@@ -1,6 +1,6 @@
 # Shalltear
 
-[![GitHub stars](https://img.shields.io/github/stars/mewiof/Shalltear?style=for-the-badge&logo=github&label=GitHub%20Stars)](https://github.com/mewiof/Shalltear/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/mewiof/Shalltear?style=for-the-badge&logo=github&label=GitHub%20Stars&cacheSeconds=3600)](https://github.com/mewiof/Shalltear/stargazers)
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/mewiof)
 
 A C++ game engine.

@@ -1,0 +1,10 @@
+{
+	"name": "dev.shalltear.visualeffects",
+	"version": "1.0.0",
+	"displayName": "Visual Effects",
+	"description": "GPU-simulated particle effects, built in the Effect Graph window as .sleffect assets.",
+	"kind": "engine",
+	"dependencies": {
+		"dev.shalltear.graphs": "1.0.0"
+	}
+}

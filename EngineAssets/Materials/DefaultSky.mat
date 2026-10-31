@@ -1,0 +1,38 @@
+{
+	"shader": "7a7d9e943a4bd61a-9a0caab8d17170d9",
+	"floats": {
+		"haze": 0.35,
+		"glow": 0.25,
+		"glowFocus": 0.8,
+		"night": 0.05
+	},
+	"colors": {
+		"zenith": [
+			0.2,
+			0.38,
+			0.75,
+			1
+		],
+		"horizon": [
+			0.62,
+			0.72,
+			0.85,
+			1
+		],
+		"ground": [
+			0.16,
+			0.15,
+			0.14,
+			1
+		],
+		"sunset": [
+			1,
+			0.45,
+			0.15,
+			1
+		]
+	},
+	"ints": {},
+	"textures": {},
+	"keywords": []
+}

@@ -1,0 +1,31 @@
+{
+	"//": "A VS Code extension manifest. This directory is the extension.",
+
+	"name": "shalltear-slss",
+	"displayName": "Shalltear Style Document",
+	"description": "Syntax highlighting for Shalltear .slss docs (including CSS constructs engine doesn't implement).",
+	"version": "1.0.0",
+	"publisher": "shalltear",
+	"private": true,
+	"engines": {
+		"vscode": "^1.75.0"
+	},
+	"categories": ["Programming Languages"],
+	"contributes": {
+		"languages": [
+			{
+				"id": "slss",
+				"aliases": ["Shalltear Style Document", "slss"],
+				"extensions": [".slss"],
+				"configuration": "./slss.language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "slss",
+				"scopeName": "source.slss",
+				"path": "./slss.tmLanguage.json"
+			}
+		]
+	}
+}

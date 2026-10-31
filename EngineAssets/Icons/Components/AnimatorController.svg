@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Animator Controller</title>
+	<path fill="#4a3a8c" d="M20 20 L40 40 L33 47 L13 27 Z"/>
+	<rect fill="#8a6fe0" x="2" y="6" width="32" height="20" rx="10"/>
+	<rect fill="#8a6fe0" x="30" y="38" width="32" height="20" rx="10"/>
+	<circle fill="#e5dcff" cx="18" cy="16" r="6"/>
+</svg>

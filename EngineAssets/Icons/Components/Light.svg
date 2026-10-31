@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Light</title>
+	<g fill="#f0b429">
+		<rect x="29.5" y="4" width="5" height="11" rx="2.5"/>
+		<rect x="29.5" y="49" width="5" height="11" rx="2.5"/>
+		<rect x="4" y="29.5" width="11" height="5" rx="2.5"/>
+		<rect x="49" y="29.5" width="11" height="5" rx="2.5"/>
+	</g>
+	<g fill="#f0b429" transform="rotate(45 32 32)">
+		<rect x="29.5" y="4" width="5" height="11" rx="2.5"/>
+		<rect x="29.5" y="49" width="5" height="11" rx="2.5"/>
+		<rect x="4" y="29.5" width="11" height="5" rx="2.5"/>
+		<rect x="49" y="29.5" width="11" height="5" rx="2.5"/>
+	</g>
+	<circle fill="#f5d76e" cx="32" cy="32" r="13"/>
+	<circle fill="#fdf3cf" cx="27.5" cy="27.5" r="4.5"/>
+</svg>

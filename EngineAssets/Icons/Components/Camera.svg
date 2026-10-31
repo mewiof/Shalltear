@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Camera</title>
+	<path fill="#4d6f8f" d="M11 20 L35 20 A5 5 0 0 1 40 25 L40 41 A5 5 0 0 1 35 46 L11 46 A5 5 0 0 1 6 41 L6 25 A5 5 0 0 1 11 20 Z"/>
+	<path fill="#8ac6f0" d="M40 27 L58 18 L58 48 L40 39 Z"/>
+	<circle fill="#cfe6f7" cx="17" cy="33" r="6"/>
+</svg>

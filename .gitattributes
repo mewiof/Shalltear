@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# cmd seeks call labels (CRLF)
+*.bat text eol=crlf

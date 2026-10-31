@@ -1,0 +1,26 @@
+{
+	"cmake.sourceDirectory": "${workspaceFolder}",
+	"cmake.useCMakePresets": "always",
+	"cmake.cmakePath": "{{CMAKE_PATH}}",
+	"cmake.debugConfig": {
+		"type": "cppvsdbg",
+		"visualizerFile": "{{ENGINE_ASSETS_DIRECTORY}}/Debug/libcxx.natvis"
+	},
+	"C_Cpp.intelliSenseEngine": "disabled",
+	"clangd.path": "{{CLANGD_PATH}}",
+	"clangd.arguments": [
+		"--background-index"
+	],
+	"files.associations": {
+		"*.scene": "json",
+		"*.prefab": "json",
+		"*.meta": "json",
+		"*.slxml": "xml"
+	},
+	"xml.fileAssociations": [
+		{
+			"pattern": "**/*.slxml",
+			"systemId": "{{ENGINE_ASSETS_DIRECTORY}}/Schemas/Layout.xsd"
+		}
+	]
+}

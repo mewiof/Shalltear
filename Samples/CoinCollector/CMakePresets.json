@@ -1,0 +1,26 @@
+{
+	"version": 3,
+	"cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+	"configurePresets": [
+		{
+			"name": "Debug-Base",
+			"hidden": true,
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/Library/Compile/Debug",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-clang++"
+			}
+		},
+		{
+			"name": "Release-Base",
+			"hidden": true,
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/Library/Compile/Release",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-clang++"
+			}
+		}
+	]
+}

@@ -1,0 +1,8 @@
+.cache
+__pycache__/
+/build*/
+/ShalltearSDK/
+/Dist/
+/Logs/
+/External/Prebuilt/
+/Library/

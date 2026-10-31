@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Transform</title>
+	<g fill="#5ac85a">
+		<path d="M29 15 L35 15 L35 34 L29 34 Z"/>
+		<path d="M32 4 L40 19 L24 19 Z"/>
+	</g>
+	<g fill="#c84646">
+		<path d="M30 29 L49 29 L49 35 L30 35 Z"/>
+		<path d="M60 32 L45 40 L45 24 Z"/>
+	</g>
+	<g fill="#4678dc">
+		<path d="M34.12 34.12 L23.52 44.72 L19.28 40.48 L29.88 29.88 Z"/>
+		<path d="M12.2 51.8 L27.06 48.26 L15.74 36.94 Z"/>
+	</g>
+</svg>

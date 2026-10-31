@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Audio Reverb Filter</title>
+	<rect fill="#4a5bb0" x="4" y="9" width="56" height="46" rx="8"/>
+	<rect fill="#dfe4ff" x="10" y="15" width="5" height="33" rx="1.5"/>
+	<g fill="#a5b4ff">
+		<rect x="18" y="22" width="2.2" height="26"/>
+		<rect x="21.2" y="27.51" width="2.2" height="20.49"/>
+		<rect x="24.4" y="31.85" width="2.2" height="16.15"/>
+		<rect x="27.6" y="35.27" width="2.2" height="12.73"/>
+		<rect x="30.8" y="37.97" width="2.2" height="10.03"/>
+		<rect x="34" y="40.09" width="2.2" height="7.91"/>
+		<rect x="37.2" y="41.77" width="2.2" height="6.23"/>
+		<rect x="40.4" y="43.09" width="2.2" height="4.91"/>
+		<rect x="43.6" y="44.13" width="2.2" height="3.87"/>
+		<rect x="46.8" y="44.95" width="2.2" height="3.05"/>
+		<rect x="50" y="45.6" width="2.2" height="2.4"/>
+	</g>
+</svg>

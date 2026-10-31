@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Sphere Collider</title>
+	<path fill="#6ee06e" d="M8 32 A24 24 0 1 0 56 32 A24 24 0 1 0 8 32 Z M14 32 A18 18 0 1 1 50 32 A18 18 0 1 1 14 32 Z"/>
+	<g fill="#3f9e4f">
+		<path d="M32 14 A9 18 0 1 0 32 50 A9 18 0 1 0 32 14 Z M32 20 A4 12 0 1 1 32 44 A4 12 0 1 1 32 20 Z"/>
+		<path d="M14 32 A18 9 0 1 0 50 32 A18 9 0 1 0 14 32 Z M20 32 A12 4 0 1 1 44 32 A12 4 0 1 1 20 32 Z"/>
+	</g>
+</svg>

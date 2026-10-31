@@ -1,0 +1,38 @@
+#pragma once
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <sstream>
+#include <mutex>
+#include <shared_mutex>
+#include <atomic>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <thread>
+#include <condition_variable>
+#include <vector>
+#include <fstream>
+#include <filesystem>
+#include <format>
+#include <utility>
+#include <new>
+#include <unordered_map>
+
+#include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Platform.h"
+#include "Shalltear/Core/Types.h"
+#include "Shalltear/Core/Memory.h"
+#include "Shalltear/Core/Assert.h"
+#include "Shalltear/Core/Object.h"
+#include "Shalltear/Core/Handle.h"
+#include "Shalltear/Core/StringHash.h"
+#include "Shalltear/Core/Log.h"
+#include "Shalltear/Core/Event.h"
+#include "Shalltear/Core/Time.h"
+#include "Shalltear/Core/FileSystem.h"
+#include "Shalltear/Core/Reflection.h"
+
+#include "Shalltear/Editor/EditorAPI.h"

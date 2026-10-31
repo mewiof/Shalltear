@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Prismatic Joint</title>
+	<rect fill="#5a6a86" x="2" y="27" width="60" height="10" rx="5"/>
+	<rect fill="#4fd0c8" x="20" y="13" width="24" height="38" rx="6"/>
+	<rect fill="#3d4a63" x="30" y="17" width="4" height="30" rx="2"/>
+	<g fill="#cdeeeb">
+		<path d="M23 32 L30 26 L30 38 Z"/>
+		<path d="M41 32 L34 26 L34 38 Z"/>
+	</g>
+</svg>

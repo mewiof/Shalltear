@@ -1,0 +1,81 @@
+#include "Shalltear/Editor/EditorExtensions.h"
+
+#include "Shalltear/Core/Log.h"
+
+#include "Shalltear/Editor/AssetOpeners.h"
+#include "Shalltear/Editor/AuthoringDefaults.h"
+#include "Shalltear/Editor/MaterialInspectorOps.h"
+#include "Shalltear/Editor/BuildPipeline.h"
+#include "Shalltear/Editor/BuildTarget.h"
+#include "Shalltear/Editor/ComponentMenu.h"
+#include "Shalltear/Editor/EditorDocuments.h"
+#include "Shalltear/Editor/EditorGizmos.h"
+#include "Shalltear/Editor/EditorIcons.h"
+#include "Shalltear/Editor/EditorPreviews.h"
+#include "Shalltear/Editor/PropertyDrawers.h"
+#include "Shalltear/Editor/ProfilerModules.h"
+#include "Shalltear/Editor/RuntimeViewToolbar.h"
+#include "Shalltear/Editor/SceneAssetDrops.h"
+#include "Shalltear/Editor/SceneViewEffects.h"
+#include "Shalltear/Editor/SceneViewOverlays.h"
+#include "Shalltear/Editor/SettingsPresentation.h"
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+namespace Shalltear::EditorExtensions {
+
+	bool Load(const void* moduleBase) {
+		if (!moduleBase) {
+			return false;
+		}
+#if defined(_WIN32)
+		auto entry = reinterpret_cast<EditorExtensionRegisterFn>(
+			::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(moduleBase)), REGISTER_SYMBOL));
+		if (!entry) {
+			return false;
+		}
+
+		entry(moduleBase);
+		return true;
+#else
+		return false;
+#endif
+	}
+
+	u32 Unload(const void* moduleBase) {
+		if (!moduleBase) {
+			return 0;
+		}
+
+		u32 removed = 0;
+		removed += PropertyDrawers::UnregisterOwnedBy(moduleBase);
+		removed += EditorPreviews::UnregisterOwnedBy(moduleBase);
+		removed += EditorPreviews::AssetBadges::UnregisterOwnedBy(moduleBase);
+		removed += EditorGizmos::UnregisterOwnedBy(moduleBase);
+		removed += EditorIcons::ComponentIcons::UnregisterOwnedBy(moduleBase);
+		removed += ComponentMenu::UnregisterOwnedBy(moduleBase);
+		removed += AuthoringDefaults::UnregisterOwnedBy(moduleBase);
+		removed += BuildStepRegistry::UnregisterOwnedBy(moduleBase);
+		removed += BuildTargetRegistry::UnregisterOwnedBy(moduleBase);
+		removed += SettingsPresentation::UnregisterOwnedBy(moduleBase);
+		removed += RuntimeViewToolbar::UnregisterOwnedBy(moduleBase);
+		removed += SceneViewEffects::UnregisterOwnedBy(moduleBase);
+		removed += SceneAssetDrops::UnregisterOwnedBy(moduleBase);
+		removed += SceneViewOverlays::UnregisterOwnedBy(moduleBase);
+		removed += ProfilerModules::UnregisterOwnedBy(moduleBase);
+		removed += AssetOpeners::UnregisterOwnedBy(moduleBase);
+		removed += MaterialInspectorOps::UnregisterShaderSourcesOwnedBy(moduleBase);
+		removed += EditorDocuments::UnregisterOwnedBy(moduleBase);
+
+		EditorPreviewStore::InvalidateAll();
+
+		if (removed > 0) {
+			SLT_LOG_INFO("Editor", "swept {} editor extension(s) belonging to the departing module", removed);
+		}
+		return removed;
+	}
+
+} // namespace Shalltear::EditorExtensions

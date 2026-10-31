@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Rigidbody</title>
+	<circle fill="#7fa8d9" cx="32" cy="23" r="15"/>
+	<circle fill="#cfe3f5" cx="26.5" cy="17.5" r="5"/>
+	<g fill="#4a6f9e">
+		<rect x="26" y="39" width="12" height="9"/>
+		<path d="M32 61 L46 46 L18 46 Z"/>
+	</g>
+</svg>

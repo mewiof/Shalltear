@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Skeleton</title>
+	<rect fill="#e8eaf0" x="28" y="6" width="8" height="30" rx="4"/>
+	<rect fill="#e8eaf0" x="28" y="32" width="8" height="24" rx="4" transform="rotate(32 32 34)"/>
+	<rect fill="#e8eaf0" x="28" y="32" width="8" height="24" rx="4" transform="rotate(-32 32 34)"/>
+	<circle fill="#5d6b85" cx="32" cy="34" r="8.5"/>
+	<circle fill="#5d6b85" cx="32" cy="54" r="6" transform="rotate(32 32 34)"/>
+	<circle fill="#5d6b85" cx="32" cy="54" r="6" transform="rotate(-32 32 34)"/>
+	<circle fill="#8f9bb3" cx="32" cy="8" r="7"/>
+</svg>

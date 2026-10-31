@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.graphs",
+	"version": "1.0.0",
+	"displayName": "Node Graphs",
+	"description": "The node library and graph compiler shared by Node Shader and Effect Graph.",
+	"kind": "tool",
+	"required": true
+}

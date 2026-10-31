@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Spring Joint</title>
+	<rect fill="#5a6a86" x="8" y="2" width="48" height="9" rx="4"/>
+	<rect fill="#5a6a86" x="8" y="53" width="48" height="9" rx="4"/>
+	<path fill="#4fd0c8" d="M14 12 L50 23 L14 34 L50 45 L50 52 L14 41 L50 30 L14 19 Z"/>
+	<g fill="#cdeeeb">
+		<circle cx="32" cy="6.5" r="3"/>
+		<circle cx="32" cy="57.5" r="3"/>
+	</g>
+</svg>

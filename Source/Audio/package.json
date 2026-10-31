@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.audio",
+	"version": "1.0.0",
+	"displayName": "Audio",
+	"description": "Sound playback: audio clips, sources and listeners, a mixer with buses and effects, 3D spatialization and streaming.",
+	"kind": "engine",
+	"stage": "LateUpdate"
+}

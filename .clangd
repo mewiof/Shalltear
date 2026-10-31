@@ -1,0 +1,11 @@
+Completion:
+    AllScopes: Yes
+    ArgumentLists: None
+    HeaderInsertion: Never
+Diagnostics:
+    UnusedIncludes: None
+InlayHints:
+    Designators: No
+    Enabled: Yes
+    ParameterNames: No
+    DeducedTypes: No

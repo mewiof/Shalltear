@@ -1,0 +1,278 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Shalltear fixture generator (self-made) - FbxImport.md M4 animation fixture"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "Root",
+   "children": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "Mirror",
+   "mesh": 0,
+   "translation": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "rotation": [
+    0.5,
+    0.5,
+    0.5,
+    0.5
+   ],
+   "scale": [
+    2.0,
+    3.0,
+    4.0
+   ]
+  },
+  {
+   "name": "Stepper"
+  },
+  {
+   "name": "Spliner"
+  },
+  {
+   "name": "Unreachable"
+  }
+ ],
+ "meshes": [
+  {
+   "name": "Tri",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0
+     }
+    }
+   ]
+  }
+ ],
+ "animations": [
+  {
+   "name": "Parity",
+   "channels": [
+    {
+     "sampler": 0,
+     "target": {
+      "node": 1,
+      "path": "translation"
+     }
+    },
+    {
+     "sampler": 1,
+     "target": {
+      "node": 1,
+      "path": "rotation"
+     }
+    },
+    {
+     "sampler": 2,
+     "target": {
+      "node": 1,
+      "path": "scale"
+     }
+    }
+   ],
+   "samplers": [
+    {
+     "input": 1,
+     "output": 2,
+     "interpolation": "LINEAR"
+    },
+    {
+     "input": 1,
+     "output": 3,
+     "interpolation": "LINEAR"
+    },
+    {
+     "input": 1,
+     "output": 4,
+     "interpolation": "LINEAR"
+    }
+   ]
+  },
+  {
+   "name": "Kinds",
+   "channels": [
+    {
+     "sampler": 0,
+     "target": {
+      "node": 2,
+      "path": "translation"
+     }
+    },
+    {
+     "sampler": 1,
+     "target": {
+      "node": 3,
+      "path": "translation"
+     }
+    },
+    {
+     "sampler": 2,
+     "target": {
+      "node": 1,
+      "path": "weights"
+     }
+    },
+    {
+     "sampler": 0,
+     "target": {
+      "node": 4,
+      "path": "translation"
+     }
+    }
+   ],
+   "samplers": [
+    {
+     "input": 5,
+     "output": 6,
+     "interpolation": "STEP"
+    },
+    {
+     "input": 5,
+     "output": 7,
+     "interpolation": "CUBICSPLINE"
+    },
+    {
+     "input": 5,
+     "output": 8,
+     "interpolation": "LINEAR"
+    }
+   ]
+  },
+  {
+   "channels": [
+    {
+     "sampler": 0,
+     "target": {
+      "node": 2,
+      "path": "translation"
+     }
+    }
+   ],
+   "samplers": [
+    {
+     "input": 1,
+     "output": 2,
+     "interpolation": "LINEAR"
+    }
+   ]
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 192,
+   "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAABAAABAQAAAAD8AAAA/AAAAPwAAAD8AAABAAABAQAAAgEAAAAAAAACAPwAAAAAAAAAAAAAAAAAAIEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgEAAAKBAAADAQAAAAAAAAAAAAAAAAAAAAAAAAIA/"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 192
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "byteOffset": 0,
+   "componentType": 5126,
+   "count": 3,
+   "type": "VEC3",
+   "min": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "max": [
+    1.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 36,
+   "componentType": 5126,
+   "count": 1,
+   "type": "SCALAR",
+   "min": [
+    0.0
+   ],
+   "max": [
+    0.0
+   ]
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 40,
+   "componentType": 5126,
+   "count": 1,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 52,
+   "componentType": 5126,
+   "count": 1,
+   "type": "VEC4"
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 68,
+   "componentType": 5126,
+   "count": 1,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 80,
+   "componentType": 5126,
+   "count": 2,
+   "type": "SCALAR",
+   "min": [
+    0.0
+   ],
+   "max": [
+    1.0
+   ]
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 88,
+   "componentType": 5126,
+   "count": 2,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 112,
+   "componentType": 5126,
+   "count": 6,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 0,
+   "byteOffset": 184,
+   "componentType": 5126,
+   "count": 2,
+   "type": "SCALAR"
+  }
+ ]
+}

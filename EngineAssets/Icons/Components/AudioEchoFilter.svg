@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Audio Echo Filter</title>
+	<rect fill="#4a5bb0" x="4" y="9" width="56" height="46" rx="8"/>
+	<rect fill="#dfe4ff" x="10" y="16" width="7" height="32" rx="2"/>
+	<g fill="#a5b4ff">
+		<rect x="22" y="24" width="7" height="24" rx="2"/>
+		<rect x="34" y="31" width="7" height="17" rx="2"/>
+		<rect x="46" y="37" width="7" height="11" rx="2"/>
+	</g>
+</svg>

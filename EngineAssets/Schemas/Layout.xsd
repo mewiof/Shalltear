@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+
+	<xs:simpleType name="classList">
+		<xs:restriction base="xs:string"/>
+	</xs:simpleType>
+
+	<xs:simpleType name="styleFragment">
+		<xs:restriction base="xs:string"/>
+	</xs:simpleType>
+
+	<xs:simpleType name="virtualPath">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Za-z][A-Za-z0-9]*://.+"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="widgetBool">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="true"/>
+			<xs:enumeration value="false"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:attributeGroup name="elementIdentity">
+		<xs:attribute name="id" type="xs:string"/>
+		<xs:attribute name="class" type="classList"/>
+		<xs:attribute name="style" type="styleFragment"/>
+	</xs:attributeGroup>
+
+	<xs:complexType name="element" mixed="true">
+		<xs:sequence>
+			<xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="elementIdentity"/>
+		<xs:anyAttribute processContents="lax"/>
+	</xs:complexType>
+
+	<xs:element name="ui">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+			</xs:sequence>
+			<xs:attribute name="version" type="xs:positiveInteger" use="required"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="sheet">
+		<xs:complexType>
+			<xs:attribute name="src" type="virtualPath" use="required"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="template">
+		<xs:complexType>
+			<xs:attribute name="src" type="virtualPath" use="required"/>
+			<xs:attribute name="name" type="xs:string" use="required"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="instance">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="attribute-overrides" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute name="template" type="xs:string" use="required"/>
+			<xs:attributeGroup ref="elementIdentity"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="attribute-overrides">
+		<xs:complexType mixed="true">
+			<xs:sequence/>
+			<xs:attribute name="element-id" type="xs:string" use="required"/>
+			<xs:anyAttribute processContents="lax"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="button">
+		<xs:complexType>
+			<xs:attribute name="text" type="xs:string"/>
+			<xs:attributeGroup ref="elementIdentity"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="checkbox">
+		<xs:complexType>
+			<xs:attribute name="value" type="widgetBool"/>
+			<xs:attributeGroup ref="elementIdentity"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="slider">
+		<xs:complexType>
+			<xs:attribute name="min" type="xs:decimal"/>
+			<xs:attribute name="max" type="xs:decimal"/>
+			<xs:attribute name="value" type="xs:decimal"/>
+			<xs:attributeGroup ref="elementIdentity"/>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="scroll-view" type="element"/>
+
+	<xs:element name="panel" type="element"/>
+	<xs:element name="label" type="element"/>
+
+</xs:schema>

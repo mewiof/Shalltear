@@ -1,0 +1,22 @@
+#pragma once
+
+#include "Shalltear/Core/Types.h"
+
+#include <string_view>
+
+namespace Shalltear::BuildStamp {
+
+	inline constexpr u32 Number = @SLT_STAMP_NUMBER@;
+
+	// when build started (Unix seconds + ISO 8601)
+	inline constexpr i64 TimeUnix = @SLT_STAMP_TIME_UNIX@;
+	inline constexpr std::string_view TimeIso = "@SLT_STAMP_TIME_ISO@";
+
+	inline constexpr std::string_view Version = "@SLT_STAMP_VERSION@";
+	inline constexpr std::string_view ProfileName = "@SLT_STAMP_PROFILE@";
+
+	inline constexpr std::string_view TargetId = "@SLT_STAMP_TARGET@";
+
+	inline constexpr bool IsPlayer = @SLT_STAMP_IS_PLAYER@;
+
+} // namespace Shalltear::BuildStamp

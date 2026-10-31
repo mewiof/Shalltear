@@ -1,0 +1,137 @@
+name: CI
+
+# manual only (TODO: ?..), also kept for contributors
+
+on:
+  workflow_dispatch:
+
+# new run cancels stale run (same branch)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Clang + GNU ABI, fetched toolchain
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: windows-latest
+    # hung test would hold the runner for 10000 years
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # the "everyday dev" configuration
+          - name: shared-debug
+            shared: "ON"
+            pch: "OFF"
+            config: Debug
+            header_check: false
+            benchmarks: false
+          # isolated header compiles?
+          - name: shared-debug-nopch
+            shared: "ON"
+            pch: "ON" # SHALLTEAR_DISABLE_PCH value
+            config: Debug
+            header_check: true
+            benchmarks: false
+          # static half of dual mode
+          - name: static-debug
+            shared: "OFF"
+            pch: "OFF"
+            config: Debug
+            header_check: false
+            benchmarks: false
+          # optimized lane, also runs "micro benchmarks"
+          - name: shared-release
+            shared: "ON"
+            pch: "OFF"
+            config: Release
+            header_check: false
+            benchmarks: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # cached by pin content
+      - name: Cache prebuilt binaries
+        uses: actions/cache@v4
+        with:
+          path: External/Prebuilt
+          key: prebuilt-${{ hashFiles('Scripts/fetch_prebuilt.py') }}
+
+      - name: Fetch prebuilt binaries
+        run: python Scripts/fetch_prebuilt.py --lavapipe --toolchain
+
+      # fetched binaru goes first because runner's clang++ targets MSVC
+      - name: Put the toolchain on PATH
+        shell: pwsh
+        run: echo "$(Resolve-Path External/Prebuilt/llvm-mingw/bin)" >> $env:GITHUB_PATH
+
+      # fail the build when stale
+      - name: Third-party notices are current
+        run: python Scripts/generate_notices.py --check
+
+      - name: Redistribution rules classify the whole toolchain
+        working-directory: Scripts
+        run: python staging_test.py
+
+      - name: Locate software Vulkan driver
+        shell: pwsh
+        run: |
+          $icd = Get-ChildItem -Recurse External/Prebuilt/lavapipe -Filter lvp_icd.x86_64.json | Select-Object -First 1
+          if (-not $icd) { throw "lavapipe ICD manifest not found" }
+          echo "VK_DRIVER_FILES=$($icd.FullName)" >> $env:GITHUB_ENV
+          echo "Using ICD: $($icd.FullName)"
+
+      # warnings = errors only here (fresh clones should build)
+      - name: Configure
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++
+          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          -DSHALLTEAR_BUILD_SHARED=${{ matrix.shared }}
+          -DSHALLTEAR_DISABLE_PCH=${{ matrix.pch }}
+          -DSHALLTEAR_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Header hygiene (isolated public headers)
+        if: matrix.header_check
+        run: cmake --build build --target ShalltearHeaderCheck --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+      - name: Benchmarks (informational)
+        if: matrix.benchmarks
+        run: build/bin/ShalltearBenchmarks.exe
+
+  format:
+    name: clang-format
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache prebuilt binaries
+        uses: actions/cache@v4
+        with:
+          path: External/Prebuilt
+          key: prebuilt-format-${{ hashFiles('Scripts/fetch_prebuilt.py') }}
+
+      - name: Fetch the pinned toolchain
+        run: python Scripts/fetch_prebuilt.py --toolchain --skip-dxc
+
+      # pinned version (the runner's realigns comments)
+      - name: Check formatting
+        shell: pwsh
+        run: |
+          $files = git ls-files 'Source/*.h' 'Source/*.hpp' 'Source/*.inl' 'Source/*.cpp' 'Samples/*.h' 'Samples/*.cpp' |
+            Where-Object { $_ -notmatch '/ThirdParty/|\.generated\.|/stb_image\.h$' }
+          External/Prebuilt/llvm-mingw/bin/clang-format.exe --dry-run -Werror $files

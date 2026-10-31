@@ -1,0 +1,3 @@
+# rewritten on regeneration
+CompileFlags:
+  CompilationDatabase: Library/Compile/{{CONFIG}}

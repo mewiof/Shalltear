@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+	<Type Name="std::__1::basic_string&lt;char,*&gt;">
+		<Intrinsic Name="is_long" Expression="__rep_.__s.__is_long_ != 0" />
+		<Intrinsic Name="size" Expression="is_long() ? (unsigned __int64)__rep_.__l.__size_ : (unsigned __int64)__rep_.__s.__size_" />
+		<Intrinsic Name="data" Expression="is_long() ? __rep_.__l.__data_ : __rep_.__s.__data_" />
+		<DisplayString>{data(),[size()]s8}</DisplayString>
+		<StringView>data(),[size()]s8</StringView>
+		<Expand>
+			<Item Name="[size]" ExcludeView="simple">size()</Item>
+			<Item Name="[capacity]" ExcludeView="simple">is_long() ? (unsigned __int64)__rep_.__l.__cap_ : 22ull</Item>
+			<ArrayItems>
+				<Size>size()</Size>
+				<ValuePointer>data()</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+	<Type Name="std::__1::basic_string_view&lt;char,*&gt;">
+		<DisplayString>{__data_,[__size_]s8}</DisplayString>
+		<StringView>__data_,[__size_]s8</StringView>
+		<Expand>
+			<Item Name="[size]" ExcludeView="simple">__size_</Item>
+			<ArrayItems>
+				<Size>__size_</Size>
+				<ValuePointer>__data_</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+	<!-- vector<bool> first because its a bitfield -->
+	<Type Name="std::__1::vector&lt;bool,*&gt;">
+		<DisplayString>{{ vector&lt;bool&gt;, no visualizer }}</DisplayString>
+	</Type>
+
+	<Type Name="std::__1::vector&lt;*&gt;">
+		<Intrinsic Name="size" Expression="(unsigned __int64)(__layout_.__end_ - __layout_.__begin_)" />
+		<DisplayString>{{ size={size()} }}</DisplayString>
+		<Expand>
+			<Item Name="[size]" ExcludeView="simple">size()</Item>
+			<Item Name="[capacity]" ExcludeView="simple">(unsigned __int64)(__layout_.__capacity_ - __layout_.__begin_)</Item>
+			<ArrayItems>
+				<Size>size()</Size>
+				<ValuePointer>__layout_.__begin_</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+	<Type Name="std::__1::unique_ptr&lt;*&gt;">
+		<Intrinsic Name="value" Expression="__ptr_" />
+		<DisplayString Condition="value() == 0">empty</DisplayString>
+		<DisplayString>unique_ptr {*value()}</DisplayString>
+		<Expand>
+			<Item Condition="value() != 0" Name="[ptr]">value()</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="std::__1::optional&lt;*&gt;">
+		<DisplayString Condition="!__engaged_">nullopt</DisplayString>
+		<DisplayString>{__val_}</DisplayString>
+		<Expand>
+			<Item Condition="__engaged_" Name="[value]">__val_</Item>
+		</Expand>
+	</Type>
+
+</AutoVisualizer>

@@ -1,0 +1,64 @@
+{
+	"version": 3,
+	"cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+	"configurePresets": [
+		{
+			"name": "toolchain",
+			"hidden": true,
+			"description": "Pinned llvm-mingw toolchain from Scripts/fetch_prebuilt.py --toolchain. Exists to take the choice away from IDE",
+			"generator": "Ninja",
+			"environment": {
+				"PATH": "${sourceDir}/External/Prebuilt/llvm-mingw/bin;${sourceDir}/External/Prebuilt/ninja;${sourceDir}/External/Prebuilt/cmake/bin;$penv{PATH}"
+			},
+			"cacheVariables": {
+				"CMAKE_C_COMPILER": "${sourceDir}/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang.exe",
+				"CMAKE_CXX_COMPILER": "${sourceDir}/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang++.exe",
+				"CMAKE_MAKE_PROGRAM": "${sourceDir}/External/Prebuilt/ninja/ninja.exe",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+			}
+		},
+		{
+			"name": "debug",
+			"inherits": "toolchain",
+			"displayName": "Debug (shared)",
+			"description": "The default tree. Shared modules",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "SHALLTEAR_BUILD_SHARED": "ON" }
+		},
+		{
+			"name": "release",
+			"inherits": "toolchain",
+			"displayName": "Release (shared)",
+			"description": "Debug masks lifetime bugs behind 0xDD fill/stripped asserts",
+			"binaryDir": "${sourceDir}/build-release",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "SHALLTEAR_BUILD_SHARED": "ON" }
+		},
+		{
+			"name": "static-debug",
+			"inherits": "toolchain",
+			"displayName": "Debug (static)",
+			"description": "A static tree declares > tests than a shared one + the delta runs both ways",
+			"binaryDir": "${sourceDir}/build-static",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "SHALLTEAR_BUILD_SHARED": "OFF" }
+		},
+		{
+			"name": "static-release",
+			"inherits": "toolchain",
+			"displayName": "Release (static)",
+			"binaryDir": "${sourceDir}/build-static-release",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "SHALLTEAR_BUILD_SHARED": "OFF" }
+		}
+	],
+	"buildPresets": [
+		{ "name": "debug", "configurePreset": "debug" },
+		{ "name": "release", "configurePreset": "release" },
+		{ "name": "static-debug", "configurePreset": "static-debug" },
+		{ "name": "static-release", "configurePreset": "static-release" }
+	],
+	"testPresets": [
+		{ "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
+		{ "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+		{ "name": "static-debug", "configurePreset": "static-debug", "output": { "outputOnFailure": true } },
+		{ "name": "static-release", "configurePreset": "static-release", "output": { "outputOnFailure": true } }
+	]
+}

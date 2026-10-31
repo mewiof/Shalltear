@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Mesh Renderer</title>
+	<path fill="#e8c193" d="M32 8 L52.78 20 L32 32 L11.22 20 Z"/>
+	<path fill="#c08b52" d="M52.78 20 L52.78 44 L32 56 L32 32 Z"/>
+	<path fill="#8f6335" d="M11.22 20 L32 32 L32 56 L11.22 44 Z"/>
+</svg>

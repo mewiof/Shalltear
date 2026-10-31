@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Audio Reverb Zone</title>
+	<path fill="#4a5bb0" d="M3 32 A29 29 0 1 0 61 32 A29 29 0 1 0 3 32 Z M7.5 32 A24.5 24.5 0 1 1 56.5 32 A24.5 24.5 0 1 1 7.5 32 Z"/>
+	<path fill="#a5b4ff" d="M13 32 A19 19 0 1 0 51 32 A19 19 0 1 0 13 32 Z M17.5 32 A14.5 14.5 0 1 1 46.5 32 A14.5 14.5 0 1 1 17.5 32 Z"/>
+	<circle fill="#dfe4ff" cx="32" cy="32" r="7"/>
+</svg>

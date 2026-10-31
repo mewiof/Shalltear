@@ -1,0 +1,10 @@
+tabWidth: 4
+useTabs: true
+proseWrap: never
+printWidth: 512
+
+overrides:
+    - files: "*.md"
+      options:
+          printWidth: 1
+          embeddedLanguageFormatting: "off"

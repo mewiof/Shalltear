@@ -1,0 +1,10 @@
+{
+	"name": "dev.shalltear.nodeshader",
+	"version": "1.0.0",
+	"displayName": "Node Shader",
+	"description": "Create shaders by connecting nodes instead of writing code, in the Node Shader window. Adds .slshader and .slsubgraph assets.",
+	"kind": "tool",
+	"dependencies": {
+		"dev.shalltear.graphs": "1.0.0"
+	}
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Behavior</title>
+	<path fill="#cfd2dc" d="M14 6 L40 6 L52 18 L52 58 L14 58 Z"/>
+	<path fill="#9198a8" d="M40 6 L52 18 L40 18 Z"/>
+	<g fill="#4a7fd9">
+		<rect x="21" y="26" width="24" height="4" rx="2"/>
+		<rect x="21" y="35" width="15" height="4" rx="2"/>
+		<rect x="21" y="44" width="24" height="4" rx="2"/>
+	</g>
+</svg>

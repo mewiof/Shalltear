@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Reflection Probe</title>
+	<path fill="#4d6f8f" d="M6 6 L20 6 L20 10 L10 10 L10 20 L6 20 Z M58 6 L58 20 L54 20 L54 10 L44 10 L44 6 Z M6 58 L6 44 L10 44 L10 54 L20 54 L20 58 Z M58 58 L44 58 L44 54 L54 54 L54 44 L58 44 Z"/>
+	<circle fill="#8ac6f0" cx="32" cy="32" r="15"/>
+	<circle fill="#cfe6f7" cx="26" cy="26" r="4.5"/>
+</svg>

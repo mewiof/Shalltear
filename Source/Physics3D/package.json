@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.physics3d",
+	"version": "1.0.0",
+	"displayName": "Physics 3D",
+	"description": "Rigid body dynamics, colliders and joints for 3D scenes.",
+	"kind": "engine",
+	"stage": "FixedUpdate"
+}

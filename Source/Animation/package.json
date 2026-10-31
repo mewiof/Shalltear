@@ -1,0 +1,11 @@
+{
+	"name": "dev.shalltear.animation",
+	"version": "1.0.0",
+	"displayName": "Animation",
+	"description": "Skeletal animation: clips, blending, retargeting and animator controllers. Disabling it also stops models from importing their animations.",
+	"kind": "engine",
+	"stage": "Update",
+	"dependencies": {
+		"dev.shalltear.importpipeline": "1.0.0"
+	}
+}

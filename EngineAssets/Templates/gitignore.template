@@ -1,0 +1,12 @@
+/Library/
+
+/.assets.db
+
+/Builds/
+
+/CMakeUserPresets.json
+/.vscode/
+/.clangd
+/compile_commands.json
+
+/.cache/

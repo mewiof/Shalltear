@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.importpipeline",
+	"version": "1.0.0",
+	"displayName": "Import Pipeline",
+	"description": "Imports glTF and FBX models as prefabs, and .primitive files as meshes.",
+	"kind": "tool",
+	"required": true
+}

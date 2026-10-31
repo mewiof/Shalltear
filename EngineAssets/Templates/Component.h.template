@@ -1,0 +1,34 @@
+#pragma once
+
+// the engine's umbrella header. It includes everything a game normally needs
+// (the packages turned on in the Package Manager among them) + brings
+// `using namespace Shalltear` with it. Every engine header can still be
+// included on its own
+#include "Shalltear.h"
+
+// starter component: press Play and the object it is attached to rotates... impressive?
+// Rename/delete it once you have components of your own.
+//
+// fields listed via SLT_REFLECT_FIELD appear in the Inspector, saved with
+// the scene, and keep their values across hot reloads. Add one -> save the file ->
+// switch back to the editor to see it
+class {{CLASS_NAME}} : public Behavior {
+public:
+	SLT_REFLECT_COMPONENT({{CLASS_NAME}}, Behavior)
+	SLT_REFLECT_FIELD(degreesPerSecond)
+	SLT_REFLECT_FIELD(target)
+	SLT_END_REFLECT()
+
+	// editing it in the Inspector during play takes effect on the next frame
+	f32 degreesPerSecond = 60.0f;
+
+	// which object to rotate.
+	//
+	// NOTE: store a Handle, never a SceneObject*! Objects can be destroyed,
+	// the pools holding them can move. A resolved pointer is valid for the
+	// current frame only! Resolve when you need it (like OnUpdate does)
+	Handle<SceneObject> target;
+protected:
+	void OnEnable() override;
+	void OnUpdate() override;
+};

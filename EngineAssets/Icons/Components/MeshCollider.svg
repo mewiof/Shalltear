@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Mesh Collider</title>
+	<path fill="#a8f0a8" d="M32 5 L8 28 L32 28 Z"/>
+	<path fill="#6ee06e" d="M32 5 L32 28 L56 28 Z"/>
+	<path fill="#4aa85a" d="M8 28 L32 28 L32 59 Z"/>
+	<path fill="#2f7a3a" d="M32 28 L56 28 L32 59 Z"/>
+</svg>

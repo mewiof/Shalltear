@@ -1,0 +1,199 @@
+{
+	"initialisms": [
+		"AABB",
+		"API",
+		"BGR",
+		"BGRA",
+		"CC",
+		"CPU",
+		"CRC",
+		"DLL",
+		"DPI",
+		"EW",
+		"FOV",
+		"GPU",
+		"HC",
+		"HDR",
+		"HLSL",
+		"HSV",
+		"JPEG",
+		"JSON",
+		"LHS",
+		"LOD",
+		"LZ",
+		"MSAA",
+		"NESW",
+		"NS",
+		"NWSE",
+		"PCH",
+		"PNG",
+		"RG",
+		"RGB",
+		"RGBA",
+		"RHI",
+		"RHS",
+		"SDF",
+		"SDK",
+		"TRS",
+		"UI",
+		"UTF",
+		"UV",
+		"XML",
+		"2D",
+		"3D"
+	],
+	"_axisComment": "Invariant 6's carve-out as a rule. An all-caps run made entirely of these resolves as an INITIALISM. Covers XYZ, ZXY, ZYX + every other permutation without 6 dictionary entries for 1 enum.",
+	"axisSymbols": "UVWXYZ",
+	"fixed": [
+		"CMake",
+		"FBX",
+		"FNV1a",
+		"GGX",
+		"SPIR-V",
+		"Vulkan",
+		"glTF",
+		"iOS",
+		"npm",
+		"sRGB"
+	],
+	"generatedNames": [
+		"*_Test",
+		"test_info_",
+		"gtest_registering_dummy_",
+		"g_sltTypeRegistrar*",
+		"gtest_*",
+		"SLT_*",
+		"_primitive_*",
+		"sltZone_*",
+		"sltZoneSite_*"
+	],
+	"reservedNames": [
+		"main",
+		"WinMain",
+		"wWinMain",
+		"DllMain",
+		"ShalltearModuleGetApi",
+		"ShalltearRegisterCoreExtensions",
+		"ShalltearRegisterEditorExtensions"
+	],
+	"_keptComment": "Identifiers the codebase spells own way. Distinct from vendorNames (which is about foreign spellings). These are ours and the styles don't apply to them. Core/Types.h's aliases stand beside int/float/bool and are read as machine primitives (Pascal would make a primitive look like a user-defined type).",
+	"keptNames": [
+		"u8",
+		"u16",
+		"u32",
+		"u64",
+		"i8",
+		"i16",
+		"i32",
+		"i64",
+		"f32",
+		"f64",
+		"str"
+	],
+	"split": {},
+	"nonSplit": [
+		"filename",
+		"metadata",
+		"framebuffer",
+		"mipmap",
+		"keyframe",
+		"viewport",
+		"raycast",
+		"swapchain",
+		"hitbox",
+		"filesystem"
+	],
+	"vendorRegions": [
+		"External/**",
+		"**/generated/**",
+		"Source/**/Generated/**",
+		"Source/**/stb_*.h",
+		"Source/**/stb_*.c",
+		"Source/Core/Private/Graphics/DxcMinimal.h"
+	],
+	"vendorNames": [
+		"Vk*",
+		"vk*",
+		"VK_*",
+		"PFN_*",
+		"KHR",
+		"EXT",
+		"stbi*",
+		"STBI*",
+		"stbtt*",
+		"FT_*",
+		"IDxc*",
+		"DXC_*",
+		"SV_*",
+		"vma*",
+		"Vma*",
+		"VMA_*",
+		"ufbx*",
+		"UFBX_*",
+		"HRESULT",
+		"WM_*",
+		"Get_vk*"
+	],
+	"frozenPaths": [
+		"EngineAssets/Shaders/**",
+		"Source/Tests/Fixtures/Graphics/*.hlsl"
+	],
+	"binding": {
+		"cpp": {
+			"types": "Pascal",
+			"enumMembers": "Pascal",
+			"templateParams": "Pascal",
+			"functions": "Pascal",
+			"locals": "camel",
+			"parameters": "camel",
+			"members": "camel",
+			"statics": "camel",
+			"constants": "CONST",
+			"macros": "CONST",
+			"namespaces": "Pascal",
+			"files": "matchPrimaryType",
+			"directories": "Pascal",
+			"assets": "Pascal",
+			"namedValues": "Pascal"
+		},
+		"hlsl": {
+			"types": "Pascal",
+			"functions": "Pascal",
+			"locals": "camel",
+			"members": "camel",
+			"constants": "CONST",
+			"files": "Pascal"
+		},
+		"python": {
+			"types": "Pascal",
+			"functions": "snake",
+			"locals": "snake",
+			"members": "snake",
+			"constants": "CONST",
+			"modules": "snake",
+			"files": "snake"
+		},
+		"cmake": {
+			"variables": "CONST",
+			"cacheVariables": "CONST",
+			"functions": "snake",
+			"files": "Pascal"
+		},
+		"markdown": {
+			"files": "Pascal",
+			"policyFiles": "CONST"
+		},
+		"configKeys": {
+			"keys": "camel"
+		}
+	},
+	"prefixes": {
+		"nonPublicFields": "_",
+		"fileScopeStatics": "_"
+	},
+	"legacyPrefixes": {
+		"g_": "_",
+		"s_": "_",
+		"t_": "_"
+	}
+}

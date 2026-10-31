@@ -1,0 +1,16 @@
+{
+	"shader": "5d0eee565c0eb506-d813bbcaa86ba3a8",
+	"floats": {
+		"roughness": 0.8,
+		"metallic": 0
+	},
+	"colors": {
+		"baseColor": [
+			1,
+			1,
+			1,
+			1
+		]
+	},
+	"textures": {}
+}

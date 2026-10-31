@@ -1,0 +1,25 @@
+#include "{{CLASS_NAME}}.h"
+
+// registers class with the engine. {{CLASS_NAME}} appears in Add Component,
+// its reflected fields appear in the Inspector once the module compiles
+SLT_REGISTER_TYPE({{CLASS_NAME}})
+
+void {{CLASS_NAME}}::OnEnable() {
+	SLT_LOG_INFO("{{MODULE_NAME}}", "{{CLASS_NAME}} enabled");
+}
+
+void {{CLASS_NAME}}::OnUpdate() {
+	// rotate the target, or this object, when nothing is assigned (or the target
+	// is gone). Both resolve to nullptr
+	SceneObject* object = target.Get();
+	if (!object) {
+		object = GetOwner().Get();
+	}
+	// GetDeltaTime() is seconds since the last frame, so the speed is the
+	// same at any frame rate. It is scaled game time -> slows -> stops with
+	// the game (GetUnscaledDeltaTime() is real seconds)
+	const Quat step = Quat::AngleAxis(degreesPerSecond * Time::GetDeltaTime(), Vec3::Up());
+	// normalized because a rotation accumulated frame->frame drifts off unit
+	// length over time
+	object->SetLocalRotation((object->GetLocalRotation() * step).Normalized());
+}

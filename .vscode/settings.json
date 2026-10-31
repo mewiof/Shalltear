@@ -1,0 +1,38 @@
+{
+	"clangd.path": "${workspaceFolder}/External/Prebuilt/llvm-mingw/bin/clangd.exe",
+	"clangd.arguments": [
+		"--header-insertion=never",
+		// without this clangd guesses sysroot
+		"--query-driver=${workspaceFolder}/External/Prebuilt/llvm-mingw/bin/*",
+		// do this or background index will starve the extension host
+		"-j=8",
+		"--background-index-priority=background"
+	],
+
+	// clangd should own C++
+	"C_Cpp.intelliSenseEngine": "disabled",
+
+	"files.watcherExclude": {
+		"**/build/**": true,
+		"**/build-*/**": true,
+		"**/External/Prebuilt/**": true,
+		"**/External/Submodules/**": true,
+		"**/ShalltearSDK/**": true,
+		"**/Dist/**": true,
+		"**/Library/**": true,
+		"**/Logs/**": true,
+		"**/.cache/**": true
+	},
+	"search.exclude": {
+		"**/build/**": true,
+		"**/build-*/**": true,
+		"**/External/Prebuilt/**": true,
+		"**/ShalltearSDK/**": true,
+		"**/Dist/**": true,
+		"**/Library/**": true,
+		"**/.cache/**": true
+	},
+
+	"[cpp]": { "editor.formatOnSave": false },
+	"[c]": { "editor.formatOnSave": false }
+}

@@ -1,0 +1,22 @@
+[submodule "External/Submodules/googletest"]
+	path = External/Submodules/googletest
+	url = https://github.com/google/googletest.git
+[submodule "External/Submodules/Vulkan-Headers"]
+	path = External/Submodules/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "External/Submodules/VulkanMemoryAllocator"]
+	path = External/Submodules/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "External/Submodules/freetype"]
+	path = External/Submodules/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "External/Submodules/ufbx"]
+	path = External/Submodules/ufbx
+	url = https://github.com/ufbx/ufbx.git
+[submodule "External/Submodules/opus"]
+	path = External/Submodules/opus
+	url = https://github.com/xiph/opus.git
+[submodule "External/Submodules/box3d"]
+	path = External/Submodules/box3d
+	url = https://github.com/mewiof/box3d.git
+	branch = shalltear

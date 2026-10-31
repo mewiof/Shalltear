@@ -1,0 +1,10 @@
+{
+	"name": "dev.shalltear.sampledependent",
+	"version": "1.0.0",
+	"displayName": "Sample Dependent Package",
+	"description": "A test package that depends on Sample Package, for trying out dependency handling.",
+	"kind": "package",
+	"dependencies": {
+		"dev.shalltear.samplepackage": "1.0.0"
+	}
+}

@@ -1,0 +1,131 @@
+{
+	"//why-not-css": "This exists because the language is NOT CSS. It must not be highlighted as it.",
+
+	"name": "Shalltear Style Document",
+	"scopeName": "source.slss",
+	"fileTypes": ["slss"],
+
+	"patterns": [
+		{ "include": "#comment" },
+		{ "include": "#block" },
+		{ "include": "#selector" }
+	],
+
+	"repository": {
+		"comment": {
+			"name": "comment.block.slss",
+			"begin": "/\\*",
+			"end": "\\*/"
+		},
+
+		"selector": {
+			"patterns": [
+				{
+					"match": ",",
+					"name": "invalid.illegal.selector-list.slss"
+				},
+				{
+					"//": "CSS's child/adjacent/general-sibling combinators (none of which the parser models)",
+					"match": "[>+~]",
+					"name": "invalid.illegal.combinator.slss"
+				},
+				{
+					"match": "(?<=[A-Za-z0-9_*\\-\\]])[ \\t]+(?=[.#*A-Za-z])",
+					"name": "invalid.illegal.descendant-combinator.slss"
+				},
+				{
+					"match": ":(hover|active|focus|drop)\\b",
+					"name": "entity.other.attribute-name.pseudo-class.slss"
+				},
+				{
+					"match": ":[A-Za-z-]+",
+					"name": "invalid.illegal.unknown-pseudo-class.slss"
+				},
+				{
+					"match": "\\.[A-Za-z_][A-Za-z0-9_-]*",
+					"name": "entity.other.attribute-name.class.slss"
+				},
+				{
+					"match": "#[A-Za-z_][A-Za-z0-9_-]*",
+					"name": "entity.other.attribute-name.id.slss"
+				},
+				{
+					"match": "\\*",
+					"name": "entity.name.tag.universal.slss"
+				},
+				{
+					"match": "[A-Za-z_][A-Za-z0-9_-]*",
+					"name": "entity.name.tag.slss"
+				}
+			]
+		},
+
+		"block": {
+			"begin": "\\{",
+			"end": "\\}",
+			"beginCaptures": { "0": { "name": "punctuation.section.block.begin.slss" } },
+			"endCaptures": { "0": { "name": "punctuation.section.block.end.slss" } },
+			"patterns": [
+				{ "include": "#comment" },
+				{ "include": "#declaration" }
+			]
+		},
+
+		"declaration": {
+			"patterns": [
+				{
+					"match": "\\b(min-width|min-height|max-width|max-height|width|height|display|position|flex-direction|flex-grow|flex-shrink|overflow|align-items|align-self|justify-content|left|top|right|bottom|padding|margin-left|margin-top|margin-right|margin-bottom|margin|background-color|background|opacity|z-index|border-radius|border-width|border-color|box-shadow|filter|text-align-vertical|text-align|text-overflow|text-outline-width|text-outline-color|letter-spacing|cursor|pointer-events)\\s*(:)",
+					"captures": {
+						"1": { "name": "support.type.property-name.slss" },
+						"2": { "name": "punctuation.separator.key-value.slss" }
+					}
+				},
+				{
+					"match": "\\b([A-Za-z-][A-Za-z0-9-]*)\\s*(:)",
+					"captures": {
+						"1": { "name": "invalid.illegal.unknown-property.slss" },
+						"2": { "name": "punctuation.separator.key-value.slss" }
+					}
+				},
+				{ "include": "#value" },
+				{
+					"match": ";",
+					"name": "punctuation.terminator.rule.slss"
+				}
+			]
+		},
+
+		"value": {
+			"patterns": [
+				{ "include": "#comment" },
+				{
+					"match": "(var)\\(\\s*(--[A-Za-z0-9_-]+)\\s*\\)",
+					"captures": {
+						"1": { "name": "support.function.var.slss" },
+						"2": { "name": "variable.other.style-var.slss" }
+					}
+				},
+				{
+					"match": "#[0-9a-fA-F]{3,8}\\b",
+					"name": "constant.other.color.rgb-value.slss"
+				},
+				{
+					"match": "\\b-?\\d+(\\.\\d+)?(px|%)?",
+					"name": "constant.numeric.slss"
+				},
+				{
+					"match": "\\b(none|auto|absolute|relative|row|column|hidden|scroll|visible|start|center|end|stretch|flex-start|flex-end|space-between|space-around|wrap|clip|ellipsis|inset|true|false)\\b",
+					"name": "support.constant.property-value.slss"
+				},
+				{
+					"match": "\\b(pointer|hand|text|crosshair|move|not-allowed|ns-resize|ew-resize)\\b",
+					"name": "support.constant.property-value.cursor.slss"
+				},
+				{
+					"match": "\\b(linear-gradient)\\b",
+					"name": "support.function.slss"
+				}
+			]
+		}
+	}
+}

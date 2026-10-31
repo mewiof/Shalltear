@@ -1,0 +1,15 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Shalltear Editor ({{MODULE_NAME}})",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"program": "{{EDITOR_EXECUTABLE}}",
+			"args": ["--project", "${workspaceFolder}"],
+			"cwd": "{{EDITOR_DIRECTORY}}",
+			"stopAtEntry": false,
+			"console": "integratedTerminal"
+		}
+	]
+}

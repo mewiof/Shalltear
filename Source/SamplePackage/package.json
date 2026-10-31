@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.samplepackage",
+	"version": "1.0.0",
+	"displayName": "Sample Package",
+	"description": "A minimal test package.",
+	"kind": "package",
+	"stage": "Update"
+}

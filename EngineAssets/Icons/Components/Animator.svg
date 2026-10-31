@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Animator</title>
+	<rect fill="#4a3a8c" x="4" y="29" width="56" height="6" rx="3"/>
+	<path fill="#8a6fe0" d="M13 19 L22 32 L13 45 L4 32 Z"/>
+	<path fill="#8a6fe0" d="M51 19 L60 32 L51 45 L42 32 Z"/>
+	<path fill="#e5dcff" d="M32 17 L43 32 L32 47 L21 32 Z"/>
+</svg>

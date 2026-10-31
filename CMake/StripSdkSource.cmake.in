@@ -1,0 +1,25 @@
+# SDK source transform runs at install time -> every install strips
+
+set(SHALLTEAR_STRIP_PY "@CMAKE_SOURCE_DIR@/Scripts/strip_sdk_source.py")
+set(SHALLTEAR_STRIP_PYTHON "@SHALLTEAR_STRIP_PYTHON@")
+
+if(NOT SHALLTEAR_STRIP_PYTHON)
+	message(FATAL_ERROR
+		"no Python 3 interpreter was found when this tree was configured.\n"
+		"  Install Python 3 and re-run cmake on this build directory.")
+endif()
+
+set(SHALLTEAR_STRIP_ROOTS
+	"${CMAKE_INSTALL_PREFIX}/@SHALLTEAR_INSTALL_INCLUDE@"
+	"${CMAKE_INSTALL_PREFIX}/@SHALLTEAR_INSTALL_PLAYER_SOURCE@")
+
+message(STATUS "Stripping packaged SDK sources, stamping the license banner")
+execute_process(
+	COMMAND "${SHALLTEAR_STRIP_PYTHON}" "${SHALLTEAR_STRIP_PY}" ${SHALLTEAR_STRIP_ROOTS}
+	RESULT_VARIABLE shalltearStripResult)
+
+if(NOT shalltearStripResult EQUAL 0)
+	message(FATAL_ERROR
+		"strip_sdk_source.py failed (${shalltearStripResult}). Fix the failure above and\n"
+		"  re-install into a clean prefix.")
+endif()

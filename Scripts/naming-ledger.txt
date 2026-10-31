@@ -1,0 +1,45 @@
+# naming change ledger. Regenerate with Scripts/naming_lint.py --ledger
+# 1 line per declaration the codemod would rewrite
+
+[run]
+translation_units = 482
+parse_failures = 0
+named_declarations_seen = 105931
+dictionary_sha256 = 204180779ab181afcb81749adecf2f41c21483858bbb7b07921669d3a563eb61
+
+[dispositions]
+finding = 0
+conforming = 42456
+unresolved = 0
+nonIdentifier = 24077
+noBindingRow = 29508
+styleNotBound = 0
+vendor = 16
+generated = 7831
+reserved = 21
+kept = 16
+foreignNamespace = 39
+foreignOverride = 1967
+TOTAL = 105931
+balances = True
+
+[unmapped_cursor_kinds]
+# reached no binding row. A kind here that OUGHT to be renamed is
+# an unhandled case (not a skip). Check this list before each phase
+DECL_REF_EXPR = 9065
+CALL_EXPR = 6451
+CONSTRUCTOR = 4306
+CXX_BASE_SPECIFIER = 2495
+UNEXPOSED_EXPR = 2195
+NAMESPACE_REF = 1624
+MEMBER_REF_EXPR = 1312
+TEMPLATE_REF = 1051
+TYPE_REF = 472
+OVERLOADED_DECL_REF = 229
+USING_DECLARATION = 141
+MEMBER_REF = 139
+NAMESPACE_ALIAS = 28
+
+[unresolved]
+
+[renames]

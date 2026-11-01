@@ -1208,6 +1208,58 @@ TEST_F(MaterialReadbackFixture, ASurfaceKnowsWhichFaceItShades) {
 	TearDownStage(stage);
 }
 
+TEST_F(MaterialReadbackFixture, MirroredQuadShadesFrontFace) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("CulledFaces.hlsl",
+					 "#pragma shalltear_template unlit\n"
+					 "#pragma shalltear_cull back\n"
+					 "[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 unused; };\n"
+					 "void ShalltearSurfaceFunction(ShalltearSurfaceInput input, inout ShalltearSurface surface) {\n"
+					 "\tsurface.baseColor = input.isFrontFace ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);\n"
+					 "\tsurface.alpha = 1.0;\n"
+					 "}\n");
+	Asset* shader = AssetDatabase::LoadAsset(Path("project://CulledFaces.hlsl"));
+	ASSERT_NE(shader, nullptr);
+	MaterialAsset* material = LoadMaterial("CulledFaces.mat", shader->assetId, {});
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(material, stage));
+	const Vec3 red = ExpectedTexel(Vec3(1.0f, 0.0f, 0.0f));
+
+	struct Row {
+		Vec3 scale;
+		f32 yawDeg;
+		bool drawn;
+	};
+	const Row rows[] = {
+		{Vec3(1.0f, 1.0f, 1.0f), 0.0f, true},
+		{Vec3(-1.0f, 1.0f, 1.0f), 0.0f, true},
+		{Vec3(-1.0f, 1.0f, 1.0f), 180.0f, false},
+		{Vec3(1.0f, 1.0f, -1.0f), 0.0f, false},
+		{Vec3(1.0f, 1.0f, -1.0f), 180.0f, true},
+		{Vec3(-1.0f, -1.0f, 1.0f), 0.0f, true},
+		{Vec3(-1.0f, -1.0f, 1.0f), 180.0f, false},
+	};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	for (u32 i = 0; i < std::size(rows); ++i) {
+		stage.quad->SetLocalScale(rows[i].scale);
+		stage.quad->SetLocalRotation(Quat::AngleAxis(rows[i].yawDeg, Vec3(0.0f, 1.0f, 0.0f)));
+		SceneSystem::EndFrame();
+		ASSERT_TRUE(RenderStage(stage, pixels, size));
+		const Vec3 center = CenterTexel(pixels, size);
+		const Vec3 expected = rows[i].drawn ? red : Vec3::Zero();
+		EXPECT_NEAR(center.x, expected.x, 1.5f) << i;
+		EXPECT_NEAR(center.y, expected.y, 1.5f) << i;
+	}
+
+	TearDownStage(stage);
+}
+
 TEST_F(MaterialReadbackFixture, ViewRecordCarriesCameraData) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

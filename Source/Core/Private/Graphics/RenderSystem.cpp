@@ -1368,6 +1368,7 @@ namespace Shalltear {
 			u32 renderingLayerMask = 1;
 			Handle<SceneObject> object;
 			bool alpha = false;
+			bool mirrored = false;
 			u64 volumeMask = 0;
 		};
 
@@ -1806,6 +1807,7 @@ namespace Shalltear {
 					}
 				}
 				f32 depth = Vec3::DistanceSquared(sortOrigin, worldBounds.Center());
+				const bool mirrored = world.ToMat3().Determinant() < 0.0f;
 
 				for (const SubMesh& submesh : mesh->submeshes) {
 					MaterialAsset* material = materialForSlot(submesh.materialSlot);
@@ -1825,6 +1827,7 @@ namespace Shalltear {
 					entry->submesh = &submesh;
 					entry->vertexAddress = vertexAddress;
 					entry->world = world;
+					entry->mirrored = mirrored;
 					entry->depth = depth;
 					entry->volumeMask = volumeMask;
 					entry->renderingLayerMask = renderingLayerMask;
@@ -2817,6 +2820,12 @@ namespace Shalltear {
 			return device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
 		}
 
+		void DrawMesh(RHI::CommandList& cmd, const DrawEntry& entry) {
+			cmd.SetFrontFace(entry.mirrored ? RHI::FrontFace::CounterClockwise : RHI::FrontFace::Clockwise);
+			cmd.BindIndexBuffer(entry.mesh->indexBuffer);
+			cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex);
+		}
+
 		struct DepthDrawBinding {
 			RHI::PipelineHandle pipeline{};
 			u64 material = ~0ull;
@@ -2848,8 +2857,7 @@ namespace Shalltear {
 			header.drawAddress = drawAddress;
 			header.value = value;
 			cmd.PushConstants({reinterpret_cast<const u8*>(&header), DRAW_HEADER_BYTES});
-			cmd.BindIndexBuffer(entry.mesh->indexBuffer);
-			cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex);
+			DrawMesh(cmd, entry);
 			return true;
 		}
 
@@ -3817,8 +3825,7 @@ namespace Shalltear {
 				header.drawAddress = perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw);
 				cmd.PushConstants({reinterpret_cast<const u8*>(&header), DRAW_HEADER_BYTES});
 
-				cmd.BindIndexBuffer(entry.mesh->indexBuffer);
-				cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex);
+				DrawMesh(cmd, entry);
 				++drawCalls;
 				outTriangles += entry.submesh->indexCount / 3;
 			};
@@ -3938,8 +3945,7 @@ namespace Shalltear {
 						perDraw.draw.drawAddress = perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw);
 						perDraw.color = wireColor.ToU32();
 						cmd.PushConstants({reinterpret_cast<const u8*>(&perDraw), WIRE_PER_DRAW_BYTES});
-						cmd.BindIndexBuffer(entry.mesh->indexBuffer);
-						cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex);
+						DrawMesh(cmd, entry);
 						++drawCalls;
 						outTriangles += entry.submesh->indexCount / 3;
 					}

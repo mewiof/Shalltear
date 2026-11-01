@@ -1327,6 +1327,84 @@ TEST_F(RHIFixture, DepthComparePassesFragmentsNameSays) {
 	FlushDeferredDeletes(*_device);
 }
 
+TEST_F(RHIFixture, FrontFaceLastsUntilNextPipeline) {
+	constexpr i32 SIZE = 16;
+	constexpr f32 TRIANGLE_DEPTH = 0.5f;
+	ShaderAsset shader;
+	if (!ImportFixtureShader(shader, "DepthOnlyTriangle.hlsl")) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
+	}
+	const ShaderVariant& base = shader.variants[SHADER_BASE_VARIANT];
+	RHI::GraphicsPipelineDesc desc;
+	desc.vertexSpirv = {base.vertexSpirv.data(), base.vertexSpirv.size()};
+	desc.bindings = {shader.bindings.data(), shader.bindings.size()};
+	desc.pushConstantSize = shader.pushConstantSize;
+	desc.depth = RHI::DepthMode::TestWrite;
+	desc.cull = RHI::CullMode::Back;
+	desc.depthFormat = RHI::Format::D32Float;
+	desc.debugName = "FrontFaceTriangle";
+	RHI::PipelineHandle pipeline = _device->CreateGraphicsPipeline(desc);
+	ASSERT_TRUE(pipeline.IsValid());
+
+	RHI::TextureDesc depthDesc;
+	depthDesc.size = {SIZE, SIZE};
+	depthDesc.format = RHI::Format::D32Float;
+	depthDesc.usage = RHI::TextureUsage::DepthStencil | RHI::TextureUsage::TransferSrc;
+	depthDesc.debugName = "FrontFaceMap";
+	RHI::TextureHandle depth = _device->CreateTextureResource(depthDesc);
+	ASSERT_TRUE(depth.IsValid());
+
+	auto depthAfter = [&](auto&& record) {
+		RHI::CommandList* cmd = _device->BeginFrame();
+		cmd->TransitionTexture(depth, RHI::ResourceState::DepthWrite);
+		RHI::RenderPassDesc::DepthAttachment depthAttachment;
+		depthAttachment.texture = depth;
+		depthAttachment.load = RHI::LoadOp::Clear;
+		depthAttachment.clearDepth = 0.0f;
+		RHI::RenderPassDesc pass;
+		pass.depth = &depthAttachment;
+		cmd->BeginRenderPass(pass);
+		record(*cmd);
+		cmd->Draw(3);
+		cmd->EndRenderPass();
+		_device->EndFrame();
+		_device->WaitIdle();
+		Vector<u8> bytes = MakePixelBuffer(SIZE, SIZE);
+		_device->ReadbackTexture(depth, {bytes.data(), bytes.size()});
+		return reinterpret_cast<const f32*>(bytes.data())[(SIZE - 2) * SIZE + 1];
+	};
+
+	using F = RHI::FrontFace;
+	EXPECT_EQ(depthAfter([&](RHI::CommandList& cmd) { cmd.SetPipeline(pipeline); }), 0.0f);
+	EXPECT_NEAR(depthAfter([&](RHI::CommandList& cmd) {
+					cmd.SetPipeline(pipeline);
+					cmd.SetFrontFace(F::CounterClockwise);
+				}),
+				TRIANGLE_DEPTH, 1e-5f);
+	EXPECT_EQ(depthAfter([&](RHI::CommandList& cmd) {
+				  cmd.SetFrontFace(F::CounterClockwise);
+				  cmd.SetPipeline(pipeline);
+			  }),
+			  0.0f);
+	EXPECT_EQ(depthAfter([&](RHI::CommandList& cmd) {
+				  cmd.SetPipeline(pipeline);
+				  cmd.SetFrontFace(F::CounterClockwise);
+				  cmd.SetFrontFace(F::Clockwise);
+			  }),
+			  0.0f);
+	EXPECT_NEAR(depthAfter([&](RHI::CommandList& cmd) {
+					cmd.SetPipeline(pipeline);
+					cmd.SetFrontFace(F::CounterClockwise);
+					cmd.SetPipeline(pipeline);
+					cmd.SetFrontFace(F::CounterClockwise);
+				}),
+				TRIANGLE_DEPTH, 1e-5f);
+
+	_device->DestroyResource(pipeline);
+	_device->DestroyResource(depth);
+	FlushDeferredDeletes(*_device);
+}
+
 TEST_F(RHIFixture, KernelDispatchWritesWhatBufferReadsBack) {
 	ShaderAsset kernel;
 	if (!ImportFixtureShader(kernel, "ComputeFixture.hlsl")) {

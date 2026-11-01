@@ -932,6 +932,7 @@ namespace Shalltear::RHI {
 
 		frame.commandListImpl.boundPipelineIndex = 0;
 		frame.commandListImpl.inRenderPass = false;
+		frame.commandListImpl.frontFaceSet = false;
 
 		impl->inFrame = true;
 		return &frame.commandList;

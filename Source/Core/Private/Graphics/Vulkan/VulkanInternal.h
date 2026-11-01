@@ -201,6 +201,8 @@ namespace Shalltear::RHI {
 		VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 		u32 boundPipelineIndex = 0;
 		bool inRenderPass = false;
+		bool frontFaceSet = false;
+		FrontFace frontFace = FrontFace::Clockwise;
 		RectI passArea{};
 		Format passColorFormats[MAX_COLOR_ATTACHMENTS] = {};
 		u32 passColorCount = 0;

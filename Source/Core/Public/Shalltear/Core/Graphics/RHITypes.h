@@ -171,6 +171,8 @@ namespace Shalltear::RHI {
 							   Front,
 							   Off,
 							   Count };
+	enum class FrontFace : u8 { Clockwise = 0,
+								CounterClockwise };
 	enum class PrimitiveTopology : u8 { TriangleList = 0,
 										LineList,
 										PointList };

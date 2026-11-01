@@ -542,7 +542,6 @@ namespace Shalltear::RHI {
 			rasterization.cullMode = VK_CULL_MODE_NONE;
 			break;
 		}
-		rasterization.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
 		VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 		multisample.rasterizationSamples = ToVkSampleCount(desc.samples);
@@ -634,9 +633,9 @@ namespace Shalltear::RHI {
 		blend.attachmentCount = desc.colorFormatCount;
 		blend.pAttachments = blendAttachments;
 
-		VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+		VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_FRONT_FACE};
 		VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-		dynamic.dynamicStateCount = 2;
+		dynamic.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
 		dynamic.pDynamicStates = dynamicStates;
 
 		VkFormat colorFormats[MAX_COLOR_ATTACHMENTS]{};

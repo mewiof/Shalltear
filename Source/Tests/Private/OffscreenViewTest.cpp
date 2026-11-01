@@ -1214,6 +1214,50 @@ TEST_F(OffscreenViewFixture, RenderersDrawAtOwnTransforms) {
 	SceneSystem::UnloadScene(level);
 }
 
+TEST_F(OffscreenViewFixture, MirroredCubeMatchesUnmirrored) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> cube = AddCube(level, 0.0f);
+	if (!cube.IsValid()) {
+		GTEST_SKIP();
+	}
+	cube->SetLocalRotation(Quat::FromEuler(Vec3(28.0f, 35.0f, 0.0f)));
+	AddSun(level);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+
+	Vector<u8> plain{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderAndRead(target, CubeView(), plain, size));
+	ASSERT_GT(CountLit(plain, size), 400u);
+
+	const Vec3 mirrors[] = {Vec3(-1.0f, 1.0f, 1.0f), Vec3(1.0f, -1.0f, 1.0f), Vec3(1.0f, 1.0f, -1.0f), Vec3(-1.0f, -1.0f, -1.0f)};
+	for (const Vec3& scale : mirrors) {
+		cube->SetLocalScale(scale);
+		SceneSystem::EndFrame();
+		Vector<u8> mirrored{GetMemoryResource(MemTag::Graphics)};
+		ASSERT_TRUE(RenderAndRead(target, CubeView(), mirrored, size));
+		u32 differing = 0;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				const RGBA a = TexelAt(plain, size, x, y);
+				const RGBA b = TexelAt(mirrored, size, x, y);
+				const i32 luma = static_cast<i32>(a.r) + a.g + a.b - b.r - b.g - b.b;
+				differing += std::abs(luma) > 15 ? 1 : 0;
+			}
+		}
+		EXPECT_GT(CountLit(mirrored, size), 400u);
+		EXPECT_LE(differing, 8u) << scale.x << ' ' << scale.y << ' ' << scale.z;
+	}
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
+}
+
 TEST_F(OffscreenViewFixture, WirePassIndexesPerDraw) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";
@@ -2192,6 +2236,78 @@ TEST_F(ShadowViewFixture, OccluderOnlyDarkens) {
 	SceneSystem::UnloadScene(scene);
 }
 
+TEST_F(ShadowViewFixture, MirroredQuadCastsSameShadow) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* cubeAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	Asset* quadAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Quad.primitive"));
+	ASSERT_NE(cubeAsset, nullptr);
+	ASSERT_NE(quadAsset, nullptr);
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Shadows");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.3f, -1.0f, 0.7f));
+	ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeAsset)));
+
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+
+	Handle<SceneObject> caster = SceneSystem::CreateObject("Caster", scene);
+	caster->SetLocalPosition(Vec3(1.1f, 3.4f, -0.6f));
+	caster->SetLocalRotation(Quat::LookRotation(-sunObject->TransformDirection(Vec3::Forward()).Normalized()));
+	caster->SetLocalScale(Vec3(3.0f, 3.0f, 3.0f));
+	caster->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(quadAsset)));
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+
+	Vector<u8> plain{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, plain, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	sun->SetCastShadows(false);
+	RenderTo(target, unshadowed, size);
+	sun->SetCastShadows(true);
+
+	auto countDiffering = [&](const Vector<u8>& a, const Vector<u8>& b) {
+		u32 differing = 0;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				const i32 delta = static_cast<i32>(Luma(TexelAt(a, size, x, y))) - static_cast<i32>(Luma(TexelAt(b, size, x, y)));
+				differing += std::abs(delta) > 6 ? 1 : 0;
+			}
+		}
+		return differing;
+	};
+	ASSERT_GT(countDiffering(plain, unshadowed), 50u);
+
+	const Vec3 mirrors[] = {Vec3(-3.0f, 3.0f, 3.0f), Vec3(-3.0f, -3.0f, 3.0f)};
+	for (const Vec3& scale : mirrors) {
+		caster->SetLocalScale(scale);
+		SceneSystem::EndFrame();
+		Vector<u8> mirrored{GetMemoryResource(MemTag::Graphics)};
+		RenderTo(target, mirrored, size);
+		EXPECT_GT(countDiffering(mirrored, unshadowed), 50u) << scale.x << ' ' << scale.y;
+		EXPECT_LE(countDiffering(mirrored, plain), 8u) << scale.x << ' ' << scale.y;
+	}
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
 TEST_F(ShadowViewFixture, NonCasterRendersNoMaps) {
 	InitializeWith();
 	if (!RenderSystem::IsRenderingAvailable()) {
@@ -2983,6 +3099,10 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 			Handle<Scene> scene = SceneSystem::CreateScene("Shadows");
 			Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
 			Handle<Light> sun = BuildOccludedScene(scene, cube);
+			Handle<SceneObject> mirrored = SceneSystem::CreateObject("Mirrored", scene);
+			mirrored->SetLocalPosition(Vec3(-2.4f, 1.2f, 1.9f));
+			mirrored->SetLocalScale(Vec3(-1.5f, 1.5f, 1.5f));
+			mirrored->AddComponent<MeshRenderer>()->SetMesh(cube);
 			Handle<SceneObject> spotObject = SceneSystem::CreateObject("Spot", scene);
 			spotObject->SetLocalPosition(Vec3(-4.3f, 6.1f, 2.7f));
 			spotObject->SetLocalRotation(Quat::LookRotation(Vec3(0.31f, -0.88f, -0.36f).Normalized()));

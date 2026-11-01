@@ -183,6 +183,19 @@ namespace Shalltear::RHI {
 #endif
 		d.fd.vkCmdBindPipeline(_impl->commandBuffer, resource->bindPoint, resource->pipeline);
 		_impl->boundPipelineIndex = pipeline.index;
+		if (!compute) {
+			SetFrontFace(FrontFace::Clockwise);
+		}
+	}
+
+	void CommandList::SetFrontFace(FrontFace face) {
+		if (_impl->frontFaceSet && _impl->frontFace == face) {
+			return;
+		}
+		DeviceImpl& d = *_impl->device;
+		d.fd.vkCmdSetFrontFace(_impl->commandBuffer, face == FrontFace::CounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
+		_impl->frontFace = face;
+		_impl->frontFaceSet = true;
 	}
 
 	void CommandList::SetViewportScissor(RectI rect) {

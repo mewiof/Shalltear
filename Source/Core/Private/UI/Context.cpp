@@ -768,21 +768,23 @@ namespace Shalltear::UI {
 		const Element& element = elements[elementIndex];
 		const Style& style = ComputedS(elementIndex);
 		const Vec2 extent = text->shaped.extent;
+		const bool input = element.textInputIndex != INVALID_UI_INDEX;
 
 		f32 dx = box.content.x;
 		f32 dy = box.content.y;
-		if (element.textInputIndex != INVALID_UI_INDEX) {
+		// must match FollowCaret's scroll bound
+		const f32 room = input ? box.content.w - SCROLL_SHOW_MARGIN : box.content.w;
+		const f32 freeX = std::max(0.0f, room - extent.x);
+		const Align align = EffectiveTextAlign(elementIndex);
+		if (align == Align::Center) {
+			dx += freeX * 0.5f;
+		} else if (align == Align::End) {
+			dx += freeX;
+		}
+		if (input) {
 			dx -= element.scrollOffset.x;
 			if (textInputs[element.textInputIndex].multiline) {
 				return {Snap(dx), Snap(dy - element.scrollOffset.y)};
-			}
-		} else {
-			f32 freeX = std::max(0.0f, box.content.w - extent.x);
-			const Align align = EffectiveTextAlign(elementIndex);
-			if (align == Align::Center) {
-				dx += freeX * 0.5f;
-			} else if (align == Align::End) {
-				dx += freeX;
 			}
 		}
 		f32 freeY = std::max(0.0f, box.content.h - extent.y);
@@ -803,9 +805,6 @@ namespace Shalltear::UI {
 	}
 
 	Align ContextImpl::EffectiveTextAlign(u32 elementIndex) const {
-		if (elements[elementIndex].textInputIndex != INVALID_UI_INDEX) {
-			return Align::Start;
-		}
 		const Align align = ComputedS(elementIndex).textAlign;
 		return align == Align::Center || align == Align::End ? align : Align::Start;
 	}
@@ -822,6 +821,7 @@ namespace Shalltear::UI {
 		f32 physicalSpacing = style.letterSpacing * scale;
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
 		const Align align = EffectiveTextAlign(elementIndex);
+		const bool editable = elements[elementIndex].textInputIndex != INVALID_UI_INDEX;
 
 		const u32 atlasGeneration = fontSystem->GetAtlasGeneration();
 		if (!text->dirty &&
@@ -831,6 +831,7 @@ namespace Shalltear::UI {
 			text->cachedLetterSpacing == physicalSpacing &&
 			text->cachedOverflow == overflow &&
 			text->cachedAlign == align &&
+			text->cachedEditable == editable &&
 			text->shapedGeneration == atlasGeneration) {
 			return;
 		}
@@ -842,6 +843,7 @@ namespace Shalltear::UI {
 		query.wrapWidth = text->wrapWidth;
 		query.overflow = overflow;
 		query.align = align;
+		query.editable = editable;
 		query.outlineWidth = physicalOutline;
 		query.letterSpacing = physicalSpacing;
 		fontSystem->ShapeText(query, text->shaped);
@@ -852,6 +854,7 @@ namespace Shalltear::UI {
 		text->cachedLetterSpacing = physicalSpacing;
 		text->cachedOverflow = overflow;
 		text->cachedAlign = align;
+		text->cachedEditable = editable;
 		text->shapedGeneration = atlasGeneration;
 		text->shapedWrapWidth = text->wrapWidth;
 		text->dirty = false;

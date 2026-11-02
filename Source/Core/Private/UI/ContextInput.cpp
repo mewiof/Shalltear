@@ -53,8 +53,6 @@ namespace Shalltear::UI {
 			}
 		}
 
-		constexpr f32 SCROLL_SHOW_MARGIN = 1.0f;
-
 		bool PointInRoundedRect(Vec2 p, const Rect& r, const Radii& radii) {
 			if (radii.IsZero()) {
 				return r.Contains(p);

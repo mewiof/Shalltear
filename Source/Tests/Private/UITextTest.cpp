@@ -528,6 +528,45 @@ TEST_F(UIFontFixture, TrailingSpacesHangPastAlignedEdge) {
 	}
 }
 
+TEST_F(UIFontFixture, EditableRunHangsOnlySoftWrapSpaces) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	constexpr std::string_view TEXT = "ab \nseveral words that will wrap";
+	const f32 width = fonts->MeasureText(Query("several words that will wrap")).x * 0.4f;
+
+	for (const bool editable : {false, true}) {
+		UI::TextQuery query = Query(TEXT, width);
+		query.align = UI::Align::End;
+		query.editable = editable;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		const u32 lines = run.LineCount();
+		ASSERT_GE(lines, 4u);
+
+		u32 hanging = 0;
+		for (u32 line = 0; line < lines; ++line) {
+			f32 inked = -1.0f;
+			f32 last = -1.0f;
+			bool first = true;
+			for (const UI::CaretStop& stop : run.caretStops) {
+				if (stop.line != line) {
+					continue;
+				}
+				if (!first && TEXT[stop.byteOffset - 1] != ' ') {
+					inked = stop.x;
+				}
+				first = false;
+				last = stop.x;
+			}
+			ASSERT_GE(inked, 0.0f) << line;
+			const bool counted = editable && (line == 0 || line + 1 == lines);
+			EXPECT_NEAR(counted ? last : inked, run.extent.x, 0.5f) << line;
+			hanging += line > 0 && line + 1 < lines && last > inked ? 1u : 0u;
+		}
+		EXPECT_GE(hanging, 1u);
+		EXPECT_GT(run.CaretXForByte(3), run.CaretXForByte(2) + 1.0f);
+	}
+}
+
 TEST_F(UIFontFixture, CenteredLabelCentersEachLine) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
 	UI::ContextDesc desc;

@@ -1398,6 +1398,115 @@ TEST(UIInputTest, MultilineSelectionBands) {
 	EXPECT_NEAR(bands[2].w, 30.0f, 0.5f);
 }
 
+TEST(UIInputTest, CenteredMultilineCentersEachLine) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	ctx.LoadStyleSheet(".note { text-align: center; }");
+	UI::ElementHandle input = MakeFocusedMultiline(ctx, "ab\nabcdef");
+	ctx.AddClass(input, StringHash("note"));
+	ctx.Update();
+
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+	Vector<UI::Rect> glyphs{GetMemoryResource(MemTag::UI)};
+	for (const UI::UIQuad& quad : list.quads) {
+		if ((quad.flags & UI::QUAD_FLAG_GLYPH) != 0u) {
+			glyphs.push_back(quad.rect);
+		}
+	}
+	ASSERT_EQ(glyphs.size(), 8u);
+	const UI::Rect content = ctx.GetLayout(input).content;
+	const f32 middle = content.x + (content.w - 1.0f) * 0.5f;
+	auto lineMiddle = [&](u32 first, u32 last) {
+		return (glyphs[first].x - 1.0f + glyphs[last].x - 1.0f + MockFontSystem::ADVANCE) * 0.5f;
+	};
+	EXPECT_NEAR(lineMiddle(0, 1), middle, 1.0f);
+	EXPECT_NEAR(lineMiddle(2, 7), middle, 1.0f);
+	EXPECT_GT(glyphs[2].x, content.x + content.w * 0.25f);
+}
+
+TEST(UIInputTest, RightAlignedMultilineHangsOnlySoftWrapSpaces) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	ctx.LoadStyleSheet(".note { text-align: right; }");
+	UI::ElementHandle input = MakeFocusedMultiline(ctx, "ab \naaa bbbb", 4.0f * MockFontSystem::ADVANCE + 1.0f);
+	ctx.AddClass(input, StringHash("note"));
+	ctx.Update();
+
+	const UI::Context::ShapedTextView view = ctx.GetShapedText(input);
+	ASSERT_NE(view.run, nullptr);
+	ASSERT_EQ(view.run->LineCount(), 3u);
+	const f32 edge = view.run->CaretXForByte(12);
+	EXPECT_FLOAT_EQ(edge, view.run->extent.x);
+	EXPECT_FLOAT_EQ(view.run->CaretXForByte(3), edge);
+	EXPECT_FLOAT_EQ(view.run->CaretXForByte(7), edge);
+	f32 hanging = 0.0f;
+	for (const UI::CaretStop& stop : view.run->caretStops) {
+		if (stop.line == 1) {
+			hanging = std::max(hanging, stop.x);
+		}
+	}
+	EXPECT_GT(hanging, edge);
+	const UI::Rect content = ctx.GetLayout(input).content;
+	EXPECT_NEAR(view.originPx.x + edge, content.x + content.w - 1.0f, 0.5f);
+}
+
+TEST(UIInputTest, AlignedSelectionBandsStartAtEachLine) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	ctx.LoadStyleSheet(".note { text-align: center; }");
+	UI::ElementHandle input = MakeFocusedMultiline(ctx, "abcd\nxy\nabc");
+	ctx.AddClass(input, StringHash("note"));
+	ctx.Update();
+	Press(ctx, Key::Home, KeyMod::Ctrl);
+	Press(ctx, Key::Right);
+	Press(ctx, Key::End, KeyMod::Ctrl | KeyMod::Shift);
+
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+	Vector<UI::Rect> bands{GetMemoryResource(MemTag::UI)};
+	for (const UI::UIQuad& quad : list.quads) {
+		if (quad.uv.w == 0.0f && quad.color0.a > 0.1f && quad.color0.a < 0.9f &&
+			std::abs(quad.rect.h - MockFontSystem::LINE_HEIGHT) < 0.5f) {
+			bands.push_back(quad.rect);
+		}
+	}
+	ASSERT_EQ(bands.size(), 3u);
+	std::sort(bands.begin(), bands.end(), [](const UI::Rect& a, const UI::Rect& b) { return a.y < b.y; });
+	const UI::Context::ShapedTextView view = ctx.GetShapedText(input);
+	ASSERT_NE(view.run, nullptr);
+	const f32 x = view.originPx.x;
+	EXPECT_NEAR(bands[0].x, x + 10.0f, 0.5f);
+	EXPECT_NEAR(bands[1].x, x + view.run->CaretXForByte(5), 0.5f);
+	EXPECT_NEAR(bands[1].x, x + 10.0f, 0.5f);
+	EXPECT_NEAR(bands[1].w, 20.0f, 0.5f);
+	EXPECT_NEAR(bands[2].x, x + view.run->CaretXForByte(8), 0.5f);
+	EXPECT_NEAR(bands[2].w, 30.0f, 0.5f);
+}
+
+TEST(UIInputTest, BecomingInputReshapesTrailingSpaces) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	UI::Style style = FixedBox(200.0f, 20.0f);
+	style.textAlign = UI::Align::End;
+	style.textOverflow = UI::TextOverflow::Clip;
+	UI::ElementHandle element = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(element, Handle<FontAsset>{}, 14.0f, Color::White(), "ab ");
+	auto pastExtent = [&]() {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		const UI::Context::ShapedTextView view = ctx.GetShapedText(element);
+		return view.run ? view.run->CaretXForByte(3) - view.run->extent.x : -1.0f;
+	};
+
+	EXPECT_FLOAT_EQ(pastExtent(), MockFontSystem::ADVANCE);
+	ctx.SetTextInput(element, true);
+	EXPECT_FLOAT_EQ(pastExtent(), 0.0f);
+	ctx.SetTextInput(element, false);
+	EXPECT_FLOAT_EQ(pastExtent(), MockFontSystem::ADVANCE);
+}
+
 TEST(UIInputTest, ShortMultilineFollowsCaret) {
 	MockFontSystem fonts;
 	UI::Context ctx(Desc(), &fonts);

@@ -481,13 +481,15 @@ namespace Shalltear::UI {
 						const CaretStop a = run.StopForByte(static_cast<u32>(std::min(input->cursor, input->anchor)));
 						const CaretStop b = run.StopForByte(static_cast<u32>(std::max(input->cursor, input->anchor)));
 						for (u32 line = a.line; line <= b.line; ++line) {
+							f32 lineStart = INFINITY;
 							f32 lineEnd = 0.0f;
 							for (const CaretStop& stop : run.caretStops) {
 								if (stop.line == line) {
+									lineStart = std::min(lineStart, stop.x);
 									lineEnd = std::max(lineEnd, stop.x);
 								}
 							}
-							const f32 x0 = line == a.line ? a.x : 0.0f;
+							const f32 x0 = line == a.line ? a.x : lineStart;
 							const f32 x1 = line == b.line ? b.x : lineEnd;
 							if (x1 <= x0) {
 								continue;

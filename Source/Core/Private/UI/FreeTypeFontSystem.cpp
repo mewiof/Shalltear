@@ -307,7 +307,7 @@ namespace Shalltear::UI {
 		};
 		u32 lineStartByte = 0;
 
-		auto flushLine = [&](bool startNewLine) {
+		auto flushLine = [&](bool startNewLine, bool softWrap) {
 			f32 baseline = penY + ascender;
 			f32 x = 0.0f;
 			f32 inked = 0.0f;
@@ -352,7 +352,7 @@ namespace Shalltear::UI {
 				previousIndex = entry->glyphIndex;
 			}
 			if (align) {
-				_scratchSpans.back().width = inked;
+				_scratchSpans.back().width = query.editable && !softWrap ? x : inked;
 			}
 			maxLineWidth = std::max(maxLineWidth, x);
 			_scratchLine.clear();
@@ -441,7 +441,7 @@ namespace Shalltear::UI {
 					pendingOverflow = true;
 					break;
 				}
-				flushLine(true);
+				flushLine(true, false);
 				out.multiline = true;
 				lineAdvance = 0.0f;
 				lastBreakCount = 0;
@@ -465,7 +465,7 @@ namespace Shalltear::UI {
 				Vector<Pending> tail{GetMemoryResource(MemTag::UI)};
 				tail.assign(_scratchLine.begin() + emitCount, _scratchLine.end());
 				_scratchLine.resize(emitCount);
-				flushLine(true);
+				flushLine(true, true);
 				out.multiline = true;
 				_scratchLine = std::move(tail);
 				lastBreakCount = 0;
@@ -508,7 +508,7 @@ namespace Shalltear::UI {
 
 		const bool endsInNewline = !ellipsize && length > 0 && text[length - 1] == '\n';
 		if (!_scratchLine.empty() || lineCount == 0 || endsInNewline) {
-			flushLine(false);
+			flushLine(false, false);
 			penY += lineHeight;
 		}
 

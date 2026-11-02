@@ -56,6 +56,8 @@ namespace Shalltear::UI {
 		TextOverflow overflow = TextOverflow::Wrap;
 		// aligns each line to the widest one (ignore trailing spaces)
 		Align align = Align::Start;
+		// trailing spaces count before \n/end (a soft wrap's still hang)
+		bool editable = false;
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
 	};

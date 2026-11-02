@@ -1650,6 +1650,63 @@ TEST_F(UIRenderFixture, CenteredLinesInkAboutBoxCenter) {
 	}
 }
 
+TEST_F(UIRenderFixture, CenteredInputInksAboutBoxCenter) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{160, 32};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::Style style = FixedBox(160.0f, 32.0f);
+	style.textAlign = UI::Align::Center;
+	UI::ElementHandle input = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(input, font, 16.0f, Color::White(), "abc");
+	ctx.SetTextInput(input, true);
+
+	auto inkColumns = [&](i32& left, i32& right) {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+		if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels)) {
+			return false;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		left = size.x;
+		right = -1;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				if (HalfToFloat(halves[(static_cast<size_t>(y) * size.x + x) * 4 + 3]) > 0.25f) {
+					left = std::min(left, x);
+					right = std::max(right, x);
+				}
+			}
+		}
+		return true;
+	};
+
+	i32 left = 0;
+	i32 right = 0;
+	if (!inkColumns(left, right)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	ASSERT_GE(right, left);
+	EXPECT_GT(left, 40);
+	EXPECT_NEAR(static_cast<f32>(left + right + 1) * 0.5f, static_cast<f32>(size.x) * 0.5f, 2.0f);
+
+	ctx.SetTextString(input, "a value far wider than the box it sits in");
+	ASSERT_TRUE(inkColumns(left, right));
+	EXPECT_LE(left, 2);
+	EXPECT_GE(right, size.x - 3);
+}
+
 namespace {
 
 	f32 TurnedRoundedBoxSDF(f32 px, f32 py, const UI::Rect& box, f32 radius, f32 rotation) {

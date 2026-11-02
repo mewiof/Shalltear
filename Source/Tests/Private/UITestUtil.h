@@ -33,6 +33,7 @@ namespace UITest {
 				u32 glyph;
 				u32 stop;
 				f32 inked;
+				f32 hard = -1.0f;
 			};
 			Vector<Span> spans{GetMemoryResource(MemTag::Debug)};
 			spans.push_back({0, 0, 0.0f});
@@ -56,6 +57,7 @@ namespace UITest {
 						truncated = true;
 						break;
 					}
+					spans.back().hard = penX;
 					penX = 0.0f;
 					penY += LINE_HEIGHT;
 					out.multiline = true;
@@ -108,11 +110,13 @@ namespace UITest {
 				maxWidth = penX > maxWidth ? penX : maxWidth;
 			}
 
+			spans.back().hard = penX;
 			const f32 share = query.align == UI::Align::Center ? 0.5f : (query.align == UI::Align::End ? 1.0f : 0.0f);
 			if (share > 0.0f) {
 				spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.caretStops.size()), 0.0f});
 				for (size_t n = 0; n + 1 < spans.size(); ++n) {
-					const f32 shift = UI::SnapToPixel((maxWidth - spans[n].inked) * share);
+					const f32 width = query.editable && spans[n].hard >= 0.0f ? spans[n].hard : spans[n].inked;
+					const f32 shift = UI::SnapToPixel((maxWidth - width) * share);
 					for (u32 k = spans[n].glyph; k < spans[n + 1].glyph; ++k) {
 						out.glyphs[k].rect.x += shift;
 					}

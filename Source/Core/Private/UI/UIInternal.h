@@ -69,6 +69,7 @@ namespace Shalltear::UI {
 		f32 cachedSizePhysical = 0.0f;
 		TextOverflow cachedOverflow = TextOverflow::Wrap;
 		Align cachedAlign = Align::Start;
+		bool cachedEditable = false;
 		u32 shapedGeneration = 0;
 		Vec2 measuredExtent{};
 
@@ -130,6 +131,8 @@ namespace Shalltear::UI {
 	};
 
 	constexpr f32 LAYOUT_INF = std::numeric_limits<f32>::max();
+
+	inline constexpr f32 SCROLL_SHOW_MARGIN = 1.0f;
 
 	struct Constraint {
 		Vec2 available{LAYOUT_INF, LAYOUT_INF};

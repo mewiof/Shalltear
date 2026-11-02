@@ -102,6 +102,20 @@ namespace {
 		return carets;
 	}
 
+	f32 PaintedCaretX(UI::Context& ctx, const UI::Rect& content) {
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		for (const UI::UIQuad& quad : list.quads) {
+			if ((quad.flags & UI::QUAD_FLAG_GLYPH) != 0u || quad.rect.w <= 0.0f || quad.rect.w > 1.5f) {
+				continue;
+			}
+			if (quad.rect.x >= content.x - 1.0f && quad.rect.x <= content.x + content.w + 1.0f) {
+				return quad.rect.x;
+			}
+		}
+		return -1.0f;
+	}
+
 	void TypeReplace(UI::Context& ctx, std::string_view text) {
 		ctx.InjectInput(KeyPress(Key::A, KeyMod::Ctrl));
 		for (char c : text) {
@@ -2045,6 +2059,102 @@ TEST(WidgetsTest, TextFieldNeverWrapsHoweverNarrow) {
 	EXPECT_EQ(rig.ctx.GetFocused(), field);
 	TypeReplace(rig.ctx, "x");
 	EXPECT_EQ(rig.ctx.GetTextString(field), "x");
+}
+
+TEST(WidgetsTest, AlignedFieldPlacesShortValue) {
+	for (const std::string_view align : {"center", "right"}) {
+		Rig rig;
+		rig.ctx.LoadStyleSheet(str(".slt-textfield { text-align: ") + str(align) + "; }");
+		UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+		UI::Widgets::TextFieldDesc desc;
+		desc.text = "123";
+		UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+		rig.ctx.Update();
+
+		const UI::Rect& content = rig.ctx.GetLayout(field).content;
+		const f32 free = content.w - 1.0f - 3.0f * MockFontSystem::ADVANCE;
+		const f32 origin = UI::SnapToPixel(content.x + (align == "center" ? free * 0.5f : free));
+		auto [head, tail] = PaintedGlyphSpan(rig.ctx);
+		EXPECT_FLOAT_EQ(head.x, origin + 1.0f) << align;
+		EXPECT_FLOAT_EQ(tail.x, origin + 2.0f * MockFontSystem::ADVANCE + 1.0f) << align;
+
+		Click(rig.ctx, Center(rig.ctx, field));
+		ASSERT_EQ(rig.ctx.GetFocused(), field);
+		rig.ctx.InjectInput(KeyPress(Key::End));
+		rig.ctx.Update();
+		EXPECT_FLOAT_EQ(PaintedCaretX(rig.ctx, content), origin + 3.0f * MockFontSystem::ADVANCE) << align;
+		EXPECT_FLOAT_EQ(PaintedGlyphSpan(rig.ctx).first.x, origin + 1.0f) << align;
+	}
+}
+
+TEST(WidgetsTest, OverflowingCenteredFieldStartsAtLeft) {
+	Rig rig;
+	rig.ctx.LoadStyleSheet(".slt-textfield { text-align: center; }");
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(60.0f, 24.0f));
+	UI::Widgets::TextFieldDesc desc;
+	desc.text = "123456789012345";
+	UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+	rig.ctx.Update();
+	const UI::Rect& content = rig.ctx.GetLayout(field).content;
+	EXPECT_NEAR(PaintedGlyphSpan(rig.ctx).first.x, content.x + 1.0f, 0.5f);
+
+	Click(rig.ctx, Center(rig.ctx, field));
+	ASSERT_EQ(rig.ctx.GetFocused(), field);
+	rig.ctx.Update();
+	auto [head, tail] = PaintedGlyphSpan(rig.ctx);
+	EXPECT_LT(head.x, content.x);
+	EXPECT_NEAR(tail.x - 1.0f + MockFontSystem::ADVANCE, content.x + content.w - 1.0f, 0.5f);
+
+	rig.ctx.InjectInput(KeyPress(Key::Home));
+	rig.ctx.Update();
+	EXPECT_NEAR(PaintedGlyphSpan(rig.ctx).first.x, content.x + 1.0f, 0.5f);
+
+	TypeReplace(rig.ctx, "12");
+	const f32 origin = UI::SnapToPixel(content.x + (content.w - 1.0f - 2.0f * MockFontSystem::ADVANCE) * 0.5f);
+	EXPECT_FLOAT_EQ(PaintedGlyphSpan(rig.ctx).first.x, origin + 1.0f);
+}
+
+TEST(WidgetsTest, TypedSpaceMovesRightAlignedText) {
+	Rig rig;
+	rig.ctx.LoadStyleSheet(".slt-textfield { text-align: right; }");
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	UI::Widgets::TextFieldDesc desc;
+	UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+	rig.ctx.Update();
+	const UI::Rect& content = rig.ctx.GetLayout(field).content;
+	const f32 edge = content.x + content.w - 1.0f;
+
+	Click(rig.ctx, Center(rig.ctx, field));
+	ASSERT_EQ(rig.ctx.GetFocused(), field);
+	TypeReplace(rig.ctx, "ab");
+	const f32 before = PaintedGlyphSpan(rig.ctx).first.x;
+	EXPECT_NEAR(PaintedCaretX(rig.ctx, content), edge, 0.5f);
+
+	rig.ctx.InjectInput(TextChar(' '));
+	rig.ctx.Update();
+	ASSERT_EQ(rig.ctx.GetTextString(field), "ab ");
+	EXPECT_NEAR(PaintedCaretX(rig.ctx, content), edge, 0.5f);
+	EXPECT_FLOAT_EQ(PaintedGlyphSpan(rig.ctx).first.x, before - MockFontSystem::ADVANCE);
+}
+
+TEST(WidgetsTest, ClickInCenteredFieldHitsPaintedGlyphs) {
+	Rig rig;
+	rig.ctx.LoadStyleSheet(".slt-textfield { text-align: center; }");
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	UI::Widgets::TextFieldDesc desc;
+	desc.text = "123";
+	UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+	rig.ctx.Update();
+	Click(rig.ctx, Center(rig.ctx, field));
+	ASSERT_EQ(rig.ctx.GetFocused(), field);
+
+	const UI::Rect& content = rig.ctx.GetLayout(field).content;
+	const UI::Rect head = PaintedGlyphSpan(rig.ctx).first;
+	ASSERT_GT(head.x, content.x + content.w * 0.25f);
+	Click(rig.ctx, {head.x - 1.0f + MockFontSystem::ADVANCE, content.y + content.h * 0.5f});
+	rig.ctx.InjectInput(TextChar('x'));
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetTextString(field), "1x23");
 }
 
 namespace {

@@ -68,6 +68,7 @@ namespace Shalltear::UI {
 		f32 cachedLetterSpacing = 0.0f;
 		f32 cachedSizePhysical = 0.0f;
 		TextOverflow cachedOverflow = TextOverflow::Wrap;
+		Align cachedAlign = Align::Start;
 		u32 shapedGeneration = 0;
 		Vec2 measuredExtent{};
 
@@ -329,6 +330,7 @@ namespace Shalltear::UI {
 		Vec2 TextOriginPx(u32 elementIndex) const;
 		TextInputState* GetTextInput(u32 elementIndex);
 		TextOverflow EffectiveTextOverflow(u32 elementIndex) const;
+		Align EffectiveTextAlign(u32 elementIndex) const;
 		void EnsureShaped(u32 elementIndex);
 		Vec2 MeasureTextExtent(u32 elementIndex, f32 wrapWidth, bool commit = true);
 		void OnTextEdited(u32 elementIndex);

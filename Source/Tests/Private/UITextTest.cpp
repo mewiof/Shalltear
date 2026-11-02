@@ -464,6 +464,142 @@ TEST_F(UIFontFixture, EllipsizedRunFillsBudget) {
 	EXPECT_EQ(longWalk, shortWalk) << longWalk << " glyphs against " << shortWalk;
 }
 
+TEST_F(UIFontFixture, AlignedLinesShiftWithinWidest) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	constexpr std::string_view TEXT = "short\na much longer second line";
+	UI::ShapedRun start;
+	ASSERT_TRUE(fonts->ShapeText(Query(TEXT), start));
+	const f32 slack = start.extent.x - fonts->MeasureText(Query("short")).x;
+	ASSERT_GT(slack, 20.0f);
+
+	for (UI::Align align : {UI::Align::Center, UI::Align::End}) {
+		UI::TextQuery query = Query(TEXT);
+		query.align = align;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		EXPECT_FLOAT_EQ(run.extent.x, start.extent.x);
+		EXPECT_FLOAT_EQ(fonts->MeasureText(query).x, start.extent.x);
+		ASSERT_EQ(run.caretStops.size(), start.caretStops.size());
+		const f32 shift = UI::SnapToPixel(slack * (align == UI::Align::Center ? 0.5f : 1.0f));
+		for (size_t k = 0; k < run.caretStops.size(); ++k) {
+			const f32 expected = start.caretStops[k].x + (run.caretStops[k].line == 0 ? shift : 0.0f);
+			EXPECT_FLOAT_EQ(run.caretStops[k].x, expected) << k;
+		}
+	}
+}
+
+TEST_F(UIFontFixture, TrailingSpacesHangPastAlignedEdge) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	constexpr std::string_view TEXT = "several words that will wrap";
+	const f32 width = fonts->MeasureText(Query(TEXT)).x * 0.4f;
+
+	for (UI::Align align : {UI::Align::Center, UI::Align::End}) {
+		UI::TextQuery query = Query(TEXT, width);
+		query.align = align;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		ASSERT_GE(run.LineCount(), 2u);
+
+		u32 hanging = 0;
+		for (u32 line = 0; line < run.LineCount(); ++line) {
+			f32 first = -1.0f;
+			f32 inked = -1.0f;
+			f32 last = -1.0f;
+			for (const UI::CaretStop& stop : run.caretStops) {
+				if (stop.line != line) {
+					continue;
+				}
+				if (first < 0.0f) {
+					first = stop.x;
+				} else if (TEXT[stop.byteOffset - 1] != ' ') {
+					inked = stop.x;
+				}
+				last = stop.x;
+			}
+			ASSERT_GE(inked, first) << line;
+			hanging += last > inked ? 1u : 0u;
+			if (align == UI::Align::End) {
+				EXPECT_NEAR(inked, run.extent.x, 0.5f) << line;
+			} else {
+				EXPECT_NEAR(first + inked, run.extent.x, 1.0f) << line;
+			}
+		}
+		EXPECT_GE(hanging, 1u);
+	}
+}
+
+TEST_F(UIFontFixture, CenteredLabelCentersEachLine) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	UI::ContextDesc desc;
+	desc.sizePx = {400, 200};
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, fonts);
+	UI::Style style = FixedBox(300.0f, 100.0f);
+	style.textAlign = UI::Align::Center;
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(label, Handle<FontAsset>(_font), 16.0f, Color::White(), "short\na much longer second line");
+	ctx.Update();
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+
+	const UI::Context::ShapedTextView view = ctx.GetShapedText(label);
+	ASSERT_NE(view.run, nullptr);
+	ASSERT_EQ(view.run->LineCount(), 2u);
+	const UI::Rect content = ctx.GetLayout(label).content;
+	const f32 widths[] = {fonts->MeasureText(Query("short")).x, fonts->MeasureText(Query("a much longer second line")).x};
+	ASSERT_LT(widths[0] + 20.0f, widths[1]);
+	ASSERT_LT(widths[1], content.w);
+	for (u32 line = 0; line < 2; ++line) {
+		const UI::CaretStop start = view.run->StopForByte(line == 0 ? 0u : 6u);
+		ASSERT_EQ(start.line, line);
+		EXPECT_NEAR(view.originPx.x + start.x, content.x + (content.w - widths[line]) * 0.5f, 1.0f) << line;
+	}
+}
+
+TEST(UITextTest, AlignedLinesPaintInPlace) {
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {400, 200};
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, &fonts);
+	UI::Style style = FixedBox(100.0f, 50.0f);
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(label, {}, 16.0f, Color::White(), "ab\nabcdef");
+
+	auto firstGlyphXs = [&]() {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		Vector<f32> xs{GetMemoryResource(MemTag::UI)};
+		for (const UI::UIQuad& quad : list.quads) {
+			if ((quad.flags & UI::QUAD_FLAG_GLYPH) != 0u) {
+				xs.push_back(quad.rect.x);
+			}
+		}
+		return xs;
+	};
+
+	const f32 left = ctx.GetLayout(label).content.x;
+	Vector<f32> xs = firstGlyphXs();
+	ASSERT_EQ(xs.size(), 8u);
+	EXPECT_FLOAT_EQ(xs[0], left + 1.0f);
+	EXPECT_FLOAT_EQ(xs[2], left + 1.0f);
+
+	style.textAlign = UI::Align::Center;
+	ctx.SetStyle(label, style);
+	xs = firstGlyphXs();
+	ASSERT_EQ(xs.size(), 8u);
+	EXPECT_FLOAT_EQ(xs[0], left + 40.0f + 1.0f);
+	EXPECT_FLOAT_EQ(xs[2], left + 20.0f + 1.0f);
+
+	style.textAlign = UI::Align::End;
+	ctx.SetStyle(label, style);
+	xs = firstGlyphXs();
+	ASSERT_EQ(xs.size(), 8u);
+	EXPECT_FLOAT_EQ(xs[0], left + 80.0f + 1.0f);
+	EXPECT_FLOAT_EQ(xs[2], left + 40.0f + 1.0f);
+}
+
 TEST_F(UIFontFixture, MeasureMatchesShape) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
 	const str prefix = "the quick brown fox jumps over the lazy dog";

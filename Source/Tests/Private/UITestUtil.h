@@ -29,6 +29,13 @@ namespace UITest {
 			f32 penY = 0.0f;
 			f32 maxWidth = 0.0f;
 			u32 line = 0;
+			struct Span {
+				u32 glyph;
+				u32 stop;
+				f32 inked;
+			};
+			Vector<Span> spans{GetMemoryResource(MemTag::Debug)};
+			spans.push_back({0, 0, 0.0f});
 			out.caretStops.push_back({0, 0.0f, 0});
 
 			const char* text = query.utf8.data();
@@ -53,6 +60,7 @@ namespace UITest {
 					penY += LINE_HEIGHT;
 					out.multiline = true;
 					firstOnLine = true;
+					spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.caretStops.size()), 0.0f});
 					out.caretStops.push_back({i, 0.0f, ++line});
 					continue;
 				}
@@ -70,6 +78,7 @@ namespace UITest {
 					out.multiline = true;
 					firstOnLine = true;
 					step = 0.0f;
+					spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.caretStops.size()), 0.0f});
 					out.caretStops.push_back({byteOffset, 0.0f, ++line});
 				}
 				penX += step;
@@ -78,6 +87,9 @@ namespace UITest {
 				glyph.uv = {0.0f, 0.0f, 0.5f, 0.5f};
 				out.glyphs.push_back(glyph);
 				penX += ADVANCE;
+				if (c != ' ' && c != '\t') {
+					spans.back().inked = penX;
+				}
 				firstOnLine = false;
 				++kept;
 				maxWidth = penX > maxWidth ? penX : maxWidth;
@@ -92,7 +104,22 @@ namespace UITest {
 				mark.uv = {0.0f, 0.0f, 0.5f, 0.5f};
 				out.glyphs.push_back(mark);
 				penX += ADVANCE;
+				spans.back().inked = penX;
 				maxWidth = penX > maxWidth ? penX : maxWidth;
+			}
+
+			const f32 share = query.align == UI::Align::Center ? 0.5f : (query.align == UI::Align::End ? 1.0f : 0.0f);
+			if (share > 0.0f) {
+				spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.caretStops.size()), 0.0f});
+				for (size_t n = 0; n + 1 < spans.size(); ++n) {
+					const f32 shift = UI::SnapToPixel((maxWidth - spans[n].inked) * share);
+					for (u32 k = spans[n].glyph; k < spans[n + 1].glyph; ++k) {
+						out.glyphs[k].rect.x += shift;
+					}
+					for (u32 k = spans[n].stop; k < spans[n + 1].stop; ++k) {
+						out.caretStops[k].x += shift;
+					}
+				}
 			}
 
 			out.extent = {maxWidth, penY + LINE_HEIGHT};

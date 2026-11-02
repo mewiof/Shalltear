@@ -1562,6 +1562,94 @@ TEST_F(UIRenderFixture, EllipsizedRunEndsWithRasterizedMark) {
 	EXPECT_LE(run.glyphs.back().rect.x + run.glyphs.back().rect.w, budget);
 }
 
+TEST_F(UIRenderFixture, AlignedGlyphsMoveWithTheirLine) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	ASSERT_NE(fonts, nullptr);
+
+	UI::TextQuery query;
+	query.font = font;
+	query.sizePx = 16.0f;
+	query.utf8 = "short\nlonger line";
+	query.outlineWidth = 1.0f;
+	UI::ShapedRun start;
+	ASSERT_TRUE(fonts->ShapeText(query, start));
+	query.align = UI::Align::End;
+	UI::ShapedRun end;
+	ASSERT_TRUE(fonts->ShapeText(query, end));
+
+	const f32 shift = end.StopForByte(0).x;
+	EXPECT_FLOAT_EQ(shift, UI::SnapToPixel(start.extent.x - start.CaretXForByte(5)));
+	ASSERT_GT(shift, 10.0f);
+	ASSERT_EQ(end.glyphs.size(), start.glyphs.size());
+	ASSERT_EQ(end.outlineGlyphs.size(), start.outlineGlyphs.size());
+	ASSERT_GT(start.glyphs.size(), 5u);
+	ASSERT_GT(start.outlineGlyphs.size(), 5u);
+	for (size_t k = 0; k < start.glyphs.size(); ++k) {
+		EXPECT_FLOAT_EQ(end.glyphs[k].rect.x, start.glyphs[k].rect.x + (k < 5 ? shift : 0.0f)) << k;
+		EXPECT_FLOAT_EQ(end.glyphs[k].rect.y, start.glyphs[k].rect.y) << k;
+	}
+	for (size_t k = 0; k < start.outlineGlyphs.size(); ++k) {
+		EXPECT_FLOAT_EQ(end.outlineGlyphs[k].rect.x, start.outlineGlyphs[k].rect.x + (k < 5 ? shift : 0.0f)) << k;
+	}
+}
+
+TEST_F(UIRenderFixture, CenteredLinesInkAboutBoxCenter) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{160, 48};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::Style style = FixedBox(160.0f, 48.0f);
+	style.textAlign = UI::Align::Center;
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(label, font, 16.0f, Color::White(), "ab\nabcdefghij");
+	ctx.Update();
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const u16* halves = reinterpret_cast<const u16*>(texels.data());
+	auto alpha = [&](i32 x, i32 y) { return HalfToFloat(halves[(static_cast<size_t>(y) * size.x + x) * 4 + 3]); };
+
+	const UI::Context::ShapedTextView view = ctx.GetShapedText(label);
+	ASSERT_NE(view.run, nullptr);
+	ASSERT_EQ(view.run->LineCount(), 2u);
+	for (u32 line = 0; line < 2; ++line) {
+		const i32 top = static_cast<i32>(view.originPx.y + static_cast<f32>(line) * view.run->lineHeight);
+		const i32 bottom = std::min(size.y, static_cast<i32>(top + view.run->lineHeight));
+		i32 left = size.x;
+		i32 right = -1;
+		for (i32 y = std::max(0, top); y < bottom; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				if (alpha(x, y) > 0.25f) {
+					left = std::min(left, x);
+					right = std::max(right, x);
+				}
+			}
+		}
+		ASSERT_GE(right, left) << line;
+		EXPECT_NEAR(static_cast<f32>(left + right + 1) * 0.5f, static_cast<f32>(size.x) * 0.5f, 2.0f) << line;
+	}
+}
+
 namespace {
 
 	f32 TurnedRoundedBoxSDF(f32 px, f32 py, const UI::Rect& box, f32 radius, f32 rotation) {

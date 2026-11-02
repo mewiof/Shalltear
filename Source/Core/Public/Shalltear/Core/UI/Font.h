@@ -54,6 +54,8 @@ namespace Shalltear::UI {
 		std::string_view utf8;
 		f32 wrapWidth = 0.0f;
 		TextOverflow overflow = TextOverflow::Wrap;
+		// aligns each line to the widest one (ignore trailing spaces)
+		Align align = Align::Start;
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
 	};

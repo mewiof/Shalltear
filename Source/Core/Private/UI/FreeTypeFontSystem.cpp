@@ -13,6 +13,10 @@ namespace Shalltear::UI {
 			return codepoint == ' ' || codepoint == '\t' || codepoint == '-' || codepoint == '/';
 		}
 
+		bool IsSpaceCodepoint(u32 codepoint) {
+			return codepoint == ' ' || codepoint == '\t';
+		}
+
 		constexpr u32 ELLIPSIS_CODEPOINT = 0x2026;
 
 	} // anonymous namespace
@@ -289,9 +293,12 @@ namespace Shalltear::UI {
 		u32 lineCount = 0;
 		const bool ellipsize = query.overflow == TextOverflow::Ellipsis;
 		const bool wrap = query.overflow == TextOverflow::Wrap && query.wrapWidth > 0.0f;
+		const f32 share = query.align == Align::Center ? 0.5f : (query.align == Align::End ? 1.0f : 0.0f);
+		const bool align = emit && share > 0.0f;
 		bool truncated = false;
 
 		_scratchLine.clear();
+		_scratchSpans.clear();
 
 		auto pushCaretStop = [&](u32 byteOffset, f32 x) {
 			if (emit) {
@@ -303,8 +310,13 @@ namespace Shalltear::UI {
 		auto flushLine = [&](bool startNewLine) {
 			f32 baseline = penY + ascender;
 			f32 x = 0.0f;
+			f32 inked = 0.0f;
 			u32 previousIndex = 0;
 			bool first = true;
+			if (align) {
+				_scratchSpans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()),
+										 static_cast<u32>(out.caretStops.size()), 0.0f});
+			}
 			pushCaretStop(lineStartByte, 0.0f);
 			for (const Pending& pending : _scratchLine) {
 				GlyphEntry* entry = pending.entry;
@@ -333,8 +345,14 @@ namespace Shalltear::UI {
 				}
 
 				x += static_cast<f32>(entry->advance);
+				if (!IsSpaceCodepoint(pending.codepoint)) {
+					inked = x;
+				}
 				pushCaretStop(pending.byteEnd, x);
 				previousIndex = entry->glyphIndex;
+			}
+			if (align) {
+				_scratchSpans.back().width = inked;
 			}
 			maxLineWidth = std::max(maxLineWidth, x);
 			_scratchLine.clear();
@@ -496,6 +514,25 @@ namespace Shalltear::UI {
 
 		out.extent = {maxLineWidth, std::max(penY, lineHeight)};
 		out.truncated = truncated;
+
+		if (align) {
+			_scratchSpans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()),
+									 static_cast<u32>(out.caretStops.size()), maxLineWidth});
+			for (size_t n = 0; n + 1 < _scratchSpans.size(); ++n) {
+				const LineSpan& line = _scratchSpans[n];
+				const LineSpan& next = _scratchSpans[n + 1];
+				const f32 shift = Snap((maxLineWidth - line.width) * share);
+				for (u32 k = line.glyphs; k < next.glyphs; ++k) {
+					out.glyphs[k].rect.x += shift;
+				}
+				for (u32 k = line.outlineGlyphs; k < next.outlineGlyphs; ++k) {
+					out.outlineGlyphs[k].rect.x += shift;
+				}
+				for (u32 k = line.caretStops; k < next.caretStops; ++k) {
+					out.caretStops[k].x += shift;
+				}
+			}
+		}
 
 		if (emit && truncated) {
 			out.caretStops.clear();

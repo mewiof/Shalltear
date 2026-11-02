@@ -778,9 +778,10 @@ namespace Shalltear::UI {
 			}
 		} else {
 			f32 freeX = std::max(0.0f, box.content.w - extent.x);
-			if (style.textAlign == Align::Center) {
+			const Align align = EffectiveTextAlign(elementIndex);
+			if (align == Align::Center) {
 				dx += freeX * 0.5f;
-			} else if (style.textAlign == Align::End) {
+			} else if (align == Align::End) {
 				dx += freeX;
 			}
 		}
@@ -801,6 +802,14 @@ namespace Shalltear::UI {
 		return ComputedS(elementIndex).textOverflow;
 	}
 
+	Align ContextImpl::EffectiveTextAlign(u32 elementIndex) const {
+		if (elements[elementIndex].textInputIndex != INVALID_UI_INDEX) {
+			return Align::Start;
+		}
+		const Align align = ComputedS(elementIndex).textAlign;
+		return align == Align::Center || align == Align::End ? align : Align::Start;
+	}
+
 	void ContextImpl::EnsureShaped(u32 elementIndex) {
 		TextComponent* text = GetText(elementIndex);
 		if (!text || !fontSystem) {
@@ -812,6 +821,7 @@ namespace Shalltear::UI {
 		f32 physicalOutline = style.textOutlineWidth * scale;
 		f32 physicalSpacing = style.letterSpacing * scale;
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
+		const Align align = EffectiveTextAlign(elementIndex);
 
 		const u32 atlasGeneration = fontSystem->GetAtlasGeneration();
 		if (!text->dirty &&
@@ -820,6 +830,7 @@ namespace Shalltear::UI {
 			text->cachedOutlineWidth == physicalOutline &&
 			text->cachedLetterSpacing == physicalSpacing &&
 			text->cachedOverflow == overflow &&
+			text->cachedAlign == align &&
 			text->shapedGeneration == atlasGeneration) {
 			return;
 		}
@@ -830,6 +841,7 @@ namespace Shalltear::UI {
 		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
 		query.wrapWidth = text->wrapWidth;
 		query.overflow = overflow;
+		query.align = align;
 		query.outlineWidth = physicalOutline;
 		query.letterSpacing = physicalSpacing;
 		fontSystem->ShapeText(query, text->shaped);
@@ -839,6 +851,7 @@ namespace Shalltear::UI {
 		text->cachedOutlineWidth = physicalOutline;
 		text->cachedLetterSpacing = physicalSpacing;
 		text->cachedOverflow = overflow;
+		text->cachedAlign = align;
 		text->shapedGeneration = atlasGeneration;
 		text->shapedWrapWidth = text->wrapWidth;
 		text->dirty = false;

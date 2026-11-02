@@ -106,6 +106,13 @@ namespace Shalltear::UI {
 			u32 byteEnd = 0;
 		};
 		Vector<Pending> _scratchLine{GetMemoryResource(MemTag::UI)};
+		struct LineSpan {
+			u32 glyphs = 0;
+			u32 outlineGlyphs = 0;
+			u32 caretStops = 0;
+			f32 width = 0.0f;
+		};
+		Vector<LineSpan> _scratchSpans{GetMemoryResource(MemTag::UI)};
 		ShapedRun _measureScratch;
 		TextStats _textStats;
 

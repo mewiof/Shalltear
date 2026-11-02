@@ -3418,6 +3418,240 @@ TEST_F(ShadowViewFixture, PointOccluderDarkensAllFaces) {
 	}
 }
 
+TEST_F(ShadowViewFixture, SkyViewDrawsNoCasters) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("SkyView");
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat(0.4082179f, 0.2345697f, -0.1093817f, 0.8754261f));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	for (i32 z = 0; z < 40; ++z) {
+		for (i32 x = 0; x < 40; ++x) {
+			Handle<SceneObject> object = SceneSystem::CreateObject("Cube", scene);
+			object->SetLocalPosition(Vec3(-40.0f + static_cast<f32>(x) * 2.0f, 0.5f, -40.0f + static_cast<f32>(z) * 2.0f));
+			object->AddComponent<MeshRenderer>()->SetMesh(cube);
+		}
+	}
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({96, 96});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const Vec3 eye(0.0f, 2.0f, 0.0f);
+	auto drawCalls = [&](const Vec3& forward, bool shadows) {
+		sun->SetCastShadows(shadows);
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(eye, eye + forward);
+		desc.projection = Mat4::PerspectiveReverseZ(60.0f, 1.0f, 0.1f, 1000.0f);
+		desc.cameraPosition = eye;
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		EXPECT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, size));
+		return RenderSystem::GetStats().drawCalls;
+	};
+
+	const Vec3 up = Vec3(0.0f, std::sin(80.0f * Math::DEG_TO_RAD), std::cos(80.0f * Math::DEG_TO_RAD));
+	const u32 skyShadowed = drawCalls(up, true);
+	if (RenderSystem::GetStats().shadowMapsRendered == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(skyShadowed, drawCalls(up, false));
+
+	const Vec3 down = Vec3(0.0f, -std::sin(15.0f * Math::DEG_TO_RAD), std::cos(15.0f * Math::DEG_TO_RAD));
+	const u32 groundShadowed = drawCalls(down, true);
+	const u32 groundLit = drawCalls(down, false);
+	EXPECT_GT(groundLit, 100u);
+	EXPECT_GT(groundShadowed, groundLit + 100u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, OffscreenSunCasterStillShadows) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("OffscreenSun");
+	const Vec3 travel = Vec3(0.3f, -1.0f, 0.2f).Normalized();
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::LookRotation(travel));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.0f, -1.0f, 0.0f));
+	ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+
+	const Vec3 occluderCenter(0.0f, 4.0f, 0.0f);
+	Handle<SceneObject> occluder = SceneSystem::CreateObject("Occluder", scene);
+	occluder->SetLocalPosition(occluderCenter);
+	occluder->SetLocalScale(Vec3(2.0f, 2.0f, 2.0f));
+	occluder->AddComponent<MeshRenderer>()->SetMesh(cube);
+	SceneSystem::EndFrame();
+
+	const Vec3 shadowCenter = occluderCenter + travel * ((occluderCenter.y + 0.8f) / -travel.y);
+	const Vec3 eye = shadowCenter + Vec3(0.0f, 1.5f, -0.3f);
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> hidden{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderFrom(target, eye, shadowCenter, shadowed, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	sun->SetCastShadows(false);
+	RenderFrom(target, eye, shadowCenter, unshadowed, size);
+	const u32 litDraws = RenderSystem::GetStats().drawCalls;
+	occluder->SetActive(false);
+	SceneSystem::EndFrame();
+	RenderFrom(target, eye, shadowCenter, hidden, size);
+	EXPECT_EQ(RenderSystem::GetStats().drawCalls, litDraws);
+
+	ASSERT_EQ(shadowed.size(), unshadowed.size());
+	const ShadowDelta delta = CompareFrames(shadowed, unshadowed, size);
+	EXPECT_GT(delta.darker, static_cast<u32>(size.x * size.y / 2));
+	EXPECT_EQ(delta.brighter, 0u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, OffscreenLampCasterStillShadows) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	const Vec3 axis = Vec3(0.12f, -0.08f, 1.0f).Normalized();
+	const f32 faceZ = axis.z * 12.0f - 4.5f;
+	const Vec3 facePoint = axis * (faceZ / axis.z);
+	const Vec3 eye = facePoint - Vec3(0.0f, 0.0f, 1.7f);
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	bool skipped = false;
+	for (LightType type : {LightType::Spot, LightType::Point}) {
+		Handle<Scene> scene = SceneSystem::CreateScene("OffscreenLamp");
+		Handle<Light> lamp = BuildPunctualRig(scene, cube, axis, type);
+		SceneSystem::EndFrame();
+
+		Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+		Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		RenderFrom(target, eye, facePoint, shadowed, size);
+		if (RenderSystem::GetStats().shadowLights == 0) {
+			SceneSystem::UnloadScene(scene);
+			skipped = true;
+			break;
+		}
+		lamp->SetCastShadows(false);
+		RenderFrom(target, eye, facePoint, unshadowed, size);
+		const u32 litDraws = RenderSystem::GetStats().drawCalls;
+		scene->FindObjectByName("Blocker")->SetActive(false);
+		SceneSystem::EndFrame();
+		Vector<u8> hidden{GetMemoryResource(MemTag::Graphics)};
+		RenderFrom(target, eye, facePoint, hidden, size);
+		EXPECT_EQ(RenderSystem::GetStats().drawCalls, litDraws) << static_cast<u32>(type);
+		SceneSystem::UnloadScene(scene);
+
+		ASSERT_EQ(shadowed.size(), unshadowed.size());
+		const ShadowDelta delta = CompareFrames(shadowed, unshadowed, size);
+		EXPECT_GT(delta.darker, static_cast<u32>(size.x * size.y / 2)) << static_cast<u32>(type);
+		EXPECT_EQ(delta.brighter, 0u) << static_cast<u32>(type);
+	}
+	RenderSystem::DestroyViewTarget(target);
+	AssetDatabase::UnloadAsset(meshAsset);
+	if (skipped) {
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+}
+
+TEST_F(ShadowViewFixture, LampCastersCulledToView) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	const Vec3 axis = Vec3(0.12f, -0.08f, 1.0f).Normalized();
+	const f32 faceZ = axis.z * 12.0f - 4.5f;
+	const Vec3 facePoint = axis * (faceZ / axis.z);
+	const Vec3 eye = facePoint - Vec3(0.0f, 0.0f, 1.7f);
+	const f32 spread = 28.0f * Math::DEG_TO_RAD;
+	const Vec3 beside = (axis * std::cos(spread) - PerpendicularTo(axis) * std::sin(spread)) * 10.0f;
+	const Vec3 behind = axis * -10.0f;
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({96, 96});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	auto drawCalls = [&]() {
+		SceneSystem::EndFrame();
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(eye, facePoint);
+		desc.projection = Mat4::PerspectiveReverseZ(30.0f, 1.0f, 0.1f, 40.0f);
+		desc.cameraPosition = eye;
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		EXPECT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, size));
+		return RenderSystem::GetStats().drawCalls;
+	};
+
+	bool skipped = false;
+	for (LightType type : {LightType::Spot, LightType::Point}) {
+		Handle<Scene> scene = SceneSystem::CreateScene("LampCulling");
+		BuildPunctualRig(scene, cube, axis, type)->SetRange(25.0f);
+		const u32 alone = drawCalls();
+		if (RenderSystem::GetStats().shadowMapsRendered == 0) {
+			SceneSystem::UnloadScene(scene);
+			skipped = true;
+			break;
+		}
+		for (const Vec3& at : {beside, behind}) {
+			Handle<SceneObject> extra = SceneSystem::CreateObject("Extra", scene);
+			extra->SetLocalPosition(at);
+			extra->AddComponent<MeshRenderer>()->SetMesh(cube);
+		}
+		EXPECT_EQ(drawCalls(), alone) << static_cast<u32>(type);
+		SceneSystem::UnloadScene(scene);
+	}
+	RenderSystem::DestroyViewTarget(target);
+	AssetDatabase::UnloadAsset(meshAsset);
+	if (skipped) {
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+}
+
 TEST_F(ShadowViewFixture, FullAtlasDropsLeastImportant) {
 	InitializeWith();
 	if (!RenderSystem::IsRenderingAvailable()) {

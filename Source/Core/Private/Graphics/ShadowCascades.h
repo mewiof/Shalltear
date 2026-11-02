@@ -41,4 +41,6 @@ namespace Shalltear::GraphicsInternal {
 
 	SHALLTEAR_CORE_API u32 SelectCascade(const CascadeSplits& splits, f32 viewDepth);
 
+	SHALLTEAR_CORE_API Vec2 CascadeReceiverDepths(const CascadeSplits& splits, u32 index);
+
 } // namespace Shalltear::GraphicsInternal

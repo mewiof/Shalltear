@@ -2,12 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace Shalltear::GraphicsInternal {
 
 	namespace {
 
 		inline constexpr Vec3 LightUp = Vec3(0.0f, 1.0f, 0.0f);
+
+		// must match SHALLTEAR_CASCADE_BLEND_FRACTION in Shadows.hlsli
+		inline constexpr f32 CASCADE_BLEND_FRACTION = 0.1f;
 
 		Mat4 LightBasis(const Vec3& direction) {
 			return Mat4::LookAt(Vec3::Zero(), direction, LightUp);
@@ -138,6 +142,16 @@ namespace Shalltear::GraphicsInternal {
 			}
 		}
 		return splits.count;
+	}
+
+	Vec2 CascadeReceiverDepths(const CascadeSplits& splits, u32 index) {
+		const f32 farDepth = splits.depths[index + 1];
+		if (index == 0) {
+			return Vec2(-std::numeric_limits<f32>::infinity(), farDepth);
+		}
+		const f32 previousFar = splits.depths[index];
+		const f32 previousNear = index == 1 ? 0.0f : splits.depths[index - 1];
+		return Vec2(previousFar - (previousFar - previousNear) * CASCADE_BLEND_FRACTION, farDepth);
 	}
 
 } // namespace Shalltear::GraphicsInternal

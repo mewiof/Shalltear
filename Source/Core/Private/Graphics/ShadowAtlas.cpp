@@ -1,5 +1,7 @@
 #include "ShadowAtlas.h"
 
+#include "ShadowCasterCulling.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -143,8 +145,7 @@ namespace Shalltear::GraphicsInternal {
 		const u32 index = face % POINT_SHADOW_FACES;
 		const u32 resolution = std::max(tileResolution, 1u);
 
-		const f32 reachTexels = static_cast<f32>(std::max(pcfTaps, 1u) + 1) * 0.5f + 1.0f;
-		const f32 halfTangent = 1.0f + 2.0f * reachTexels / static_cast<f32>(resolution);
+		const f32 halfTangent = 1.0f + 2.0f * ShadowFilterReachTexels(pcfTaps) / static_cast<f32>(resolution);
 		const f32 fov = 2.0f * std::atan(halfTangent) * (180.0f / Math::PI);
 
 		out.view = Mat4::LookAt(position, position + FaceDirection[index], FaceUp[index]);

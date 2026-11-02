@@ -50,6 +50,7 @@
 #include "Graphics/SceneRequests.h"
 #include "Graphics/ShadowAtlas.h"
 #include "Graphics/ShadowCascades.h"
+#include "Graphics/ShadowCasterCulling.h"
 #include "Graphics/Skinning.h"
 #include "Module/EngineStateTable.h"
 #include "Shalltear/Core/Window.h"
@@ -820,6 +821,7 @@ namespace Shalltear {
 			Vector<GraphicsInternal::CascadeView> cascadeViews{GetMemoryResource(MemTag::Graphics)};
 			Vector<GraphicsInternal::ShadowRequest> shadowRequests{GetMemoryResource(MemTag::Graphics)};
 			Vector<GraphicsInternal::PunctualView> punctualViews{GetMemoryResource(MemTag::Graphics)};
+			Vector<GraphicsInternal::CullVolume> casterVolumes{GetMemoryResource(MemTag::Graphics)};
 			GraphicsInternal::ShadowAtlasAllocator punctualAllocator;
 
 			u32 lastDrawCalls = 0;
@@ -1754,7 +1756,7 @@ namespace Shalltear {
 		};
 
 		ExtractedDraws ExtractDrawList(LinearAllocator& arena, SceneKind kind, std::span<const u64> onlyScenes,
-									   std::span<const Frustum> volumes, const Vec3& sortOrigin,
+									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
 									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
 			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
 								"a draw's volume mask is 1 bit per shadow map");
@@ -1983,7 +1985,8 @@ namespace Shalltear {
 		};
 
 		u32 RecordProceduralDepth(RHI::CommandList& cmd, RHI::Device& device, std::span<const u32> renderers,
-								  const ProceduralDepthView& depthView, const Frustum* volume, std::span<const u32> values = {}) {
+								  const ProceduralDepthView& depthView, const GraphicsInternal::CullVolume* volume,
+								  std::span<const u32> values = {}) {
 			RenderState& state = *_state;
 			const GraphicsInternal::ProceduralFrame& frame = state.procedural;
 			const Mat4 inverseView = depthView.view.Inverse();
@@ -2887,7 +2890,8 @@ namespace Shalltear {
 				return 0;
 			}
 
-			Frustum volumes[GraphicsInternal::MAX_SHADOW_MAPS];
+			Vector<GraphicsInternal::CullVolume>& volumes = state.casterVolumes;
+			volumes.clear();
 			u32 mapCount = 0;
 
 			u32 casterIndex = candidateCount;
@@ -2922,8 +2926,15 @@ namespace Shalltear {
 					allocation.firstMap = 0;
 					allocation.mapCount = cascadeCount;
 					allocation.strength = candidates[casterIndex].shadowStrength;
+					const Vec4 towardLight(-candidates[casterIndex].direction, 0.0f);
+					const f32 marginTexels = GraphicsInternal::ShadowReceiverMarginTexels(
+						state.shadowPcfTaps, candidates[casterIndex].shadowNormalBias);
 					for (u32 i = 0; i < cascadeCount; ++i) {
-						volumes[mapCount++] = Frustum::FromMatrix(state.cascadeViews[i].viewProjection);
+						const GraphicsInternal::CascadeView& cascade = state.cascadeViews[i];
+						volumes.push_back(GraphicsInternal::BuildCasterVolume(
+							cascade.viewProjection, fitView, fitProjection, GraphicsInternal::CascadeReceiverDepths(splits, i),
+							towardLight, cascade.worldTexelSize * marginTexels));
+						++mapCount;
 					}
 				}
 			}
@@ -2958,6 +2969,7 @@ namespace Shalltear {
 			RectI punctualTiles[GraphicsInternal::MAX_SHADOW_MAPS];
 			Vec2 punctualBias[GraphicsInternal::MAX_SHADOW_MAPS];
 			const u32 firstPunctualMap = mapCount;
+			const Vec3 forward(view(2, 0), view(2, 1), view(2, 2));
 			for (GraphicsInternal::ShadowRequest& request : requests) {
 				++state.frameShadowLights;
 				const u32 wanted = request.MapCount();
@@ -2978,6 +2990,9 @@ namespace Shalltear {
 					++state.frameShadowLightsDropped;
 					continue;
 				}
+				const f32 lightDepth = Vec3::Dot(forward, request.position) + view(2, 3);
+				const f32 depthReach = request.range * forward.Length();
+				const f32 marginTexels = GraphicsInternal::ShadowReceiverMarginTexels(state.shadowPcfTaps, request.normalBias);
 				for (u32 face = 0; face < wanted; ++face) {
 					const GraphicsInternal::PunctualView built =
 						request.type == LightType::Point
@@ -2988,7 +3003,10 @@ namespace Shalltear {
 					punctualTiles[mapCount] = granted[face];
 					punctualBias[mapCount] = Vec2(request.depthBias, request.normalBias);
 					state.punctualViews.push_back(built);
-					volumes[mapCount++] = Frustum::FromMatrix(built.viewProjection);
+					volumes.push_back(GraphicsInternal::BuildCasterVolume(
+						built.viewProjection, view, projection, Vec2(lightDepth - depthReach, lightDepth + depthReach),
+						Vec4(request.position, 1.0f), built.worldTexelSizePerUnit * request.range * marginTexels));
+					++mapCount;
 				}
 				RenderState::ShadowAllocation& allocation = state.shadowAllocations.emplace_back();
 				allocation.lightKey = request.stableKey;
@@ -3001,7 +3019,7 @@ namespace Shalltear {
 				return 0;
 			}
 
-			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {volumes, mapCount}, cameraPosition, renderingLayerMask);
+			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, renderingLayerMask);
 
 			RHI::TransientAllocation mapAllocation =
 				device.AllocateTransient(static_cast<u64>(mapCount) * sizeof(GPUShadowMap), 16);
@@ -3131,7 +3149,7 @@ namespace Shalltear {
 			RenderState& state = *_state;
 			RHI::Device& device = *state.device;
 			const Mat4 viewProjection = projection * view;
-			const Frustum frustum = Frustum::FromMatrix(viewProjection);
+			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
 			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {&frustum, 1}, cameraPosition, renderingLayerMask);
 
 			RHI::RenderPassDesc::Attachment normalAttachment;
@@ -3203,7 +3221,7 @@ namespace Shalltear {
 			RenderState& state = *_state;
 			RHI::Device& device = *state.device;
 			const Mat4 viewProjection = pending.projection * pending.view;
-			const Frustum frustum = Frustum::FromMatrix(viewProjection);
+			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
 			const ExtractedDraws extracted =
 				ExtractDrawList(arena, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
 								pending.cameraPosition, pending.cullingMask);
@@ -3366,7 +3384,7 @@ namespace Shalltear {
 			objects.clear();
 			const Mat4 projection = PickProjection(pending.projection, pixel, extent);
 			const Mat4 viewProjection = projection * pending.view;
-			const Frustum frustum = Frustum::FromMatrix(pending.projection * pending.view);
+			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(pending.projection * pending.view));
 			const ExtractedDraws extracted =
 				ExtractDrawList(arena, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
 								pending.cameraPosition, pending.cullingMask);
@@ -3582,7 +3600,7 @@ namespace Shalltear {
 
 			const bool isolated = kind != SceneKind::World;
 			Mat4 viewProjection = projection * view;
-			Frustum frustum = Frustum::FromMatrix(viewProjection);
+			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
 
 			u32 directionalCount = 0;
 			u32 droppedLights = 0;

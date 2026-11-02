@@ -1,11 +1,14 @@
 #include "Shalltear/Core/UI/WidgetRegistry.h"
 
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
+#include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/UI/Context.h"
 #include "Shalltear/Core/UI/UIDocument.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
 #include "Module/EngineStateTable.h"
+#include "UI/UIInternal.h"
 
 #include <charconv>
 #include <vector>
@@ -85,6 +88,95 @@ namespace Shalltear::UI {
 			return {parts.root, parts.viewport};
 		}
 
+		constexpr std::string_view ImageSourceTypes[] = {"TextureAsset", "SpriteAsset"};
+		constexpr std::string_view ScaleModes[] = {"scale-to-fit", "stretch-to-fill", "scale-and-crop", "sliced", "tiled"};
+		constexpr std::string_view FillMethods[] = {"none", "horizontal", "vertical", "radial-90", "radial-180", "radial-360"};
+		constexpr std::string_view FillOrigins[] = {"bottom", "top", "left", "right", "bottom-left", "bottom-right", "top-left", "top-right"};
+		constexpr ImageScaleMode ScaleModeValues[] = {ImageScaleMode::ScaleToFit, ImageScaleMode::StretchToFill, ImageScaleMode::ScaleAndCrop,
+													  ImageScaleMode::Sliced, ImageScaleMode::Tiled};
+		constexpr ImageFillMethod FillMethodValues[] = {ImageFillMethod::None, ImageFillMethod::Horizontal, ImageFillMethod::Vertical,
+														ImageFillMethod::Radial90, ImageFillMethod::Radial180, ImageFillMethod::Radial360};
+		constexpr ImageFillOrigin FillOriginValues[] = {ImageFillOrigin::Bottom, ImageFillOrigin::Top, ImageFillOrigin::Left,
+														ImageFillOrigin::Right, ImageFillOrigin::BottomLeft, ImageFillOrigin::BottomRight,
+														ImageFillOrigin::TopLeft, ImageFillOrigin::TopRight};
+
+		constexpr WidgetAttribute ImageAttributes[] = {
+			{"src", WidgetAttributeType::Asset, {}, ImageSourceTypes},
+			{"scale-mode", WidgetAttributeType::Choice, ScaleModes, {}, "scale-to-fit"},
+			{"tint", WidgetAttributeType::Color, {}, {}, "#ffffff"},
+			{"fill-method", WidgetAttributeType::Choice, FillMethods, {}, "none"},
+			{"fill-origin", WidgetAttributeType::Choice, FillOrigins, {}, "bottom"},
+			{"fill-amount", WidgetAttributeType::Number, {}, {}, "1"},
+			{"fill-clockwise", WidgetAttributeType::Bool, {}, {}, "true"},
+		};
+
+		template <typename T, size_t N>
+		T Choose(const std::string_view (&spellings)[N], const T (&values)[N], std::string_view text, T fallback) {
+			for (size_t i = 0; i < N; ++i) {
+				if (spellings[i] == text) {
+					return values[i];
+				}
+			}
+			return fallback;
+		}
+
+		ImageFillOrigin DefaultOrigin(ImageFillMethod method) {
+			switch (method) {
+			case ImageFillMethod::Horizontal:
+				return ImageFillOrigin::Left;
+			case ImageFillMethod::Radial90:
+				return ImageFillOrigin::BottomLeft;
+			default:
+				return ImageFillOrigin::Bottom;
+			}
+		}
+
+		ImageFill ReadFill(std::span<const WidgetAttributeValue> attributes) {
+			WidgetArgs args{UIInstantiateDesc{}, attributes};
+			ImageFill fill;
+			fill.method = Choose(FillMethods, FillMethodValues, args.Get("fill-method"), ImageFillMethod::None);
+			fill.origin = Choose(FillOrigins, FillOriginValues, args.Get("fill-origin"), DefaultOrigin(fill.method));
+			fill.amount = static_cast<f32>(args.GetNumber("fill-amount", 1.0));
+			fill.clockwise = args.GetBool("fill-clockwise", true);
+			return fill;
+		}
+
+		bool ValidateImage(std::span<const WidgetAttributeValue> attributes, u32 childCount, str& error) {
+			if (childCount > 0) {
+				error = "takes no child elements";
+				return false;
+			}
+			WidgetArgs args{UIInstantiateDesc{}, attributes};
+			const ImageFill fill = ReadFill(attributes);
+			if (fill.amount < 0.0f || fill.amount > 1.0f) {
+				error = str("attribute 'fill-amount' wants 0-1, not '") + str(args.Get("fill-amount")) + str("'");
+				return false;
+			}
+			if (!IsValidFillOrigin(fill.method, fill.origin)) {
+				error = str("fill-origin '") + str(args.Get("fill-origin")) + str("' doesn't fit fill-method '") + str(args.Get("fill-method")) + str("'");
+				return false;
+			}
+			return true;
+		}
+
+		WidgetResult MakeImage(Context& context, ElementHandle parent, const WidgetArgs& args) {
+			ElementHandle element = context.CreateElement();
+			context.AppendChild(parent, element);
+			ImageDesc image;
+			if (Asset* source = args.GetAsset("src")) {
+				if (source->GetAssetTypeId() == SpriteAsset::GetReflectType()->name) {
+					image.sprite = Handle<SpriteAsset>(static_cast<SpriteAsset*>(source));
+				} else if (source->GetAssetTypeId() == TextureAsset::GetReflectType()->name) {
+					image.texture = Handle<TextureAsset>(static_cast<TextureAsset*>(source));
+				}
+			}
+			image.scaleMode = Choose(ScaleModes, ScaleModeValues, args.Get("scale-mode"), ImageScaleMode::ScaleToFit);
+			image.fill = ReadFill(args.attributes);
+			context.SetImage(element, image);
+			context.SetTint(element, args.GetColor("tint", Color::White()));
+			return {element, {}};
+		}
+
 		constexpr std::string_view CategoryContainers = "Containers";
 		constexpr std::string_view CategoryControls = "Controls";
 
@@ -93,6 +185,7 @@ namespace Shalltear::UI {
 			{"checkbox", &MakeCheckbox, CheckboxAttributes, CheckboxClasses, CategoryControls},
 			{"slider", &MakeSlider, SliderAttributes, SliderClasses, CategoryControls},
 			{"scroll-view", &MakeScrollView, {}, ScrollViewClasses, CategoryContainers},
+			{"image", &MakeImage, ImageAttributes, {}, CategoryControls, &ValidateImage},
 		};
 
 		struct WidgetEntry {
@@ -156,6 +249,23 @@ namespace Shalltear::UI {
 		f64 parsed = fallback;
 		ParseNumber(Get(name), parsed);
 		return parsed;
+	}
+
+	Color WidgetArgs::GetColor(std::string_view name, Color fallback) const {
+		Color parsed = fallback;
+		if (!Color::TryParseHex(Get(name), parsed)) {
+			return fallback;
+		}
+		return parsed;
+	}
+
+	Asset* WidgetArgs::GetAsset(std::string_view name) const {
+		for (const WidgetAttributeValue& attribute : attributes) {
+			if (attribute.name == name) {
+				return attribute.asset;
+			}
+		}
+		return nullptr;
 	}
 
 	void WidgetRegistry::Shutdown() {
@@ -236,8 +346,8 @@ namespace Shalltear::UI {
 		return removed;
 	}
 
-	bool WidgetRegistry::IsValidLiteral(WidgetAttributeType type, std::string_view text) {
-		switch (type) {
+	bool WidgetRegistry::IsValidLiteral(const WidgetAttribute& attribute, std::string_view text) {
+		switch (attribute.type) {
 		case WidgetAttributeType::Bool: {
 			bool value = false;
 			return ParseBool(text, value);
@@ -245,6 +355,21 @@ namespace Shalltear::UI {
 		case WidgetAttributeType::Number: {
 			f64 value = 0.0;
 			return ParseNumber(text, value);
+		}
+		case WidgetAttributeType::Choice:
+			for (std::string_view choice : attribute.choices) {
+				if (choice == text) {
+					return true;
+				}
+			}
+			return false;
+		case WidgetAttributeType::Color: {
+			Color value;
+			return !text.empty() && text[0] == '#' && Color::TryParseHex(text, value);
+		}
+		case WidgetAttributeType::Asset: {
+			const size_t fragment = text.rfind('#');
+			return !text.empty() && fragment != 0 && fragment != text.size() - 1;
 		}
 		case WidgetAttributeType::String:
 		default:

@@ -110,21 +110,40 @@ TEST_F(UIWidgetRegistryFixture, DeclaredClassesMatchFactory) {
 
 TEST_F(UIWidgetRegistryFixture, AttributeLiteralsAreValidatedAgainstDeclaredType) {
 	using Type = UI::WidgetAttributeType;
+	auto valid = [](Type type, std::string_view text) { return UI::WidgetRegistry::IsValidLiteral(UI::WidgetAttribute{"a", type}, text); };
 
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::String, ""));
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::String, "anything at all"));
+	EXPECT_TRUE(valid(Type::String, ""));
+	EXPECT_TRUE(valid(Type::String, "anything at all"));
 
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::Bool, "true"));
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::Bool, "false"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Bool, "True"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Bool, "1"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Bool, ""));
+	EXPECT_TRUE(valid(Type::Bool, "true"));
+	EXPECT_TRUE(valid(Type::Bool, "false"));
+	EXPECT_FALSE(valid(Type::Bool, "True"));
+	EXPECT_FALSE(valid(Type::Bool, "1"));
+	EXPECT_FALSE(valid(Type::Bool, ""));
 
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::Number, "12"));
-	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(Type::Number, "-0.75"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Number, "12abc"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Number, "12px"));
-	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(Type::Number, ""));
+	EXPECT_TRUE(valid(Type::Number, "12"));
+	EXPECT_TRUE(valid(Type::Number, "-0.75"));
+	EXPECT_FALSE(valid(Type::Number, "12abc"));
+	EXPECT_FALSE(valid(Type::Number, "12px"));
+	EXPECT_FALSE(valid(Type::Number, ""));
+
+	EXPECT_TRUE(valid(Type::Color, "#ff8800"));
+	EXPECT_TRUE(valid(Type::Color, "#f80c"));
+	EXPECT_FALSE(valid(Type::Color, "ff8800"));
+	EXPECT_FALSE(valid(Type::Color, "#ff880"));
+	EXPECT_FALSE(valid(Type::Color, "orange"));
+
+	EXPECT_TRUE(valid(Type::Asset, "project://UI/Hud.png"));
+	EXPECT_TRUE(valid(Type::Asset, "project://UI/Atlas.png#Heart"));
+	EXPECT_FALSE(valid(Type::Asset, ""));
+	EXPECT_FALSE(valid(Type::Asset, "project://UI/Atlas.png#"));
+	EXPECT_FALSE(valid(Type::Asset, "#Heart"));
+
+	constexpr std::string_view sizes[] = {"small", "large"};
+	const UI::WidgetAttribute choice{"size", Type::Choice, sizes};
+	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(choice, "large"));
+	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(choice, "Large"));
+	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(choice, ""));
 }
 
 TEST_F(UIWidgetRegistryFixture, OmittedAttributeIsWidgetsDefaultNotZero) {

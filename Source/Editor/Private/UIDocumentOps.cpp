@@ -371,6 +371,10 @@ namespace Shalltear::UIDocumentOps {
 		for (const UIDocumentTemplate& declared : snapshot.templates) {
 			document.templates.push_back(UIDocumentTemplate{declared.name, declared.src, declared.document});
 		}
+		str error;
+		if (!document.ResolveAssetReferences(error)) {
+			SLT_LOG_WARN("Editor", "UIBuilder: {}", error);
+		}
 	}
 
 	bool Validate(const UIDocumentAsset& document, str& error) {
@@ -486,7 +490,7 @@ namespace Shalltear::UIDocumentOps {
 				Restore(document, before);
 				return false;
 			}
-			if (!Validate(document, error)) {
+			if (!Validate(document, error) || !document.ResolveAssetReferences(error)) {
 				Restore(document, before);
 				return false;
 			}
@@ -665,6 +669,10 @@ namespace Shalltear::UIDocumentOps {
 		node.attributes = Vector<UIDocumentAttribute>{GetMemoryResource(MemTag::Asset)};
 		if (const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(tag)) {
 			for (const UI::WidgetAttribute& attribute : widget->attributes) {
+				if (!attribute.defaultValue.empty()) {
+					node.attributes.push_back(UIDocumentAttribute{str(attribute.name), str(attribute.defaultValue)});
+					continue;
+				}
 				str value;
 				switch (attribute.type) {
 				case UI::WidgetAttributeType::Bool:
@@ -676,6 +684,14 @@ namespace Shalltear::UIDocumentOps {
 				case UI::WidgetAttributeType::String:
 					value = str(tag);
 					break;
+				case UI::WidgetAttributeType::Choice:
+					value = attribute.choices.empty() ? str() : str(attribute.choices[0]);
+					break;
+				case UI::WidgetAttributeType::Color:
+					value = Color::White().ToHex();
+					break;
+				case UI::WidgetAttributeType::Asset:
+					continue;
 				}
 				node.attributes.push_back(UIDocumentAttribute{str(attribute.name), value});
 			}

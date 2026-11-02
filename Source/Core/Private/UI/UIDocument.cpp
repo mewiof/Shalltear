@@ -5,6 +5,8 @@
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/FileSystem.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
+#include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/UI/Context.h"
@@ -122,16 +124,51 @@ namespace Shalltear {
 			return builtIn >= UI::MAX_ELEMENT_CLASSES ? 0u : static_cast<u32>(UI::MAX_ELEMENT_CLASSES - builtIn);
 		}
 
-		std::string_view SpellAttributeType(UI::WidgetAttributeType type) {
-			switch (type) {
+		str SpellAttributeType(const UI::WidgetAttribute& attribute) {
+			switch (attribute.type) {
 			case UI::WidgetAttributeType::Bool:
 				return "a boolean ('true' or 'false')";
 			case UI::WidgetAttributeType::Number:
 				return "a number";
+			case UI::WidgetAttributeType::Choice: {
+				str spelled = "1 of ";
+				for (size_t i = 0; i < attribute.choices.size(); ++i) {
+					spelled += (i == 0 ? "'" : "/'") + str(attribute.choices[i]) + "'";
+				}
+				return spelled;
+			}
+			case UI::WidgetAttributeType::Color:
+				return "a hex color (like #ff8800)";
+			case UI::WidgetAttributeType::Asset:
+				return "an asset path (project://path, or project://path#name for a sprite)";
 			case UI::WidgetAttributeType::String:
 			default:
 				return "a string";
 			}
+		}
+
+		const UI::WidgetAttribute* DeclaredAttribute(const UI::WidgetDesc* widget, std::string_view name) {
+			if (!widget) {
+				return nullptr;
+			}
+			for (const UI::WidgetAttribute& candidate : widget->attributes) {
+				if (candidate.name == name) {
+					return &candidate;
+				}
+			}
+			return nullptr;
+		}
+
+		bool RunWidgetValidator(const UI::WidgetDesc& widget, const Vector<UIDocumentAttribute>& attributes, u32 childCount, str& error) {
+			if (!widget.validate) {
+				return true;
+			}
+			Vector<UI::WidgetAttributeValue> values{GetMemoryResource(MemTag::Asset)};
+			values.reserve(attributes.size());
+			for (const UIDocumentAttribute& attribute : attributes) {
+				values.push_back(UI::WidgetAttributeValue{attribute.name, attribute.value});
+			}
+			return widget.validate(values, childCount, error);
 		}
 
 		bool ConvertSheet(const XML::XMLNode& in, UIDocumentSheet& out, str& error) {
@@ -264,21 +301,13 @@ namespace Shalltear {
 				} else if (isInstance && attribute.name == AttrTemplate) {
 					out.templateName = str(attribute.value);
 				} else {
-					const UI::WidgetAttribute* declared = nullptr;
-					if (widget) {
-						for (const UI::WidgetAttribute& candidate : widget->attributes) {
-							if (candidate.name == attribute.name) {
-								declared = &candidate;
-								break;
-							}
-						}
-					}
+					const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
 					if (!declared) {
 						error = Refuse(in, str("unknown attribute '") + str(attribute.name) + str("'"));
 						return false;
 					}
-					if (!UI::WidgetRegistry::IsValidLiteral(declared->type, attribute.value)) {
-						error = Refuse(in, str("attribute '") + str(attribute.name) + str("' wants ") + str(SpellAttributeType(declared->type)) +
+					if (!UI::WidgetRegistry::IsValidLiteral(*declared, attribute.value)) {
+						error = Refuse(in, str("attribute '") + str(attribute.name) + str("' wants ") + SpellAttributeType(*declared) +
 											   str(", not '") + str(attribute.value) + str("'"));
 						return false;
 					}
@@ -309,6 +338,13 @@ namespace Shalltear {
 			if (widget && !out.text.empty()) {
 				error = Refuse(in, "a widget element can't have text content (use its declared attributes)");
 				return false;
+			}
+			if (widget) {
+				str refused;
+				if (!RunWidgetValidator(*widget, out.attributes, static_cast<u32>(in.children.size()), refused)) {
+					error = Refuse(in, refused);
+					return false;
+				}
 			}
 			if (isInstance && !out.text.empty()) {
 				error = Refuse(in, str("can't have text content (change text inside the template with <") + str(TagOverrides) + str(">)"));
@@ -456,7 +492,10 @@ namespace Shalltear {
 			out += " -> ";
 		}
 
+		void ReleaseAssetRefs(Vector<UIDocumentAssetRef>& refs);
+
 		void ReleaseTemplates(UIDocumentAsset& document) {
+			ReleaseAssetRefs(document.assets);
 			for (UIDocumentTemplate& declared : document.templates) {
 				if (Asset* loaded = declared.document.Get()) {
 					AssetDatabase::UnloadAsset(loaded);
@@ -565,6 +604,141 @@ namespace Shalltear {
 												   error);
 		}
 
+		struct AssetUse {
+			std::string_view src;
+			const UI::WidgetAttribute* declared = nullptr;
+			std::string_view tag;
+		};
+
+		template <typename Fn>
+		void ForEachAssetAttribute(const UIDocumentAsset& document, const UIDocumentNode& node, const Fn& fn) {
+			if (node.templateName.empty()) {
+				const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(node.tag);
+				for (const UIDocumentAttribute& attribute : node.attributes) {
+					const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
+					if (declared && declared->type == UI::WidgetAttributeType::Asset) {
+						fn(AssetUse{attribute.value, declared, node.tag});
+					}
+				}
+			} else {
+				for (const UIDocumentOverride& block : node.overrides) {
+					ForEachExpandedElement(document, node, node.id, 0, [&](const UIDocumentNode& target, std::string_view id) {
+						if (id != block.elementId) {
+							return;
+						}
+						const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(target.tag);
+						for (const UIDocumentAttribute& attribute : block.attributes) {
+							const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
+							if (declared && declared->type == UI::WidgetAttributeType::Asset) {
+								fn(AssetUse{attribute.value, declared, target.tag});
+							}
+						}
+					});
+				}
+			}
+			for (const UIDocumentNode& child : node.children) {
+				ForEachAssetAttribute(document, child, fn);
+			}
+		}
+
+		void CollectAssetUses(const UIDocumentAsset& document, Vector<AssetUse>& out) {
+			out.clear();
+			ForEachAssetAttribute(document, document.root, [&out](const AssetUse& use) {
+				for (const AssetUse& seen : out) {
+					if (seen.src == use.src) {
+						return;
+					}
+				}
+				out.push_back(use);
+			});
+		}
+
+		bool IsAcceptedAsset(const Asset& asset, const UI::WidgetAttribute& declared) {
+			if (declared.assetTypes.empty()) {
+				return true;
+			}
+			for (std::string_view type : declared.assetTypes) {
+				if (asset.GetAssetTypeId() == StringHash(type)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		str SpellAssetTypes(const UI::WidgetAttribute& declared) {
+			str spelled;
+			for (std::string_view type : declared.assetTypes) {
+				spelled += (spelled.empty() ? "" : "/") + str(type);
+			}
+			return spelled;
+		}
+
+		Asset* LoadReferencedAsset(std::string_view src) {
+			const Path whole{str(src)};
+			const size_t hash = src.rfind('#');
+			if (hash == std::string_view::npos || AssetDatabase::LookupGuid(whole).IsValid()) {
+				return AssetDatabase::LoadAsset(whole);
+			}
+			const Path sourcePath{str(src.substr(0, hash))};
+			Asset* source = AssetDatabase::LoadAsset(sourcePath);
+			if (!source) {
+				return nullptr;
+			}
+			const std::string_view name = src.substr(hash + 1);
+			Vector<AssetProduct> products{GetMemoryResource(MemTag::Asset)};
+			AssetDatabase::GetProducts(source->assetId, products);
+			Asset* found = nullptr;
+			for (const AssetProduct& product : products) {
+				if ((product.name.empty() ? product.key : product.name) == name) {
+					found = AssetDatabase::LoadAssetByGuid(product.guid);
+					if (found) {
+						break;
+					}
+				}
+			}
+			AssetDatabase::UnloadAsset(source);
+			return found;
+		}
+
+		void ReleaseAssetRefs(Vector<UIDocumentAssetRef>& refs) {
+			for (UIDocumentAssetRef& ref : refs) {
+				if (Asset* loaded = ref.asset.Get()) {
+					AssetDatabase::UnloadAsset(loaded);
+				}
+				ref.asset = {};
+			}
+			refs.clear();
+		}
+
+		bool BindCookedAssets(UIDocumentAsset& document, CookReader& descriptor, str& error) {
+			Vector<AssetUse> uses{GetMemoryResource(MemTag::Asset)};
+			CollectAssetUses(document, uses);
+			u32 count = 0;
+			descriptor.Read(count);
+			if (descriptor.Failed() || count != uses.size()) {
+				error = str("the cooked record has ") + std::to_string(count) + str(" asset reference(s), the document has ") +
+						std::to_string(uses.size());
+				return false;
+			}
+			Vector<UIDocumentAssetRef> bound{GetMemoryResource(MemTag::Asset)};
+			for (const AssetUse& use : uses) {
+				Guid guid{};
+				descriptor.Read(guid);
+				Asset* loaded = descriptor.Failed() ? nullptr : AssetDatabase::LoadAssetByGuid(guid);
+				if (!loaded || !IsAcceptedAsset(*loaded, *use.declared)) {
+					if (loaded) {
+						AssetDatabase::UnloadAsset(loaded);
+					}
+					ReleaseAssetRefs(bound);
+					error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (not in the package)"));
+					return false;
+				}
+				bound.push_back(UIDocumentAssetRef{str(use.src), Handle<Asset>(loaded)});
+			}
+			document.assets = std::move(bound);
+			return true;
+		}
+
 		str RefuseOverride(const UIDocumentNode& instance, const UIDocumentOverride& block, std::string_view what) {
 			str spelled = str("<") + str(TagInstance) + str(" ") + str(AttrTemplate) + str("=\"") + instance.templateName + str("\"");
 			if (!instance.id.empty()) {
@@ -594,22 +768,35 @@ namespace Shalltear {
 					addressed = true;
 					const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(target.tag);
 					for (const UIDocumentAttribute& attribute : block.attributes) {
-						const UI::WidgetAttribute* declared = nullptr;
-						if (widget) {
-							for (const UI::WidgetAttribute& candidate : widget->attributes) {
-								if (candidate.name == attribute.name) {
-									declared = &candidate;
-									break;
-								}
-							}
-						}
+						const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
 						if (!declared) {
 							error = RefuseOverride(node, block, str("<") + target.tag + str("> has no attribute '") + attribute.name + str("'"));
 							ok = false;
 							return;
 						}
-						if (!UI::WidgetRegistry::IsValidLiteral(declared->type, attribute.value)) {
-							error = RefuseOverride(node, block, str("attribute '") + attribute.name + str("' wants ") + str(SpellAttributeType(declared->type)) + str(", not '") + attribute.value + str("'"));
+						if (!UI::WidgetRegistry::IsValidLiteral(*declared, attribute.value)) {
+							error = RefuseOverride(node, block, str("attribute '") + attribute.name + str("' wants ") + SpellAttributeType(*declared) + str(", not '") + attribute.value + str("'"));
+							ok = false;
+							return;
+						}
+					}
+					if (widget && widget->validate) {
+						Vector<UIDocumentAttribute> composed = target.attributes;
+						for (const UIDocumentAttribute& attribute : block.attributes) {
+							bool replaced = false;
+							for (UIDocumentAttribute& existing : composed) {
+								if (existing.name == attribute.name) {
+									existing.value = attribute.value;
+									replaced = true;
+								}
+							}
+							if (!replaced) {
+								composed.push_back(attribute);
+							}
+						}
+						str refused;
+						if (!RunWidgetValidator(*widget, composed, static_cast<u32>(target.children.size()), refused)) {
+							error = RefuseOverride(node, block, refused);
 							ok = false;
 							return;
 						}
@@ -727,6 +914,17 @@ namespace Shalltear {
 			Vector<UIInstantiateMapping>* mapping = nullptr;
 		};
 
+		Asset* FindReferencedAsset(const InstantiateScope& scope, std::string_view src) {
+			for (const DocumentChain* link = scope.expanding; link; link = link->outer) {
+				for (const UIDocumentAssetRef& ref : link->document->assets) {
+					if (ref.src == src) {
+						return ref.asset.Get();
+					}
+				}
+			}
+			return nullptr;
+		}
+
 		void RecordMapping(const InstantiateScope& scope, const UIDocumentNode& node, UI::ElementHandle element) {
 			if (scope.mapping && element.IsValid()) {
 				scope.mapping->push_back(UIInstantiateMapping{scope.document, &node, element});
@@ -795,6 +993,12 @@ namespace Shalltear {
 						if (!replaced) {
 							values.push_back(UI::WidgetAttributeValue{attribute.name, attribute.value});
 						}
+					}
+				}
+				for (UI::WidgetAttributeValue& value : values) {
+					const UI::WidgetAttribute* declared = DeclaredAttribute(widget, value.name);
+					if (declared && declared->type == UI::WidgetAttributeType::Asset) {
+						value.asset = FindReferencedAsset(scope, value.value);
 					}
 				}
 				UI::WidgetResult built = widget->factory(context, parent, UI::WidgetArgs{desc, values});
@@ -880,6 +1084,7 @@ namespace Shalltear {
 		root = UIDocumentNode{};
 		sheets.clear();
 		templates.clear();
+		assets.clear();
 
 		LinearAllocator arena(source.size() + 64, MemTag::Asset);
 		XML::XMLError xmlError;
@@ -1044,6 +1249,15 @@ namespace Shalltear {
 			}
 			descriptor.WriteAssetRef(document->assetId);
 		}
+		descriptor.Write(static_cast<u32>(assets.size()));
+		for (const UIDocumentAssetRef& ref : assets) {
+			const Asset* asset = ref.asset.Get();
+			if (!asset || !asset->assetId.IsValid()) {
+				SLT_LOG_ERROR("UI", "UIDocumentAsset: '{}' can't cook '{}': it was never resolved", virtualPath, ref.src);
+				return false;
+			}
+			descriptor.WriteAssetRef(asset->assetId);
+		}
 
 		payload.WriteBytes(text.data(), text.size());
 		return true;
@@ -1063,11 +1277,35 @@ namespace Shalltear {
 			return false;
 		}
 
-		if (!BindCookedReferences(*this, descriptor, error)) {
+		if (!BindCookedReferences(*this, descriptor, error) || !BindCookedAssets(*this, descriptor, error)) {
 			SLT_LOG_ERROR("UI", "UIDocumentAsset: cooked '{}' rejected -> {}", virtualPath, error);
 			ReleaseTemplates(*this);
 			return false;
 		}
+		return true;
+	}
+
+	bool UIDocumentAsset::ResolveAssetReferences(str& error) {
+		Vector<AssetUse> uses{GetMemoryResource(MemTag::Asset)};
+		CollectAssetUses(*this, uses);
+		Vector<UIDocumentAssetRef> resolved{GetMemoryResource(MemTag::Asset)};
+		for (const AssetUse& use : uses) {
+			Asset* loaded = LoadReferencedAsset(use.src);
+			if (!loaded) {
+				ReleaseAssetRefs(resolved);
+				error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (didn't load)"));
+				return false;
+			}
+			if (!IsAcceptedAsset(*loaded, *use.declared)) {
+				AssetDatabase::UnloadAsset(loaded);
+				ReleaseAssetRefs(resolved);
+				error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (not a ") + SpellAssetTypes(*use.declared) + str(")"));
+				return false;
+			}
+			resolved.push_back(UIDocumentAssetRef{str(use.src), Handle<Asset>(loaded)});
+		}
+		ReleaseAssetRefs(assets);
+		assets = std::move(resolved);
 		return true;
 	}
 
@@ -1111,6 +1349,17 @@ namespace Shalltear {
 					MixVersion(hash, 0);
 				}
 			}
+			for (const UIDocumentAssetRef& ref : document.assets) {
+				const Asset* asset = ref.asset.Get();
+				const TextureAsset* texture = nullptr;
+				if (asset && asset->GetAssetTypeId() == SpriteAsset::GetReflectType()->name) {
+					texture = static_cast<const SpriteAsset*>(asset)->GetTexture();
+				} else if (asset && asset->GetAssetTypeId() == TextureAsset::GetReflectType()->name) {
+					texture = static_cast<const TextureAsset*>(asset);
+				}
+				MixVersion(hash, asset ? asset->GetInstanceId() : 0);
+				MixVersion(hash, texture ? texture->version : 0);
+			}
 		}
 
 	} // anonymous namespace
@@ -1129,6 +1378,7 @@ namespace Shalltear {
 		std::swap(root, imported.root);
 		std::swap(sheets, imported.sheets);
 		std::swap(templates, imported.templates);
+		std::swap(assets, imported.assets);
 		++version;
 	}
 
@@ -1151,7 +1401,8 @@ namespace Shalltear {
 		UIDocumentAsset* document = static_cast<UIDocumentAsset*>(imported);
 
 		str error;
-		if (!ResolveSheets(*document, error) || !ResolveTemplates(*document, error) || !ValidateInstances(*document, document->root, error)) {
+		if (!ResolveSheets(*document, error) || !ResolveTemplates(*document, error) || !ValidateInstances(*document, document->root, error) ||
+			!document->ResolveAssetReferences(error)) {
 			SLT_LOG_ERROR("UI", "UIDocumentAsset: '{}' rejected -> {}", virtualPath.ToString(), error);
 			ReleaseTemplates(*document);
 			Delete(document);

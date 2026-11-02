@@ -380,7 +380,7 @@ TEST_F(UIBuilderOpsTest, LibraryGroupsEveryRegisteredWidgetByCategory) {
 		EXPECT_FALSE(group.widgets.empty());
 		listed += static_cast<u32>(group.widgets.size());
 	}
-	EXPECT_EQ(listed, 4u);
+	EXPECT_EQ(listed, 5u);
 	ASSERT_EQ(groups.size(), 2u);
 
 	bool sawScrollViewUnderContainers = false;
@@ -414,9 +414,10 @@ TEST_F(UIBuilderOpsTest, ModuleWidgetJoinsLibrary) {
 
 	Vector<const UI::WidgetDesc*> all{GetMemoryResource(MemTag::Debug)};
 	UI::WidgetRegistry::GetAll(all);
-	ASSERT_EQ(all.size(), 5u);
+	ASSERT_EQ(all.size(), 6u);
 	EXPECT_EQ(all[0]->tag, "button");
-	EXPECT_EQ(all[4]->tag, GAUGE);
+	EXPECT_EQ(all[4]->tag, "image");
+	EXPECT_EQ(all[5]->tag, GAUGE);
 
 	Vector<UIBuilderOps::LibraryGroup> groups{GetMemoryResource(MemTag::Debug)};
 	UIBuilderOps::BuildLibrary(groups);
@@ -430,13 +431,13 @@ TEST_F(UIBuilderOpsTest, ModuleWidgetJoinsLibrary) {
 	ASSERT_TRUE(UI::WidgetRegistry::Register(replacement, owner));
 
 	UI::WidgetRegistry::GetAll(all);
-	ASSERT_EQ(all.size(), 5u);
+	ASSERT_EQ(all.size(), 6u);
 	EXPECT_EQ(all[0]->tag, "button");
 	EXPECT_EQ(all[0]->factory, static_cast<UI::WidgetFactoryFn>(factory));
 
 	EXPECT_EQ(UI::WidgetRegistry::UnregisterOwnedBy(owner), 2u);
 	UI::WidgetRegistry::GetAll(all);
-	ASSERT_EQ(all.size(), 4u);
+	ASSERT_EQ(all.size(), 5u);
 	EXPECT_EQ(all[0]->tag, "button");
 	EXPECT_NE(all[0]->factory, static_cast<UI::WidgetFactoryFn>(factory));
 }

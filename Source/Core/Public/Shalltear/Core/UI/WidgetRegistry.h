@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Math/Color.h"
 #include "Shalltear/Core/Types.h"
 #include "Shalltear/Core/UI/Element.h"
 
@@ -10,6 +11,7 @@
 
 namespace Shalltear {
 
+	class Asset;
 	struct UIInstantiateDesc;
 
 	namespace UI {
@@ -20,16 +22,26 @@ namespace Shalltear {
 			String,
 			Bool,
 			Number,
+			Choice,
+			// hex, #rgb to #rrggbbaa
+			Color,
+			// project://path, or project://path#name for a product
+			Asset,
 		};
 
 		struct WidgetAttribute {
 			std::string_view name;
 			WidgetAttributeType type = WidgetAttributeType::String;
+			std::span<const std::string_view> choices;
+			std::span<const std::string_view> assetTypes;
+			std::string_view defaultValue;
 		};
 
 		struct WidgetAttributeValue {
 			std::string_view name;
 			std::string_view value;
+			// set for Asset attributes only
+			Asset* asset = nullptr;
 		};
 
 		struct SHALLTEAR_CORE_API WidgetArgs {
@@ -39,6 +51,8 @@ namespace Shalltear {
 			std::string_view Get(std::string_view name, std::string_view fallback = {}) const;
 			bool GetBool(std::string_view name, bool fallback = false) const;
 			f64 GetNumber(std::string_view name, f64 fallback = 0.0) const;
+			Color GetColor(std::string_view name, Color fallback) const;
+			Asset* GetAsset(std::string_view name) const;
 		};
 
 		struct WidgetResult {
@@ -48,6 +62,9 @@ namespace Shalltear {
 
 		using WidgetFactoryFn = WidgetResult (*)(Context& context, ElementHandle parent, const WidgetArgs& args);
 
+		// at import, after literal checks. Return false to refuse the document
+		using WidgetValidateFn = bool (*)(std::span<const WidgetAttributeValue> attributes, u32 childCount, str& error);
+
 		struct WidgetDesc {
 			std::string_view tag;
 			WidgetFactoryFn factory = nullptr;
@@ -56,6 +73,8 @@ namespace Shalltear {
 			std::span<const std::string_view> builtInClasses;
 
 			std::string_view category;
+
+			WidgetValidateFn validate = nullptr;
 		};
 
 		class SHALLTEAR_CORE_API WidgetRegistry {
@@ -71,7 +90,7 @@ namespace Shalltear {
 			// before the image unmaps (descs point into it)
 			static u32 UnregisterOwnedBy(const void* owner);
 
-			static bool IsValidLiteral(WidgetAttributeType type, std::string_view text);
+			static bool IsValidLiteral(const WidgetAttribute& attribute, std::string_view text);
 		};
 
 	} // namespace UI

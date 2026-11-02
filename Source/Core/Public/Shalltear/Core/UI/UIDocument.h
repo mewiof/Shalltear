@@ -42,6 +42,13 @@ namespace Shalltear {
 		Handle<UIDocumentAsset> document;
 	};
 
+	struct UIDocumentAssetRef {
+		// as written in the Asset attribute
+		str src;
+
+		Handle<Asset> asset;
+	};
+
 	struct UIDocumentOverride {
 		str elementId;
 
@@ -98,7 +105,13 @@ namespace Shalltear {
 
 		Vector<UIDocumentTemplate> templates{GetMemoryResource(MemTag::Asset)};
 
+		// 1 per distinct src, held while loaded
+		Vector<UIDocumentAssetRef> assets{GetMemoryResource(MemTag::Asset)};
+
 		u32 version = 0;
+
+		// templates must be resolved. Previous table untouched on refusal
+		bool ResolveAssetReferences(str& error);
 
 		[[nodiscard]] u64 GetContentVersion() const;
 
@@ -130,6 +143,9 @@ namespace Shalltear {
 		Asset* Import(const Path& sourcePath) override;
 
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
+
+		// bump when cooked record changes shape
+		u32 GetImporterVersion() const override { return 2; }
 
 		bool CanCreateAsset() const override { return true; }
 		std::string_view GetCreateMenuLabel() const override { return "UI Document"; }

@@ -7,6 +7,9 @@
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
+#include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/Reflection/Reflect.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Scene/SceneAsset.h"
@@ -21,6 +24,7 @@
 
 #include "CookHarness.h"
 #include "ProductLookup.h"
+#include "TestImages.h"
 
 #include <algorithm>
 #include <atomic>
@@ -774,4 +778,73 @@ TEST_F(CookClosureFixture, RendererPullsUIDependencies) {
 	EXPECT_NE(std::find(settingsEdges->begin(), settingsEdges->end(), fontGuid), settingsEdges->end());
 
 	AssetDatabase::UnloadAsset(settings);
+}
+
+TEST_F(CookClosureFixture, ImageSpriteCooksItsTexture) {
+	std::vector<u8> pixels(16 * 8 * 4, 255);
+	std::filesystem::create_directories(_root / "Assets" / "UI");
+	TestImages::WriteTga(_root / "Assets" / "UI" / "Atlas.tga", 16, 8, pixels.data());
+	Rescan();
+	const Path atlasPath("project://Assets/UI/Atlas.tga");
+	JSONValue rect = JSONValue::MakeArray();
+	for (f64 value : {8.0, 0.0, 8.0, 8.0}) {
+		rect.Push(JSONValue::MakeNumber(value));
+	}
+	JSONValue sprite = JSONValue::MakeObject();
+	sprite.AddMember("id", JSONValue::MakeString("gem"));
+	sprite.AddMember("name", JSONValue::MakeString("Gem"));
+	sprite.AddMember("rect", rect);
+	JSONValue sprites = JSONValue::MakeArray();
+	sprites.Push(sprite);
+	JSONValue settings = JSONValue::MakeObject();
+	settings.AddMember("compression", JSONValue::MakeString("none"));
+	settings.AddMember("sprites", sprites);
+	ASSERT_TRUE(AssetDatabase::WriteImporterSettings(atlasPath, settings));
+	StageText("Assets/UI/Hud.slxml", R"(<ui version="1"><panel><image src="project://Assets/UI/Atlas.tga#Gem"/></panel></ui>)");
+	Rescan();
+
+	const Guid documentGuid = GuidOf("project://Assets/UI/Hud.slxml");
+	const Guid atlasGuid = GuidOf("project://Assets/UI/Atlas.tga");
+	Asset* document = AssetDatabase::LoadAssetByGuid(documentGuid);
+	ASSERT_NE(document, nullptr);
+	const Guid spriteGuid = ProductLookup::Find(atlasPath, "Sprites/gem");
+	ASSERT_TRUE(spriteGuid.IsValid());
+
+	CookOps::CookClosure closure;
+	str error;
+	ASSERT_TRUE(CookOps::ComputeClosure(Roots({documentGuid}), closure, error)) << error;
+	EXPECT_TRUE(Holds(closure, spriteGuid));
+	EXPECT_TRUE(Holds(closure, atlasGuid));
+	const Vector<Guid>* documentEdges = EdgesOf(closure, documentGuid);
+	ASSERT_NE(documentEdges, nullptr);
+	EXPECT_NE(std::find(documentEdges->begin(), documentEdges->end(), spriteGuid), documentEdges->end());
+	const Vector<Guid>* spriteEdges = EdgesOf(closure, spriteGuid);
+	ASSERT_NE(spriteEdges, nullptr);
+	EXPECT_NE(std::find(spriteEdges->begin(), spriteEdges->end(), atlasGuid), spriteEdges->end());
+
+	Vector<u8> package{GetMemoryResource(MemTag::Editor)};
+	CookOps::PakWriteDesc desc;
+	ASSERT_TRUE(CookOps::CookPackage(closure, desc, package, error)) << error;
+	AssetDatabase::UnloadAsset(document);
+	for (u32 pass = 0; pass < 4 && AssetDatabase::CollectGarbage() > 0; ++pass) {
+	}
+	ASSERT_EQ(AssetDatabase::FindLoadedByGuid(atlasGuid), nullptr);
+
+	std::filesystem::path file = _root / "Hud.slpak";
+	Buffer buffer(package.size(), MemTag::Editor);
+	std::memcpy(buffer.data, package.data(), package.size());
+	ASSERT_TRUE(FileSystem::WriteFile(Path(file.generic_string()), buffer));
+	ASSERT_TRUE(AssetDatabase::MountPackage(Path(file.generic_string()), error)) << error;
+
+	Asset* cooked = AssetDatabase::LoadAssetByGuid(documentGuid);
+	ASSERT_NE(cooked, nullptr);
+	const UIDocumentAsset& restored = *static_cast<UIDocumentAsset*>(cooked);
+	ASSERT_EQ(restored.assets.size(), 1u);
+	const Asset* bound = restored.assets[0].asset.Get();
+	ASSERT_NE(bound, nullptr);
+	ASSERT_EQ(bound->GetAssetTypeId(), SpriteAsset::GetReflectType()->name);
+	const TextureSprite* definition = static_cast<const SpriteAsset*>(bound)->GetDefinition();
+	ASSERT_NE(definition, nullptr);
+	EXPECT_EQ(definition->rect, RectI(8, 0, 8, 8));
+	AssetDatabase::UnloadAsset(cooked);
 }

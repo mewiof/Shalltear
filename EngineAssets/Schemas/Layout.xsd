@@ -100,6 +100,72 @@
 		</xs:complexType>
 	</xs:element>
 
+	<xs:simpleType name="assetReference">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Za-z][A-Za-z0-9]*://[^#]+(#.+)?"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="hexColor">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="#([0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="imageScaleMode">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="scale-to-fit"/>
+			<xs:enumeration value="stretch-to-fill"/>
+			<xs:enumeration value="scale-and-crop"/>
+			<xs:enumeration value="sliced"/>
+			<xs:enumeration value="tiled"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="imageFillMethod">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="none"/>
+			<xs:enumeration value="horizontal"/>
+			<xs:enumeration value="vertical"/>
+			<xs:enumeration value="radial-90"/>
+			<xs:enumeration value="radial-180"/>
+			<xs:enumeration value="radial-360"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="imageFillOrigin">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="bottom"/>
+			<xs:enumeration value="top"/>
+			<xs:enumeration value="left"/>
+			<xs:enumeration value="right"/>
+			<xs:enumeration value="bottom-left"/>
+			<xs:enumeration value="bottom-right"/>
+			<xs:enumeration value="top-left"/>
+			<xs:enumeration value="top-right"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="unitInterval">
+		<xs:restriction base="xs:decimal">
+			<xs:minInclusive value="0"/>
+			<xs:maxInclusive value="1"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:element name="image">
+		<xs:complexType>
+			<xs:attribute name="src" type="assetReference"/>
+			<xs:attribute name="scale-mode" type="imageScaleMode"/>
+			<xs:attribute name="tint" type="hexColor"/>
+			<xs:attribute name="fill-method" type="imageFillMethod"/>
+			<xs:attribute name="fill-origin" type="imageFillOrigin"/>
+			<xs:attribute name="fill-amount" type="unitInterval"/>
+			<xs:attribute name="fill-clockwise" type="widgetBool"/>
+			<xs:attributeGroup ref="elementIdentity"/>
+		</xs:complexType>
+	</xs:element>
+
 	<xs:element name="scroll-view" type="element"/>
 
 	<xs:element name="panel" type="element"/>

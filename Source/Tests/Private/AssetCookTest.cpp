@@ -675,8 +675,9 @@ TEST_F(AssetCookFixture, UIDocumentRoundTripsAsText) {
 	ExpectNodesEqual(original.root, restored.root, str("root"));
 	EXPECT_TRUE(restored.sheets.empty());
 	EXPECT_TRUE(restored.templates.empty());
+	EXPECT_TRUE(restored.assets.empty());
 
-	EXPECT_EQ(cooked.source.descriptor.size(), 2 * sizeof(u32));
+	EXPECT_EQ(cooked.source.descriptor.size(), 3 * sizeof(u32));
 	EXPECT_EQ(cooked.source.payload.size(), original.Write().size());
 }
 

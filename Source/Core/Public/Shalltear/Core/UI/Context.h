@@ -22,6 +22,7 @@ namespace Shalltear {
 	class FontAsset;
 	class VectorAsset;
 	class TextureAsset;
+	class SpriteAsset;
 	class UISystem;
 } // namespace Shalltear
 
@@ -82,6 +83,59 @@ namespace Shalltear::UI {
 	enum class HitTestMode : u8 {
 		Box = 0,
 		Precise
+	};
+
+	enum class ImageScaleMode : u8 {
+		StretchToFill = 0,
+		ScaleAndCrop,
+		ScaleToFit,
+		// sprite's border stays unscaled
+		Sliced,
+		// at most MAX_IMAGE_TILES tiles (larger tiles past that)
+		Tiled
+	};
+
+	inline constexpr u32 MAX_IMAGE_TILES = 4096;
+
+	enum class ImageFillMethod : u8 {
+		None = 0,
+		Horizontal,
+		Vertical,
+		Radial90,
+		Radial180,
+		Radial360
+	};
+
+	// Horizontal: Left/Right, Vertical: Top/Bottom, Radial90: a corner, Radial180/360: a side
+	enum class ImageFillOrigin : u8 {
+		Left = 0,
+		Right,
+		Top,
+		Bottom,
+		TopLeft,
+		TopRight,
+		BottomLeft,
+		BottomRight
+	};
+
+	struct ImageFill {
+		ImageFillMethod method = ImageFillMethod::None;
+		ImageFillOrigin origin = ImageFillOrigin::Bottom;
+		// 0-1
+		f32 amount = 1.0f;
+		bool clockwise = true;
+
+		bool operator==(const ImageFill&) const = default;
+	};
+
+	struct ImageDesc {
+		Handle<TextureAsset> texture;
+		// used over texture when set
+		Handle<SpriteAsset> sprite;
+		ImageScaleMode scaleMode = ImageScaleMode::ScaleToFit;
+		ImageFill fill;
+
+		bool operator==(const ImageDesc&) const = default;
 	};
 
 	enum class PopupFlags : u8 {
@@ -170,6 +224,10 @@ namespace Shalltear::UI {
 		[[nodiscard]] Handle<VectorAsset> GetIconAsset(ElementHandle handle) const;
 
 		void SetImage(ElementHandle handle, Handle<TextureAsset> asset, f32 sizePx);
+		// native size, drawn into content box by scaleMode
+		void SetImage(ElementHandle handle, const ImageDesc& image);
+		// null unless SetImage(handle, ImageDesc) set it
+		[[nodiscard]] const ImageDesc* GetImage(ElementHandle handle) const;
 		void ClearImage(ElementHandle handle);
 		[[nodiscard]] bool HasImage(ElementHandle handle) const;
 		[[nodiscard]] Handle<TextureAsset> GetImageAsset(ElementHandle handle) const;

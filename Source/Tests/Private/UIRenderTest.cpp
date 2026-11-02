@@ -1452,6 +1452,58 @@ TEST_F(UIRenderFixture, GradientRampsBetweenColors) {
 	EXPECT_NEAR(alphaAt(16, 4), alphaAt(16, 60), 0.02f);
 }
 
+TEST_F(UIRenderFixture, RadialFillMasksWedge) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+
+	constexpr f32 PI = 3.14159265f;
+	UI::UIQuad quad;
+	quad.rect = {0.0f, 0.0f, 64.0f, 64.0f};
+	quad.color0 = Color(1.0f, 1.0f, 1.0f, 1.0f);
+	quad.color1 = Color(32.0f, 32.0f, PI * 0.5f, PI);
+	quad.clipRect = UI::InfiniteClip;
+	quad.flags = UI::QUAD_FLAG_RADIAL_FILL;
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderQuadsOffscreen(*RenderSystem::GetDevice(), {&quad, 1}, {64, 64}, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const u16* halves = reinterpret_cast<const u16*>(texels.data());
+	auto alphaAt = [halves](i32 x, i32 y) {
+		return HalfToFloat(halves[(static_cast<size_t>(y) * 64 + x) * 4 + 3]);
+	};
+
+	EXPECT_NEAR(alphaAt(8, 32), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(20, 50), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(20, 12), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(56, 32), 0.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(44, 50), 0.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(31, 56), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(32, 56), 0.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(31, 8), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(32, 8), 0.0f, 0.02f);
+
+	quad.color1 = Color(32.0f, 32.0f, PI * 0.5f, -PI);
+	ASSERT_TRUE(RenderQuadsOffscreen(*RenderSystem::GetDevice(), {&quad, 1}, {64, 64}, texels));
+	halves = reinterpret_cast<const u16*>(texels.data());
+	EXPECT_NEAR(alphaAt(8, 32), 0.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(56, 32), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(32, 56), 1.0f, 0.02f);
+	EXPECT_NEAR(alphaAt(31, 56), 0.0f, 0.02f);
+
+	u32 edge = 0;
+	for (i32 y = 0; y < 64; ++y) {
+		for (i32 x = 0; x < 64; ++x) {
+			const f32 alpha = alphaAt(x, y);
+			if (alpha > 0.05f && alpha < 0.95f) {
+				++edge;
+			}
+		}
+	}
+	EXPECT_LE(edge, 8u);
+}
+
 TEST_F(UIRenderFixture, HeaderKeepsLeafOutline) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

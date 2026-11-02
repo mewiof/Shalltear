@@ -23,6 +23,8 @@ namespace Shalltear::UI {
 	inline constexpr u32 QUAD_FLAG_PREMULTIPLIED = 1u << 4;
 	inline constexpr u32 QUAD_FLAG_RING = 1u << 5;
 	inline constexpr u32 QUAD_FLAG_ROTATED = 1u << 6;
+	// color1 = center x/y in context px, start rads, signed sweep rads
+	inline constexpr u32 QUAD_FLAG_RADIAL_FILL = 1u << 7;
 
 	struct UIQuad {
 		Rect rect;

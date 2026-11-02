@@ -169,6 +169,8 @@ namespace Shalltear::UI {
 			const Rect* visualRect = nullptr;
 			const Rect* innerRect = nullptr;
 			Radii innerRadii{};
+			// center x/y in context px, start rads, signed sweep rads
+			const Vec4* radialFill = nullptr;
 		};
 
 		Rect RotatedBounds(const Rect& rect, f32 rotation) {
@@ -239,6 +241,11 @@ namespace Shalltear::UI {
 				quad.flags |= QUAD_FLAG_RING;
 				quad.color1 = Color(params.innerRadii.topLeft, params.innerRadii.topRight,
 									params.innerRadii.bottomRight, params.innerRadii.bottomLeft);
+			}
+			if (params.radialFill) {
+				SLT_CORE_ASSERT_MSG(!params.gradient && !params.innerRect, "a radial fill spends color1 (can't also be a gradient or a ring)");
+				quad.flags |= QUAD_FLAG_RADIAL_FILL;
+				quad.color1 = Color(params.radialFill->x, params.radialFill->y, params.radialFill->z, params.radialFill->w);
 			}
 			SLT_CORE_ASSERT_MSG(!(params.visualRect && params.innerRect), "a quad can't be both a blur and a ring (uv holds 1 box)");
 			SLT_CORE_ASSERT_MSG(!(params.gradient && params.innerRect), "a quad can't be both a gradient and a ring (color1 holds 1 of them)");
@@ -603,11 +610,269 @@ namespace Shalltear::UI {
 			EmitRect(*state.list, state.ink, params, opacity, z, clipRect, clipRadii);
 		}
 
+		constexpr f32 TAU = 6.28318530718f;
+
+		struct ImageSpan {
+			f32 start = 0.0f;
+			f32 end = 0.0f;
+			f32 texelStart = 0.0f;
+			f32 texelEnd = 0.0f;
+		};
+
+		void SplitSpan(f32 start, f32 end, f32 texelStart, f32 texelEnd, f32 tileLength, Vector<ImageSpan>& out) {
+			if (end - start <= 0.0f || texelEnd - texelStart <= 0.0f) {
+				return;
+			}
+			if (tileLength <= 0.0f) {
+				out.push_back({start, end, texelStart, texelEnd});
+				return;
+			}
+			for (f32 at = start; at < end; at += tileLength) {
+				const f32 stop = std::min(at + tileLength, end);
+				const f32 shown = (stop - at) / tileLength;
+				out.push_back({at, stop, texelStart, texelStart + (texelEnd - texelStart) * shown});
+			}
+		}
+
+		f32 TileCount(f32 length, f32 tileLength) {
+			return tileLength > 0.0f ? std::ceil(length / tileLength) : 1.0f;
+		}
+
+		struct ImagePaint {
+			PaintState* state = nullptr;
+			EmitParams params;
+			Vec2 textureSize{};
+			Rect visible{};
+			f32 opacity = 1.0f;
+			i32 z = 0;
+			Rect clipRect{};
+			Radii clipRadii{};
+
+			void Emit(const Rect& dst, const Rect& texels) {
+				if (dst.w <= 0.0f || dst.h <= 0.0f || texels.w <= 0.0f || texels.h <= 0.0f) {
+					return;
+				}
+				const Rect shown = RectIntersect(dst, visible);
+				if (shown.w <= 0.0f || shown.h <= 0.0f) {
+					return;
+				}
+				const f32 u = texels.x + (shown.x - dst.x) / dst.w * texels.w;
+				const f32 v = texels.y + (shown.y - dst.y) / dst.h * texels.h;
+				const f32 uw = shown.w / dst.w * texels.w;
+				const f32 vh = shown.h / dst.h * texels.h;
+				params.rect = shown;
+				params.uv = {u / textureSize.x, v / textureSize.y, uw / textureSize.x, vh / textureSize.y};
+				EmitRect(*state->list, state->ink, params, opacity, z, clipRect, clipRadii);
+			}
+
+			void EmitGrid(const Vector<ImageSpan>& columns, const Vector<ImageSpan>& rows) {
+				for (const ImageSpan& row : rows) {
+					for (const ImageSpan& column : columns) {
+						Emit({column.start, row.start, column.end - column.start, row.end - row.start},
+							 {column.texelStart, row.texelStart, column.texelEnd - column.texelStart, row.texelEnd - row.texelStart});
+					}
+				}
+			}
+		};
+
+		void SplitBands(f32 start, f32 end, f32 texelStart, f32 texelEnd, f32 lowTexels, f32 highTexels, f32 scale, f32 centerTile,
+						Vector<ImageSpan>& out) {
+			f32 low = lowTexels * scale;
+			f32 high = highTexels * scale;
+			const f32 length = end - start;
+			if (low + high > length && low + high > 0.0f) {
+				const f32 shrink = length / (low + high);
+				low *= shrink;
+				high *= shrink;
+			}
+			SplitSpan(start, start + low, texelStart, texelStart + lowTexels, 0.0f, out);
+			SplitSpan(start + low, end - high, texelStart + lowTexels, texelEnd - highTexels, centerTile, out);
+			SplitSpan(end - high, end, texelEnd - highTexels, texelEnd, 0.0f, out);
+		}
+
+		Vec4 RadialFillParams(const ImageFill& fill, const Rect& drawn) {
+			const f32 x0 = drawn.x;
+			const f32 y0 = drawn.y;
+			const f32 x1 = drawn.x + drawn.w;
+			const f32 y1 = drawn.y + drawn.h;
+			const f32 cx = drawn.x + drawn.w * 0.5f;
+			const f32 cy = drawn.y + drawn.h * 0.5f;
+			constexpr f32 RIGHT = 0.0f;
+			constexpr f32 DOWN = TAU * 0.25f;
+			constexpr f32 LEFT = TAU * 0.5f;
+			constexpr f32 UP = TAU * 0.75f;
+			Vec2 center{cx, cy};
+			f32 inward = 0.0f;
+			f32 range = TAU;
+			switch (fill.method) {
+			case ImageFillMethod::Radial90:
+				range = TAU * 0.25f;
+				switch (fill.origin) {
+				case ImageFillOrigin::TopLeft:
+					center = {x0, y0};
+					inward = TAU * 0.125f;
+					break;
+				case ImageFillOrigin::TopRight:
+					center = {x1, y0};
+					inward = TAU * 0.375f;
+					break;
+				case ImageFillOrigin::BottomRight:
+					center = {x1, y1};
+					inward = TAU * 0.625f;
+					break;
+				default:
+					center = {x0, y1};
+					inward = TAU * 0.875f;
+					break;
+				}
+				break;
+			case ImageFillMethod::Radial180:
+				range = TAU * 0.5f;
+				switch (fill.origin) {
+				case ImageFillOrigin::Left:
+					center = {x0, cy};
+					inward = RIGHT;
+					break;
+				case ImageFillOrigin::Top:
+					center = {cx, y0};
+					inward = DOWN;
+					break;
+				case ImageFillOrigin::Right:
+					center = {x1, cy};
+					inward = LEFT;
+					break;
+				default:
+					center = {cx, y1};
+					inward = UP;
+					break;
+				}
+				break;
+			default:
+				switch (fill.origin) {
+				case ImageFillOrigin::Left:
+					inward = LEFT;
+					break;
+				case ImageFillOrigin::Top:
+					inward = UP;
+					break;
+				case ImageFillOrigin::Right:
+					inward = RIGHT;
+					break;
+				default:
+					inward = DOWN;
+					break;
+				}
+				break;
+			}
+			const f32 sweep = range * fill.amount;
+			if (fill.method == ImageFillMethod::Radial360) {
+				return {center.x, center.y, inward, fill.clockwise ? sweep : -sweep};
+			}
+			const f32 half = range * 0.5f;
+			return fill.clockwise ? Vec4{center.x, center.y, inward - half, sweep} : Vec4{center.x, center.y, inward + half, -sweep};
+		}
+
+		void EmitFittedImage(PaintState& state, u32 index, const IconComponent& picture, f32 opacity, i32 z, const Rect& clipRect,
+							 const Radii& clipRadii) {
+			ContextImpl& ctx = *state.ctx;
+			const ImageDesc& image = picture.image;
+			ImageSource source;
+			if (!ResolveImageSource(image, source) || !source.texture->texture.IsValid()) {
+				return;
+			}
+			const ImageFill& fill = image.fill;
+			if (fill.method != ImageFillMethod::None && fill.amount <= 0.0f) {
+				return;
+			}
+
+			const f32 scale = ctx.desc.contentScale;
+			const Rect content = ctx.L(index).content;
+			const Vec2 native{source.texels.w * scale, source.texels.h * scale};
+			if (content.w <= 0.0f || content.h <= 0.0f || native.x <= 0.0f || native.y <= 0.0f) {
+				return;
+			}
+
+			Rect drawn = content;
+			Rect texels = source.texels;
+			if (image.scaleMode == ImageScaleMode::ScaleToFit) {
+				const f32 fit = std::min(content.w / native.x, content.h / native.y);
+				drawn.w = native.x * fit;
+				drawn.h = native.y * fit;
+				drawn.x = content.x + (content.w - drawn.w) * 0.5f;
+				drawn.y = content.y + (content.h - drawn.h) * 0.5f;
+			} else if (image.scaleMode == ImageScaleMode::ScaleAndCrop) {
+				const f32 cover = std::max(content.w / native.x, content.h / native.y);
+				const f32 shownW = texels.w * content.w / (native.x * cover);
+				const f32 shownH = texels.h * content.h / (native.y * cover);
+				texels = {texels.x + (texels.w - shownW) * 0.5f, texels.y + (texels.h - shownH) * 0.5f, shownW, shownH};
+			}
+
+			ImagePaint paint;
+			paint.state = &state;
+			paint.textureSize = {static_cast<f32>(source.texture->size.x), static_cast<f32>(source.texture->size.y)};
+			paint.visible = drawn;
+			paint.opacity = opacity;
+			paint.z = z;
+			paint.clipRect = clipRect;
+			paint.clipRadii = clipRadii;
+			paint.params.texture = source.texture->texture;
+			paint.params.sampler = source.texture->settings.filter == RHI::FilterMode::Nearest ? SamplerKind::NearestClamp
+																							   : SamplerKind::LinearClamp;
+			paint.params.colorSRGB = ctx.E(index).tint;
+
+			Vec4 radial{};
+			if (fill.method == ImageFillMethod::Horizontal && fill.amount < 1.0f) {
+				const f32 width = drawn.w * fill.amount;
+				paint.visible = {fill.origin == ImageFillOrigin::Right ? drawn.x + drawn.w - width : drawn.x, drawn.y, width, drawn.h};
+			} else if (fill.method == ImageFillMethod::Vertical && fill.amount < 1.0f) {
+				const f32 height = drawn.h * fill.amount;
+				paint.visible = {drawn.x, fill.origin == ImageFillOrigin::Top ? drawn.y : drawn.y + drawn.h - height, drawn.w, height};
+			} else if (fill.method != ImageFillMethod::None && fill.method != ImageFillMethod::Horizontal &&
+					   fill.method != ImageFillMethod::Vertical && fill.amount < 1.0f) {
+				radial = RadialFillParams(fill, drawn);
+				paint.params.radialFill = &radial;
+			}
+
+			const SpriteBorder& border = source.border;
+			const bool sliced = image.scaleMode == ImageScaleMode::Sliced || image.scaleMode == ImageScaleMode::Tiled;
+			if (!sliced) {
+				paint.Emit(drawn, texels);
+				return;
+			}
+
+			const f32 centerTexelsW = texels.w - static_cast<f32>(border.left + border.right);
+			const f32 centerTexelsH = texels.h - static_cast<f32>(border.top + border.bottom);
+			f32 tileW = 0.0f;
+			f32 tileH = 0.0f;
+			if (image.scaleMode == ImageScaleMode::Tiled) {
+				tileW = centerTexelsW * scale;
+				tileH = centerTexelsH * scale;
+				const f32 spanW = std::max(0.0f, drawn.w - static_cast<f32>(border.left + border.right) * scale);
+				const f32 spanH = std::max(0.0f, drawn.h - static_cast<f32>(border.top + border.bottom) * scale);
+				while (TileCount(spanW, tileW) * TileCount(spanH, tileH) > static_cast<f32>(MAX_IMAGE_TILES)) {
+					tileW *= 1.25f;
+					tileH *= 1.25f;
+				}
+			}
+
+			Vector<ImageSpan> columns{GetMemoryResource(MemTag::UI)};
+			Vector<ImageSpan> rows{GetMemoryResource(MemTag::UI)};
+			SplitBands(drawn.x, drawn.x + drawn.w, texels.x, texels.x + texels.w, static_cast<f32>(border.left), static_cast<f32>(border.right),
+					   scale, tileW, columns);
+			SplitBands(drawn.y, drawn.y + drawn.h, texels.y, texels.y + texels.h, static_cast<f32>(border.top), static_cast<f32>(border.bottom),
+					   scale, tileH, rows);
+			paint.EmitGrid(columns, rows);
+		}
+
 		void EmitImage(PaintState& state, u32 index, f32 opacity, i32 z,
 					   const Rect& clipRect, const Radii& clipRadii) {
 			ContextImpl& ctx = *state.ctx;
 			IconComponent* picture = ctx.GetPicture(index);
 			if (!picture) {
+				return;
+			}
+			if (picture->fillsContentBox) {
+				EmitFittedImage(state, index, *picture, opacity, z, clipRect, clipRadii);
 				return;
 			}
 			const TextureAsset* image = picture->texture.Get();

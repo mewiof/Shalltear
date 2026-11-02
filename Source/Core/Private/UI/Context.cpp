@@ -1,5 +1,6 @@
 #include "UI/UIInternal.h"
 
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Profiler.h"
 #include "Shalltear/Core/Time.h"
@@ -727,10 +728,59 @@ namespace Shalltear::UI {
 		return {w * scale, h * scale};
 	}
 
+	bool ResolveImageSource(const ImageDesc& image, ImageSource& out) {
+		out = {};
+		if (image.sprite.IsValid()) {
+			const SpriteAsset* sprite = image.sprite.Get();
+			const TextureSprite* definition = sprite ? sprite->GetDefinition() : nullptr;
+			if (!definition) {
+				return false;
+			}
+			out.texture = sprite->GetTexture();
+			out.texels = {static_cast<f32>(definition->rect.position.x), static_cast<f32>(definition->rect.position.y),
+						  static_cast<f32>(definition->rect.size.x), static_cast<f32>(definition->rect.size.y)};
+			out.border = definition->border;
+			return out.texture != nullptr;
+		}
+		const TextureAsset* texture = image.texture.Get();
+		if (!texture || texture->size.x <= 0 || texture->size.y <= 0) {
+			return false;
+		}
+		out.texture = texture;
+		out.texels = {0.0f, 0.0f, static_cast<f32>(texture->size.x), static_cast<f32>(texture->size.y)};
+		return true;
+	}
+
+	bool IsValidFillOrigin(ImageFillMethod method, ImageFillOrigin origin) {
+		switch (method) {
+		case ImageFillMethod::None:
+			return true;
+		case ImageFillMethod::Horizontal:
+			return origin == ImageFillOrigin::Left || origin == ImageFillOrigin::Right;
+		case ImageFillMethod::Vertical:
+			return origin == ImageFillOrigin::Top || origin == ImageFillOrigin::Bottom;
+		case ImageFillMethod::Radial90:
+			return origin == ImageFillOrigin::TopLeft || origin == ImageFillOrigin::TopRight || origin == ImageFillOrigin::BottomLeft ||
+				   origin == ImageFillOrigin::BottomRight;
+		case ImageFillMethod::Radial180:
+		case ImageFillMethod::Radial360:
+			return origin == ImageFillOrigin::Left || origin == ImageFillOrigin::Right || origin == ImageFillOrigin::Top ||
+				   origin == ImageFillOrigin::Bottom;
+		}
+		return false;
+	}
+
 	Vec2 ContextImpl::MeasureIconExtent(u32 elementIndex) {
 		IconComponent* icon = GetPicture(elementIndex);
 		if (!icon) {
 			return {};
+		}
+		if (icon->fillsContentBox) {
+			ImageSource source;
+			if (!ResolveImageSource(icon->image, source)) {
+				return {};
+			}
+			return {source.texels.w * desc.contentScale, source.texels.h * desc.contentScale};
 		}
 		const f32 sizePhysical = icon->sizePx * desc.contentScale;
 		if (icon->cachedSizePhysical == sizePhysical) {
@@ -1398,6 +1448,8 @@ namespace Shalltear::UI {
 		icon.palette = palette;
 		icon.cachedSizePhysical = -1.0f;
 		icon.texture = {};
+		icon.image = {};
+		icon.fillsContentBox = false;
 		element.flags &= ~ElementFlags::HasImage;
 		element.flags |= ElementFlags::HasIcon;
 		_impl->MarkLayoutDirtyUpwards(index);
@@ -1458,10 +1510,12 @@ namespace Shalltear::UI {
 		}
 		Element& element = _impl->E(index);
 		IconComponent& picture = _impl->icons[index];
-		if (HasFlag(element.flags, ElementFlags::HasImage) && picture.texture == asset && picture.sizePx == sizePx) {
+		if (HasFlag(element.flags, ElementFlags::HasImage) && !picture.fillsContentBox && picture.texture == asset && picture.sizePx == sizePx) {
 			return;
 		}
 		picture.texture = asset;
+		picture.image = {};
+		picture.fillsContentBox = false;
 		picture.sizePx = sizePx;
 		picture.cachedSizePhysical = -1.0f;
 		picture.asset = {};
@@ -1469,6 +1523,47 @@ namespace Shalltear::UI {
 		element.flags &= ~ElementFlags::HasIcon;
 		element.flags |= ElementFlags::HasImage;
 		_impl->MarkLayoutDirtyUpwards(index);
+	}
+
+	void Context::SetImage(ElementHandle handle, const ImageDesc& image) {
+		u32 index = _impl->ResolveIndex(handle);
+		if (index == INVALID_UI_INDEX) {
+			return;
+		}
+		if (!image.texture.IsValid() && !image.sprite.IsValid()) {
+			ClearImage(handle);
+			return;
+		}
+		Element& element = _impl->E(index);
+		IconComponent& picture = _impl->icons[index];
+		ImageDesc wanted = image;
+		wanted.fill.amount = std::clamp(image.fill.amount, 0.0f, 1.0f);
+		const bool had = HasFlag(element.flags, ElementFlags::HasImage) && picture.fillsContentBox;
+		if (had && picture.image == wanted) {
+			return;
+		}
+		const bool sameBox = had && picture.image.texture == wanted.texture && picture.image.sprite == wanted.sprite;
+		picture.image = wanted;
+		picture.fillsContentBox = true;
+		picture.texture = {};
+		picture.sizePx = 0.0f;
+		picture.cachedSizePhysical = -1.0f;
+		picture.asset = {};
+		picture.palette = {};
+		element.flags &= ~ElementFlags::HasIcon;
+		element.flags |= ElementFlags::HasImage;
+		if (!sameBox) {
+			_impl->MarkLayoutDirtyUpwards(index);
+		}
+	}
+
+	const ImageDesc* Context::GetImage(ElementHandle handle) const {
+		u32 index = _impl->ResolveIndex(handle);
+		if (index == INVALID_UI_INDEX || !HasFlag(_impl->E(index).flags, ElementFlags::HasImage)) {
+			return nullptr;
+		}
+		const IconComponent* picture = _impl->GetPicture(index);
+		return picture && picture->fillsContentBox ? &picture->image : nullptr;
 	}
 
 	void Context::ClearImage(ElementHandle handle) {
@@ -1499,7 +1594,10 @@ namespace Shalltear::UI {
 			return {};
 		}
 		const IconComponent* picture = _impl->GetPicture(index);
-		return picture ? picture->texture : Handle<TextureAsset>{};
+		if (!picture) {
+			return {};
+		}
+		return picture->fillsContentBox ? picture->image.texture : picture->texture;
 	}
 
 	void Context::SetTextInput(ElementHandle handle, bool enabled) {

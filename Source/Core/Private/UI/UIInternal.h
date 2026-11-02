@@ -112,12 +112,24 @@ namespace Shalltear::UI {
 	struct IconComponent {
 		Handle<VectorAsset> asset;
 		Handle<TextureAsset> texture;
+		ImageDesc image;
+		bool fillsContentBox = false;
 		f32 sizePx = 16.0f;
 		IconPalette palette;
 
 		Vec2 measuredExtent{};
 		f32 cachedSizePhysical = -1.0f;
 	};
+
+	struct ImageSource {
+		const TextureAsset* texture = nullptr;
+		Rect texels{};
+		SpriteBorder border{};
+	};
+
+	bool ResolveImageSource(const ImageDesc& image, ImageSource& out);
+
+	[[nodiscard]] bool IsValidFillOrigin(ImageFillMethod method, ImageFillOrigin origin);
 
 	struct TextInputState {
 		i32 cursor = 0;

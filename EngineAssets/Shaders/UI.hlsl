@@ -28,6 +28,7 @@ struct UIQuad {
 #define UI_FLAG_PREMULTIPLIED 16u
 #define UI_FLAG_RING 32u
 #define UI_FLAG_ROTATED 64u
+#define UI_FLAG_RADIAL_FILL 128u
 
 #define UI_TEXTURE_DECODES 1u
 
@@ -99,7 +100,7 @@ VSOutput VSMain(uint vertexId : SV_VertexID) {
 		1.0 - 2.0 * local.y / gPush.viewportSize.y,
 		0.0, 1.0);
 	output.uv = quad.uv.xy + corner * quad.uv.zw;
-	float4 rampEnd = ((quad.flags & UI_FLAG_RING) != 0u) ? quad.color0 : quad.color1;
+	float4 rampEnd = ((quad.flags & (UI_FLAG_RING | UI_FLAG_RADIAL_FILL)) != 0u) ? quad.color0 : quad.color1;
 	output.color = ((quad.flags & UI_FLAG_GRADIENT_VERTICAL) != 0u)
 					   ? lerp(quad.color0, rampEnd, corner.y)
 					   : lerp(quad.color0, rampEnd, corner.x);
@@ -190,6 +191,21 @@ float ClippedCoverage(float dist, float support, float clipDist, float clipSuppo
 	return Coverage(shapeWins ? dist : clipDist, shapeWins ? support : clipSupport, 0.0);
 }
 
+// wedge = center xy, start rads, signed sweep rads (clockwise positive, +y down)
+float RadialFillCoverage(float2 p, float4 wedge) {
+	const float tau = 6.28318530718;
+	float sweep = abs(wedge.w);
+	if (sweep >= tau) {
+		return 1.0;
+	}
+	float2 v = p - wedge.xy;
+	float rel = (wedge.w >= 0.0 ? atan2(v.y, v.x) - wedge.z : wedge.z - atan2(v.y, v.x));
+	rel -= tau * floor(rel / tau);
+	float angular = rel <= sweep ? min(rel, sweep - rel) : -min(rel - sweep, tau - rel);
+	float px = length(v) * sin(clamp(angular, -1.5707963, 1.5707963));
+	return saturate(px + 0.5);
+}
+
 float DitherNoise(float2 p) {
 	return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453123);
 }
@@ -256,6 +272,9 @@ float4 PSMain(VSOutput input) : SV_Target {
 			float innerSupport;
 			float innerDist = RoundedBoxSDF(shapePos, input.innerBox, input.innerRadii, rotated, input.cosSin, innerSupport);
 			coverage = max(coverage - ClippedCoverage(innerDist, innerSupport, clipDist, clipSupport, clipMask, input.softness), 0.0);
+		}
+		if ((input.flags & UI_FLAG_RADIAL_FILL) != 0u) {
+			coverage *= RadialFillCoverage(contextPos, input.innerRadii);
 		}
 		color.a *= coverage;
 	}

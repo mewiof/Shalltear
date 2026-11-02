@@ -26,6 +26,8 @@ namespace Shalltear {
 
 	void UsePackagedProjectSettings(SettingsPaths& paths);
 
+	void RegisterGameCoreExtensions();
+
 	bool LoadBootScene(const BootScene& scene, str& outWhat);
 
 	bool ReadBootManifest(BootManifest& out, str& outError);

@@ -123,6 +123,7 @@ namespace Shalltear {
 		SceneSystem::Initialize();
 
 		InitializeLinkedPackages();
+		RegisterGameCoreExtensions();
 
 		SLT_LOG_INFO("Player", "{} {} (build {}, {}), {} scene(s)",
 					 manifest.productName.empty() ? "Shalltear game" : manifest.productName,

@@ -71,6 +71,7 @@ namespace Shalltear {
 		Settings::Initialize(paths);
 
 		SceneSystem::Initialize();
+		RegisterGameCoreExtensions();
 
 		BootManifest manifest;
 		str error;

@@ -59,6 +59,35 @@ namespace {
 
 	constexpr const char* DATA_MARKER = "SHALLTEAR_DATA_PROBE";
 
+	constexpr const char* EXTENSION_MARKER = "SHALLTEAR_EXTENSION_PROBE";
+
+	constexpr const char* EXTENSION_SOURCE = R"(#include "Shalltear.h"
+#include "Shalltear/Core/Frame/FrameStages.h"
+
+using namespace Shalltear;
+
+namespace {
+
+	u32 _endFrameRuns = 0;
+
+	void OnEndFrame(const FrameStageArgs&, void*) {
+		if (++_endFrameRuns == 1) {
+			SLT_LOG_INFO("PlayerProbe", "SHALLTEAR_EXTENSION_PROBE stage");
+		}
+	}
+
+	void RegisterExtensions(const void* owner) {
+		const TypeInfo* component = TypeRegistry::FindType(StringHash("ExampleComponent"));
+		SLT_LOG_INFO("PlayerProbe", "SHALLTEAR_EXTENSION_PROBE registered owned={}",
+					 component && component->ownerModule == owner ? "yes" : "no");
+		FrameStages::Register(FrameStage::EndFrame, FrameStagePosition::Normal, &OnEndFrame, nullptr, owner);
+	}
+
+}
+
+SLT_IMPLEMENT_CORE_EXTENSIONS(&RegisterExtensions)
+)";
+
 	constexpr int HUD_SHEET_WIDTH = 240;
 	constexpr int HUD_INLINE_HEIGHT = 64;
 
@@ -615,6 +644,8 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	WriteFile("Source/PotionDrinker.h", POTION_DRINKER_HEADER);
 	WriteFile("Source/PotionDrinker.cpp", POTION_DRINKER_SOURCE);
 
+	WriteFile("Source/ExtensionProbe.cpp", EXTENSION_SOURCE);
+
 	CompileService service;
 	service.RefreshToolchain();
 	if (!RunCompile(service)) {
@@ -847,6 +878,15 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 
 	EXPECT_NE(playerLog.find(PLAYER_MARKER), str::npos) << playerLog;
 
+	auto expectGameExtensions = [](const str& log) {
+		const size_t registered = log.find(str(EXTENSION_MARKER) + " registered owned=yes");
+		EXPECT_NE(registered, str::npos) << log;
+		EXPECT_LT(registered, log.find(PLAYER_MARKER)) << log;
+		EXPECT_EQ(log.find(str(EXTENSION_MARKER) + " registered", registered + 1), str::npos) << log;
+		EXPECT_NE(log.find(str(EXTENSION_MARKER) + " stage"), str::npos) << log;
+	};
+	expectGameExtensions(playerLog);
+
 	EXPECT_EQ(playerLog.find("unloaded type"), str::npos) << playerLog;
 
 	EXPECT_NE(playerLog.find(str(DATA_MARKER) + " heal=42 name='Elixir'"), str::npos) << playerLog;
@@ -1022,6 +1062,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_EQ(serverLog.find("could not be resolved"), str::npos) << serverLog;
 	EXPECT_NE(serverLog.find("headless"), str::npos) << serverLog;
 	EXPECT_NE(serverLog.find("target=WindowsServer"), str::npos) << serverLog;
+	expectGameExtensions(serverLog);
 
 	EXPECT_EQ(serverLog.find("WindowSystem initialized"), str::npos) << serverLog;
 	EXPECT_EQ(serverLog.find("[Graphics]"), str::npos) << serverLog;

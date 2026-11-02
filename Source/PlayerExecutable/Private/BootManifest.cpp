@@ -3,11 +3,18 @@
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/Log.h"
+#include "Shalltear/Core/Module/ModuleAPI.h"
 #include "Shalltear/Core/Scene/Scene.h"
 #include "Shalltear/Core/Scene/SceneSystem.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 
 #include <format>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace Shalltear {
 
@@ -20,6 +27,17 @@ namespace Shalltear {
 	void UsePackagedProjectSettings(SettingsPaths& paths) {
 		paths.project = {};
 		AssetDatabase::ReadPackageDocument(PakDocumentKind::ProjectSettings, paths.projectText);
+	}
+
+	void RegisterGameCoreExtensions() {
+#if defined(_WIN32)
+		HMODULE image = ::GetModuleHandleW(nullptr);
+		auto entry = reinterpret_cast<CoreExtensionRegisterFn>(
+			::GetProcAddress(image, SLT_CORE_EXTENSION_REGISTER_SYMBOL));
+		if (entry) {
+			entry(image);
+		}
+#endif
 	}
 
 	bool LoadBootScene(const BootScene& scene, str& outWhat) {

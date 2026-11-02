@@ -133,6 +133,11 @@ namespace {
 			const std::span<const BoneTransform> pose = rig->GetComponent<Skeleton>()->GetLocalPose();
 			return bone < pose.size() ? Quat::Angle(Quat::Identity(), pose[bone].rotation) : 0.0f;
 		}
+
+		f32 BoneX(Handle<SceneObject> rig, u32 bone) {
+			const std::span<const BoneTransform> pose = rig->GetComponent<Skeleton>()->GetLocalPose();
+			return bone < pose.size() ? pose[bone].position.x : 0.0f;
+		}
 	};
 
 	void AddConstantRotation(AnimationClip& clip, std::initializer_list<const char*> bones, f32 degrees) {
@@ -150,11 +155,39 @@ namespace {
 		clip.loop = AnimationLoopMode::Loop;
 	}
 
+	void AddRamp(AnimationClip& clip, const char* bone, f32 length, f32 distance, AnimationLoopMode loop) {
+		AnimationClip::Track track;
+		track.kind = AnimationTrackKind::BonePosition;
+		track.interp = AnimationInterpolation::Linear;
+		track.name = str(bone);
+		track.times.push_back(0.0f);
+		track.times.push_back(length);
+		track.values.push_back(Vec4(0.0f, 0.0f, 0.0f, 0.0f));
+		track.values.push_back(Vec4(distance, 0.0f, 0.0f, 0.0f));
+		clip.tracks.push_back(std::move(track));
+		clip.length = length;
+		clip.loop = loop;
+	}
+
 	i32 AddLeaf(AnimatorController& controller, AnimationClip* clip) {
 		AnimatorController::MotionNode node;
 		node.kind = AnimatorBlendKind::Clip;
 		node.clip = Handle<AnimationClip>(clip);
 		controller.nodes.push_back(std::move(node));
+		return static_cast<i32>(controller.nodes.size()) - 1;
+	}
+
+	i32 AddTree1D(AnimatorController& controller, const char* parameter, std::initializer_list<AnimationClip*> clips) {
+		AnimatorController::MotionNode tree;
+		tree.kind = AnimatorBlendKind::Simple1D;
+		tree.parameterX = parameter;
+		for (AnimationClip* clip : clips) {
+			AnimatorController::MotionChild child;
+			child.node = AddLeaf(controller, clip);
+			child.position = Vec2(static_cast<f32>(tree.children.size()), 0.0f);
+			tree.children.push_back(child);
+		}
+		controller.nodes.push_back(std::move(tree));
 		return static_cast<i32>(controller.nodes.size()) - 1;
 	}
 
@@ -1206,6 +1239,135 @@ TEST_F(AnimationLayeringFixture, BlendFiresDominantMotionEvents) {
 	}
 	EXPECT_GT(_runSteps, 0u);
 	EXPECT_EQ(_walkSteps, 0u);
+}
+
+TEST_F(AnimationLayeringFixture, BlendTreeSharesNormalizedTime) {
+	SkeletonAsset* skeleton = MakeSpine();
+	AnimationClip* shortClip = MakeClip("project://short.clip");
+	AddRamp(*shortClip, "Chest", 1.0f, 1.0f, AnimationLoopMode::Loop);
+	AnimationClip* longClip = MakeClip("project://long.clip");
+	AddRamp(*longClip, "Chest", 2.0f, 1.0f, AnimationLoopMode::Loop);
+
+	AnimatorController* controller = MakeController();
+	AddParameter(*controller, "Blend", AnimatorParameterKind::Float, 0.5f);
+	const i32 state = AddState(*controller, "Move", AddTree1D(*controller, "Blend", {shortClip, longClip}));
+	controller->machines[0].defaultState = state;
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	Handle<AnimatorStateMachine> driver = rig->AddComponent<AnimatorStateMachine>();
+	driver->SetController(Handle<AnimatorController>(controller));
+
+	for (i32 frame = 0; frame < 24; ++frame) {
+		RunUpdate(0.05f);
+	}
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.8f, 1e-3f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.8f, 1e-3f);
+	EXPECT_NEAR(animator->GetTime(), 1.2f, 1e-3f);
+
+	ASSERT_TRUE(driver->SetFloat("Blend", 1.0f));
+	RunUpdate(0.1f);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.85f, 1e-3f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.85f, 1e-3f);
+
+	ASSERT_TRUE(driver->SetFloat("Blend", 0.0f));
+	RunUpdate(0.1f);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.95f, 1e-3f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.95f, 1e-3f);
+}
+
+TEST_F(AnimationLayeringFixture, BlendRootMotionFollowsCycle) {
+	SkeletonAsset* skeleton = MakeSpine();
+	auto makeLocomotion = [&](f32 length, f32 metres, const char* eventName) {
+		AnimationClip* clip = MakeClip("project://locomotion.clip");
+		AddRamp(*clip, "Hips", length, metres, AnimationLoopMode::Loop);
+		AnimationClip::Track event;
+		event.kind = AnimationTrackKind::Event;
+		event.name = eventName;
+		event.times.push_back(0.5f * length);
+		event.values.push_back(Vec4{});
+		clip->tracks.push_back(std::move(event));
+		clip->bakeRootMotionIntoPose = false;
+		return clip;
+	};
+	AnimationClip* walk = makeLocomotion(1.0f, 1.0f, "WalkStep");
+	AnimationClip* run = makeLocomotion(2.0f, 4.0f, "RunStep");
+
+	AnimatorController* controller = MakeController();
+	AddParameter(*controller, "Speed", AnimatorParameterKind::Float, 0.4f);
+	const i32 state = AddState(*controller, "Move", AddTree1D(*controller, "Speed", {walk, run}));
+	controller->machines[0].defaultState = state;
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	Handle<AnimatorStateMachine> driver = rig->AddComponent<AnimatorStateMachine>();
+	driver->SetController(Handle<AnimatorController>(controller));
+
+	struct Steps {
+		u32 walk = 0;
+		u32 run = 0;
+	} steps;
+	animator->Subscribe(
+		[](const AnimationEvent& event, void* user) {
+			Steps& counted = *static_cast<Steps*>(user);
+			if (event.name == StringHash("WalkStep")) {
+				++counted.walk;
+			} else if (event.name == StringHash("RunStep")) {
+				++counted.run;
+			}
+		},
+		&steps);
+
+	RunUpdate(0.1f);
+	RunUpdate(0.1f);
+	EXPECT_NEAR(animator->GetRootMotionDelta().x, 2.2f / 14.0f, 1e-3f);
+
+	for (i32 frame = 0; frame < 18; ++frame) {
+		RunUpdate(0.1f);
+	}
+	EXPECT_EQ(steps.walk, 1u);
+	EXPECT_EQ(steps.run, 0u);
+}
+
+TEST_F(AnimationLayeringFixture, NonLoopingBlendEndsTogether) {
+	SkeletonAsset* skeleton = MakeSpine();
+	AnimationClip* shortClip = MakeClip("project://short.clip");
+	AddRamp(*shortClip, "Chest", 1.0f, 1.0f, AnimationLoopMode::None);
+	AnimationClip* longClip = MakeClip("project://long.clip");
+	AddRamp(*longClip, "Chest", 3.0f, 1.0f, AnimationLoopMode::None);
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	AnimationLayer::Motion motions[2];
+	motions[0].clip = Handle<AnimationClip>(shortClip);
+	motions[0].weight = 0.5f;
+	motions[1].clip = Handle<AnimationClip>(longClip);
+	motions[1].weight = 0.5f;
+	motions[1].speed = 1.5f;
+	PlayHandle handle = animator->PlayBlend(motions, 2, 0.0f);
+	ASSERT_TRUE(handle.IsValid());
+
+	handle.SetTime(0.75f);
+	RunUpdate(0.0f);
+	const AnimationLayer* layer = animator->GetLayer(0);
+	ASSERT_NE(layer, nullptr);
+	EXPECT_NEAR(layer->GetNormalizedTime(), 0.5f, 1e-4f);
+	EXPECT_NEAR(handle.GetTime(), 0.75f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.5f, 1e-4f);
+
+	for (i32 frame = 0; frame < 6; ++frame) {
+		RunUpdate(0.1f);
+	}
+	EXPECT_TRUE(handle.IsValid());
+	EXPECT_NEAR(BoneX(rig, 3), 0.9f, 1e-3f);
+
+	RunUpdate(0.2f);
+	EXPECT_FALSE(handle.IsValid());
+	EXPECT_FLOAT_EQ(layer->GetNormalizedTime(), 1.0f);
+	EXPECT_NEAR(BoneX(rig, 3), 1.0f, 1e-4f);
 }
 
 #endif

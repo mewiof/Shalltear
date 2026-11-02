@@ -188,20 +188,6 @@ namespace Shalltear {
 		}
 	}
 
-	namespace {
-
-		f32 NormalizedOf(const AnimationLayer& layer) {
-			const AnimationLayer::Motion motion = layer.GetMotion(0);
-			const AnimationClip* clip = motion.clip.Get();
-			if (!clip || !(clip->length > 0.0f) || !(motion.speed != 0.0f)) {
-				return 0.0f;
-			}
-			const f32 length = clip->length / Math::Abs(motion.speed);
-			return layer.GetTime() / length;
-		}
-
-	} // anonymous namespace
-
 	void AnimatorStateMachine::EnterState(LayerState& live, i32 layerIndex, i32 state, f32 fade, f32 startNormalized) {
 		AnimatorController* asset = _adopted.Get();
 		Animator* animator = GetAnimator().Get();
@@ -222,13 +208,7 @@ namespace Shalltear {
 			return;
 		}
 		layer->speed = entered.speed;
-		if (startNormalized != 0.0f) {
-			const AnimationLayer::Motion motion = layer->GetMotion(0);
-			const AnimationClip* clip = motion.clip.Get();
-			if (clip && clip->length > 0.0f && motion.speed != 0.0f) {
-				layer->SetTime(startNormalized * clip->length / Math::Abs(motion.speed));
-			}
-		}
+		layer->SetNormalizedTime(startNormalized);
 	}
 
 	void AnimatorStateMachine::UpdateWeights(LayerState& live, i32 layerIndex) {
@@ -417,7 +397,7 @@ namespace Shalltear {
 		}
 		const Animator* animator = GetAnimator().Get();
 		const AnimationLayer* target = animator ? animator->GetLayer(_layers[static_cast<size_t>(layer)].target) : nullptr;
-		return target ? NormalizedOf(*target) : 0.0f;
+		return target ? target->GetNormalizedTime() : 0.0f;
 	}
 
 	bool AnimatorStateMachine::Play(std::string_view state, f32 fade, i32 layer) {
@@ -471,7 +451,7 @@ namespace Shalltear {
 				ApplyMask(*target, authored, *rig);
 			}
 
-			const f32 normalized = NormalizedOf(*target);
+			const f32 normalized = target->GetNormalizedTime();
 			const AnimatorController::Transition* take = nullptr;
 			if (!live.travel.empty()) {
 				const i32 next = live.travel.back();

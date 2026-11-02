@@ -704,16 +704,16 @@ TEST_F(RootMotionFixture, ExtractedLoopKeepsTravelling) {
 	Handle<Animator> extracted = MakeCharacter(rig, MakeWalk(0.2f, 1.0f, 0.0f, false), "extracted");
 	extracted->SetApplyRootMotion(true);
 
-	for (i32 frame = 0; frame < 25; ++frame) {
+	for (i32 frame = 0; frame < 26; ++frame) {
 		RunUpdate(0.04f);
 	}
 
 	const std::span<const BoneTransform> bakedPose =
 		baked->GetOwner()->GetComponent<Skeleton>()->GetLocalPose();
-	EXPECT_NEAR(bakedPose[0].position.z, 0.0f, 2e-2f);
+	EXPECT_NEAR(bakedPose[0].position.z, 0.2f, 2e-2f);
 	EXPECT_NEAR(baked->GetOwner()->GetLocalPosition().z, 0.0f, 1e-5f);
 
-	EXPECT_NEAR(extracted->GetOwner()->GetLocalPosition().z, 5.0f, 5e-2f);
+	EXPECT_NEAR(extracted->GetOwner()->GetLocalPosition().z, 5.2f, 5e-2f);
 	const std::span<const BoneTransform> movedPose =
 		extracted->GetOwner()->GetComponent<Skeleton>()->GetLocalPose();
 	EXPECT_NEAR(movedPose[0].position.z, 0.0f, 1e-4f);

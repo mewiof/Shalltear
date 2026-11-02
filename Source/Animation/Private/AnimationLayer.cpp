@@ -123,7 +123,31 @@ namespace Shalltear {
 		return best;
 	}
 
-	void AnimationLayer::SetTime(f32 seconds) { _time = Math::IsFinite(seconds) ? seconds : 0.0f; }
+	f32 AnimationLayer::CycleOf(const Vector<MotionSlot>& slots) {
+		f32 weighted = 0.0f;
+		f32 total = 0.0f;
+		for (const MotionSlot& slot : slots) {
+			const AnimationClip* asset = slot.motion.clip.Get();
+			const f32 speed = Math::Abs(slot.motion.speed);
+			if (!asset || !(slot.motion.weight > 0.0f) || !(asset->length > 0.0f) || !(speed > 0.0f)) {
+				continue;
+			}
+			weighted += slot.motion.weight * asset->length / speed;
+			total += slot.motion.weight;
+		}
+		return total > 0.0f ? weighted / total : 0.0f;
+	}
+
+	f32 AnimationLayer::GetTime() const { return _normalized * CycleOf(_motions); }
+
+	void AnimationLayer::SetTime(f32 seconds) {
+		const f32 cycle = CycleOf(_motions);
+		_normalized = Math::IsFinite(seconds) && cycle > 0.0f ? seconds / cycle : 0.0f;
+	}
+
+	void AnimationLayer::SetNormalizedTime(f32 normalized) {
+		_normalized = Math::IsFinite(normalized) ? normalized : 0.0f;
+	}
 
 	const AnimationLayer::BoneBinding* AnimationLayer::FindRow(const Vector<BoneBinding>& rows, i16 bone) {
 		auto found = std::lower_bound(rows.begin(), rows.end(), bone,

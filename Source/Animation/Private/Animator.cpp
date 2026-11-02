@@ -21,8 +21,15 @@ namespace Shalltear {
 
 		constexpr f32 CAPTURE_FALLBACK_STEP = 1.0f / 60.0f;
 
-		f32 SampleAt(const AnimationClip& asset, f32 clock, f32 rate, f32 back) {
-			return AnimationImpl::WrapTime(clock - back * rate, asset.length, asset.loop);
+		f32 ClipTime(const AnimationClip& asset, f32 speed, f32 normalized) {
+			if (speed == 0.0f) {
+				return 0.0f;
+			}
+			return speed > 0.0f ? normalized * asset.length : -normalized * asset.length;
+		}
+
+		f32 SampleAt(const AnimationClip& asset, f32 speed, f32 normalized) {
+			return AnimationImpl::WrapTime(ClipTime(asset, speed, normalized), asset.length, asset.loop);
 		}
 
 		BoneTransform RestPose(const SkeletonAsset& skeleton, i16 bone) {
@@ -179,13 +186,13 @@ namespace Shalltear {
 		const f32 duration = fade < 0.0f ? settings.defaultTransitionDuration : fade;
 		if (duration > 0.0f && layer.IsPlaying()) {
 			layer._fadeMotions = layer._motions;
-			layer._fadeTime = layer._time;
+			layer._fadeNormalized = layer._normalized;
 			layer._fadeValid = true;
 			_pendingFade = Math::Max(_pendingFade, duration);
 		}
 
 		layer.SetMotions(motions, count);
-		layer._time = 0.0f;
+		layer._normalized = 0.0f;
 		layer._playing = layer.GetClip().IsValid();
 
 		++layer._playId;
@@ -404,7 +411,7 @@ namespace Shalltear {
 				rebound = true;
 			}
 
-			layer._prevTime = layer._time;
+			layer._prevNormalized = layer._normalized;
 
 			AnimationLayer::RefreshShares(layer._motions);
 
@@ -415,20 +422,22 @@ namespace Shalltear {
 				continue;
 			}
 			const f32 rate = _speed * layer.speed;
+			const f32 cycle = AnimationLayer::CycleOf(layer._motions);
 			if (Math::IsFinite(deltaTime)) {
-				layer._time += deltaTime * rate;
-				if (layer._fadeValid) {
-					layer._fadeTime += deltaTime * rate;
+				if (cycle > 0.0f) {
+					layer._normalized += deltaTime * rate / cycle;
+				}
+				const f32 fadeCycle = layer._fadeValid ? AnimationLayer::CycleOf(layer._fadeMotions) : 0.0f;
+				if (fadeCycle > 0.0f) {
+					layer._fadeNormalized += deltaTime * rate / fadeCycle;
 				}
 			}
-			const f32 dominantSpeed = layer._motions[static_cast<size_t>(dominant)].motion.speed;
-			const f32 layerLength = dominantSpeed != 0.0f ? asset->length / Math::Abs(dominantSpeed) : 0.0f;
-			if (asset->loop == AnimationLoopMode::None && layerLength > 0.0f) {
-				if (layer._time >= layerLength) {
-					layer._time = layerLength;
+			if (asset->loop == AnimationLoopMode::None && cycle > 0.0f) {
+				if (layer._normalized >= 1.0f) {
+					layer._normalized = 1.0f;
 					layer._playing = false;
-				} else if (layer._time <= 0.0f && rate < 0.0f) {
-					layer._time = 0.0f;
+				} else if (layer._normalized <= 0.0f && rate < 0.0f) {
+					layer._normalized = 0.0f;
 					layer._playing = false;
 				}
 			}
@@ -581,13 +590,13 @@ namespace Shalltear {
 			const AnimationLayer& layer = *layerPtr;
 
 			const Vector<AnimationLayer::MotionSlot>* slots = nullptr;
-			f32 clock = 0.0f;
+			f32 normalized = 0.0f;
 			if (outgoing && layer._fadeValid) {
 				slots = &layer._fadeMotions;
-				clock = layer._fadeTime;
+				normalized = layer._fadeNormalized;
 			} else if (layer._active) {
 				slots = &layer._motions;
-				clock = layer._time;
+				normalized = layer._normalized;
 			}
 			if (!slots || slots->empty()) {
 				continue;
@@ -596,7 +605,12 @@ namespace Shalltear {
 			if (!(weight > 0.0f)) {
 				continue;
 			}
-			const f32 rate = _speed * layer.speed;
+			if (back != 0.0f) {
+				const f32 cycle = AnimationLayer::CycleOf(*slots);
+				if (cycle > 0.0f) {
+					normalized -= back * _speed * layer.speed / cycle;
+				}
+			}
 			const bool additive = layer.blend == AnimationBlendMode::Additive;
 
 			BoneTransform motionPose = accumulated;
@@ -621,7 +635,7 @@ namespace Shalltear {
 
 				BoneTransform sampled = accumulated;
 				BoneTransform reference = accumulated;
-				const f32 at = SampleAt(*asset, clock * slot.motion.speed, rate, back * slot.motion.speed);
+				const f32 at = SampleAt(*asset, slot.motion.speed, normalized);
 				const i32 channels[3] = {row->position, row->rotation, row->scale};
 				const f32 referenceAt =
 					additive ? AnimationImpl::WrapTime(asset->additiveReferenceTime, asset->length, AnimationLoopMode::None)
@@ -697,7 +711,7 @@ namespace Shalltear {
 		if (!layer._active || !asset || (layer._properties.empty() && layer._blendShapes.empty())) {
 			return;
 		}
-		const f32 at = SampleAt(*asset, layer._time * slot.motion.speed, _speed * layer.speed, 0.0f);
+		const f32 at = SampleAt(*asset, slot.motion.speed, layer._normalized);
 
 		for (const AnimationLayer::BlendShapeBinding& binding : layer._blendShapes) {
 			if (binding.track < 0 || static_cast<size_t>(binding.track) >= asset->tracks.size()) {
@@ -776,10 +790,10 @@ namespace Shalltear {
 		if (!asset) {
 			return;
 		}
-		const f32 rate = slot.motion.speed;
+		const f32 speed = slot.motion.speed;
 		AnimationImpl::ClipSegment runs[AnimationImpl::ANIMATION_MAX_CLIP_RUNS];
-		const u32 count = IntervalRuns(layer._prevTime * rate, layer._time * rate, *asset, runs, layer._intervalWarned,
-									   GetOwner().IsValid() ? GetOwner()->name : str("<detached>"));
+		const u32 count = IntervalRuns(ClipTime(*asset, speed, layer._prevNormalized), ClipTime(*asset, speed, layer._normalized),
+									   *asset, runs, layer._intervalWarned, GetOwner().IsValid() ? GetOwner()->name : str("<detached>"));
 
 		for (u32 index = 0; index < count; ++index) {
 			const AnimationImpl::ClipSegment& run = runs[index];
@@ -874,8 +888,9 @@ namespace Shalltear {
 				running += share;
 
 				AnimationImpl::ClipSegment runs[AnimationImpl::ANIMATION_MAX_CLIP_RUNS];
-				const f32 rate = slot.motion.speed;
-				const u32 count = IntervalRuns(layer._prevTime * rate, layer._time * rate, *asset, runs,
+				const f32 speed = slot.motion.speed;
+				const u32 count = IntervalRuns(ClipTime(*asset, speed, layer._prevNormalized),
+											   ClipTime(*asset, speed, layer._normalized), *asset, runs,
 											   layer._intervalWarned,
 											   GetOwner().IsValid() ? GetOwner()->name : str("<detached>"));
 				BoneTransform own;

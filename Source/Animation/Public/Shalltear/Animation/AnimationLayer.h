@@ -58,8 +58,13 @@ namespace Shalltear {
 
 		f32 WeightForBone(i32 bone) const;
 
-		f32 GetTime() const { return _time; }
+		// seconds = normalized time * blended cycle length
+		f32 GetTime() const;
 		void SetTime(f32 seconds);
+
+		// shared by layer's motions, +1 per cycle (not wrapped)
+		f32 GetNormalizedTime() const { return _normalized; }
+		void SetNormalizedTime(f32 normalized);
 
 		void Stop() { _playing = false; }
 
@@ -117,6 +122,8 @@ namespace Shalltear {
 
 		static void RefreshShares(Vector<MotionSlot>& slots);
 
+		static f32 CycleOf(const Vector<MotionSlot>& slots);
+
 		i32 DominantMotion() const;
 
 		static const BoneBinding* FindRow(const Vector<BoneBinding>& rows, i16 bone);
@@ -127,9 +134,9 @@ namespace Shalltear {
 
 		Vector<BlendShapeBinding> _blendShapes{GetMemoryResource(MemTag::Scene)};
 
-		f32 _time = 0.0f;
+		f32 _normalized = 0.0f;
 
-		f32 _prevTime = 0.0f;
+		f32 _prevNormalized = 0.0f;
 
 		bool _active = false;
 
@@ -139,7 +146,7 @@ namespace Shalltear {
 		bool _intervalWarned = false;
 
 		Vector<MotionSlot> _fadeMotions{GetMemoryResource(MemTag::Scene)};
-		f32 _fadeTime = 0.0f;
+		f32 _fadeNormalized = 0.0f;
 		bool _fadeValid = false;
 	};
 

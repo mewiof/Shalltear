@@ -375,6 +375,10 @@ namespace Shalltear::RHI {
 		return _impl->size;
 	}
 
+	bool SwapChain::GetVSync() const {
+		return _impl->vsync;
+	}
+
 } // namespace Shalltear::RHI
 
 #endif

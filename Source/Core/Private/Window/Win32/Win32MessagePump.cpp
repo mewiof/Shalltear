@@ -89,29 +89,48 @@ namespace Shalltear::WindowBackend {
 		}
 	}
 
+	namespace {
+
+		HANDLE ArmWaitTimer(f64 seconds) {
+			BackendState& backend = GetBackendState();
+			if (!backend.waitTimerTried) {
+				backend.waitTimerTried = true;
+				backend.waitTimer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+															 TIMER_ALL_ACCESS);
+			}
+			if (!backend.waitTimer) {
+				return nullptr;
+			}
+			LARGE_INTEGER due;
+			due.QuadPart = -static_cast<LONGLONG>(seconds * 1.0e7);
+			return ::SetWaitableTimer(backend.waitTimer, &due, 0, nullptr, nullptr, FALSE) ? backend.waitTimer : nullptr;
+		}
+
+	} // anonymous namespace
+
 	void Wait(f64 timeoutSeconds) {
 		if (timeoutSeconds < 0.0) {
 			::MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 			return;
 		}
 
-		BackendState& backend = GetBackendState();
-		if (!backend.waitTimerTried) {
-			backend.waitTimerTried = true;
-			backend.waitTimer = ::CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
-														 TIMER_ALL_ACCESS);
-		}
-		if (backend.waitTimer) {
-			LARGE_INTEGER due;
-			due.QuadPart = -static_cast<LONGLONG>(timeoutSeconds * 1.0e7);
-			if (::SetWaitableTimer(backend.waitTimer, &due, 0, nullptr, nullptr, FALSE)) {
-				HANDLE timer = backend.waitTimer;
-				::MsgWaitForMultipleObjectsEx(1, &timer, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-				return;
-			}
+		if (HANDLE timer = ArmWaitTimer(timeoutSeconds)) {
+			::MsgWaitForMultipleObjectsEx(1, &timer, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+			return;
 		}
 		DWORD milliseconds = static_cast<DWORD>(timeoutSeconds * 1000.0);
 		::MsgWaitForMultipleObjectsEx(0, nullptr, milliseconds, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+	}
+
+	void Sleep(f64 seconds) {
+		if (seconds <= 0.0) {
+			return;
+		}
+		if (HANDLE timer = ArmWaitTimer(seconds)) {
+			::WaitForSingleObject(timer, INFINITE);
+			return;
+		}
+		::Sleep(static_cast<DWORD>(seconds * 1000.0));
 	}
 
 	namespace {

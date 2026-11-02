@@ -130,6 +130,7 @@ namespace Shalltear {
 
 		void Pump();
 		void Wait(f64 timeoutSeconds);
+		void Sleep(f64 seconds);
 
 		void EnumerateMonitors(Vector<MonitorInfo>& outMonitors);
 		void EnumerateDisplayModes(u64 monitorId, Vector<WindowInternal::DisplayMode>& outModes);

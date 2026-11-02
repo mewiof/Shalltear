@@ -22,6 +22,8 @@ namespace Shalltear::ScreenInternal {
 		Vec2I resolution{};
 	};
 
+	bool RunsInBackground();
+
 	SHALLTEAR_CORE_API str DescribeProjectDefaults(const PlayerSettings& project);
 
 	SHALLTEAR_CORE_API ScreenChoice ResolveStartup(const PlayerSettings& project, const ScreenSettings& saved, const ScreenLaunch& launch);

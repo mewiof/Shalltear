@@ -152,13 +152,14 @@ namespace Shalltear {
 			}
 		}
 
-		FrameTimer frameTimer;
+		FramePacer pacer(options.frames > 0);
 		FixedTimestep fixed(Time::GetFrame().fixedDeltaTime, Time::GetFrame().maximumDeltaTime);
 		i32 framesRemaining = options.frames;
 		while (WindowSystem::GetWindowCount() > 0 && framesRemaining != 0) {
-			WindowSystem::PumpEvents();
-			frameTimer.Tick();
-			Time::BeginFrame(frameTimer.GetUnscaledDeltaTime());
+			if (!pacer.BeginFrame()) {
+				continue;
+			}
+			Time::BeginFrame(pacer.GetUnscaledDeltaTime());
 
 			SceneSystem::BeginFrame();
 

@@ -32,6 +32,7 @@ namespace Shalltear {
 			f64 fixedTime = 0.0;
 			f64 fixedUnscaledTime = 0.0;
 			bool gameplayRan = false;
+			i32 targetFrameRate = -1;
 		};
 
 		struct TimeData {
@@ -176,6 +177,14 @@ namespace Shalltear {
 			return;
 		}
 		GetTimeData().clock.frame.timeScale = scale;
+	}
+
+	void Time::SetTargetFrameRate(i32 framesPerSecond) noexcept {
+		GetTimeData().clock.targetFrameRate = framesPerSecond > 0 ? framesPerSecond : -1;
+	}
+
+	i32 Time::GetTargetFrameRate() noexcept {
+		return GetTimeData().clock.targetFrameRate;
 	}
 
 	void Time::ResetFrameClock() noexcept {

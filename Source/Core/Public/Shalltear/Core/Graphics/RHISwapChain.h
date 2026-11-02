@@ -22,6 +22,7 @@ namespace Shalltear::RHI {
 
 		Format GetFormat() const;
 		Vec2I GetSize() const;
+		bool GetVSync() const;
 	private:
 		friend class Device;
 		friend struct DeviceImpl;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Time.h"
 #include "Shalltear/Core/Types.h"
 
 namespace Shalltear {
@@ -23,6 +24,22 @@ namespace Shalltear {
 		f64 _stepSeconds;
 		f64 _accumulator = 0.0;
 		u32 _maxStepsPerFrame;
+	};
+
+	class SHALLTEAR_CORE_API FramePacer {
+	public:
+		// unattended (no user to focus a window) -> never pauses
+		explicit FramePacer(bool unattended = false) noexcept;
+
+		// pumps window events. false while paused (caller should skip the frame)
+		bool BeginFrame();
+
+		f32 GetUnscaledDeltaTime() const noexcept { return _timer.GetUnscaledDeltaTime(); }
+	private:
+		FrameTimer _timer;
+		u64 _anchorTicks = 0;
+		bool _unattended;
+		bool _paused = false;
 	};
 
 } // namespace Shalltear

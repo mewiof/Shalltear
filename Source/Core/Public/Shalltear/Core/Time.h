@@ -49,6 +49,10 @@ namespace Shalltear {
 
 		static void SetTimeScale(f32 scale) noexcept;
 
+		// built games only (not Play mode). Ignored while vsync is on
+		static void SetTargetFrameRate(i32 framesPerSecond) noexcept;
+		static i32 GetTargetFrameRate() noexcept;
+
 		static void BeginFrame(f64 unscaledDeltaSeconds) noexcept;
 
 		static void ResetFrameClock() noexcept;

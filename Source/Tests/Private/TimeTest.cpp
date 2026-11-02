@@ -36,6 +36,16 @@ TEST(TimeTest, TicksPerSecondIsReasonable) {
 	EXPECT_GT(freq, 1000u);
 }
 
+TEST(TimeTest, TargetFrameRateTakesPositiveOnly) {
+	Time::SetTargetFrameRate(30);
+	EXPECT_EQ(Time::GetTargetFrameRate(), 30);
+	Time::SetTargetFrameRate(0);
+	EXPECT_EQ(Time::GetTargetFrameRate(), -1);
+	Time::SetTargetFrameRate(144);
+	Time::SetTargetFrameRate(-7);
+	EXPECT_EQ(Time::GetTargetFrameRate(), -1);
+}
+
 TEST(StopwatchTest, DefaultConstructedIsStoppedAtZero) {
 	Stopwatch sw;
 	EXPECT_FALSE(sw.IsRunning());
@@ -530,6 +540,13 @@ TEST_F(FrameClockFixture, ResetRestoresInitialClock) {
 	FrameStages::Run(FrameStage::FixedUpdate, Args());
 	EXPECT_EQ(probe.runs, 2u);
 	EXPECT_DOUBLE_EQ(probe.seen.time, STEP);
+}
+
+TEST_F(FrameClockFixture, ResetClearsTargetFrameRate) {
+	Time::SetTargetFrameRate(24);
+	ASSERT_EQ(Time::GetTargetFrameRate(), 24);
+	Time::ResetFrameClock();
+	EXPECT_EQ(Time::GetTargetFrameRate(), -1);
 }
 
 namespace {

@@ -11,6 +11,7 @@ namespace Shalltear {
 		SLT_REFLECT_VALUE(PlayerSettings)
 		SLT_REFLECT_CONSTRUCTIBLE()
 		SLT_SETTINGS_CATEGORY("Player")
+		SLT_REFLECT_FIELD(runInBackground, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(fullScreenMode, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
 		SLT_REFLECT_FIELD(defaultIsNativeResolution, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
 		SLT_REFLECT_FIELD(defaultScreenWidth, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
@@ -19,6 +20,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(allowFullscreenSwitch, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_END_REFLECT()
 
+		bool runInBackground = false;
 		FullScreenMode fullScreenMode = FullScreenMode::FullScreenWindow;
 		bool defaultIsNativeResolution = true;
 		i32 defaultScreenWidth = 1024;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Shalltear/Core/CoreAPI.h"
 #include "Shalltear/Core/Types.h"
 
 namespace Shalltear::RHI {
@@ -18,3 +19,14 @@ namespace Shalltear::RHI {
 	}
 
 } // namespace Shalltear::RHI
+
+namespace Shalltear::GraphicsInternal {
+
+	struct PresentCounts {
+		u32 windows = 0;
+		u32 vsyncWindows = 0;
+	};
+
+	SHALLTEAR_CORE_API PresentCounts GetLastFramePresents();
+
+} // namespace Shalltear::GraphicsInternal

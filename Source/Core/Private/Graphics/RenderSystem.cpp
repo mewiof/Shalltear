@@ -45,6 +45,7 @@
 #include "Graphics/FramePassInternal.h"
 #include "Graphics/GraphicsSettings.h"
 #include "Graphics/LightCulling.h"
+#include "Graphics/PresentPolicy.h"
 #include "Graphics/ProceduralRendererInternal.h"
 #include "Graphics/RenderGraph.h"
 #include "Graphics/SceneRequests.h"
@@ -831,6 +832,7 @@ namespace Shalltear {
 
 			u32 lastDrawCalls = 0;
 			u32 lastTriangles = 0;
+			GraphicsInternal::PresentCounts lastPresents;
 
 			u32 frameLightsBinned = 0;
 			u32 frameLightsDropped = 0;
@@ -7330,6 +7332,10 @@ namespace Shalltear {
 		return _state && _state->renderingAvailable;
 	}
 
+	GraphicsInternal::PresentCounts GraphicsInternal::GetLastFramePresents() {
+		return RenderSystem::IsRenderingAvailable() ? _state->lastPresents : PresentCounts{};
+	}
+
 	RHI::Device* RenderSystem::GetDevice() {
 		return _state ? _state->device : nullptr;
 	}
@@ -7849,6 +7855,7 @@ namespace Shalltear {
 		SLT_PROFILE_ZONE("Render.Frame");
 		RenderState& state = *_state;
 		RHI::Device& device = *state.device;
+		state.lastPresents = {};
 
 		ReconcileGraphicsConfig(state);
 
@@ -8037,6 +8044,10 @@ namespace Shalltear {
 			auto contextIt = state.windowContexts.find(work[workIndex].window.GetInstanceId());
 			if (contextIt != state.windowContexts.end() && contextIt->second.presentedThisFrame) {
 				contextIt->second.swapChain->Present();
+				++state.lastPresents.windows;
+				if (contextIt->second.swapChain->GetVSync()) {
+					++state.lastPresents.vsyncWindows;
+				}
 			}
 		}
 

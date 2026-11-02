@@ -1010,6 +1010,19 @@ TEST_F(SettingsWindowFixture, ThePlayerPageShowsTheResolutionRows) {
 	EXPECT_TRUE(shown("allowFullscreenSwitch"));
 }
 
+TEST_F(SettingsWindowFixture, PlayerPageLabelsEveryField) {
+	Settings::Initialize(_paths);
+	SettingsPresentation::RegisterBuiltIns();
+	const TypeInfo* type = PlayerSettings::GetReflectType();
+	ASSERT_NE(type, nullptr);
+	ASSERT_GT(type->fieldCount, 0u);
+	for (u32 index = 0; index < type->fieldCount; ++index) {
+		const SettingsFieldPresentation* presentation = SettingsPresentation::FindField("Player", type->fields[index].displayName);
+		ASSERT_NE(presentation, nullptr) << type->fields[index].displayName;
+		EXPECT_FALSE(presentation->label.empty()) << type->fields[index].displayName;
+	}
+}
+
 TEST_F(SettingsWindowFixture, UnboundConditionStaysShown) {
 	Settings::Initialize(_paths);
 	DeclareProbes();

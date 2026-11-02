@@ -185,6 +185,12 @@ namespace Shalltear {
 
 			const i64 windowed = static_cast<i64>(FullScreenMode::Windowed);
 
+			SettingsFieldPresentation background;
+			background.label = "Run In Background";
+			background.tooltip = "Game runs when its window loses focus. When off, it pauses until the window is focused again.";
+			background.keywords = "focus unfocused pause alt tab background minimized";
+			RegisterField("Player", "runInBackground", std::move(background));
+
 			SettingsFieldPresentation mode;
 			mode.label = "Fullscreen Mode";
 			mode.tooltip = "Window mode the game starts in. Fullscreen Window covers the monitor without a frame, Maximized Window "

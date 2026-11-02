@@ -374,6 +374,29 @@ namespace {
 		return desc;
 	}
 
+	ViewDesc RaisedView() {
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(Vec3(0.0f, 6.0f, 4.0f), Vec3(0.0f, 6.0f, 0.0f));
+		desc.projection = Mat4::PerspectiveReverseZ(30.0f, 1.0f, 0.1f, 100.0f);
+		desc.cameraPosition = Vec3(0.0f, 6.0f, 4.0f);
+		desc.clearColor = Color::Black();
+		return desc;
+	}
+
+	u32 CountLit(ViewTargetId target, const ViewDesc& desc) {
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		if (!RenderSystem::ReadbackViewTarget(target, pixels, size)) {
+			return 0;
+		}
+		u32 top = 0;
+		u32 bottom = 0;
+		CountHalves(pixels, size, top, bottom);
+		return top + bottom;
+	}
+
 } // anonymous namespace
 
 TEST_F(SkinningFixture, SkinnedMeshRendersBindPose) {
@@ -465,6 +488,91 @@ TEST_F(SkinningFixture, PosedBoneMovesPixels) {
 	EXPECT_GT(posedTop, bindTop + 100u) << bindTop << ", posed " << posedTop;
 	EXPECT_NEAR(static_cast<f32>(posedBottom), static_cast<f32>(bindBottom), 8.0f);
 	EXPECT_NE(bind, posed);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}
+
+TEST_F(SkinningFixture, PoseOutsideBindBoundsDraws) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(StageFixture("SimpleSkin.gltf"));
+	Asset* model = AssetDatabase::LoadAsset(Path("project://SimpleSkin.gltf"));
+	ASSERT_NE(model, nullptr);
+	const Guid modelGuid = model->assetId;
+	AssetDatabase::UnloadAsset(model);
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Reach");
+	Handle<SceneObject> root = SceneSystem::Instantiate(modelGuid, scene);
+	ASSERT_TRUE(root.IsValid());
+	Handle<Skeleton> skeleton = root->GetComponent<Skeleton>();
+	ASSERT_TRUE(skeleton.IsValid());
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	if (CountLit(target, SkinnedView()) == 0) {
+		GTEST_SKIP();
+	}
+	EXPECT_EQ(CountLit(target, RaisedView()), 0u);
+
+	BoneTransform raised;
+	raised.position = Vec3(0.0f, 6.0f, 0.0f);
+	skeleton->SetBoneLocalPose(1, raised);
+	skeleton->UpdatePose();
+	EXPECT_GT(CountLit(target, RaisedView()), 400u);
+
+	skeleton->SetBoneLocalPose(1, skeleton->GetSkeleton()->restPose[1]);
+	skeleton->UpdatePose();
+	EXPECT_EQ(CountLit(target, RaisedView()), 0u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}
+
+TEST_F(SkinningFixture, PosedAwayMeshIsCulled) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(StageFixture("SimpleSkin.gltf"));
+	Asset* model = AssetDatabase::LoadAsset(Path("project://SimpleSkin.gltf"));
+	ASSERT_NE(model, nullptr);
+	const Guid modelGuid = model->assetId;
+	AssetDatabase::UnloadAsset(model);
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Away");
+	Handle<SceneObject> root = SceneSystem::Instantiate(modelGuid, scene);
+	ASSERT_TRUE(root.IsValid());
+	Handle<Skeleton> skeleton = root->GetComponent<Skeleton>();
+	ASSERT_TRUE(skeleton.IsValid());
+	SceneSystem::EndFrame();
+
+	auto viewAt = [](f32 x) {
+		ViewDesc desc = SkinnedView();
+		desc.view = Mat4::LookAt(Vec3(x, 1.0f, 4.0f), Vec3(x, 1.0f, 0.0f));
+		desc.cameraPosition = Vec3(x, 1.0f, 4.0f);
+		return desc;
+	};
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	if (CountLit(target, viewAt(0.0f)) == 0) {
+		GTEST_SKIP();
+	}
+	const u32 drawn = RenderSystem::GetStats().drawCalls;
+	EXPECT_EQ(CountLit(target, viewAt(-20.0f)), 0u);
+	const u32 baseline = RenderSystem::GetStats().drawCalls;
+	EXPECT_GT(drawn, baseline);
+
+	BoneTransform moved;
+	moved.position = Vec3(10.0f, 0.0f, 0.0f);
+	skeleton->SetBoneLocalPose(0, moved);
+	skeleton->UpdatePose();
+	EXPECT_EQ(CountLit(target, viewAt(0.0f)), 0u);
+	EXPECT_EQ(RenderSystem::GetStats().drawCalls, baseline);
+	EXPECT_GT(CountLit(target, viewAt(10.0f)), 100u);
 
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);
@@ -601,6 +709,135 @@ TEST(SkinningKernelTest, BonelessJointGetsIdentity) {
 
 	EXPECT_TRUE(Vec3::Approximately(matrices[0].TransformPoint(Vec3(1.0f, 2.0f, 3.0f)), Vec3(1.0f, 2.0f, 3.0f)));
 	EXPECT_TRUE(Vec3::Approximately(matrices[1].TransformPoint(Vec3(1.0f, 2.0f, 3.0f)), Vec3(1.0f, 2.0f, 3.0f)));
+}
+
+namespace {
+
+	void AddInfluence(MeshAsset& mesh, size_t vertex, u16 joint, f32 weight) {
+		MeshSkinInfluence& influence = mesh.skinInfluences[vertex];
+		for (u32 k = 0; k < 4; ++k) {
+			if (influence.weights[k] == 0.0f) {
+				influence.joints[k] = joint;
+				influence.weights[k] = weight;
+				return;
+			}
+		}
+	}
+
+	void AddVertices(MeshAsset& mesh, std::span<const Vec3> positions) {
+		for (const Vec3& position : positions) {
+			MeshVertex vertex;
+			vertex.position = position;
+			vertex.normal = Vec3(0.0f, 0.0f, 1.0f);
+			mesh.vertices.push_back(vertex);
+		}
+		mesh.skinInfluences.resize(mesh.vertices.size());
+	}
+
+} // anonymous namespace
+
+TEST(SkinningKernelTest, PoseBoundsHoldSkinnedVertices) {
+	MeshAsset mesh;
+	const Vec3 positions[] = {
+		Vec3(0.0f, 0.0f, 0.0f),
+		Vec3(1.0f, 0.0f, 0.0f),
+		Vec3(0.0f, 1.0f, 0.5f),
+		Vec3(1.0f, 2.0f, -0.5f),
+		Vec3(-1.0f, 3.0f, 0.0f),
+		Vec3(2.0f, -1.0f, 1.0f),
+		Vec3(-6.0f, -6.0f, -6.0f),
+		Vec3(-2.0f, 0.0f, -1.0f),
+	};
+	AddVertices(mesh, positions);
+	AddInfluence(mesh, 0, 0, 1.0f);
+	AddInfluence(mesh, 1, 0, 0.5f);
+	AddInfluence(mesh, 1, 1, 0.5f);
+	AddInfluence(mesh, 2, 1, 0.25f);
+	AddInfluence(mesh, 2, 2, 0.75f);
+	AddInfluence(mesh, 3, 2, 1.0f);
+	AddInfluence(mesh, 4, 1, 0.6f);
+	AddInfluence(mesh, 4, 2, 0.4f);
+	AddInfluence(mesh, 5, 5, 1.0f);
+	AddInfluence(mesh, 7, 0, 0.3f);
+	AddInfluence(mesh, 7, 5, 0.7f);
+
+	MeshBlendShape up;
+	up.name = "Up";
+	MeshBlendShapeFrame upFrame;
+	upFrame.vertices = {2, 4};
+	upFrame.positionDeltas = {Vec3(0.0f, 3.0f, 0.0f), Vec3(1.0f, 0.0f, -2.0f)};
+	up.frames.push_back(upFrame);
+	mesh.blendShapes.push_back(up);
+
+	MeshBlendShape bulge;
+	bulge.name = "Bulge";
+	MeshBlendShapeFrame below;
+	below.weight = -50.0f;
+	below.vertices = {3};
+	below.positionDeltas = {Vec3(0.0f, 0.0f, 4.0f)};
+	bulge.frames.push_back(below);
+	MeshBlendShapeFrame above;
+	above.vertices = {0, 6};
+	above.positionDeltas = {Vec3(-2.0f, 0.0f, 0.0f), Vec3(0.0f, -3.0f, 1.0f)};
+	bulge.frames.push_back(above);
+	mesh.blendShapes.push_back(bulge);
+
+	const f32 weights[] = {250.0f, -80.0f};
+	const Mat4 matrices[3] = {
+		Mat4::TRS(Vec3(1.0f, 2.0f, 3.0f), Quat::AngleAxis(40.0f, Vec3(0.0f, 0.0f, 1.0f)), Vec3::One()),
+		Mat4::TRS(Vec3(-2.0f, 0.0f, 1.0f), Quat::AngleAxis(-70.0f, Vec3(1.0f, 0.0f, 0.0f)), Vec3(2.0f, 0.5f, 1.0f)),
+		Mat4::TRS(Vec3(0.0f, 5.0f, 0.0f), Quat::AngleAxis(120.0f, Vec3(0.0f, 1.0f, 0.0f)), Vec3::One()),
+	};
+
+	GraphicsInternal::SkinBounds::Build(mesh);
+	Vector<MeshVertex> morphed{GetMemoryResource(MemTag::Asset)};
+	morphed.resize(mesh.vertices.size());
+	GraphicsInternal::ApplyBlendShapes(mesh, weights, morphed.data());
+	Vector<MeshVertex> skinned{GetMemoryResource(MemTag::Asset)};
+	skinned.resize(mesh.vertices.size());
+	GraphicsInternal::SkinVertices({morphed.data(), morphed.size()}, {mesh.skinInfluences.data(), mesh.skinInfluences.size()},
+								   matrices, skinned.data());
+
+	EXPECT_GT(morphed[2].position.y, 8.0f);
+	const AABB posed = GraphicsInternal::SkinBounds::Pose(mesh, matrices, weights);
+	ASSERT_TRUE(posed.IsValid());
+	for (size_t v = 0; v < skinned.size(); ++v) {
+		EXPECT_TRUE(posed.Contains(skinned[v].position)) << v;
+	}
+
+	const AABB rest = GraphicsInternal::SkinBounds::Pose(mesh, {}, weights);
+	ASSERT_TRUE(rest.IsValid());
+	for (size_t v = 0; v < morphed.size(); ++v) {
+		EXPECT_TRUE(rest.Contains(morphed[v].position)) << v;
+	}
+}
+
+TEST(SkinningKernelTest, PoseBoundsFollowRigidJoint) {
+	MeshAsset mesh;
+	const Vec3 positions[] = {Vec3(-1.0f, 0.0f, 0.0f), Vec3(1.0f, 2.0f, 0.0f), Vec3(0.0f, 1.0f, 3.0f)};
+	AddVertices(mesh, positions);
+	for (size_t v = 0; v < mesh.vertices.size(); ++v) {
+		AddInfluence(mesh, v, 0, 1.0f);
+	}
+	GraphicsInternal::SkinBounds::Build(mesh);
+
+	const Mat4 shift = Mat4::TRS(Vec3(5.0f, 0.0f, 0.0f), Quat::Identity(), Vec3::One());
+	const AABB posed = GraphicsInternal::SkinBounds::Pose(mesh, {&shift, 1}, {});
+	EXPECT_TRUE(Vec3::Approximately(posed.min, Vec3(4.0f, 0.0f, 0.0f)));
+	EXPECT_TRUE(Vec3::Approximately(posed.max, Vec3(6.0f, 2.0f, 3.0f)));
+}
+
+TEST(SkinningKernelTest, NegativeWeightLeavesPoseUnbounded) {
+	MeshAsset mesh;
+	const Vec3 positions[] = {Vec3(0.0f, 0.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f)};
+	AddVertices(mesh, positions);
+	AddInfluence(mesh, 0, 0, 1.0f);
+	AddInfluence(mesh, 1, 0, 1.5f);
+	AddInfluence(mesh, 1, 1, -0.5f);
+	GraphicsInternal::SkinBounds::Build(mesh);
+
+	const Mat4 matrices[2] = {Mat4::Identity(), Mat4::TRS(Vec3(0.0f, 9.0f, 0.0f), Quat::Identity(), Vec3::One())};
+	EXPECT_FALSE(GraphicsInternal::SkinBounds::Pose(mesh, matrices, {}).IsValid());
 }
 
 TEST_F(SkinningFixture, SkinnedDrawFollowsSkeletonNotObject) {
@@ -931,6 +1168,42 @@ TEST_F(SkinningFixture, SliderMovesMorphPixels) {
 	Vector<u8> returned{GetMemoryResource(MemTag::Graphics)};
 	ASSERT_TRUE(RenderSystem::ReadbackViewTarget(target, returned, size));
 	EXPECT_EQ(rest, returned);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}
+
+TEST_F(SkinningFixture, MorphOutsideBindBoundsDraws) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(StageFixture("morphed.gltf"));
+	Asset* model = AssetDatabase::LoadAsset(Path("project://morphed.gltf"));
+	ASSERT_NE(model, nullptr);
+	const Guid modelGuid = model->assetId;
+	AssetDatabase::UnloadAsset(model);
+
+	Handle<Scene> scene = SceneSystem::CreateScene("MorphReach");
+	Handle<SceneObject> root = SceneSystem::Instantiate(modelGuid, scene);
+	ASSERT_TRUE(root.IsValid());
+	Handle<SkinnedMeshRenderer> renderer = root->GetComponentInChildren<SkinnedMeshRenderer>();
+	ASSERT_TRUE(renderer.IsValid());
+	ASSERT_EQ(renderer->GetBlendShapeWeightCount(), 2u);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	if (CountLit(target, SkinnedView()) == 0) {
+		GTEST_SKIP();
+	}
+	EXPECT_EQ(CountLit(target, RaisedView()), 0u);
+
+	renderer->SetBlendShapeWeight(static_cast<u32>(0), 300.0f);
+	EXPECT_GT(CountLit(target, RaisedView()), 400u);
+
+	renderer->SetBlendShapeWeight(static_cast<u32>(0), 0.0f);
+	EXPECT_EQ(CountLit(target, RaisedView()), 0u);
 
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);

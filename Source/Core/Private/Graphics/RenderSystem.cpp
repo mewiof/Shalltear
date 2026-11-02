@@ -413,10 +413,14 @@ namespace Shalltear {
 			Vector<Handle<ReflectionProbe>> reflectionProbes{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ReflectionProbe>> isolatedReflectionProbes{GetMemoryResource(MemTag::Graphics)};
 
+			struct SkinnedOutput {
+				u64 vertexAddress = 0;
+				AABB bounds = AABB::Empty();
+			};
 			Vector<Handle<SkinnedMeshRenderer>> skinnedMeshRenderers{GetMemoryResource(MemTag::Graphics)};
-			Vector<u64> skinnedVertexAddress{GetMemoryResource(MemTag::Graphics)};
+			Vector<SkinnedOutput> skinnedOutputs{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<SkinnedMeshRenderer>> isolatedSkinnedMeshRenderers{GetMemoryResource(MemTag::Graphics)};
-			Vector<u64> isolatedSkinnedVertexAddress{GetMemoryResource(MemTag::Graphics)};
+			Vector<SkinnedOutput> isolatedSkinnedOutputs{GetMemoryResource(MemTag::Graphics)};
 
 			Vector<Handle<ProceduralRenderer>> proceduralRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ProceduralRenderer>> isolatedProceduralRenderers{GetMemoryResource(MemTag::Graphics)};
@@ -1671,7 +1675,7 @@ namespace Shalltear {
 
 		void RecordSkinning(RHI::Device& device,
 							const Vector<Handle<SkinnedMeshRenderer>>& renderers,
-							Vector<u64>& outAddresses) {
+							Vector<RenderState::SkinnedOutput>& outputs) {
 			if (renderers.empty()) {
 				return;
 			}
@@ -1715,6 +1719,7 @@ namespace Shalltear {
 					source = deformed;
 				}
 
+				std::span<const Mat4> jointMatrices;
 				if (skinned) {
 					const u32 jointCount = skin->GetJointCount();
 					RHI::TransientAllocation matrices = device.AllocateTransient(
@@ -1724,14 +1729,16 @@ namespace Shalltear {
 					}
 					Mat4* skinMatrices = static_cast<Mat4*>(matrices.cpu);
 					GraphicsInternal::BuildSkinMatrices(*skin, modelPose, skinMatrices, jointCount);
+					jointMatrices = {skinMatrices, jointCount};
 					GraphicsInternal::SkinVertices(
 						{source, mesh->vertices.size()},
 						{mesh->skinInfluences.data(), mesh->skinInfluences.size()},
-						{skinMatrices, jointCount},
+						jointMatrices,
 						deformed);
 				}
 
-				outAddresses[i] = device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
+				outputs[i].vertexAddress = device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
+				outputs[i].bounds = GraphicsInternal::SkinBounds::Pose(*mesh, jointMatrices, weights);
 			}
 		}
 
@@ -1755,7 +1762,7 @@ namespace Shalltear {
 			const bool isolated = kind != SceneKind::World;
 			const Vector<Handle<MeshRenderer>>& meshRenderers = isolated ? state.isolatedMeshRenderers : state.meshRenderers;
 			const Vector<Handle<SkinnedMeshRenderer>>& skinnedRenderers = isolated ? state.isolatedSkinnedMeshRenderers : state.skinnedMeshRenderers;
-			const Vector<u64>& skinnedAddresses = isolated ? state.isolatedSkinnedVertexAddress : state.skinnedVertexAddress;
+			const Vector<RenderState::SkinnedOutput>& skinnedOutputs = isolated ? state.isolatedSkinnedOutputs : state.skinnedOutputs;
 
 			arena.Reset();
 			u32 drawCapacity = 0;
@@ -1782,11 +1789,11 @@ namespace Shalltear {
 
 			ShaderAsset* errorShader = state.standardShader.Get();
 
-			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const Mat4& world,
+			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world,
 								 u32 renderingLayerMask, Handle<SceneObject> object, auto&& materialForSlot) {
-				AABB worldBounds = mesh->bounds.IsValid() ? mesh->bounds.Transformed(world) : AABB{};
+				AABB worldBounds = bounds.IsValid() ? bounds.Transformed(world) : AABB{};
 				u64 volumeMask = 0;
-				if (mesh->bounds.IsValid()) {
+				if (bounds.IsValid()) {
 					for (u32 volume = 0; volume < static_cast<u32>(volumes.size()); ++volume) {
 						if (volumes[volume].Intersects(worldBounds)) {
 							volumeMask |= 1ull << volume;
@@ -1873,7 +1880,7 @@ namespace Shalltear {
 				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0) {
 					continue;
 				}
-				emitDraws(mesh, mesh->vertexBufferAddress, owner->GetWorldMatrix(),
+				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(),
 						  renderer->GetRenderingLayerMask(), renderer->GetOwner(),
 						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
@@ -1899,8 +1906,8 @@ namespace Shalltear {
 				SceneObject* skeletonOwner = skeleton ? skeleton->GetOwner().Get() : nullptr;
 				const Mat4 world = skeletonOwner ? skeletonOwner->GetWorldMatrix() : owner->GetWorldMatrix();
 
-				const u64 skinned = i < skinnedAddresses.size() ? skinnedAddresses[i] : 0;
-				emitDraws(mesh, skinned ? skinned : mesh->vertexBufferAddress, world,
+				const RenderState::SkinnedOutput* skinned = i < skinnedOutputs.size() && skinnedOutputs[i].vertexAddress ? &skinnedOutputs[i] : nullptr;
+				emitDraws(mesh, skinned ? skinned->vertexAddress : mesh->vertexBufferAddress, skinned ? skinned->bounds : mesh->bounds, world,
 						  renderer->GetRenderingLayerMask(), renderer->GetOwner(),
 						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
@@ -3994,9 +4001,9 @@ namespace Shalltear {
 		void PassRecordSkinning(GraphExecution& exec, const GraphPass& pass) {
 			RenderState& state = *_state;
 			if (pass.work.flag) {
-				RecordSkinning(*exec.device, state.isolatedSkinnedMeshRenderers, state.isolatedSkinnedVertexAddress);
+				RecordSkinning(*exec.device, state.isolatedSkinnedMeshRenderers, state.isolatedSkinnedOutputs);
 			} else {
-				RecordSkinning(*exec.device, state.skinnedMeshRenderers, state.skinnedVertexAddress);
+				RecordSkinning(*exec.device, state.skinnedMeshRenderers, state.skinnedOutputs);
 			}
 		}
 
@@ -5707,8 +5714,8 @@ namespace Shalltear {
 
 			DeclareProceduralRenderers(state);
 
-			state.skinnedVertexAddress.assign(state.skinnedMeshRenderers.size(), 0);
-			state.isolatedSkinnedVertexAddress.assign(state.isolatedSkinnedMeshRenderers.size(), 0);
+			state.skinnedOutputs.assign(state.skinnedMeshRenderers.size(), {});
+			state.isolatedSkinnedOutputs.assign(state.isolatedSkinnedMeshRenderers.size(), {});
 			GraphResourceId worldSkin = graph.CreateVirtual();
 			GraphResourceId isolatedSkin = graph.CreateVirtual();
 			PassWork skinWork;

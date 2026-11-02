@@ -139,6 +139,16 @@ namespace Shalltear::GraphicsInternal {
 			}
 		}
 
+		void AddReach(AABB& reach, const AABB& delta, f32 scale) {
+			if (scale == 0.0f) {
+				return;
+			}
+			const Vec3 low = delta.min * scale;
+			const Vec3 high = delta.max * scale;
+			reach.min += Vec3::Min(low, high);
+			reach.max += Vec3::Max(low, high);
+		}
+
 	} // namespace
 
 	bool HasActiveBlendShapes(const MeshAsset& mesh, std::span<const f32> weights) {
@@ -182,6 +192,109 @@ namespace Shalltear::GraphicsInternal {
 				out[v].normal = out[v].normal.Normalized();
 			}
 		}
+	}
+
+	void SkinBounds::Build(MeshAsset& mesh) {
+		Release(mesh);
+		if (mesh.skinInfluences.empty() && mesh.blendShapes.empty()) {
+			return;
+		}
+		SkinBounds* bounds = New<SkinBounds>(MemTag::Asset);
+
+		const size_t vertexCount = mesh.vertices.size();
+		for (size_t v = 0; v < vertexCount; ++v) {
+			const Vec3& position = mesh.vertices[v].position;
+			bool jointed = false;
+			if (v < mesh.skinInfluences.size()) {
+				const MeshSkinInfluence& influence = mesh.skinInfluences[v];
+				for (u32 k = 0; k < 4; ++k) {
+					const f32 weight = influence.weights[k];
+					if (weight == 0.0f) {
+						continue;
+					}
+					if (!(weight > 0.0f)) {
+						bounds->convex = false;
+						continue;
+					}
+					const u16 joint = influence.joints[k];
+					if (joint >= bounds->joints.size()) {
+						bounds->joints.resize(static_cast<size_t>(joint) + 1, AABB::Empty());
+					}
+					bounds->joints[joint].Encapsulate(position);
+					jointed = true;
+				}
+			}
+			if (!jointed) {
+				bounds->unjointed.Encapsulate(position);
+			}
+		}
+
+		for (const MeshBlendShape& shape : mesh.blendShapes) {
+			for (const MeshBlendShapeFrame& frame : shape.frames) {
+				AABB& delta = bounds->frameDeltas.emplace_back();
+				const size_t deltas = frame.vertices.size() < frame.positionDeltas.size() ? frame.vertices.size() : frame.positionDeltas.size();
+				for (size_t d = 0; d < deltas; ++d) {
+					if (frame.vertices[d] < vertexCount) {
+						delta.Encapsulate(frame.positionDeltas[d]);
+					}
+				}
+			}
+		}
+
+		mesh._skinBounds = bounds;
+	}
+
+	void SkinBounds::Release(MeshAsset& mesh) {
+		if (mesh._skinBounds) {
+			Delete(mesh._skinBounds);
+			mesh._skinBounds = nullptr;
+		}
+	}
+
+	AABB SkinBounds::Pose(const MeshAsset& mesh, std::span<const Mat4> skinMatrices, std::span<const f32> weights) {
+		const SkinBounds* bounds = mesh._skinBounds;
+		if (!bounds || !bounds->convex) {
+			return AABB::Empty();
+		}
+
+		AABB reach;
+		size_t firstFrame = 0;
+		const size_t count = mesh.blendShapes.size() < weights.size() ? mesh.blendShapes.size() : weights.size();
+		for (size_t s = 0; s < count; ++s) {
+			const MeshBlendShape& shape = mesh.blendShapes[s];
+			const size_t frames = firstFrame;
+			firstFrame += shape.frames.size();
+			if (weights[s] == 0.0f || shape.frames.empty()) {
+				continue;
+			}
+			if (firstFrame > bounds->frameDeltas.size()) {
+				return AABB::Empty();
+			}
+			const FrameBlend blend = BracketFrames(shape, weights[s]);
+			if (blend.first >= 0) {
+				AddReach(reach, bounds->frameDeltas[frames + static_cast<size_t>(blend.first)], blend.firstScale);
+			}
+			if (blend.second >= 0) {
+				AddReach(reach, bounds->frameDeltas[frames + static_cast<size_t>(blend.second)], blend.secondScale);
+			}
+		}
+		if (!reach.IsValid()) {
+			return AABB::Empty();
+		}
+
+		AABB posed = AABB::Empty();
+		const auto place = [&](const AABB& box, const Mat4* matrix) {
+			if (!box.IsValid()) {
+				return;
+			}
+			const AABB reached(box.min + reach.min, box.max + reach.max);
+			posed.Encapsulate(matrix ? reached.Transformed(*matrix) : reached);
+		};
+		place(bounds->unjointed, nullptr);
+		for (size_t j = 0; j < bounds->joints.size(); ++j) {
+			place(bounds->joints[j], j < skinMatrices.size() ? &skinMatrices[j] : nullptr);
+		}
+		return posed;
 	}
 
 } // namespace Shalltear::GraphicsInternal

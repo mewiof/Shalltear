@@ -13,6 +13,10 @@
 
 namespace Shalltear {
 
+	namespace GraphicsInternal {
+		struct SkinBounds;
+	} // namespace GraphicsInternal
+
 	struct MeshVertex {
 		Vec3 position;
 		f32 u = 0.0f;
@@ -91,6 +95,11 @@ namespace Shalltear {
 	protected:
 		void OnLoad() override;
 		void OnUnload() override;
+	private:
+		friend struct GraphicsInternal::SkinBounds;
+
+		// owned, built at load
+		GraphicsInternal::SkinBounds* _skinBounds = nullptr;
 	};
 
 } // namespace Shalltear

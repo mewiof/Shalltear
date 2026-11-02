@@ -4,6 +4,8 @@
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
 
+#include "Graphics/Skinning.h"
+
 namespace Shalltear {
 
 	static_assert(sizeof(MeshVertex) == 52);
@@ -13,12 +15,15 @@ namespace Shalltear {
 	static_assert(std::is_trivially_copyable_v<SubMesh>);
 	static_assert(std::is_trivially_copyable_v<MeshSkinInfluence>);
 
-	MeshAsset::~MeshAsset() = default;
+	MeshAsset::~MeshAsset() {
+		GraphicsInternal::SkinBounds::Release(*this);
+	}
 
 	void MeshAsset::OnLoad() {
 		if (!RenderSystem::IsRenderingAvailable() || vertices.empty()) {
 			return;
 		}
+		GraphicsInternal::SkinBounds::Build(*this);
 		RHI::Device* device = RenderSystem::GetDevice();
 
 		RHI::BufferDesc vertexDesc;
@@ -43,6 +48,7 @@ namespace Shalltear {
 	}
 
 	void MeshAsset::OnUnload() {
+		GraphicsInternal::SkinBounds::Release(*this);
 		if (!RenderSystem::IsRenderingAvailable()) {
 			vertexBuffer = {};
 			indexBuffer = {};

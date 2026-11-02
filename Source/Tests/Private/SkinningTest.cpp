@@ -17,13 +17,19 @@
 #include "Shalltear/Core/Graphics/Skeleton.h"
 #include "Shalltear/Core/Graphics/SkinAsset.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
+#include "Shalltear/Core/Jobs/JobSystem.h"
+#include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Scene/SceneObject.h"
 #include "Shalltear/Core/Window.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 using namespace Shalltear;
 
@@ -658,44 +664,6 @@ TEST_F(SkinningFixture, MeshUnderTwoSkinsDiffers) {
 	SceneSystem::EndFrame();
 }
 
-TEST(SkinningKernelTest, UnboundVertexKeepsPosition) {
-	MeshVertex vertices[2]{};
-	vertices[0].position = Vec3(1.0f, 0.0f, 0.0f);
-	vertices[0].normal = Vec3(0.0f, 0.0f, 1.0f);
-	vertices[1].position = Vec3(2.0f, 0.0f, 0.0f);
-	vertices[1].normal = Vec3(0.0f, 0.0f, 1.0f);
-
-	MeshSkinInfluence influences[2]{};
-	influences[0].joints[0] = 0;
-	influences[0].weights[0] = 1.0f;
-
-	Mat4 matrices[1] = {Mat4::TRS(Vec3(10.0f, 0.0f, 0.0f), Quat::Identity(), Vec3::One())};
-
-	MeshVertex out[2]{};
-	GraphicsInternal::SkinVertices({vertices, 2}, {influences, 2}, {matrices, 1}, out);
-
-	EXPECT_TRUE(Vec3::Approximately(out[0].position, Vec3(11.0f, 0.0f, 0.0f)));
-	EXPECT_TRUE(Vec3::Approximately(out[1].position, Vec3(2.0f, 0.0f, 0.0f)));
-}
-
-TEST(SkinningKernelTest, OutOfRangeJointDropped) {
-	MeshVertex vertices[1]{};
-	vertices[0].position = Vec3(0.0f, 4.0f, 0.0f);
-	vertices[0].normal = Vec3(0.0f, 0.0f, 1.0f);
-
-	MeshSkinInfluence influences[1]{};
-	influences[0].joints[0] = 0;
-	influences[0].weights[0] = 0.5f;
-	influences[0].joints[1] = 99;
-	influences[0].weights[1] = 0.5f;
-
-	Mat4 matrices[1] = {Mat4::TRS(Vec3(0.0f, 0.0f, 6.0f), Quat::Identity(), Vec3::One())};
-
-	MeshVertex out[1]{};
-	GraphicsInternal::SkinVertices({vertices, 1}, {influences, 1}, {matrices, 1}, out);
-	EXPECT_TRUE(Vec3::Approximately(out[0].position, Vec3(0.0f, 4.0f, 6.0f)));
-}
-
 TEST(SkinningKernelTest, BonelessJointGetsIdentity) {
 	SkinAsset skin;
 	skin.jointToBone.push_back(-1);
@@ -734,69 +702,136 @@ namespace {
 		mesh.skinInfluences.resize(mesh.vertices.size());
 	}
 
+	Vector<MeshVertex> ReferenceDeform(const MeshAsset& mesh, std::span<const Mat4> matrices, std::span<const f32> weights) {
+		Vector<MeshVertex> out{GetMemoryResource(MemTag::Asset)};
+		out.assign(mesh.vertices.begin(), mesh.vertices.end());
+		if (GraphicsInternal::HasActiveBlendShapes(mesh, weights)) {
+			size_t frameCount = 0;
+			for (const MeshBlendShape& shape : mesh.blendShapes) {
+				frameCount += shape.frames.size();
+			}
+			Vector<f32> scales{GetMemoryResource(MemTag::Asset)};
+			scales.resize(frameCount);
+			bool movesNormals = false;
+			GraphicsInternal::BlendShapeFrameScales(mesh, weights, scales, movesNormals);
+			size_t frameIndex = 0;
+			for (const MeshBlendShape& shape : mesh.blendShapes) {
+				for (const MeshBlendShapeFrame& frame : shape.frames) {
+					const f32 scale = scales[frameIndex++];
+					const bool normals = frame.normalDeltas.size() == frame.vertices.size();
+					for (size_t d = 0; d < frame.vertices.size(); ++d) {
+						MeshVertex& vertex = out[frame.vertices[d]];
+						vertex.position += frame.positionDeltas[d] * scale;
+						if (normals) {
+							vertex.normal += frame.normalDeltas[d] * scale;
+						}
+					}
+				}
+			}
+			if (movesNormals) {
+				for (MeshVertex& vertex : out) {
+					vertex.normal = vertex.normal.Normalized();
+				}
+			}
+		}
+
+		for (size_t v = 0; v < out.size() && v < mesh.skinInfluences.size() && !matrices.empty(); ++v) {
+			const MeshSkinInfluence& influence = mesh.skinInfluences[v];
+			Mat4 blended;
+			f32 total = 0.0f;
+			for (u32 k = 0; k < 4; ++k) {
+				const f32 weight = influence.weights[k];
+				if (weight == 0.0f || influence.joints[k] >= matrices.size()) {
+					continue;
+				}
+				for (u32 e = 0; e < 16; ++e) {
+					blended.data[e] += matrices[influence.joints[k]].data[e] * weight;
+				}
+				total += weight;
+			}
+			if (total <= 0.0f) {
+				continue;
+			}
+			if (total != 1.0f) {
+				for (u32 e = 0; e < 16; ++e) {
+					blended.data[e] /= total;
+				}
+			}
+			MeshVertex& vertex = out[v];
+			vertex.position = blended.TransformPoint(vertex.position);
+			vertex.normal = blended.TransformVector(vertex.normal).Normalized();
+			vertex.tangent = blended.TransformVector(vertex.tangent);
+		}
+		return out;
+	}
+
+	void BuildPosedMesh(MeshAsset& mesh) {
+		const Vec3 positions[] = {
+			Vec3(0.0f, 0.0f, 0.0f),
+			Vec3(1.0f, 0.0f, 0.0f),
+			Vec3(0.0f, 1.0f, 0.5f),
+			Vec3(1.0f, 2.0f, -0.5f),
+			Vec3(-1.0f, 3.0f, 0.0f),
+			Vec3(2.0f, -1.0f, 1.0f),
+			Vec3(-6.0f, -6.0f, -6.0f),
+			Vec3(-2.0f, 0.0f, -1.0f),
+		};
+		AddVertices(mesh, positions);
+		AddInfluence(mesh, 0, 0, 1.0f);
+		AddInfluence(mesh, 1, 0, 0.5f);
+		AddInfluence(mesh, 1, 1, 0.5f);
+		AddInfluence(mesh, 2, 1, 0.25f);
+		AddInfluence(mesh, 2, 2, 0.75f);
+		AddInfluence(mesh, 3, 2, 1.0f);
+		AddInfluence(mesh, 4, 1, 0.6f);
+		AddInfluence(mesh, 4, 2, 0.4f);
+		AddInfluence(mesh, 5, 5, 1.0f);
+		AddInfluence(mesh, 7, 0, 0.3f);
+		AddInfluence(mesh, 7, 5, 0.7f);
+
+		MeshBlendShape up;
+		up.name = "Up";
+		MeshBlendShapeFrame upFrame;
+		upFrame.vertices = {2, 4};
+		upFrame.positionDeltas = {Vec3(0.0f, 3.0f, 0.0f), Vec3(1.0f, 0.0f, -2.0f)};
+		up.frames.push_back(upFrame);
+		mesh.blendShapes.push_back(up);
+
+		MeshBlendShape bulge;
+		bulge.name = "Bulge";
+		MeshBlendShapeFrame below;
+		below.weight = -50.0f;
+		below.vertices = {3};
+		below.positionDeltas = {Vec3(0.0f, 0.0f, 4.0f)};
+		bulge.frames.push_back(below);
+		MeshBlendShapeFrame above;
+		above.vertices = {0, 6};
+		above.positionDeltas = {Vec3(-2.0f, 0.0f, 0.0f), Vec3(0.0f, -3.0f, 1.0f)};
+		bulge.frames.push_back(above);
+		mesh.blendShapes.push_back(bulge);
+	}
+
+	constexpr f32 POSED_WEIGHTS[] = {250.0f, -80.0f};
+
+	std::array<Mat4, 3> PosedMatrices() {
+		return {
+			Mat4::TRS(Vec3(1.0f, 2.0f, 3.0f), Quat::AngleAxis(40.0f, Vec3(0.0f, 0.0f, 1.0f)), Vec3::One()),
+			Mat4::TRS(Vec3(-2.0f, 0.0f, 1.0f), Quat::AngleAxis(-70.0f, Vec3(1.0f, 0.0f, 0.0f)), Vec3(2.0f, 0.5f, 1.0f)),
+			Mat4::TRS(Vec3(0.0f, 5.0f, 0.0f), Quat::AngleAxis(120.0f, Vec3(0.0f, 1.0f, 0.0f)), Vec3::One()),
+		};
+	}
+
 } // anonymous namespace
 
 TEST(SkinningKernelTest, PoseBoundsHoldSkinnedVertices) {
 	MeshAsset mesh;
-	const Vec3 positions[] = {
-		Vec3(0.0f, 0.0f, 0.0f),
-		Vec3(1.0f, 0.0f, 0.0f),
-		Vec3(0.0f, 1.0f, 0.5f),
-		Vec3(1.0f, 2.0f, -0.5f),
-		Vec3(-1.0f, 3.0f, 0.0f),
-		Vec3(2.0f, -1.0f, 1.0f),
-		Vec3(-6.0f, -6.0f, -6.0f),
-		Vec3(-2.0f, 0.0f, -1.0f),
-	};
-	AddVertices(mesh, positions);
-	AddInfluence(mesh, 0, 0, 1.0f);
-	AddInfluence(mesh, 1, 0, 0.5f);
-	AddInfluence(mesh, 1, 1, 0.5f);
-	AddInfluence(mesh, 2, 1, 0.25f);
-	AddInfluence(mesh, 2, 2, 0.75f);
-	AddInfluence(mesh, 3, 2, 1.0f);
-	AddInfluence(mesh, 4, 1, 0.6f);
-	AddInfluence(mesh, 4, 2, 0.4f);
-	AddInfluence(mesh, 5, 5, 1.0f);
-	AddInfluence(mesh, 7, 0, 0.3f);
-	AddInfluence(mesh, 7, 5, 0.7f);
+	BuildPosedMesh(mesh);
+	const std::span<const f32> weights = POSED_WEIGHTS;
+	const std::array<Mat4, 3> matrices = PosedMatrices();
 
-	MeshBlendShape up;
-	up.name = "Up";
-	MeshBlendShapeFrame upFrame;
-	upFrame.vertices = {2, 4};
-	upFrame.positionDeltas = {Vec3(0.0f, 3.0f, 0.0f), Vec3(1.0f, 0.0f, -2.0f)};
-	up.frames.push_back(upFrame);
-	mesh.blendShapes.push_back(up);
-
-	MeshBlendShape bulge;
-	bulge.name = "Bulge";
-	MeshBlendShapeFrame below;
-	below.weight = -50.0f;
-	below.vertices = {3};
-	below.positionDeltas = {Vec3(0.0f, 0.0f, 4.0f)};
-	bulge.frames.push_back(below);
-	MeshBlendShapeFrame above;
-	above.vertices = {0, 6};
-	above.positionDeltas = {Vec3(-2.0f, 0.0f, 0.0f), Vec3(0.0f, -3.0f, 1.0f)};
-	bulge.frames.push_back(above);
-	mesh.blendShapes.push_back(bulge);
-
-	const f32 weights[] = {250.0f, -80.0f};
-	const Mat4 matrices[3] = {
-		Mat4::TRS(Vec3(1.0f, 2.0f, 3.0f), Quat::AngleAxis(40.0f, Vec3(0.0f, 0.0f, 1.0f)), Vec3::One()),
-		Mat4::TRS(Vec3(-2.0f, 0.0f, 1.0f), Quat::AngleAxis(-70.0f, Vec3(1.0f, 0.0f, 0.0f)), Vec3(2.0f, 0.5f, 1.0f)),
-		Mat4::TRS(Vec3(0.0f, 5.0f, 0.0f), Quat::AngleAxis(120.0f, Vec3(0.0f, 1.0f, 0.0f)), Vec3::One()),
-	};
-
-	GraphicsInternal::SkinBounds::Build(mesh);
-	Vector<MeshVertex> morphed{GetMemoryResource(MemTag::Asset)};
-	morphed.resize(mesh.vertices.size());
-	GraphicsInternal::ApplyBlendShapes(mesh, weights, morphed.data());
-	Vector<MeshVertex> skinned{GetMemoryResource(MemTag::Asset)};
-	skinned.resize(mesh.vertices.size());
-	GraphicsInternal::SkinVertices({morphed.data(), morphed.size()}, {mesh.skinInfluences.data(), mesh.skinInfluences.size()},
-								   matrices, skinned.data());
+	GraphicsInternal::MeshDeform::Build(mesh, nullptr);
+	const Vector<MeshVertex> morphed = ReferenceDeform(mesh, {}, weights);
+	const Vector<MeshVertex> skinned = ReferenceDeform(mesh, matrices, weights);
 
 	EXPECT_GT(morphed[2].position.y, 8.0f);
 	const AABB posed = GraphicsInternal::SkinBounds::Pose(mesh, matrices, weights);
@@ -819,7 +854,7 @@ TEST(SkinningKernelTest, PoseBoundsFollowRigidJoint) {
 	for (size_t v = 0; v < mesh.vertices.size(); ++v) {
 		AddInfluence(mesh, v, 0, 1.0f);
 	}
-	GraphicsInternal::SkinBounds::Build(mesh);
+	GraphicsInternal::MeshDeform::Build(mesh, nullptr);
 
 	const Mat4 shift = Mat4::TRS(Vec3(5.0f, 0.0f, 0.0f), Quat::Identity(), Vec3::One());
 	const AABB posed = GraphicsInternal::SkinBounds::Pose(mesh, {&shift, 1}, {});
@@ -834,7 +869,7 @@ TEST(SkinningKernelTest, NegativeWeightLeavesPoseUnbounded) {
 	AddInfluence(mesh, 0, 0, 1.0f);
 	AddInfluence(mesh, 1, 0, 1.5f);
 	AddInfluence(mesh, 1, 1, -0.5f);
-	GraphicsInternal::SkinBounds::Build(mesh);
+	GraphicsInternal::MeshDeform::Build(mesh, nullptr);
 
 	const Mat4 matrices[2] = {Mat4::Identity(), Mat4::TRS(Vec3(0.0f, 9.0f, 0.0f), Quat::Identity(), Vec3::One())};
 	EXPECT_FALSE(GraphicsInternal::SkinBounds::Pose(mesh, matrices, {}).IsValid());
@@ -924,10 +959,7 @@ namespace {
 	}
 
 	Vec3 MorphedPosition(const MeshAsset& mesh, std::span<const f32> weights, size_t vertex) {
-		Vector<MeshVertex> out{GetMemoryResource(MemTag::Asset)};
-		out.resize(mesh.vertices.size());
-		GraphicsInternal::ApplyBlendShapes(mesh, weights, out.data());
-		return out[vertex].position;
+		return ReferenceDeform(mesh, {}, weights)[vertex].position;
 	}
 
 } // anonymous namespace
@@ -1014,20 +1046,30 @@ TEST(BlendShapeKernelTest, ShortWeightListRestsRemainder) {
 	Delete(mesh);
 }
 
-TEST(BlendShapeKernelTest, AMovedNormalComesBackUnitLength) {
+TEST(BlendShapeKernelTest, NormalDeltaAsksRenormalize) {
 	MeshAsset* mesh = MakeTwoVertexMesh();
-	MeshBlendShape shape;
-	shape.name = "Tilt";
-	shape.frames.push_back(MakeFrame(100.0f, Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 3.0f, 0.0f)));
-	mesh->blendShapes.push_back(std::move(shape));
+	MeshBlendShape tilt;
+	tilt.name = "Tilt";
+	tilt.frames.push_back(MakeFrame(100.0f, Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 3.0f, 0.0f)));
+	MeshBlendShape lift;
+	lift.name = "Lift";
+	lift.frames.push_back(MakeFrame(100.0f, Vec3(0.0f, 1.0f, 0.0f)));
+	mesh->blendShapes.push_back(std::move(tilt));
+	mesh->blendShapes.push_back(std::move(lift));
 
-	Vector<MeshVertex> out{GetMemoryResource(MemTag::Asset)};
-	out.resize(mesh->vertices.size());
-	const f32 full[1] = {100.0f};
-	GraphicsInternal::ApplyBlendShapes(*mesh, full, out.data());
+	f32 scales[2] = {};
+	bool movesNormals = true;
+	const f32 liftOnly[2] = {0.0f, 100.0f};
+	GraphicsInternal::BlendShapeFrameScales(*mesh, liftOnly, scales, movesNormals);
+	EXPECT_FALSE(movesNormals);
+	EXPECT_FLOAT_EQ(scales[0], 0.0f);
+	EXPECT_FLOAT_EQ(scales[1], 1.0f);
 
-	EXPECT_NEAR(out[0].normal.Length(), 1.0f, 0.0001f);
-	EXPECT_GT(out[0].normal.y, 0.5f);
+	const f32 tiltOnly[2] = {100.0f, 0.0f};
+	GraphicsInternal::BlendShapeFrameScales(*mesh, tiltOnly, scales, movesNormals);
+	EXPECT_TRUE(movesNormals);
+	EXPECT_FLOAT_EQ(scales[0], 1.0f);
+	EXPECT_FLOAT_EQ(scales[1], 0.0f);
 	Delete(mesh);
 }
 
@@ -1208,4 +1250,307 @@ TEST_F(SkinningFixture, MorphOutsideBindBoundsDraws) {
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);
 	SceneSystem::EndFrame();
+}
+
+namespace {
+
+	class VulkanMessageSink : public ILogSink {
+	public:
+		static constexpr const char* SENTINEL = "skin-deformer-sentinel";
+
+		void ReceiveLog(const LogEvent& event) override {
+			std::lock_guard lock(_mutex);
+			if (event.message.find(SENTINEL) != str::npos) {
+				_armed = true;
+				return;
+			}
+			if (_armed && event.category == "Vulkan" && event.level >= LogLevel::Warn) {
+				_said += event.message;
+				_said += '\n';
+			}
+		}
+		void Flush() override {}
+
+		bool Armed() const {
+			std::lock_guard lock(_mutex);
+			return _armed;
+		}
+		str Said() const {
+			std::lock_guard lock(_mutex);
+			return _said;
+		}
+	private:
+		mutable std::mutex _mutex;
+		bool _armed = false;
+		str _said;
+	};
+
+	class SkinDeformerFixture : public ::testing::Test {
+	protected:
+		std::shared_ptr<VulkanMessageSink> _sink;
+		RHI::Device* _device = nullptr;
+		ShaderAsset _kernel;
+		RHI::PipelineHandle _pipeline;
+		GraphicsInternal::SkinDeformer _deformer;
+		Vector<MeshAsset*> _meshes{GetMemoryResource(MemTag::Asset)};
+
+		void SetUp() override {
+			JobSystem::Initialize();
+			LogManager::Initialize({false, false});
+			LogManager::SetGlobalLevel(LogLevel::Trace);
+			_sink = std::make_shared<VulkanMessageSink>();
+			LogManager::AddSink(_sink);
+			for (int attempt = 0; attempt < 200 && !_sink->Armed(); ++attempt) {
+				SLT_LOG_INFO("Graphics", "{}", VulkanMessageSink::SENTINEL);
+				std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			}
+			ASSERT_TRUE(_sink->Armed());
+
+			RHI::DeviceDesc deviceDesc;
+			deviceDesc.headless = true;
+			deviceDesc.enableValidation = true;
+			_device = RHI::Device::Create(deviceDesc);
+			if (!_device) {
+				GTEST_SKIP() << "no Vulkan ICD available";
+			}
+			const std::filesystem::path source = RepoDir("EngineAssets/Shaders/Skinning.hlsl");
+			if (source.empty() || !_kernel.Import(Path(source.generic_string()))) {
+				GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
+			}
+			ASSERT_TRUE(_kernel.IsKernel());
+			const Vector<u8>& spirv = _kernel.variants[SHADER_BASE_VARIANT].computeSpirv;
+			RHI::ComputePipelineDesc pipelineDesc;
+			pipelineDesc.spirv = {spirv.data(), spirv.size()};
+			pipelineDesc.bindings = {_kernel.bindings.data(), _kernel.bindings.size()};
+			pipelineDesc.pushConstantSize = _kernel.pushConstantSize;
+			_pipeline = _device->CreateComputePipeline(pipelineDesc);
+			ASSERT_TRUE(_pipeline.IsValid());
+		}
+
+		void TearDown() override {
+			if (_device) {
+				_device->WaitIdle();
+				for (MeshAsset* mesh : _meshes) {
+					GraphicsInternal::MeshDeform::Release(*mesh, _device);
+					if (mesh->vertexBuffer.IsValid()) {
+						_device->DestroyResource(mesh->vertexBuffer);
+					}
+					Delete(mesh);
+				}
+				_deformer.Destroy(*_device);
+				if (_pipeline.IsValid()) {
+					_device->DestroyResource(_pipeline);
+				}
+				RHI::Device::Destroy(_device);
+			}
+			if (_sink) {
+				LogManager::Terminate();
+				const str said = _sink->Said();
+				_sink.reset();
+				JobSystem::Terminate();
+				EXPECT_TRUE(said.empty()) << said;
+			}
+		}
+
+		MeshAsset* Upload(MeshAsset* mesh) {
+			_meshes.push_back(mesh);
+			RHI::BufferDesc desc;
+			desc.size = mesh->vertices.size() * sizeof(MeshVertex);
+			desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress | RHI::BufferUsage::TransferDst;
+			mesh->vertexBuffer = _device->CreateBufferResource(desc);
+			_device->UploadBuffer(mesh->vertexBuffer, {reinterpret_cast<const u8*>(mesh->vertices.data()), desc.size});
+			mesh->vertexBufferAddress = _device->GetBufferDeviceAddress(mesh->vertexBuffer);
+			GraphicsInternal::MeshDeform::Build(*mesh, _device);
+			return mesh;
+		}
+
+		Vector<MeshVertex> Read(u64 address, size_t count) {
+			Vector<MeshVertex> out{GetMemoryResource(MemTag::Asset)};
+			out.resize(count);
+			_device->ReadbackBuffer(_deformer.GetOutput(), {reinterpret_cast<u8*>(out.data()), count * sizeof(MeshVertex)},
+									address - _deformer.GetOutputAddress());
+			return out;
+		}
+
+		void Record(RHI::CommandList& cmd) {
+			cmd.TransitionBuffer(_deformer.GetOutput(), RHI::ResourceState::UnorderedAccess);
+			_deformer.Record(cmd, _pipeline);
+			cmd.TransitionBuffer(_deformer.GetOutput(), RHI::ResourceState::ShaderResource);
+		}
+
+		Vector<MeshVertex> Deform(const MeshAsset& mesh, std::span<const Mat4> matrices, std::span<const f32> weights) {
+			RHI::CommandList* cmd = _device->BeginFrame();
+			_deformer.Begin(*_device, mesh.vertices.size());
+			const u64 address = _deformer.Add(*_device, mesh, matrices, weights);
+			Record(*cmd);
+			_device->EndFrame();
+			_device->WaitIdle();
+			if (address == 0) {
+				return Vector<MeshVertex>{GetMemoryResource(MemTag::Asset)};
+			}
+			return Read(address, mesh.vertices.size());
+		}
+	};
+
+	void ExpectSameVertices(const Vector<MeshVertex>& actual, const Vector<MeshVertex>& expected) {
+		ASSERT_EQ(actual.size(), expected.size());
+		for (size_t v = 0; v < actual.size(); ++v) {
+			EXPECT_TRUE(Vec3::Approximately(actual[v].position, expected[v].position, 1e-4f)) << v;
+			EXPECT_TRUE(Vec3::Approximately(actual[v].normal, expected[v].normal, 1e-4f)) << v;
+			EXPECT_TRUE(Vec3::Approximately(actual[v].tangent, expected[v].tangent, 1e-4f)) << v;
+			EXPECT_EQ(actual[v].u, expected[v].u) << v;
+			EXPECT_EQ(actual[v].v, expected[v].v) << v;
+			EXPECT_EQ(actual[v].tangentSign, expected[v].tangentSign) << v;
+			EXPECT_TRUE(actual[v].color == expected[v].color) << v;
+		}
+	}
+
+} // anonymous namespace
+
+TEST_F(SkinDeformerFixture, MatchesReferenceDeform) {
+	MeshAsset* mesh = New<MeshAsset>(MemTag::Asset);
+	BuildPosedMesh(*mesh);
+	MeshVertex extra;
+	extra.position = Vec3(3.0f, 3.0f, 3.0f);
+	extra.normal = Vec3(0.0f, 1.0f, 0.0f);
+	mesh->vertices.push_back(extra);
+	for (size_t v = 0; v < mesh->vertices.size(); ++v) {
+		MeshVertex& vertex = mesh->vertices[v];
+		vertex.u = 0.125f * static_cast<f32>(v);
+		vertex.v = 1.0f - 0.125f * static_cast<f32>(v);
+		vertex.tangent = Vec3(1.0f, 0.0f, 0.0f);
+		vertex.tangentSign = v % 2 ? -1.0f : 1.0f;
+		vertex.color = Color32(static_cast<u8>(10 * v), 20, 30, 255);
+	}
+	mesh->blendShapes[0].frames[0].normalDeltas = {Vec3(0.0f, 1.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f)};
+	Upload(mesh);
+
+	const std::array<Mat4, 3> matrices = PosedMatrices();
+	const Vector<MeshVertex> expected = ReferenceDeform(*mesh, matrices, POSED_WEIGHTS);
+	ExpectSameVertices(Deform(*mesh, matrices, POSED_WEIGHTS), expected);
+	EXPECT_FALSE(Vec3::Approximately(expected[2].position, mesh->vertices[2].position));
+	EXPECT_TRUE(Vec3::Approximately(expected[8].position, mesh->vertices[8].position));
+
+	const f32 rest[2] = {0.0f, 0.0f};
+	ExpectSameVertices(Deform(*mesh, matrices, rest), ReferenceDeform(*mesh, matrices, rest));
+	ExpectSameVertices(Deform(*mesh, {}, POSED_WEIGHTS), ReferenceDeform(*mesh, {}, POSED_WEIGHTS));
+}
+
+TEST_F(SkinDeformerFixture, UnboundVertexKeepsPosition) {
+	MeshAsset* mesh = New<MeshAsset>(MemTag::Asset);
+	const Vec3 positions[] = {Vec3(1.0f, 0.0f, 0.0f), Vec3(2.0f, 0.0f, 0.0f)};
+	AddVertices(*mesh, positions);
+	AddInfluence(*mesh, 0, 0, 1.0f);
+	Upload(mesh);
+
+	const Mat4 matrices[1] = {Mat4::TRS(Vec3(10.0f, 0.0f, 0.0f), Quat::Identity(), Vec3::One())};
+	const Vector<MeshVertex> out = Deform(*mesh, matrices, {});
+	ASSERT_EQ(out.size(), 2u);
+	EXPECT_TRUE(Vec3::Approximately(out[0].position, Vec3(11.0f, 0.0f, 0.0f)));
+	EXPECT_TRUE(Vec3::Approximately(out[1].position, Vec3(2.0f, 0.0f, 0.0f)));
+}
+
+TEST_F(SkinDeformerFixture, OutOfRangeJointDropped) {
+	MeshAsset* mesh = New<MeshAsset>(MemTag::Asset);
+	const Vec3 positions[] = {Vec3(0.0f, 4.0f, 0.0f)};
+	AddVertices(*mesh, positions);
+	AddInfluence(*mesh, 0, 0, 0.5f);
+	AddInfluence(*mesh, 0, 99, 0.5f);
+	Upload(mesh);
+
+	const Mat4 matrices[1] = {Mat4::TRS(Vec3(0.0f, 0.0f, 6.0f), Quat::Identity(), Vec3::One())};
+	const Vector<MeshVertex> out = Deform(*mesh, matrices, {});
+	ASSERT_EQ(out.size(), 1u);
+	EXPECT_TRUE(Vec3::Approximately(out[0].position, Vec3(0.0f, 4.0f, 6.0f)));
+}
+
+TEST_F(SkinDeformerFixture, MorphedNormalIsUnitLength) {
+	MeshAsset* mesh = MakeTwoVertexMesh();
+	MeshBlendShape shape;
+	shape.name = "Tilt";
+	shape.frames.push_back(MakeFrame(100.0f, Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 3.0f, 0.0f)));
+	mesh->blendShapes.push_back(std::move(shape));
+	Upload(mesh);
+
+	const f32 full[1] = {100.0f};
+	const Vector<MeshVertex> out = Deform(*mesh, {}, full);
+	ASSERT_EQ(out.size(), 2u);
+	EXPECT_NEAR(out[0].normal.Length(), 1.0f, 0.0001f);
+	EXPECT_GT(out[0].normal.y, 0.5f);
+	EXPECT_TRUE(Vec3::Approximately(out[0].position, Vec3(0.0f, 1.0f, 0.0f)));
+	EXPECT_TRUE(Vec3::Approximately(out[1].position, Vec3(1.0f, 0.0f, 0.0f)));
+	EXPECT_TRUE(Vec3::Approximately(out[1].normal, Vec3(0.0f, 0.0f, 1.0f)));
+}
+
+TEST_F(SkinDeformerFixture, MeshesShareFrameWithoutOverlap) {
+	MeshAsset* morphed = MakeTwoVertexMesh();
+	MeshBlendShape shape;
+	shape.name = "Up";
+	shape.frames.push_back(MakeFrame(100.0f, Vec3(0.0f, 4.0f, 0.0f)));
+	morphed->blendShapes.push_back(std::move(shape));
+	Upload(morphed);
+
+	MeshAsset* skinned = New<MeshAsset>(MemTag::Asset);
+	const Vec3 positions[] = {Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f)};
+	AddVertices(*skinned, positions);
+	for (size_t v = 0; v < skinned->vertices.size(); ++v) {
+		AddInfluence(*skinned, v, 0, 1.0f);
+	}
+	Upload(skinned);
+
+	const f32 half[1] = {50.0f};
+	const f32 rest[1] = {0.0f};
+	const Mat4 lift[1] = {Mat4::TRS(Vec3(0.0f, 5.0f, 0.0f), Quat::Identity(), Vec3::One())};
+
+	RHI::CommandList* cmd = _device->BeginFrame();
+	_deformer.Begin(*_device, morphed->vertices.size() + skinned->vertices.size() + morphed->vertices.size());
+	const u64 first = _deformer.Add(*_device, *morphed, {}, half);
+	const u64 second = _deformer.Add(*_device, *skinned, lift, {});
+	const u64 resting = _deformer.Add(*_device, *morphed, {}, rest);
+	Record(*cmd);
+	_device->EndFrame();
+	_device->WaitIdle();
+
+	EXPECT_EQ(resting, 0u);
+	ASSERT_NE(first, 0u);
+	ASSERT_NE(second, 0u);
+	EXPECT_GE(second, first + morphed->vertices.size() * sizeof(MeshVertex));
+
+	const Vector<MeshVertex> a = Read(first, morphed->vertices.size());
+	EXPECT_TRUE(Vec3::Approximately(a[0].position, Vec3(0.0f, 2.0f, 0.0f)));
+	EXPECT_TRUE(Vec3::Approximately(a[1].position, Vec3(1.0f, 0.0f, 0.0f)));
+	const Vector<MeshVertex> b = Read(second, skinned->vertices.size());
+	for (size_t v = 0; v < b.size(); ++v) {
+		EXPECT_TRUE(Vec3::Approximately(b[v].position, positions[v] + Vec3(0.0f, 5.0f, 0.0f))) << v;
+	}
+}
+
+TEST_F(SkinDeformerFixture, GrownOutputReskinsNextFrame) {
+	MeshAsset* mesh = New<MeshAsset>(MemTag::Asset);
+	const Vec3 positions[] = {Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 2.0f, 0.0f)};
+	AddVertices(*mesh, positions);
+	AddInfluence(*mesh, 0, 0, 1.0f);
+	AddInfluence(*mesh, 1, 0, 1.0f);
+	Upload(mesh);
+
+	const Mat4 first[1] = {Mat4::TRS(Vec3(3.0f, 0.0f, 0.0f), Quat::Identity(), Vec3::One())};
+	const Vector<MeshVertex> before = Deform(*mesh, first, {});
+	ASSERT_EQ(before.size(), 2u);
+	EXPECT_TRUE(Vec3::Approximately(before[1].position, Vec3(3.0f, 2.0f, 0.0f)));
+	const RHI::BufferHandle small = _deformer.GetOutput();
+
+	const Mat4 second[1] = {Mat4::TRS(Vec3(0.0f, 0.0f, -7.0f), Quat::AngleAxis(90.0f, Vec3(1.0f, 0.0f, 0.0f)), Vec3::One())};
+	RHI::CommandList* cmd = _device->BeginFrame();
+	_deformer.Begin(*_device, 4096);
+	const u64 address = _deformer.Add(*_device, *mesh, second, {});
+	Record(*cmd);
+	_device->EndFrame();
+	_device->WaitIdle();
+
+	EXPECT_FALSE(_deformer.GetOutput() == small);
+	ASSERT_NE(address, 0u);
+	const Vector<MeshVertex> after = Read(address, mesh->vertices.size());
+	const Vec3 expected = second[0].TransformPoint(positions[1]);
+	EXPECT_TRUE(Vec3::Approximately(after[1].position, expected, 1e-4f));
+	EXPECT_TRUE(Vec3::Approximately(after[1].normal, second[0].TransformVector(Vec3(0.0f, 0.0f, 1.0f)), 1e-4f));
 }

@@ -50,6 +50,7 @@ namespace {
 		{"Shaders/DepthCopy.hlsl", EngineBuiltins::DepthCopyShader},
 		{"Shaders/Outline.hlsl", EngineBuiltins::OutlineShader},
 		{"Shaders/SkyPrefilter.hlsl", EngineBuiltins::SkyPrefilterShader},
+		{"Shaders/Skinning.hlsl", EngineBuiltins::SkinningShader},
 	};
 
 	class EngineBuiltinsFixture : public ::testing::Test {

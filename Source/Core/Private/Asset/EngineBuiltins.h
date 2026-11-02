@@ -30,6 +30,8 @@ namespace Shalltear {
 
 		inline constexpr Guid SkyPrefilterShader{0x6a3f1c9e2b847d05, 0xe1c74b2a90f36d18};
 
+		inline constexpr Guid SkinningShader{0x7cb3d340a65e4637, 0x4efde93d781eaa22};
+
 		inline constexpr Guid UIShader{0x338097fb9c0c87b0, 0x92e117f93e38c514};
 
 		inline constexpr Guid DefaultFont{0x5d280fd701b66993, 0xda09822ec0a9b52b};
@@ -48,6 +50,7 @@ namespace Shalltear {
 			DepthCopyShader,
 			OutlineShader,
 			SkyPrefilterShader,
+			SkinningShader,
 		};
 
 	} // namespace EngineBuiltins

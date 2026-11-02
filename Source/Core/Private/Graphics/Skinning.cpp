@@ -1,5 +1,9 @@
 #include "Skinning.h"
 
+#include "Shalltear/Core/Graphics/RHICommandList.h"
+#include "Shalltear/Core/Graphics/RHIDevice.h"
+
+#include <algorithm>
 #include <cstring>
 
 namespace Shalltear::GraphicsInternal {
@@ -13,58 +17,6 @@ namespace Shalltear::GraphicsInternal {
 				continue;
 			}
 			out[j] = modelPose[static_cast<size_t>(bone)] * skin.inverseBind[j];
-		}
-	}
-
-	void SkinVertices(std::span<const MeshVertex> vertices,
-					  std::span<const MeshSkinInfluence> influences,
-					  std::span<const Mat4> skinMatrices,
-					  MeshVertex* out) {
-		const size_t count = vertices.size();
-		for (size_t v = 0; v < count; ++v) {
-			MeshVertex vertex = vertices[v];
-			if (v >= influences.size()) {
-				out[v] = vertex;
-				continue;
-			}
-			const MeshSkinInfluence& influence = influences[v];
-
-			Mat4 blended;
-			f32 total = 0.0f;
-			for (u32 k = 0; k < 4; ++k) {
-				const f32 weight = influence.weights[k];
-				if (weight == 0.0f) {
-					continue;
-				}
-				const u32 joint = influence.joints[k];
-				if (joint >= skinMatrices.size()) {
-					continue;
-				}
-				const Mat4& m = skinMatrices[joint];
-				for (u32 e = 0; e < 16; ++e) {
-					blended.data[e] += m.data[e] * weight;
-				}
-				total += weight;
-			}
-			if (total <= 0.0f) {
-				out[v] = vertex;
-				continue;
-			}
-
-			if (total != 1.0f) {
-				const f32 rescale = 1.0f / total;
-				for (u32 e = 0; e < 16; ++e) {
-					blended.data[e] *= rescale;
-				}
-			}
-
-			const Vec3 position = vertex.position;
-			const Vec3 normal = vertex.normal;
-			const Vec3 tangent = vertex.tangent;
-			vertex.position = blended.TransformPoint(position);
-			vertex.normal = blended.TransformVector(normal).Normalized();
-			vertex.tangent = blended.TransformVector(tangent);
-			out[v] = vertex;
 		}
 	}
 
@@ -121,24 +73,6 @@ namespace Shalltear::GraphicsInternal {
 			return blend;
 		}
 
-		void AddFrame(const MeshBlendShapeFrame& frame, f32 scale, size_t vertexCount, MeshVertex* out) {
-			if (scale == 0.0f) {
-				return;
-			}
-			const size_t deltas = frame.vertices.size();
-			const bool normals = frame.normalDeltas.size() == deltas;
-			for (size_t d = 0; d < deltas; ++d) {
-				const u32 vertex = frame.vertices[d];
-				if (vertex >= vertexCount) {
-					continue;
-				}
-				out[vertex].position += frame.positionDeltas[d] * scale;
-				if (normals) {
-					out[vertex].normal += frame.normalDeltas[d] * scale;
-				}
-			}
-		}
-
 		void AddReach(AABB& reach, const AABB& delta, f32 scale) {
 			if (scale == 0.0f) {
 				return;
@@ -147,6 +81,127 @@ namespace Shalltear::GraphicsInternal {
 			const Vec3 high = delta.max * scale;
 			reach.min += Vec3::Min(low, high);
 			reach.max += Vec3::Max(low, high);
+		}
+
+		size_t FrameDeltaCount(const MeshBlendShapeFrame& frame) {
+			return frame.vertices.size() < frame.positionDeltas.size() ? frame.vertices.size() : frame.positionDeltas.size();
+		}
+
+		void BuildBounds(const MeshAsset& mesh, SkinBounds& bounds) {
+			const size_t vertexCount = mesh.vertices.size();
+			for (size_t v = 0; v < vertexCount; ++v) {
+				const Vec3& position = mesh.vertices[v].position;
+				bool jointed = false;
+				if (v < mesh.skinInfluences.size()) {
+					const MeshSkinInfluence& influence = mesh.skinInfluences[v];
+					for (u32 k = 0; k < 4; ++k) {
+						const f32 weight = influence.weights[k];
+						if (weight == 0.0f) {
+							continue;
+						}
+						if (!(weight > 0.0f)) {
+							bounds.convex = false;
+							continue;
+						}
+						const u16 joint = influence.joints[k];
+						if (joint >= bounds.joints.size()) {
+							bounds.joints.resize(static_cast<size_t>(joint) + 1, AABB::Empty());
+						}
+						bounds.joints[joint].Encapsulate(position);
+						jointed = true;
+					}
+				}
+				if (!jointed) {
+					bounds.unjointed.Encapsulate(position);
+				}
+			}
+
+			for (const MeshBlendShape& shape : mesh.blendShapes) {
+				for (const MeshBlendShapeFrame& frame : shape.frames) {
+					AABB& delta = bounds.frameDeltas.emplace_back();
+					const size_t deltas = FrameDeltaCount(frame);
+					for (size_t d = 0; d < deltas; ++d) {
+						if (frame.vertices[d] < vertexCount) {
+							delta.Encapsulate(frame.positionDeltas[d]);
+						}
+					}
+				}
+			}
+		}
+
+		RHI::BufferHandle UploadStream(RHI::Device& device, std::span<const u8> bytes, const char* name, u64& outAddress) {
+			RHI::BufferDesc desc;
+			desc.size = bytes.size();
+			desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress | RHI::BufferUsage::TransferDst;
+			desc.debugName = name;
+			RHI::BufferHandle buffer = device.CreateBufferResource(desc);
+			if (buffer.IsValid()) {
+				device.UploadBuffer(buffer, bytes);
+				outAddress = device.GetBufferDeviceAddress(buffer);
+			}
+			return buffer;
+		}
+
+		template <typename T>
+		std::span<const u8> AsBytes(const Vector<T>& values) {
+			return {reinterpret_cast<const u8*>(values.data()), values.size() * sizeof(T)};
+		}
+
+		void UploadMorphStreams(const MeshAsset& mesh, MeshDeform& deform, RHI::Device& device) {
+			const size_t vertexCount = mesh.vertices.size();
+			Vector<u32> ranges{GetMemoryResource(MemTag::Graphics)};
+			ranges.assign(vertexCount * 2, 0u);
+			for (const MeshBlendShape& shape : mesh.blendShapes) {
+				for (const MeshBlendShapeFrame& frame : shape.frames) {
+					const size_t deltas = FrameDeltaCount(frame);
+					for (size_t d = 0; d < deltas; ++d) {
+						if (frame.vertices[d] < vertexCount) {
+							++ranges[static_cast<size_t>(frame.vertices[d]) * 2 + 1];
+						}
+					}
+				}
+			}
+			u32 total = 0;
+			for (size_t v = 0; v < vertexCount; ++v) {
+				ranges[v * 2] = total;
+				total += ranges[v * 2 + 1];
+			}
+			if (total == 0) {
+				return;
+			}
+
+			Vector<GPUMorphDelta> deltas{GetMemoryResource(MemTag::Graphics)};
+			deltas.resize(total);
+			Vector<u32> next{GetMemoryResource(MemTag::Graphics)};
+			next.resize(vertexCount);
+			for (size_t v = 0; v < vertexCount; ++v) {
+				next[v] = ranges[v * 2];
+			}
+			u32 frameIndex = 0;
+			for (const MeshBlendShape& shape : mesh.blendShapes) {
+				for (const MeshBlendShapeFrame& frame : shape.frames) {
+					const size_t count = FrameDeltaCount(frame);
+					const bool normals = frame.normalDeltas.size() == frame.vertices.size();
+					for (size_t d = 0; d < count; ++d) {
+						const u32 vertex = frame.vertices[d];
+						if (vertex >= vertexCount) {
+							continue;
+						}
+						GPUMorphDelta& delta = deltas[next[vertex]++];
+						delta.position = frame.positionDeltas[d];
+						delta.frame = frameIndex;
+						delta.normal = normals ? frame.normalDeltas[d] : Vec3{};
+					}
+					++frameIndex;
+				}
+			}
+
+			deform.morphRanges = UploadStream(device, AsBytes(ranges), mesh.virtualPath.c_str(), deform.morphRangesAddress);
+			deform.morphDeltas = UploadStream(device, AsBytes(deltas), mesh.virtualPath.c_str(), deform.morphDeltasAddress);
+			if (!deform.morphRanges.IsValid() || !deform.morphDeltas.IsValid()) {
+				deform.morphRangesAddress = 0;
+				deform.morphDeltasAddress = 0;
+			}
 		}
 
 	} // namespace
@@ -161,101 +216,75 @@ namespace Shalltear::GraphicsInternal {
 		return false;
 	}
 
-	void ApplyBlendShapes(const MeshAsset& mesh, std::span<const f32> weights, MeshVertex* out) {
-		const size_t vertexCount = mesh.vertices.size();
-		if (vertexCount == 0) {
-			return;
-		}
-		std::memcpy(out, mesh.vertices.data(), vertexCount * sizeof(MeshVertex));
-
+	void BlendShapeFrameScales(const MeshAsset& mesh, std::span<const f32> weights, std::span<f32> scales, bool& outMovesNormals) {
+		std::fill(scales.begin(), scales.end(), 0.0f);
+		outMovesNormals = false;
 		const size_t count = mesh.blendShapes.size() < weights.size() ? mesh.blendShapes.size() : weights.size();
-		bool movedNormals = false;
+		size_t firstFrame = 0;
 		for (size_t s = 0; s < count; ++s) {
-			const f32 weight = weights[s];
-			if (weight == 0.0f) {
+			const MeshBlendShape& shape = mesh.blendShapes[s];
+			const size_t frames = firstFrame;
+			firstFrame += shape.frames.size();
+			if (weights[s] == 0.0f || firstFrame > scales.size()) {
 				continue;
 			}
-			const MeshBlendShape& shape = mesh.blendShapes[s];
-			const FrameBlend blend = BracketFrames(shape, weight);
+			const FrameBlend blend = BracketFrames(shape, weights[s]);
 			if (blend.first >= 0) {
-				AddFrame(shape.frames[static_cast<size_t>(blend.first)], blend.firstScale, vertexCount, out);
-				movedNormals = movedNormals || !shape.frames[static_cast<size_t>(blend.first)].normalDeltas.empty();
+				scales[frames + static_cast<size_t>(blend.first)] += blend.firstScale;
+				outMovesNormals = outMovesNormals || !shape.frames[static_cast<size_t>(blend.first)].normalDeltas.empty();
 			}
 			if (blend.second >= 0) {
-				AddFrame(shape.frames[static_cast<size_t>(blend.second)], blend.secondScale, vertexCount, out);
-				movedNormals = movedNormals || !shape.frames[static_cast<size_t>(blend.second)].normalDeltas.empty();
-			}
-		}
-
-		if (movedNormals) {
-			for (size_t v = 0; v < vertexCount; ++v) {
-				out[v].normal = out[v].normal.Normalized();
+				scales[frames + static_cast<size_t>(blend.second)] += blend.secondScale;
+				outMovesNormals = outMovesNormals || !shape.frames[static_cast<size_t>(blend.second)].normalDeltas.empty();
 			}
 		}
 	}
 
-	void SkinBounds::Build(MeshAsset& mesh) {
-		Release(mesh);
+	void MeshDeform::Build(MeshAsset& mesh, RHI::Device* device) {
+		Release(mesh, device);
 		if (mesh.skinInfluences.empty() && mesh.blendShapes.empty()) {
 			return;
 		}
-		SkinBounds* bounds = New<SkinBounds>(MemTag::Asset);
-
-		const size_t vertexCount = mesh.vertices.size();
-		for (size_t v = 0; v < vertexCount; ++v) {
-			const Vec3& position = mesh.vertices[v].position;
-			bool jointed = false;
-			if (v < mesh.skinInfluences.size()) {
-				const MeshSkinInfluence& influence = mesh.skinInfluences[v];
-				for (u32 k = 0; k < 4; ++k) {
-					const f32 weight = influence.weights[k];
-					if (weight == 0.0f) {
-						continue;
-					}
-					if (!(weight > 0.0f)) {
-						bounds->convex = false;
-						continue;
-					}
-					const u16 joint = influence.joints[k];
-					if (joint >= bounds->joints.size()) {
-						bounds->joints.resize(static_cast<size_t>(joint) + 1, AABB::Empty());
-					}
-					bounds->joints[joint].Encapsulate(position);
-					jointed = true;
-				}
-			}
-			if (!jointed) {
-				bounds->unjointed.Encapsulate(position);
-			}
-		}
-
+		MeshDeform* deform = New<MeshDeform>(MemTag::Asset);
+		BuildBounds(mesh, deform->bounds);
 		for (const MeshBlendShape& shape : mesh.blendShapes) {
-			for (const MeshBlendShapeFrame& frame : shape.frames) {
-				AABB& delta = bounds->frameDeltas.emplace_back();
-				const size_t deltas = frame.vertices.size() < frame.positionDeltas.size() ? frame.vertices.size() : frame.positionDeltas.size();
-				for (size_t d = 0; d < deltas; ++d) {
-					if (frame.vertices[d] < vertexCount) {
-						delta.Encapsulate(frame.positionDeltas[d]);
-					}
-				}
-			}
+			deform->frameCount += static_cast<u32>(shape.frames.size());
+		}
+		mesh._deform = deform;
+		if (!device || mesh.vertices.empty()) {
+			return;
 		}
 
-		mesh._skinBounds = bounds;
+		if (!mesh.skinInfluences.empty()) {
+			deform->influences = UploadStream(*device, AsBytes(mesh.skinInfluences), mesh.virtualPath.c_str(), deform->influencesAddress);
+		}
+		if (deform->frameCount > 0) {
+			UploadMorphStreams(mesh, *deform, *device);
+		}
 	}
 
-	void SkinBounds::Release(MeshAsset& mesh) {
-		if (mesh._skinBounds) {
-			Delete(mesh._skinBounds);
-			mesh._skinBounds = nullptr;
+	void MeshDeform::Release(MeshAsset& mesh, RHI::Device* device) {
+		MeshDeform* deform = mesh._deform;
+		if (!deform) {
+			return;
 		}
+		if (device) {
+			for (RHI::BufferHandle buffer : {deform->influences, deform->morphRanges, deform->morphDeltas}) {
+				if (buffer.IsValid()) {
+					device->DestroyResource(buffer);
+				}
+			}
+		}
+		Delete(deform);
+		mesh._deform = nullptr;
 	}
 
 	AABB SkinBounds::Pose(const MeshAsset& mesh, std::span<const Mat4> skinMatrices, std::span<const f32> weights) {
-		const SkinBounds* bounds = mesh._skinBounds;
-		if (!bounds || !bounds->convex) {
+		const MeshDeform* deform = MeshDeform::Of(mesh);
+		if (!deform || !deform->bounds.convex) {
 			return AABB::Empty();
 		}
+		const SkinBounds& bounds = deform->bounds;
 
 		AABB reach;
 		size_t firstFrame = 0;
@@ -267,15 +296,15 @@ namespace Shalltear::GraphicsInternal {
 			if (weights[s] == 0.0f || shape.frames.empty()) {
 				continue;
 			}
-			if (firstFrame > bounds->frameDeltas.size()) {
+			if (firstFrame > bounds.frameDeltas.size()) {
 				return AABB::Empty();
 			}
 			const FrameBlend blend = BracketFrames(shape, weights[s]);
 			if (blend.first >= 0) {
-				AddReach(reach, bounds->frameDeltas[frames + static_cast<size_t>(blend.first)], blend.firstScale);
+				AddReach(reach, bounds.frameDeltas[frames + static_cast<size_t>(blend.first)], blend.firstScale);
 			}
 			if (blend.second >= 0) {
-				AddReach(reach, bounds->frameDeltas[frames + static_cast<size_t>(blend.second)], blend.secondScale);
+				AddReach(reach, bounds.frameDeltas[frames + static_cast<size_t>(blend.second)], blend.secondScale);
 			}
 		}
 		if (!reach.IsValid()) {
@@ -290,11 +319,101 @@ namespace Shalltear::GraphicsInternal {
 			const AABB reached(box.min + reach.min, box.max + reach.max);
 			posed.Encapsulate(matrix ? reached.Transformed(*matrix) : reached);
 		};
-		place(bounds->unjointed, nullptr);
-		for (size_t j = 0; j < bounds->joints.size(); ++j) {
-			place(bounds->joints[j], j < skinMatrices.size() ? &skinMatrices[j] : nullptr);
+		place(bounds.unjointed, nullptr);
+		for (size_t j = 0; j < bounds.joints.size(); ++j) {
+			place(bounds.joints[j], j < skinMatrices.size() ? &skinMatrices[j] : nullptr);
 		}
 		return posed;
+	}
+
+	void SkinDeformer::Begin(RHI::Device& device, u64 maxVertices) {
+		_jobs.clear();
+		_used = 0;
+		const u64 bytes = maxVertices * sizeof(MeshVertex);
+		if (bytes <= _capacity) {
+			return;
+		}
+		if (_output.IsValid()) {
+			device.DestroyResource(_output);
+		}
+		u64 capacity = 64ull * 1024;
+		while (capacity < bytes) {
+			capacity *= 2;
+		}
+		RHI::BufferDesc desc;
+		desc.size = capacity;
+		desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress | RHI::BufferUsage::TransferSrc;
+		desc.debugName = "SkinnedVertices";
+		_output = device.CreateBufferResource(desc);
+		_capacity = _output.IsValid() ? capacity : 0;
+		_outputAddress = _output.IsValid() ? device.GetBufferDeviceAddress(_output) : 0;
+	}
+
+	u64 SkinDeformer::Add(RHI::Device& device, const MeshAsset& mesh, std::span<const Mat4> skinMatrices, std::span<const f32> weights) {
+		const MeshDeform* deform = MeshDeform::Of(mesh);
+		const u64 vertexCount = mesh.vertices.size();
+		const u64 bytes = vertexCount * sizeof(MeshVertex);
+		if (!deform || vertexCount == 0 || mesh.vertexBufferAddress == 0 || _used + bytes > _capacity) {
+			return 0;
+		}
+
+		GPUSkinningPush push;
+		if (!skinMatrices.empty() && deform->influencesAddress != 0) {
+			RHI::TransientAllocation matrices = device.AllocateTransient(skinMatrices.size_bytes(), 16);
+			if (!matrices.IsValid()) {
+				return 0;
+			}
+			std::memcpy(matrices.cpu, skinMatrices.data(), skinMatrices.size_bytes());
+			push.influences = deform->influencesAddress;
+			push.influenceCount = static_cast<u32>(std::min<u64>(mesh.skinInfluences.size(), vertexCount));
+			push.matrices = device.GetBufferDeviceAddress(matrices.buffer) + matrices.offset;
+			push.jointCount = static_cast<u32>(skinMatrices.size());
+		}
+		if (deform->morphDeltasAddress != 0 && HasActiveBlendShapes(mesh, weights)) {
+			RHI::TransientAllocation scales = device.AllocateTransient(static_cast<u64>(deform->frameCount) * sizeof(f32), 16);
+			if (!scales.IsValid()) {
+				return 0;
+			}
+			bool movesNormals = false;
+			BlendShapeFrameScales(mesh, weights, {static_cast<f32*>(scales.cpu), deform->frameCount}, movesNormals);
+			push.morphRanges = deform->morphRangesAddress;
+			push.morphDeltas = deform->morphDeltasAddress;
+			push.frameScales = device.GetBufferDeviceAddress(scales.buffer) + scales.offset;
+			push.flags |= movesNormals ? SKINNING_RENORMALIZE : 0u;
+		}
+		if (push.matrices == 0 && push.frameScales == 0) {
+			return 0;
+		}
+
+		push.source = mesh.vertexBufferAddress;
+		push.output = _outputAddress + _used;
+		push.vertexCount = static_cast<u32>(vertexCount);
+		_jobs.push_back(push);
+		_used += bytes;
+		return push.output;
+	}
+
+	void SkinDeformer::Record(RHI::CommandList& cmd, RHI::PipelineHandle kernel) const {
+		if (_jobs.empty() || !kernel.IsValid()) {
+			return;
+		}
+		cmd.SetPipeline(kernel);
+		for (const GPUSkinningPush& push : _jobs) {
+			cmd.PushConstants({reinterpret_cast<const u8*>(&push), sizeof(push)});
+			const u32 groups = (push.vertexCount + SKINNING_GROUP_SIZE - 1) / SKINNING_GROUP_SIZE;
+			cmd.Dispatch(std::min(groups, SKINNING_MAX_GROUPS_X), (groups + SKINNING_MAX_GROUPS_X - 1) / SKINNING_MAX_GROUPS_X);
+		}
+	}
+
+	void SkinDeformer::Destroy(RHI::Device& device) {
+		if (_output.IsValid()) {
+			device.DestroyResource(_output);
+		}
+		_output = {};
+		_outputAddress = 0;
+		_capacity = 0;
+		_used = 0;
+		_jobs.clear();
 	}
 
 } // namespace Shalltear::GraphicsInternal

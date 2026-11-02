@@ -423,6 +423,9 @@ namespace Shalltear {
 			Vector<SkinnedOutput> skinnedOutputs{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<SkinnedMeshRenderer>> isolatedSkinnedMeshRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<SkinnedOutput> isolatedSkinnedOutputs{GetMemoryResource(MemTag::Graphics)};
+			GraphicsInternal::SkinDeformer skinDeformer;
+			GraphicsInternal::SkinDeformer isolatedSkinDeformer;
+			Vector<Mat4> skinMatrices{GetMemoryResource(MemTag::Graphics)};
 
 			Vector<Handle<ProceduralRenderer>> proceduralRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ProceduralRenderer>> isolatedProceduralRenderers{GetMemoryResource(MemTag::Graphics)};
@@ -783,6 +786,8 @@ namespace Shalltear {
 			bool skyShaderTried = false;
 			Handle<ShaderAsset> skyPrefilterShader;
 			bool skyPrefilterShaderTried = false;
+			Handle<ShaderAsset> skinningShader;
+			bool skinningShaderTried = false;
 
 			struct ShadowAllocation {
 				u64 lightKey = 0;
@@ -1006,6 +1011,15 @@ namespace Shalltear {
 				state.skyPrefilterShader = LoadEngineShader(EngineBuiltins::SkyPrefilterShader, "SkyPrefilter");
 			}
 			return state.skyPrefilterShader.Get();
+		}
+
+		ShaderAsset* EnsureSkinningShader() {
+			RenderState& state = *_state;
+			if (!state.skinningShaderTried) {
+				state.skinningShaderTried = true;
+				state.skinningShader = LoadEngineShader(EngineBuiltins::SkinningShader, "Skinning");
+			}
+			return state.skinningShader.Get();
 		}
 
 		void ReleaseEngineShader(Handle<ShaderAsset>& handle) {
@@ -1687,13 +1701,21 @@ namespace Shalltear {
 						 material.virtualPath, shader.virtualPath);
 		}
 
-		void RecordSkinning(RHI::Device& device,
+		void RecordSkinning(RHI::Device& device, RHI::CommandList& cmd, GraphicsInternal::SkinDeformer& deformer,
 							const Vector<Handle<SkinnedMeshRenderer>>& renderers,
 							Vector<RenderState::SkinnedOutput>& outputs) {
 			if (renderers.empty()) {
 				return;
 			}
+			ShaderAsset* kernel = EnsureSkinningShader();
+			const RHI::PipelineHandle pipeline = kernel ? GetOrCreatePipeline(kernel, RHI::Format::Unknown, RHI::Format::Unknown, nullptr, 1,
+																			  SHADER_BASE_VARIANT, ShaderProgramKind::Compute)
+														: RHI::PipelineHandle{};
+			if (!pipeline.IsValid()) {
+				return;
+			}
 
+			Vector<Mat4>& skinMatrices = _state->skinMatrices;
 			for (size_t i = 0; i < renderers.size(); ++i) {
 				SkinnedMeshRenderer* renderer = renderers[i].Get();
 				if (!renderer) {
@@ -1706,54 +1728,27 @@ namespace Shalltear {
 
 				SkinAsset* skin = renderer->GetSkin().Get();
 				Skeleton* skeleton = renderer->GetSkeleton().Get();
-				bool skinned = skin != nullptr && skeleton != nullptr && !mesh->skinInfluences.empty();
+				const bool skinned = skin != nullptr && skeleton != nullptr && !mesh->skinInfluences.empty();
 				const std::span<const f32> weights = renderer->GetBlendShapeWeights();
-				const bool morphed = GraphicsInternal::HasActiveBlendShapes(*mesh, weights);
-
-				std::span<const Mat4> modelPose;
-				if (skinned) {
-					skeleton->UpdatePose();
-					modelPose = skeleton->GetModelPose();
-					skinned = !modelPose.empty();
-				}
-				if (!skinned && !morphed) {
-					continue;
-				}
-
-				const u64 vertexBytes = mesh->vertices.size() * sizeof(MeshVertex);
-				RHI::TransientAllocation allocation = device.AllocateTransient(vertexBytes, 16);
-				if (!allocation.IsValid()) {
-					continue;
-				}
-				MeshVertex* deformed = static_cast<MeshVertex*>(allocation.cpu);
-
-				const MeshVertex* source = mesh->vertices.data();
-				if (morphed) {
-					GraphicsInternal::ApplyBlendShapes(*mesh, weights, deformed);
-					source = deformed;
-				}
 
 				std::span<const Mat4> jointMatrices;
 				if (skinned) {
-					const u32 jointCount = skin->GetJointCount();
-					RHI::TransientAllocation matrices = device.AllocateTransient(
-						static_cast<u64>(jointCount ? jointCount : 1) * sizeof(Mat4), 16);
-					if (!matrices.IsValid()) {
-						continue;
+					skeleton->UpdatePose();
+					const std::span<const Mat4> modelPose = skeleton->GetModelPose();
+					if (!modelPose.empty()) {
+						const u32 jointCount = skin->GetJointCount();
+						skinMatrices.resize(jointCount);
+						GraphicsInternal::BuildSkinMatrices(*skin, modelPose, skinMatrices.data(), jointCount);
+						jointMatrices = {skinMatrices.data(), jointCount};
 					}
-					Mat4* skinMatrices = static_cast<Mat4*>(matrices.cpu);
-					GraphicsInternal::BuildSkinMatrices(*skin, modelPose, skinMatrices, jointCount);
-					jointMatrices = {skinMatrices, jointCount};
-					GraphicsInternal::SkinVertices(
-						{source, mesh->vertices.size()},
-						{mesh->skinInfluences.data(), mesh->skinInfluences.size()},
-						jointMatrices,
-						deformed);
 				}
 
-				outputs[i].vertexAddress = device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
-				outputs[i].bounds = GraphicsInternal::SkinBounds::Pose(*mesh, jointMatrices, weights);
+				outputs[i].vertexAddress = deformer.Add(device, *mesh, jointMatrices, weights);
+				if (outputs[i].vertexAddress != 0) {
+					outputs[i].bounds = GraphicsInternal::SkinBounds::Pose(*mesh, jointMatrices, weights);
+				}
 			}
+			deformer.Record(cmd, pipeline);
 		}
 
 		struct PassTargets {
@@ -4034,12 +4029,24 @@ namespace Shalltear {
 			return 1;
 		}
 
+		GraphResourceId DeclareSkinOutput(RHI::Device& device, GraphicsInternal::RenderGraph& graph, GraphicsInternal::SkinDeformer& deformer,
+										  const Vector<Handle<SkinnedMeshRenderer>>& renderers) {
+			u64 maxVertices = 0;
+			for (Handle<SkinnedMeshRenderer> handle : renderers) {
+				SkinnedMeshRenderer* renderer = handle.Get();
+				MeshAsset* mesh = renderer ? renderer->GetMesh().Get() : nullptr;
+				maxVertices += mesh ? mesh->vertices.size() : 0;
+			}
+			deformer.Begin(device, maxVertices);
+			return deformer.GetOutput().IsValid() ? graph.ImportBuffer(deformer.GetOutput()) : graph.CreateVirtual();
+		}
+
 		void PassRecordSkinning(GraphExecution& exec, const GraphPass& pass) {
 			RenderState& state = *_state;
 			if (pass.work.flag) {
-				RecordSkinning(*exec.device, state.isolatedSkinnedMeshRenderers, state.isolatedSkinnedOutputs);
+				RecordSkinning(*exec.device, *exec.cmd, state.isolatedSkinDeformer, state.isolatedSkinnedMeshRenderers, state.isolatedSkinnedOutputs);
 			} else {
-				RecordSkinning(*exec.device, state.skinnedMeshRenderers, state.skinnedOutputs);
+				RecordSkinning(*exec.device, *exec.cmd, state.skinDeformer, state.skinnedMeshRenderers, state.skinnedOutputs);
 			}
 		}
 
@@ -4319,6 +4326,7 @@ namespace Shalltear {
 			GraphicsInternal::GraphResourceId sceneColorCopy = GraphicsInternal::INVALID_GRAPH_RESOURCE;
 			GraphicsInternal::GraphResourceId prepassDepth = GraphicsInternal::INVALID_GRAPH_RESOURCE;
 			GraphicsInternal::GraphResourceId prepassNormals = GraphicsInternal::INVALID_GRAPH_RESOURCE;
+			GraphicsInternal::GraphResourceId skinBuffer = GraphicsInternal::INVALID_GRAPH_RESOURCE;
 		};
 
 		void DeclareRowPasses(RenderState& state, GraphicsInternal::RenderGraph& graph,
@@ -4341,6 +4349,9 @@ namespace Shalltear {
 				} else {
 					graph.Write(state.rowPlanTargets[plan.firstTarget + declared.target].resource,
 								RHI::ResourceState::RenderTarget);
+				}
+				if (frame.skinBuffer != GraphicsInternal::INVALID_GRAPH_RESOURCE) {
+					graph.Read(frame.skinBuffer, RHI::ResourceState::ShaderResource);
 				}
 				if (HasFlag(requests, PassRequests::SceneColor)) {
 					graph.Read(frame.sceneColorCopy, RHI::ResourceState::ShaderResource);
@@ -5325,7 +5336,7 @@ namespace Shalltear {
 				graph.Write(normals, RHI::ResourceState::RenderTarget);
 			}
 			graph.Write(images.target, RHI::ResourceState::DepthWrite);
-			graph.Read(skin, RHI::ResourceState::Undefined);
+			graph.Read(skin, RHI::ResourceState::ShaderResource);
 			if (images.items) {
 				DeclareProceduralReads(state, graph, procedural);
 			}
@@ -5753,16 +5764,19 @@ namespace Shalltear {
 
 			state.skinnedOutputs.assign(state.skinnedMeshRenderers.size(), {});
 			state.isolatedSkinnedOutputs.assign(state.isolatedSkinnedMeshRenderers.size(), {});
-			GraphResourceId worldSkin = graph.CreateVirtual();
-			GraphResourceId isolatedSkin = graph.CreateVirtual();
+			GraphResourceId worldSkin = DeclareSkinOutput(device, graph, state.skinDeformer, state.skinnedMeshRenderers);
+			GraphResourceId isolatedSkin = DeclareSkinOutput(device, graph, state.isolatedSkinDeformer, state.isolatedSkinnedMeshRenderers);
+			const GraphResourceId worldSkinBuffer = state.skinDeformer.GetOutput().IsValid() ? worldSkin : GraphicsInternal::INVALID_GRAPH_RESOURCE;
+			const GraphResourceId isolatedSkinBuffer =
+				state.isolatedSkinDeformer.GetOutput().IsValid() ? isolatedSkin : GraphicsInternal::INVALID_GRAPH_RESOURCE;
 			PassWork skinWork;
 			SLT_GRAPH_SITE(worldSkinSite, "Render.Skinning");
 			graph.AddPass("Render.Skinning", worldSkinSite, &PassRecordSkinning, skinWork);
-			graph.Write(worldSkin, RHI::ResourceState::Undefined);
+			graph.Write(worldSkin, RHI::ResourceState::UnorderedAccess);
 			skinWork.flag = true;
 			SLT_GRAPH_SITE(isolatedSkinSite, "Render.Skinning.Isolated");
 			graph.AddPass("Render.Skinning.Isolated", isolatedSkinSite, &PassRecordSkinning, skinWork);
-			graph.Write(isolatedSkin, RHI::ResourceState::Undefined);
+			graph.Write(isolatedSkin, RHI::ResourceState::UnorderedAccess);
 
 			DeclareSkyCaptures(state, device, graph, workCount);
 
@@ -5955,7 +5969,8 @@ namespace Shalltear {
 							viewWork.subIndex = index - firstRow;
 							DeclareRowPasses(state, graph, "Render.View.Row", viewRowSite, &PassRecordViewRow,
 											 viewWork, index,
-											 {sceneTarget, depth, sceneColorCopy, prepassDepth, prepassNormals});
+											 {sceneTarget, depth, sceneColorCopy, prepassDepth, prepassNormals,
+											  pending.kind == SceneKind::World ? worldSkinBuffer : isolatedSkinBuffer});
 						}
 					}
 					nextKey = anchorKey;
@@ -5976,7 +5991,7 @@ namespace Shalltear {
 					graph.AddPass("Render.View.Shadow", viewShadowSite, &PassRecordViewShadow, viewWork);
 					graph.Write(shadowAtlas, RHI::ResourceState::DepthWrite);
 					graph.Write(punctualAtlas, RHI::ResourceState::DepthWrite);
-					graph.Read(skin, RHI::ResourceState::Undefined);
+					graph.Read(skin, RHI::ResourceState::ShaderResource);
 					DeclareProceduralReads(state, graph, casters);
 				}
 
@@ -5986,7 +6001,7 @@ namespace Shalltear {
 				graph.AddPass("Render.View.Scene", viewSceneSite, &PassRecordViewScene, viewWork);
 				graph.Write(sceneTarget, RHI::ResourceState::RenderTarget);
 				graph.Write(depth, RHI::ResourceState::DepthWrite);
-				graph.Read(skin, RHI::ResourceState::Undefined);
+				graph.Read(skin, RHI::ResourceState::ShaderResource);
 				graph.Read(shadowAtlas, RHI::ResourceState::ShaderResource);
 				graph.Read(punctualAtlas, RHI::ResourceState::ShaderResource);
 				if (viewWork.produced) {
@@ -6030,7 +6045,7 @@ namespace Shalltear {
 					graph.AddPass("Render.View.OutlineMask", viewOutlineMaskSite, &PassRecordViewOutlineMask, viewWork);
 					graph.Write(outlineMask, RHI::ResourceState::RenderTarget);
 					graph.Write(outlineDepth, RHI::ResourceState::DepthWrite);
-					graph.Read(skin, RHI::ResourceState::Undefined);
+					graph.Read(skin, RHI::ResourceState::ShaderResource);
 					DeclareProceduralReads(state, graph, procedural);
 					SLT_GRAPH_SITE(viewOutlineSite, "Render.View.Outline");
 					graph.AddPass("Render.View.Outline", viewOutlineSite, &PassRecordViewOutline, viewWork);
@@ -6085,7 +6100,7 @@ namespace Shalltear {
 						graph.AddPass("Render.View.Pick", viewPickSite, &PassRecordViewPick, viewWork);
 						graph.Write(pickTarget, RHI::ResourceState::RenderTarget);
 						graph.Write(pickDepth, RHI::ResourceState::DepthWrite);
-						graph.Read(skin, RHI::ResourceState::Undefined);
+						graph.Read(skin, RHI::ResourceState::ShaderResource);
 						DeclareProceduralReads(state, graph, procedural);
 						const GraphResourceId pickSink = graph.CreateVirtual(true);
 						SLT_GRAPH_SITE(viewPickCopySite, "Render.View.PickCopy");
@@ -6358,7 +6373,7 @@ namespace Shalltear {
 									work.element = slot;
 									DeclareRowPasses(state, graph, "Render.Window.Row", windowRowSite, &PassRecordWindowRow,
 													 work, cameraRows.firstRow + slot,
-													 {sceneTarget, sceneDepth, sceneColorCopy, prepassDepth, prepassNormals});
+													 {sceneTarget, sceneDepth, sceneColorCopy, prepassDepth, prepassNormals, worldSkinBuffer});
 								}
 							}
 							nextCameraKey = anchorKey;
@@ -6370,7 +6385,7 @@ namespace Shalltear {
 							graph.AddPass("Render.Window.Shadow", windowShadowSite, &PassRecordWindowShadow, work);
 							graph.Write(windowShadowAtlas, RHI::ResourceState::DepthWrite);
 							graph.Write(windowPunctualAtlas, RHI::ResourceState::DepthWrite);
-							graph.Read(worldSkin, RHI::ResourceState::Undefined);
+							graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
 							DeclareProceduralReads(state, graph, casters);
 						}
 
@@ -6379,7 +6394,7 @@ namespace Shalltear {
 						graph.AddPass("Render.Window.Scene", windowSceneSite, &PassRecordWindowScene, work);
 						graph.Write(sceneTarget, RHI::ResourceState::RenderTarget);
 						graph.Write(sceneDepth, RHI::ResourceState::DepthWrite);
-						graph.Read(worldSkin, RHI::ResourceState::Undefined);
+						graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
 						graph.Read(windowShadowAtlas, RHI::ResourceState::ShaderResource);
 						graph.Read(windowPunctualAtlas, RHI::ResourceState::ShaderResource);
 						if (work.produced) {
@@ -7193,6 +7208,9 @@ namespace Shalltear {
 			ReleaseEngineShader(state.debugViewShader);
 			ReleaseEngineShader(state.debugOverlayShader);
 			ReleaseEngineShader(state.outlineShader);
+			ReleaseEngineShader(state.skinningShader);
+			state.skinDeformer.Destroy(*state.device);
+			state.isolatedSkinDeformer.Destroy(*state.device);
 			if (state.pickRing.IsValid()) {
 				state.device->DestroyResource(state.pickRing);
 				state.pickRing = {};

@@ -31,8 +31,6 @@ using namespace Shalltear;
 
 namespace {
 
-	using CookHarness::BUILTIN_GUIDS;
-
 	class ClProbeComponent : public Component {
 	public:
 		SLT_REFLECT_COMPONENT(ClProbeComponent, Component)
@@ -379,8 +377,8 @@ TEST_F(CookClosureFixture, EngineBuiltinsAreRoots) {
 	str error;
 	ASSERT_TRUE(CookOps::ComputeClosure(Roots({GuidOf("project://Assets/Only.txt")}), closure, error)) << error;
 
-	for (const char* text : BUILTIN_GUIDS) {
-		Guid guid = Guid::FromString(text);
+	ASSERT_FALSE(AssetDatabase::GetEngineBuiltinRoots().empty());
+	for (const Guid& guid : AssetDatabase::GetEngineBuiltinRoots()) {
 		EXPECT_TRUE(Holds(closure, guid));
 	}
 }

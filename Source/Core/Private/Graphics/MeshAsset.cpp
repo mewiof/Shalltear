@@ -16,14 +16,13 @@ namespace Shalltear {
 	static_assert(std::is_trivially_copyable_v<MeshSkinInfluence>);
 
 	MeshAsset::~MeshAsset() {
-		GraphicsInternal::SkinBounds::Release(*this);
+		GraphicsInternal::MeshDeform::Release(*this, nullptr);
 	}
 
 	void MeshAsset::OnLoad() {
 		if (!RenderSystem::IsRenderingAvailable() || vertices.empty()) {
 			return;
 		}
-		GraphicsInternal::SkinBounds::Build(*this);
 		RHI::Device* device = RenderSystem::GetDevice();
 
 		RHI::BufferDesc vertexDesc;
@@ -45,11 +44,12 @@ namespace Shalltear {
 			device->UploadBuffer(indexBuffer, {reinterpret_cast<const u8*>(indices.data()), indexDesc.size});
 			indexBufferAddress = device->GetBufferDeviceAddress(indexBuffer);
 		}
+		GraphicsInternal::MeshDeform::Build(*this, device);
 	}
 
 	void MeshAsset::OnUnload() {
-		GraphicsInternal::SkinBounds::Release(*this);
 		if (!RenderSystem::IsRenderingAvailable()) {
+			GraphicsInternal::MeshDeform::Release(*this, nullptr);
 			vertexBuffer = {};
 			indexBuffer = {};
 			vertexBufferAddress = 0;
@@ -57,6 +57,7 @@ namespace Shalltear {
 			return;
 		}
 		RHI::Device* device = RenderSystem::GetDevice();
+		GraphicsInternal::MeshDeform::Release(*this, device);
 		if (vertexBuffer.IsValid()) {
 			device->DestroyResource(vertexBuffer);
 			vertexBuffer = {};

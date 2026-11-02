@@ -14,7 +14,7 @@
 namespace Shalltear {
 
 	namespace GraphicsInternal {
-		struct SkinBounds;
+		struct MeshDeform;
 	} // namespace GraphicsInternal
 
 	struct MeshVertex {
@@ -96,10 +96,10 @@ namespace Shalltear {
 		void OnLoad() override;
 		void OnUnload() override;
 	private:
-		friend struct GraphicsInternal::SkinBounds;
+		friend struct GraphicsInternal::MeshDeform;
 
 		// owned, built at load
-		GraphicsInternal::SkinBounds* _skinBounds = nullptr;
+		GraphicsInternal::MeshDeform* _deform = nullptr;
 	};
 
 } // namespace Shalltear

@@ -2587,6 +2587,68 @@ TEST_F(ShadowViewFixture, Cascade0EndsWhereProfileSays) {
 	AssetDatabase::UnloadAsset(meshAsset);
 }
 
+TEST_F(ShadowViewFixture, CrowdedSceneDrawsAllCubes) {
+	constexpr i32 SIDE = 110;
+	InitializeWith();
+	UseProfile([](GraphicsProfile& profile) {
+		profile.shadowDistance = 400.0f;
+		profile.shadowCascades = 1;
+	});
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("Crowd");
+	Handle<SceneObject> sun = SceneSystem::CreateObject("Sun", scene);
+	sun->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	sun->AddComponent<Light>()->SetIntensity(2.0f);
+	auto addCube = [&](i32 x, i32 z) {
+		Handle<SceneObject> object = SceneSystem::CreateObject("Cube", scene);
+		object->SetLocalPosition(Vec3(static_cast<f32>(x) * 2.0f, 0.5f, static_cast<f32>(z) * 2.0f));
+		object->AddComponent<MeshRenderer>()->SetMesh(cube);
+	};
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	auto drawCalls = [&]() {
+		SceneSystem::EndFrame();
+		RenderFrom(target, Vec3(0.0f, 300.0f, -1.0f), Vec3::Zero(), pixels, size);
+		return RenderSystem::GetStats().drawCalls;
+	};
+
+	addCube(0, 0);
+	const u32 one = drawCalls();
+	if (RenderSystem::GetStats().shadowMapsRendered == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	addCube(1, 0);
+	const u32 perCube = drawCalls() - one;
+	ASSERT_GE(perCube, 2u);
+
+	for (i32 z = -SIDE / 2; z < SIDE / 2; ++z) {
+		for (i32 x = -SIDE / 2; x < SIDE / 2; ++x) {
+			if (z != 0 || (x != 0 && x != 1)) {
+				addCube(x, z);
+			}
+		}
+	}
+	const u32 expected = one + perCube * (SIDE * SIDE - 1);
+	EXPECT_EQ(drawCalls(), expected);
+	EXPECT_EQ(drawCalls(), expected);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
 TEST_F(ShadowViewFixture, OldProfileKeepsNearFieldSharp) {
 	constexpr const char* SAVED_BEFORE_X54 =
 		"{\n"

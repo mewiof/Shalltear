@@ -27,8 +27,7 @@ namespace Shalltear::XML {
 			IllegalCharacter,
 			TooDeep,
 			NoRoot,
-			TrailingContent,
-			OutOfMemory
+			TrailingContent
 		};
 
 		Code code = Code::None;
@@ -86,9 +85,6 @@ namespace Shalltear::XML {
 				break;
 			case Code::TrailingContent:
 				what = "content after the root element";
-				break;
-			case Code::OutOfMemory:
-				what = "text does not fit in the supplied arena";
 				break;
 			}
 			str message = str("line ") + str(std::to_string(line)) + str(": ") + str(what);
@@ -455,10 +451,6 @@ namespace Shalltear::XML {
 				}
 
 				char* buffer = static_cast<char*>(_arena.Allocate(total ? total : 1, 1));
-				if (!buffer) {
-					FailAt(XMLError::Code::OutOfMemory, segments.front().substr(0, 12), line);
-					return false;
-				}
 
 				size_t write = 0;
 				for (std::string_view run : segments) {

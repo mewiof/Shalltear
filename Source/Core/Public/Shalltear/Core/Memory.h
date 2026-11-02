@@ -93,6 +93,7 @@ namespace Shalltear {
 		LinearAllocator(LinearAllocator&&) = delete;
 		LinearAllocator& operator=(LinearAllocator&&) = delete;
 
+		// never should be null, valid until Reset (grow past capacity)
 		void* Allocate(size_t size, size_t alignment = 16);
 
 		template <typename T>
@@ -104,20 +105,24 @@ namespace Shalltear {
 		template <typename T, typename... Args>
 		T* Construct(Args&&... args) {
 			static_assert(std::is_trivially_destructible_v<T>, "LinearAllocator only supports trivially destructible types");
-			void* mem = Allocate(sizeof(T), alignof(T));
-			return mem ? new (mem) T(std::forward<Args>(args)...) : nullptr;
+			return new (Allocate(sizeof(T), alignof(T))) T(std::forward<Args>(args)...);
 		}
 
 		void Reset() noexcept;
 
-		size_t GetUsedBytes() const noexcept { return _used; }
-		size_t GetCapacity() const noexcept { return _capacity; }
+		size_t GetUsedBytes() const noexcept { return _retiredUsed + _used; }
+		size_t GetCapacity() const noexcept { return _retiredCapacity + _capacity; }
 		size_t GetRemainingBytes() const noexcept { return _capacity - _used; }
 		MemTag GetTag() const noexcept { return _tag; }
 	private:
+		void* Grow(size_t size, size_t alignment);
+		void ReleaseBlocks() noexcept;
+
 		u8* _buffer;
 		size_t _capacity;
 		size_t _used;
+		size_t _retiredCapacity = 0;
+		size_t _retiredUsed = 0;
 		MemTag _tag;
 	};
 

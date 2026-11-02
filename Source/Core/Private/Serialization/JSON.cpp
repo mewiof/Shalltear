@@ -347,10 +347,6 @@ namespace Shalltear {
 
 		bool Unescape(std::string_view raw, std::string_view& out) {
 			char* buffer = static_cast<char*>(_arena.Allocate(raw.empty() ? 1 : raw.size(), 1));
-			if (!buffer) {
-				_error = true;
-				return false;
-			}
 
 			size_t write = 0;
 			for (size_t i = 0; i < raw.size();) {

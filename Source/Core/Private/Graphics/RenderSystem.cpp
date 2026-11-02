@@ -1384,9 +1384,6 @@ namespace Shalltear {
 				return;
 			}
 			u8* block = arena.AllocateAs<u8>(layout->sizeBytes);
-			if (!block) {
-				return;
-			}
 			if (source) {
 				source->PackBlock(*layout, {block, layout->sizeBytes},
 								  {target->memberDefaults.data(), target->memberDefaults.size()});
@@ -1434,9 +1431,6 @@ namespace Shalltear {
 				return;
 			}
 			DrawTexture* resolved = arena.AllocateAs<DrawTexture>(slotCount);
-			if (!resolved) {
-				return;
-			}
 			u32 written = 0;
 			ForEachMaterialTextureSlot(*target, [&](const ShaderResourceInfo& slot, u32 samplerBinding) {
 				DrawTexture& out = resolved[written++];
@@ -1820,9 +1814,6 @@ namespace Shalltear {
 					}
 
 					DrawEntry* entry = arena.Construct<DrawEntry>();
-					if (!entry) {
-						break;
-					}
 					entry->mesh = mesh;
 					entry->submesh = &submesh;
 					entry->vertexAddress = vertexAddress;
@@ -3520,9 +3511,6 @@ namespace Shalltear {
 				return 0;
 			}
 			ProceduralDraw* draws = arena.AllocateAs<ProceduralDraw>(capacity);
-			if (!draws) {
-				return 0;
-			}
 			u32 count = 0;
 			for (u32 index : visible) {
 				const GraphicsInternal::ProceduralFrame::Renderer& renderer = frame.renderers[index];
@@ -3551,9 +3539,6 @@ namespace Shalltear {
 			}
 			u64* keys = arena.AllocateAs<u64>(count);
 			ProceduralDraw* sorted = arena.AllocateAs<ProceduralDraw>(count);
-			if (!keys || !sorted) {
-				return count;
-			}
 			for (u32 place = 0; place < count; ++place) {
 				keys[place] = ProceduralSortKey(draws[place], place);
 			}

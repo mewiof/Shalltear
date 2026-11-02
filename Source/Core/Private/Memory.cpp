@@ -4,6 +4,8 @@
 
 #include "Module/EngineStateTable.h"
 
+#include <algorithm>
+
 namespace Shalltear {
 
 	namespace {
@@ -235,6 +237,15 @@ namespace Shalltear {
 		::operator delete(raw);
 	}
 
+	namespace {
+
+		struct alignas(16) GrownBlockLink {
+			u8* previous;
+			bool previousGrown;
+		};
+
+	} // anonymous namespace
+
 	LinearAllocator::LinearAllocator(size_t capacity, MemTag tag)
 		: _buffer(nullptr), _capacity(capacity), _used(0), _tag(tag) {
 		SLT_CORE_ASSERT_MSG(capacity > 0, "LinearAllocator capacity must be > 0");
@@ -244,8 +255,7 @@ namespace Shalltear {
 
 	LinearAllocator::~LinearAllocator() {
 		if (_buffer) {
-			Shalltear::Free(_buffer);
-			_buffer = nullptr;
+			ReleaseBlocks();
 		}
 	}
 
@@ -258,19 +268,49 @@ namespace Shalltear {
 
 		size_t newUsed = static_cast<size_t>(aligned - _buffer) + size;
 		if (newUsed > _capacity) {
-			SLT_LOG_ERROR("Memory",
-						  "LinearAllocator (tag={}) exhausted: requested {} bytes (aligned to {}), only {} of {} remain",
-						  MemoryManager::GetTagName(_tag), size, alignment,
-						  _capacity - _used, _capacity);
-			SLT_CORE_ASSERT_MSG(false, "LinearAllocator exhausted. Increase its capacity");
-			return nullptr;
+			return Grow(size, alignment);
 		}
 
 		_used = newUsed;
 		return aligned;
 	}
 
+	void* LinearAllocator::Grow(size_t size, size_t alignment) {
+		const size_t capacity = std::max(GetCapacity(), size + alignment);
+		u8* block = static_cast<u8*>(Shalltear::Allocate(sizeof(GrownBlockLink) + capacity, _tag, 16));
+		const bool grown = _retiredCapacity > 0;
+		new (block) GrownBlockLink{grown ? _buffer - sizeof(GrownBlockLink) : _buffer, grown};
+
+		_retiredCapacity += _capacity;
+		_retiredUsed += _used;
+		_buffer = block + sizeof(GrownBlockLink);
+		_capacity = capacity;
+		_used = 0;
+		return Allocate(size, alignment);
+	}
+
+	void LinearAllocator::ReleaseBlocks() noexcept {
+		bool grown = _retiredCapacity > 0;
+		u8* block = grown ? _buffer - sizeof(GrownBlockLink) : _buffer;
+		while (grown) {
+			const GrownBlockLink link = *reinterpret_cast<const GrownBlockLink*>(block);
+			Shalltear::Free(block);
+			block = link.previous;
+			grown = link.previousGrown;
+		}
+		Shalltear::Free(block);
+		_buffer = nullptr;
+	}
+
 	void LinearAllocator::Reset() noexcept {
+		if (_retiredCapacity > 0) {
+			const size_t capacity = GetCapacity();
+			ReleaseBlocks();
+			_buffer = static_cast<u8*>(Shalltear::Allocate(capacity, _tag, 16));
+			_capacity = capacity;
+			_retiredCapacity = 0;
+			_retiredUsed = 0;
+		}
 		_used = 0;
 	}
 

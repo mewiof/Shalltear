@@ -315,6 +315,79 @@ TEST(LinearAllocatorTest, ArenaChargesTagOnceAtCapacity) {
 	EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore);
 }
 
+TEST(LinearAllocatorTest, GrowsWithoutMovingEarlierAllocations) {
+	LinearAllocator arena(256, MemTag::Debug);
+	u8* first = arena.AllocateAs<u8>(200);
+	ASSERT_NE(first, nullptr);
+	std::memset(first, 0xAB, 200);
+
+	u8* second = arena.AllocateAs<u8>(200);
+	ASSERT_NE(second, nullptr);
+	std::memset(second, 0xCD, 200);
+	u8* large = arena.AllocateAs<u8>(10000);
+	ASSERT_NE(large, nullptr);
+	std::memset(large, 0xEF, 10000);
+
+	EXPECT_EQ(arena.GetUsedBytes(), 10400u);
+	EXPECT_GE(arena.GetCapacity(), 10400u);
+	EXPECT_EQ(std::count(first, first + 200, u8{0xAB}), 200);
+	EXPECT_EQ(std::count(second, second + 200, u8{0xCD}), 200);
+}
+
+TEST(LinearAllocatorTest, GrownBlockHonorsAlignment) {
+	LinearAllocator arena(64, MemTag::Debug);
+	arena.Allocate(60, 1);
+	for (size_t alignment : {size_t(16), size_t(64), size_t(256)}) {
+		void* p = arena.Allocate(100, alignment);
+		ASSERT_NE(p, nullptr);
+		EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % alignment, 0u) << alignment;
+	}
+}
+
+TEST(LinearAllocatorTest, ResetFoldsGrownBlocksIntoOne) {
+	const size_t before = MemoryManager::GetBytesForTag(MemTag::Physics);
+	const size_t countBefore = MemoryManager::GetAllocationCountForTag(MemTag::Physics);
+	{
+		LinearAllocator arena(256, MemTag::Physics);
+		for (int i = 0; i < 8; ++i) {
+			arena.Allocate(200, 16);
+		}
+		const size_t peak = arena.GetUsedBytes();
+		EXPECT_GT(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore + 1);
+
+		arena.Reset();
+		const size_t capacity = arena.GetCapacity();
+		EXPECT_EQ(arena.GetUsedBytes(), 0u);
+		EXPECT_GE(capacity, peak);
+		EXPECT_EQ(arena.GetRemainingBytes(), capacity);
+		EXPECT_EQ(MemoryManager::GetBytesForTag(MemTag::Physics), before + capacity);
+		EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore + 1);
+
+		for (int i = 0; i < 8; ++i) {
+			arena.Allocate(200, 16);
+		}
+		EXPECT_EQ(arena.GetCapacity(), capacity);
+		EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore + 1);
+	}
+	EXPECT_EQ(MemoryManager::GetBytesForTag(MemTag::Physics), before);
+	EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore);
+}
+
+TEST(LinearAllocatorTest, GrownArenaReleasesAllBlocks) {
+	const size_t before = MemoryManager::GetBytesForTag(MemTag::Physics);
+	const size_t countBefore = MemoryManager::GetAllocationCountForTag(MemTag::Physics);
+	{
+		LinearAllocator arena(64, MemTag::Physics);
+		arena.Allocate(48, 16);
+		arena.Allocate(48, 16);
+		arena.Allocate(1000, 16);
+		arena.Allocate(5000, 256);
+		EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore + 4);
+	}
+	EXPECT_EQ(MemoryManager::GetBytesForTag(MemTag::Physics), before);
+	EXPECT_EQ(MemoryManager::GetAllocationCountForTag(MemTag::Physics), countBefore);
+}
+
 TEST(MemorySmartPointerTest, MakeSharedStartsAtOne) {
 	SharedPtr<int> ptr = MakeShared<int>(42);
 	ASSERT_NE(ptr, nullptr);

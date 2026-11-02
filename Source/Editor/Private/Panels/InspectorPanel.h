@@ -213,5 +213,7 @@ namespace Shalltear {
 	void RegisterBuiltInComponentInspectors();
 	void RegisterBuiltInAssetInspectors();
 	void RegisterPrefabAssetInspector();
+	void RegisterTextureAssetInspector();
+	void TerminateTextureAssetInspector();
 
 } // namespace Shalltear

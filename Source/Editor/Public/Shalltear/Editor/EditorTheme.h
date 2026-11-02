@@ -283,6 +283,8 @@
 	X(AudioGraphHeight, "--ed-audio-graph-height", "170")               \
 	X(CurveEditorWidth, "--ed-curve-editor-width", "360")               \
 	X(CurveEditorHeight, "--ed-curve-editor-height", "200")             \
+	X(SpriteCanvasHeight, "--ed-sprite-canvas-height", "280")           \
+	X(SpriteHandle, "--ed-sprite-handle", "5")                          \
 	X(AudioStripWidth, "--ed-audio-strip-width", "84")                  \
 	X(AudioMeterHeight, "--ed-audio-meter-height", "190")               \
 	X(AudioMixerColumn, "--ed-audio-mixer-column", "190")               \

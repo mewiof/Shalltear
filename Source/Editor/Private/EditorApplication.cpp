@@ -41,6 +41,7 @@
 
 #include "BuildFlows.h"
 #include "Panels/BuildProfilesPanel.h"
+#include "Panels/InspectorPanel.h"
 #include "Panels/RuntimeViewPanel.h"
 #include "Panels/SceneViewPanel.h"
 #include "SceneFileFlows.h"
@@ -381,6 +382,7 @@ namespace Shalltear {
 		EditorDocuments::Terminate();
 		AssetOpeners::Terminate();
 		MaterialInspectorOps::TerminateShaderSources();
+		TerminateTextureAssetInspector();
 		UndoSystem::Terminate();
 		EditorSelection::Terminate();
 		SceneAnnotations::Terminate();

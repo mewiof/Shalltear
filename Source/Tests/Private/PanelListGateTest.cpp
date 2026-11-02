@@ -46,6 +46,8 @@ namespace {
 		 "viewport (no rows, no selection)"},
 		{"Source/Editor/Private/Panels/RuntimeViewPanel.cpp",
 		 "game viewport, declines every key"},
+		{"Source/Editor/Private/Panels/TextureInspector.cpp",
+		 "sprite canvas (no rows)"},
 	};
 
 	str CodeOnly(const str& line) {

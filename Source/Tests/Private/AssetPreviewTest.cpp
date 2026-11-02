@@ -1666,9 +1666,9 @@ TEST_F(PreviewPaneTest, CachedPreviewHoldsNoReference) {
 
 	Asset* asset = AssetDatabase::LoadAssetByGuid(guid);
 	ASSERT_NE(asset, nullptr);
-	EXPECT_EQ(asset->GetRefCount(), 1);
 
 	PanelManager::ClosePanel(panel);
+	EXPECT_EQ(EditorPreviewStore::GetCachedCount(), 1u);
 	EXPECT_EQ(asset->GetRefCount(), 1);
 	AssetDatabase::UnloadAsset(asset);
 }

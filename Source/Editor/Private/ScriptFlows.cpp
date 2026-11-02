@@ -173,7 +173,7 @@ namespace Shalltear::ScriptFlows {
 		AddShellPopupLine(context, card, "New C++ Component", 14.0f, TextNormal());
 		AddShellPopupLine(context, card, ScriptProjectOps::GetSourceDirectory(projectPath), 11.0f, TextDim());
 
-		UI::ElementHandle nameField = AddShellPopupField(context, card, "Class name", "CharacterController");
+		UI::ElementHandle nameField = AddShellPopupField(context, card, "Class name", "PlayerMovement");
 		UI::ElementHandle folderField = AddShellPopupField(context, card, "Folder (inside Source/, optional)", "");
 
 		UI::Context* contextPtr = &context;

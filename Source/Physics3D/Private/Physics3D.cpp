@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Time.h"
 #include "Shalltear/Core/Types.h"
 
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 #include "Shalltear/Physics3D/Joints.h"
 #include "Shalltear/Physics3D/PhysicsMaterial.h"
@@ -63,6 +64,7 @@ namespace Shalltear {
 			SphereCollider::GetReflectType();
 			CapsuleCollider::GetReflectType();
 			MeshCollider::GetReflectType();
+			CharacterController::GetReflectType();
 			Joint::GetReflectType();
 			HingeJoint::GetReflectType();
 			FixedJoint::GetReflectType();

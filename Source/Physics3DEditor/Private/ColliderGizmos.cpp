@@ -7,6 +7,7 @@
 #include "Shalltear/Editor/EditorGizmos.h"
 #include "Shalltear/Editor/EditorTheme.h"
 
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 
 #include "PhysicsBackend.h"
@@ -78,6 +79,21 @@ namespace Shalltear::Physics3DEditor {
 			}
 		}
 
+		void DrawCharacterControllerGizmo(GizmoDrawContext& context, Handle<Component> component) {
+			CharacterController* controller = static_cast<CharacterController*>(component.Get());
+			if (!controller || !context.selected) {
+				return;
+			}
+			PhysicsShapeRequest request;
+			Vec3 objectPosition;
+			Quat objectRotation;
+			if (!DescribeForGizmo(*controller, request, objectPosition, objectRotation)) {
+				return;
+			}
+			EditorGizmos::AppendCapsule(*context.lines, objectPosition + request.capsulePoint0,
+										objectPosition + request.capsulePoint1, request.radius, ColliderWire());
+		}
+
 		void DrawMeshColliderGizmo(GizmoDrawContext& context, Handle<Component> component) {
 			MeshCollider* collider = static_cast<MeshCollider*>(component.Get());
 			if (!collider || !context.selected) {
@@ -123,6 +139,7 @@ namespace Shalltear::Physics3DEditor {
 		EditorGizmos::RegisterComponentGizmo(StringHash("SphereCollider"), &DrawPrimitiveColliderGizmo, owner);
 		EditorGizmos::RegisterComponentGizmo(StringHash("CapsuleCollider"), &DrawPrimitiveColliderGizmo, owner);
 		EditorGizmos::RegisterComponentGizmo(StringHash("MeshCollider"), &DrawMeshColliderGizmo, owner);
+		EditorGizmos::RegisterComponentGizmo(StringHash("CharacterController"), &DrawCharacterControllerGizmo, owner);
 	}
 
 } // namespace Shalltear::Physics3DEditor

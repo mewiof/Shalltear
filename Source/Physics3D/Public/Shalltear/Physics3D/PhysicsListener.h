@@ -4,6 +4,7 @@
 #include "Shalltear/Core/Math/Vector.h"
 #include "Shalltear/Core/Types.h"
 
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 #include "Shalltear/Physics3D/Rigidbody.h"
 
@@ -58,6 +59,9 @@ namespace Shalltear {
 
 		// joint already gone from the solver
 		virtual void OnJointBreak(f32 breakForce) { (void)breakForce; }
+
+		// once per collider per Move, after the move
+		virtual void OnControllerColliderHit(const ControllerColliderHit& hit) { (void)hit; }
 	};
 
 } // namespace Shalltear

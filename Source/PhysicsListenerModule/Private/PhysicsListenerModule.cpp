@@ -25,6 +25,7 @@ namespace PhysicsListenerModuleImpl {
 		SLT_REFLECT_FIELD(lastHadRigidbody)
 		SLT_REFLECT_FIELD(jointBreak)
 		SLT_REFLECT_FIELD(lastBreakForce)
+		SLT_REFLECT_FIELD(controllerHit)
 		SLT_END_REFLECT()
 
 		i32 collisionEnter = 0;
@@ -42,6 +43,8 @@ namespace PhysicsListenerModuleImpl {
 		bool lastHadRigidbody = false;
 
 		f32 lastBreakForce = 0.0f;
+
+		i32 controllerHit = 0;
 
 		void OnCollisionEnter(const Collision& collision) override {
 			++collisionEnter;
@@ -76,6 +79,11 @@ namespace PhysicsListenerModuleImpl {
 		void OnJointBreak(f32 breakForce) override {
 			++jointBreak;
 			lastBreakForce = breakForce;
+		}
+
+		void OnControllerColliderHit(const ControllerColliderHit& hit) override {
+			++controllerHit;
+			RecordOther(hit.collider);
 		}
 	private:
 		void RecordOther(Handle<Collider> other) {

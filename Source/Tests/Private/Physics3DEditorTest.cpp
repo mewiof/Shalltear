@@ -261,6 +261,7 @@ TEST_F(Physics3DEditorFixture, GizmoPerColliderType) {
 	EXPECT_NE(EditorGizmos::FindComponentGizmo(StringHash("SphereCollider")), nullptr);
 	EXPECT_NE(EditorGizmos::FindComponentGizmo(StringHash("CapsuleCollider")), nullptr);
 	EXPECT_NE(EditorGizmos::FindComponentGizmo(StringHash("MeshCollider")), nullptr);
+	EXPECT_NE(EditorGizmos::FindComponentGizmo(StringHash("CharacterController")), nullptr);
 	EXPECT_EQ(EditorGizmos::FindComponentGizmo(StringHash("Collider")), nullptr);
 }
 
@@ -268,8 +269,9 @@ TEST_F(Physics3DEditorFixture, UnloadSweepTakesEveryRegistrationPackageMade) {
 	ASSERT_TRUE(LoadEditorExtensions());
 
 	const u32 removed = EditorExtensions::Unload(_moduleBase);
-	EXPECT_EQ(removed, 23u);
+	EXPECT_EQ(removed, 25u);
 	EXPECT_EQ(EditorGizmos::FindComponentGizmo(StringHash("BoxCollider")), nullptr);
+	EXPECT_EQ(EditorGizmos::FindComponentGizmo(StringHash("CharacterController")), nullptr);
 	EXPECT_EQ(PropertyDrawers::FindFieldDrawerFor(StringHash("Collider"), StringHash("_categories")), nullptr);
 	EXPECT_EQ(PropertyDrawers::FindFieldDrawerFor(StringHash("Collider"), StringHash("_collidesWith")), nullptr);
 	EXPECT_EQ(EditorIcons::ComponentIcons::For(TypeRegistry::FindType(StringHash("BoxCollider"))),
@@ -389,6 +391,27 @@ TEST_F(Physics3DEditorFixture, ColliderGizmoFollowsCenterAndObjectsPose) {
 	center = DrawnCenter(_lines);
 	EXPECT_NEAR(center.x, 3.0f, 1.0e-2f);
 	EXPECT_NEAR(center.y, 0.0f, 1.0e-2f);
+}
+
+TEST_F(Physics3DEditorFixture, ControllerGizmoStaysUpright) {
+	ASSERT_TRUE(LoadEditorExtensions());
+	const TypeInfo* controllerType = TypeRegistry::FindType(StringHash("CharacterController"));
+	ASSERT_NE(controllerType, nullptr);
+	EXPECT_EQ(EditorIcons::ComponentIcons::For(controllerType), EditorIcons::ComponentIcons::For(_capsuleType));
+	EXPECT_EQ(ComponentMenu::CategoryFor(controllerType), "Physics");
+
+	Handle<SceneObject> object = MakeObject("hero", Vec3{5.0f, 0.0f, 0.0f});
+	object->SetWorldRotation(Quat::FromEuler(Vec3{0.0f, 0.0f, 90.0f}));
+	object->AddComponent(controllerType);
+	EditorSelection::Select(Handle<Object>(object.Get()));
+
+	Draw();
+	ASSERT_FALSE(_lines.empty());
+	const Vec3 center = DrawnCenter(_lines);
+	EXPECT_NEAR(center.x, 5.0f, 1.0e-2f);
+	EXPECT_NEAR(center.y, 0.0f, 1.0e-2f);
+	EXPECT_NEAR(ExtentAlong(_lines, Vec3{5.0f, 0.0f, 0.0f}, Vec3::Up()), 1.0f, 1.0e-2f);
+	EXPECT_NEAR(ExtentAlong(_lines, Vec3{5.0f, 0.0f, 0.0f}, Vec3::Right()), 0.5f, 1.0e-2f);
 }
 
 TEST_F(Physics3DEditorFixture, MeshlessColliderDrawsNothing) {

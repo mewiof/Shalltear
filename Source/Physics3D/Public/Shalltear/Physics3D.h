@@ -1,6 +1,7 @@
 #pragma once
 
 // IWYU pragma: begin_exports
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 #include "Shalltear/Physics3D/Joints.h"
 #include "Shalltear/Physics3D/Physics.h"

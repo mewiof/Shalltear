@@ -5,6 +5,7 @@
 #include "Shalltear/Editor/ComponentMenu.h"
 #include "Shalltear/Editor/EditorIcons.h"
 
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 #include "Shalltear/Physics3D/Joints.h"
 #include "Shalltear/Physics3D/Rigidbody.h"
@@ -38,6 +39,7 @@ namespace Shalltear::Physics3DEditor {
 		Register(SphereCollider::GetReflectType()->name, SphereMark, owner);
 		Register(CapsuleCollider::GetReflectType()->name, CapsuleMark, owner);
 		Register(MeshCollider::GetReflectType()->name, MeshMark, owner);
+		Register(CharacterController::GetReflectType()->name, CapsuleMark, owner);
 		Register(Rigidbody::GetReflectType()->name, RigidbodyMark, owner);
 		Register(Joint::GetReflectType()->name, JointMark, owner);
 		Register(HingeJoint::GetReflectType()->name, HingeMark, owner);

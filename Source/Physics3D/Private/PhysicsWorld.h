@@ -15,6 +15,7 @@
 namespace Shalltear {
 
 	struct PhysicsSettings;
+	class CharacterController;
 	class Collider;
 	class PhysicsMaterial;
 	class Joint;
@@ -23,6 +24,14 @@ namespace Shalltear {
 	class SceneObject;
 
 	inline constexpr u32 PHYSICS_DEFAULT_ISLAND = 0;
+
+	struct ControllerContact {
+		u64 shapeOwner = 0;
+		Vec3 point{};
+		Vec3 normal{};
+		Vec3 direction{};
+		f32 travelled = 0.0f;
+	};
 
 	class PhysicsWorld {
 	public:
@@ -53,6 +62,25 @@ namespace Shalltear {
 
 		void AddJoint(Joint& joint);
 		void RemoveJoint(Joint& joint);
+
+		void AddController(CharacterController& controller);
+		void RemoveController(CharacterController& controller);
+
+		// capsule relative to position
+		u32 CollideController(const CharacterController& controller, const Vec3& position,
+							  const PhysicsBackend::MoverCapsule& capsule, PhysicsBackend::MoverPlane* planes, u32 capacity);
+		f32 CastController(const CharacterController& controller, const Vec3& position,
+						   const PhysicsBackend::MoverCapsule& capsule, const Vec3& translation);
+
+		// closest non-trigger hit (never the controller)
+		bool ProbeController(const CharacterController& controller, const Vec3& origin, const Vec3& translation, Vec3& normal);
+
+		void PlaceController(CharacterController& controller);
+
+		Handle<Rigidbody> FindCarrier(u64 shapeOwner, const Vec3& normal) const;
+
+		// may destroy the controller
+		void DispatchControllerHits(Handle<CharacterController> controller, std::span<const ControllerContact> contacts);
 
 		void PushJointProperty(const Joint& joint, PhysicsBackend::JointProperty property,
 							   const PhysicsBackend::PropertyValue& value);
@@ -94,6 +122,8 @@ namespace Shalltear {
 		u32 GetStaticBodyCount() const { return static_cast<u32>(_staticBodies.size()); }
 
 		u32 GetColliderCount() const { return static_cast<u32>(_colliders.size()); }
+
+		u32 GetControllerCount() const { return static_cast<u32>(_controllers.size()); }
 
 		u32 GetShapeCountOnBodyOf(const Collider& collider) const;
 
@@ -233,6 +263,11 @@ namespace Shalltear {
 
 		void RehomeColliders();
 
+		void AttachController(CharacterController& controller);
+		void DetachController(CharacterController& controller);
+		void AttachControllerShape(CharacterController& controller);
+		void ResolveControllerFilter(CharacterController& controller);
+
 		void SyncCategoryVocabulary();
 
 		void ReapplyCategoryFilters();
@@ -278,6 +313,8 @@ namespace Shalltear {
 		Vector<Handle<Rigidbody>> _bodies{GetMemoryResource(MemTag::Physics)};
 
 		Vector<Handle<Collider>> _colliders{GetMemoryResource(MemTag::Physics)};
+
+		Vector<Handle<CharacterController>> _controllers{GetMemoryResource(MemTag::Physics)};
 
 		struct SurfaceWatch {
 			Handle<PhysicsMaterial> material;

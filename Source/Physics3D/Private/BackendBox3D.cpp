@@ -858,6 +858,86 @@ namespace Shalltear {
 
 		namespace {
 
+			struct MoverContext {
+				bool hitTriggers = true;
+				bool hasIgnore = false;
+				b3ShapeId ignore = b3_nullShapeId;
+				Vec3 origin{};
+				PhysicsBackend::MoverPlaneFn sink = nullptr;
+				void* user = nullptr;
+			};
+
+			bool MoverAccepts(b3ShapeId shapeId, void* userContext) {
+				const MoverContext& context = *static_cast<const MoverContext*>(userContext);
+				if (context.hasIgnore && B3_ID_EQUALS(shapeId, context.ignore)) {
+					return false;
+				}
+				return context.hitTriggers || !b3Shape_IsSensor(shapeId);
+			}
+
+			bool MoverPlaneResult(b3ShapeId shapeId, const b3PlaneResult* planes, int planeCount, void* userContext) {
+				if (!MoverAccepts(shapeId, userContext)) {
+					return true;
+				}
+				const MoverContext& context = *static_cast<const MoverContext*>(userContext);
+				PhysicsBackend::MoverPlane plane;
+				plane.shapeOwner = ShapeOwnerOf(shapeId);
+				for (int index = 0; index < planeCount; ++index) {
+					plane.normal = FromBackend(planes[index].plane.normal);
+					plane.offset = planes[index].plane.offset;
+					plane.point = context.origin + FromBackend(planes[index].point);
+					context.sink(context.user, plane);
+				}
+				return true;
+			}
+
+			b3Capsule ToBackendCapsule(const PhysicsBackend::MoverCapsule& mover) {
+				return b3Capsule{ToBackend(mover.center1), ToBackend(mover.center2), mover.radius};
+			}
+
+			MoverContext MakeMoverContext(const Vec3& origin, const QueryFilter& filter, ShapeHandle ignore) {
+				MoverContext context;
+				context.hitTriggers = filter.hitTriggers;
+				context.origin = origin;
+				if (!ignore.IsNull()) {
+					context.hasIgnore = true;
+					context.ignore = UnpackShape(ignore);
+				}
+				return context;
+			}
+
+		} // anonymous namespace
+
+		void CollideMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const QueryFilter& filter,
+						  ShapeHandle ignore, MoverPlaneFn sink, void* user) {
+			if (!IsWorldValid(world) || !sink) {
+				return;
+			}
+			MoverContext context = MakeMoverContext(origin, filter, ignore);
+			context.sink = sink;
+			context.user = user;
+			const b3Capsule capsule = ToBackendCapsule(mover);
+			b3World_CollideMover(Unpack(world), ToBackend(origin), &capsule, ToBackendFilter(filter),
+								 &MoverPlaneResult, &context);
+		}
+
+		f32 CastMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const Vec3& translation,
+					  const QueryFilter& filter, ShapeHandle ignore) {
+			if (!IsWorldValid(world)) {
+				return 1.0f;
+			}
+			MoverContext context = MakeMoverContext(origin, filter, ignore);
+			const b3Capsule capsule = ToBackendCapsule(mover);
+			return b3World_CastMover(Unpack(world), ToBackend(origin), &capsule, ToBackend(translation),
+									 ToBackendFilter(filter), &MoverAccepts, &context);
+		}
+
+		f32 GetMoverSlop() {
+			return B3_LINEAR_SLOP;
+		}
+
+		namespace {
+
 			Vector<b3ContactData> _contactScratch{GetMemoryResource(MemTag::Physics)};
 
 			u64 LiveShapeOwnerOf(b3ShapeId shapeId) {

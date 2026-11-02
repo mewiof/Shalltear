@@ -375,6 +375,33 @@ namespace Shalltear {
 		u32 OverlapShape(WorldHandle world, const Vec3* points, u32 pointCount, f32 radius,
 						 const QueryFilter& filter, QueryOverlapFn sink, void* user);
 
+		struct MoverCapsule {
+			Vec3 center1{};
+			Vec3 center2{};
+			f32 radius = 0.0f;
+		};
+
+		// normal from shape to mover, offset = overlap depth
+		struct MoverPlane {
+			Vec3 normal{};
+			f32 offset = 0.0f;
+			Vec3 point{};
+			u64 shapeOwner = 0;
+		};
+
+		using MoverPlaneFn = void (*)(void* user, const MoverPlane& plane);
+
+		// capsule and offsets relative to origin, points in world
+		void CollideMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const QueryFilter& filter,
+						  ShapeHandle ignore, MoverPlaneFn sink, void* user);
+
+		// fraction of translation (overlapped shapes don't block)
+		f32 CastMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const Vec3& translation,
+					  const QueryFilter& filter, ShapeHandle ignore);
+
+		// resting overlap after CastMover
+		f32 GetMoverSlop();
+
 		// contacts report when either asks and sensors only when both do
 		void SetShapeEvents(ShapeHandle shape, bool contactEvents, bool sensorEvents);
 

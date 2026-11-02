@@ -12,6 +12,7 @@
 #include "Shalltear/Core/Scene/SceneSystem.h"
 #include "Shalltear/Core/Time.h"
 
+#include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
 #include "Shalltear/Physics3D/Joints.h"
 #include "Shalltear/Physics3D/PhysicsListener.h"
@@ -130,7 +131,7 @@ namespace Shalltear {
 		}
 
 		if (_islandCount == 0 || !_bodies.empty() || !_colliders.empty() || !_staticBodies.empty() ||
-			!_joints.empty() || _worldAnchorUsers > 0) {
+			!_joints.empty() || !_controllers.empty() || _worldAnchorUsers > 0) {
 			return;
 		}
 
@@ -262,6 +263,7 @@ namespace Shalltear {
 		_settings = nullptr;
 		_bodies.clear();
 		_colliders.clear();
+		_controllers.clear();
 		_staticBodies.clear();
 		_shapePoints.clear();
 		_shapeIndices.clear();
@@ -590,6 +592,12 @@ namespace Shalltear {
 			PhysicsBackend::SetShapeFilter(PhysicsBackend::ShapeHandle{collider->_shapeBits},
 										   filter.categoryBits, filter.maskBits, filter.groupIndex);
 		}
+		for (const Handle<CharacterController>& handle : _controllers) {
+			CharacterController* controller = handle.Get();
+			if (controller && controller->_bodyBits != 0) {
+				ResolveControllerFilter(*controller);
+			}
+		}
 	}
 
 	void PhysicsWorld::ReconcileSurfaces() {
@@ -615,6 +623,13 @@ namespace Shalltear {
 					continue;
 				}
 				PhysicsBackend::SetShapeSurface(PhysicsBackend::ShapeHandle{collider->_shapeBits}, wanted);
+			}
+			for (const Handle<CharacterController>& handle : _controllers) {
+				CharacterController* controller = handle.Get();
+				if (!controller || controller->_shapeBits == 0 || controller->GetMaterial() != watch.material) {
+					continue;
+				}
+				PhysicsBackend::SetShapeSurface(PhysicsBackend::ShapeHandle{controller->_shapeBits}, wanted);
 			}
 			++index;
 		}
@@ -679,6 +694,10 @@ namespace Shalltear {
 				return Vec3{0.0f, 1.0f, 0.0f};
 			}
 			return owner->GetWorldRotation() * Vec3{0.0f, 1.0f, 0.0f};
+		}
+
+		bool IsController(const Collider* collider) {
+			return dynamic_cast<const CharacterController*>(collider) != nullptr;
 		}
 
 	} // anonymous namespace
@@ -964,9 +983,12 @@ namespace Shalltear {
 
 			const bool dynamicA = bodyA && !bodyA->IsKinematic();
 			const bool dynamicB = bodyB && !bodyB->IsKinematic();
-			const bool eligible = pair.sensor ? (bodyA != nullptr || bodyB != nullptr) : (dynamicA || dynamicB);
 
-			const bool awake = (bodyA && !bodyA->IsSleeping()) || (bodyB && !bodyB->IsSleeping());
+			const bool controllerInPair = pair.sensor && ((!bodyA && IsController(colliderA)) || (!bodyB && IsController(colliderB)));
+
+			const bool eligible = pair.sensor ? (bodyA != nullptr || bodyB != nullptr || controllerInPair) : (dynamicA || dynamicB);
+
+			const bool awake = (bodyA && !bodyA->IsSleeping()) || (bodyB && !bodyB->IsSleeping()) || controllerInPair;
 
 			const bool wantEnter = pair.fresh && eligible;
 			const bool wantExit = leaving && pair.announced;
@@ -1609,6 +1631,15 @@ namespace Shalltear {
 	}
 
 	void PhysicsWorld::RebuildShape(Collider& collider) {
+		if (auto* controller = dynamic_cast<CharacterController*>(&collider)) {
+			if (controller->_shapeBits != 0) {
+				PhysicsBackend::DestroyShape(PhysicsBackend::ShapeHandle{controller->_shapeBits});
+				controller->_shapeBits = 0;
+				controller->_ownerBodyBits = 0;
+			}
+			AttachControllerShape(*controller);
+			return;
+		}
 		if (collider._shapeBits == 0) {
 			return;
 		}
@@ -1626,6 +1657,13 @@ namespace Shalltear {
 	}
 
 	void PhysicsWorld::PushColliderFilter(Collider& collider) {
+		if (auto* controller = dynamic_cast<CharacterController*>(&collider)) {
+			if (controller->_bodyBits != 0) {
+				SyncCategoryVocabulary();
+				ResolveControllerFilter(*controller);
+			}
+			return;
+		}
 		if (collider._shapeBits == 0) {
 			return;
 		}
@@ -1843,6 +1881,12 @@ namespace Shalltear {
 			entry.syncedRotation = rotation;
 		}
 
+		for (const Handle<CharacterController>& handle : _controllers) {
+			if (CharacterController* controller = handle.Get()) {
+				PlaceController(*controller);
+			}
+		}
+
 		for (const Handle<Rigidbody>& handle : _bodies) {
 			Rigidbody* body = handle.Get();
 			if (!body || body->_bodyBits == 0) {
@@ -1952,6 +1996,258 @@ namespace Shalltear {
 			}
 
 			WriteTransform(*body, position, rotation);
+		}
+	}
+
+	void PhysicsWorld::AddController(CharacterController& controller) {
+		const Handle<CharacterController> handle(&controller);
+		if (std::find(_controllers.begin(), _controllers.end(), handle) != _controllers.end()) {
+			return;
+		}
+		if (!controller.GetOwner().IsValid()) {
+			return;
+		}
+
+		Scene* scene = controller.GetScene().Get();
+		if (!scene || scene->GetKind() != SceneKind::World) {
+			return;
+		}
+
+		BeginPopulation();
+
+		_controllers.push_back(handle);
+		AttachController(controller);
+	}
+
+	void PhysicsWorld::RemoveController(CharacterController& controller) {
+		DetachController(controller);
+
+		const Handle<CharacterController> handle(&controller);
+		auto it = std::find(_controllers.begin(), _controllers.end(), handle);
+		if (it != _controllers.end()) {
+			_controllers.erase(it);
+		}
+	}
+
+	void PhysicsWorld::AttachController(CharacterController& controller) {
+		if (controller._bodyBits != 0 || _islandCount == 0) {
+			return;
+		}
+		SceneObject* owner = controller.GetOwner().Get();
+		if (!owner) {
+			return;
+		}
+
+		const Vec3 position = owner->GetWorldPosition();
+
+		PhysicsBackend::BodyParams params;
+		params.kind = PhysicsBackend::BodyKind::Kinematic;
+		params.position = position;
+		params.gravityScale = 0.0f;
+		params.owner = controller.GetOwner().GetInstanceId();
+
+		PhysicsBackend::BodyHandle body;
+		if (!PhysicsBackend::CreateBody(_islands[0].world, params, body)) {
+			SLT_LOG_ERROR("Physics", "the {} backend couldn't create a body for '{}'", PhysicsBackend::Name(), owner->name);
+			return;
+		}
+
+		controller._bodyBits = body.bits;
+		controller._syncedPosition = position;
+		controller._reportedOutside = false;
+
+		SyncCategoryVocabulary();
+		ResolveControllerFilter(controller);
+		AttachControllerShape(controller);
+	}
+
+	void PhysicsWorld::DetachController(CharacterController& controller) {
+		if (controller._shapeBits != 0) {
+			PhysicsBackend::DestroyShape(PhysicsBackend::ShapeHandle{controller._shapeBits});
+			controller._shapeBits = 0;
+		}
+		controller._ownerBodyBits = 0;
+		if (controller._bodyBits != 0) {
+			PhysicsBackend::DestroyBody(PhysicsBackend::BodyHandle{controller._bodyBits});
+			controller._bodyBits = 0;
+		}
+		controller._carrier = {};
+	}
+
+	void PhysicsWorld::AttachControllerShape(CharacterController& controller) {
+		if (controller._shapeBits != 0 || controller._bodyBits == 0 || !controller.GetDetectCollisions()) {
+			return;
+		}
+		SceneObject* owner = controller.GetOwner().Get();
+		if (!owner) {
+			return;
+		}
+
+		PhysicsShapeRequest request;
+		request.isTrigger = controller.IsTrigger();
+		request.surface = SurfaceOf(controller);
+		request.categoryBits = controller._queryCategoryBits;
+		request.maskBits = controller._queryMaskBits;
+		request.owner = Handle<Collider>(&controller).GetInstanceId();
+
+		if (!controller.DescribeShape(owner->GetLossyScale(), request)) {
+			SLT_LOG_WARN("Physics", "'{}' has a CharacterController with no usable geometry", owner->name);
+			return;
+		}
+
+		const PhysicsBackend::BodyHandle body{controller._bodyBits};
+		PhysicsBackend::ShapeHandle shape;
+		if (!PhysicsBackend::CreateShape(body, request, shape)) {
+			SLT_LOG_ERROR("Physics", "the {} backend couldn't create a collider shape for '{}'", PhysicsBackend::Name(), owner->name);
+			return;
+		}
+
+		controller._shapeBits = shape.bits;
+		controller._ownerBodyBits = body.bits;
+		TrackSurface(controller, request.surface);
+		PhysicsBackend::SetShapeEvents(shape, false, true);
+	}
+
+	void PhysicsWorld::ResolveControllerFilter(CharacterController& controller) {
+		const PhysicsCategoryFilter filter = ResolveFilterFor(controller);
+		controller._queryCategoryBits = filter.categoryBits;
+		controller._queryMaskBits = filter.maskBits;
+		if (controller._shapeBits != 0) {
+			PhysicsBackend::SetShapeFilter(PhysicsBackend::ShapeHandle{controller._shapeBits},
+										   filter.categoryBits, filter.maskBits, filter.groupIndex);
+		}
+	}
+
+	u32 PhysicsWorld::CollideController(const CharacterController& controller, const Vec3& position,
+										const PhysicsBackend::MoverCapsule& capsule, PhysicsBackend::MoverPlane* planes,
+										u32 capacity) {
+		if (_islandCount == 0 || capacity == 0) {
+			return 0;
+		}
+		SyncCategoryVocabulary();
+
+		PhysicsBackend::QueryFilter filter;
+		filter.categoryBits = controller._queryCategoryBits;
+		filter.maskBits = controller._queryMaskBits;
+		filter.hitTriggers = false;
+
+		struct Sink {
+			PhysicsBackend::MoverPlane* planes = nullptr;
+			u32 capacity = 0;
+			u32 count = 0;
+		} sink{planes, capacity, 0};
+
+		PhysicsBackend::CollideMover(
+			_islands[PHYSICS_DEFAULT_ISLAND].world, position, capsule, filter,
+			PhysicsBackend::ShapeHandle{controller._shapeBits},
+			[](void* user, const PhysicsBackend::MoverPlane& plane) {
+				Sink& target = *static_cast<Sink*>(user);
+				if (target.count < target.capacity) {
+					target.planes[target.count++] = plane;
+				}
+			},
+			&sink);
+		return sink.count;
+	}
+
+	f32 PhysicsWorld::CastController(const CharacterController& controller, const Vec3& position,
+									 const PhysicsBackend::MoverCapsule& capsule, const Vec3& translation) {
+		if (_islandCount == 0) {
+			return 1.0f;
+		}
+
+		PhysicsBackend::QueryFilter filter;
+		filter.categoryBits = controller._queryCategoryBits;
+		filter.maskBits = controller._queryMaskBits;
+		filter.hitTriggers = false;
+
+		return PhysicsBackend::CastMover(_islands[PHYSICS_DEFAULT_ISLAND].world, position, capsule, translation, filter,
+										 PhysicsBackend::ShapeHandle{controller._shapeBits});
+	}
+
+	bool PhysicsWorld::ProbeController(const CharacterController& controller, const Vec3& origin, const Vec3& translation,
+									   Vec3& normal) {
+		if (_islandCount == 0) {
+			return false;
+		}
+
+		PhysicsBackend::QueryFilter filter;
+		filter.categoryBits = controller._queryCategoryBits;
+		filter.maskBits = controller._queryMaskBits;
+		filter.hitTriggers = false;
+
+		PhysicsBackend::QueryHit hit;
+		if (!PhysicsBackend::CastRay(_islands[PHYSICS_DEFAULT_ISLAND].world, origin, translation, filter, hit)) {
+			return false;
+		}
+		if (ResolveShapeCollider(hit.shapeOwner).Get() == static_cast<const Collider*>(&controller)) {
+			return false;
+		}
+		normal = hit.normal;
+		return true;
+	}
+
+	void PhysicsWorld::PlaceController(CharacterController& controller) {
+		if (controller._bodyBits == 0) {
+			return;
+		}
+		SceneObject* owner = controller.GetOwner().Get();
+		if (!owner) {
+			return;
+		}
+		const Vec3 position = owner->GetWorldPosition();
+		if (position == controller._syncedPosition) {
+			return;
+		}
+		PhysicsBackend::SetBodyTransform(PhysicsBackend::BodyHandle{controller._bodyBits}, position, Quat::Identity());
+		controller._syncedPosition = position;
+	}
+
+	Handle<Rigidbody> PhysicsWorld::FindCarrier(u64 shapeOwner, const Vec3& normal) const {
+		Collider* collider = ResolveShapeCollider(shapeOwner).Get();
+		Rigidbody* body = collider ? FindOwningBody(*collider) : nullptr;
+		if (!body || !body->GetCarryRiders() || Vec3::Dot(normal, CarrierUp(*body)) < PHYSICS_CARRY_UP_DOT) {
+			return {};
+		}
+		return Handle<Rigidbody>(body);
+	}
+
+	void PhysicsWorld::DispatchControllerHits(Handle<CharacterController> controller,
+											  std::span<const ControllerContact> contacts) {
+		for (const ControllerContact& contact : contacts) {
+			CharacterController* self = controller.Get();
+			if (!self || self->IsPendingDestroy()) {
+				return;
+			}
+			const Handle<SceneObject> owner = self->GetOwner();
+
+			ControllerColliderHit hit;
+			hit.controller = controller;
+			hit.collider = ResolveShapeCollider(contact.shapeOwner);
+			Collider* collider = hit.collider.Get();
+			if (!collider) {
+				continue;
+			}
+			hit.object = collider->GetOwner();
+			hit.rigidbody = Handle<Rigidbody>(FindOwningBody(*collider));
+			hit.point = contact.point;
+			hit.normal = contact.normal;
+			hit.moveDirection = contact.direction;
+			hit.moveLength = contact.travelled;
+
+			for (u32 index = 0;; ++index) {
+				SceneObject* object = owner.Get();
+				if (!object || index >= object->GetComponentCount()) {
+					break;
+				}
+				Component* component = object->GetComponentAt(index).Get();
+				if (!component || component->IsPendingDestroy()) {
+					continue;
+				}
+				if (auto* listener = dynamic_cast<PhysicsListener*>(component)) {
+					listener->OnControllerColliderHit(hit);
+				}
+			}
 		}
 	}
 

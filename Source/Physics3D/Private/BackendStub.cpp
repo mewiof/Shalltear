@@ -1198,6 +1198,100 @@ namespace Shalltear {
 			return count;
 		}
 
+		void CollideMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const QueryFilter& filter,
+						  ShapeHandle ignore, MoverPlaneFn sink, void* user) {
+			if (!Resolve(world) || !sink) {
+				return;
+			}
+			const u32 worldSlot = WorldSlot(world);
+			const StubShape* ignored = ResolveShape(ignore);
+			const Vec3 point0 = origin + mover.center1;
+			const Vec3 axis = mover.center2 - mover.center1;
+			const f32 axisLengthSq = axis.LengthSquared();
+
+			for (const StubShape& shape : _shapes) {
+				if ((shape.generation & 1u) == 0u || &shape == ignored) {
+					continue;
+				}
+				if (shape.bodySlot >= STUB_BODY_CAPACITY || _bodies[shape.bodySlot].worldSlot != worldSlot) {
+					continue;
+				}
+				if ((!filter.hitTriggers && shape.isSensor) || !ShouldQueryCollide(shape, filter)) {
+					continue;
+				}
+
+				Vec3 targetCenter;
+				f32 targetRadius = 0.0f;
+				if (!ShapeWorldSphere(shape, targetCenter, targetRadius)) {
+					continue;
+				}
+
+				f32 along = 0.0f;
+				if (axisLengthSq > 0.0f) {
+					along = Vec3::Dot(targetCenter - point0, axis) / axisLengthSq;
+					along = along < 0.0f ? 0.0f : (along > 1.0f ? 1.0f : along);
+				}
+				const Vec3 toMover = point0 + axis * along - targetCenter;
+				const f32 distance = toMover.Length();
+				const f32 reach = targetRadius + mover.radius;
+				if (distance > reach) {
+					continue;
+				}
+
+				MoverPlane plane;
+				plane.normal = distance > 0.0f ? toMover * (1.0f / distance) : Vec3::Up();
+				plane.offset = reach - distance;
+				plane.point = targetCenter + plane.normal * targetRadius;
+				plane.shapeOwner = shape.owner;
+				sink(user, plane);
+			}
+		}
+
+		f32 CastMover(WorldHandle world, const Vec3& origin, const MoverCapsule& mover, const Vec3& translation,
+					  const QueryFilter& filter, ShapeHandle ignore) {
+			if (!Resolve(world)) {
+				return 1.0f;
+			}
+			const u32 worldSlot = WorldSlot(world);
+			const StubShape* ignored = ResolveShape(ignore);
+			const Vec3 point0 = origin + mover.center1;
+			const Vec3 point1 = origin + mover.center2;
+
+			f32 best = 1.0f;
+			for (const StubShape& shape : _shapes) {
+				if ((shape.generation & 1u) == 0u || &shape == ignored) {
+					continue;
+				}
+				if (shape.bodySlot >= STUB_BODY_CAPACITY || _bodies[shape.bodySlot].worldSlot != worldSlot) {
+					continue;
+				}
+				if ((!filter.hitTriggers && shape.isSensor) || !ShouldQueryCollide(shape, filter)) {
+					continue;
+				}
+
+				Vec3 targetCenter;
+				f32 targetRadius = 0.0f;
+				if (!ShapeWorldSphere(shape, targetCenter, targetRadius)) {
+					continue;
+				}
+
+				f32 fraction = 0.0f;
+				Vec3 normal;
+				bool initialOverlap = false;
+				if (!SweptHit(point0, point1, mover.radius, translation, targetCenter, targetRadius, fraction, normal,
+							  initialOverlap) ||
+					initialOverlap) {
+					continue;
+				}
+				best = fraction < best ? fraction : best;
+			}
+			return best;
+		}
+
+		f32 GetMoverSlop() {
+			return 0.0f;
+		}
+
 		void SetShapeEvents(ShapeHandle shape, bool contactEvents, bool sensorEvents) {
 			StubShape* entry = ResolveShape(shape);
 			if (!entry) {

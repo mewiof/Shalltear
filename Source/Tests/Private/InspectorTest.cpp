@@ -1647,7 +1647,7 @@ TEST_F(ScriptedProjectFixture, EmptyStateReportsWhileFiltering) {
 	}
 	ASSERT_TRUE(context.IsAlive(search));
 	ASSERT_TRUE(static_cast<bool>(context.Events(search).onTextChange));
-	context.Events(search).onTextChange("CharacterController");
+	context.Events(search).onTextChange("PlayerMovement");
 	context.Update();
 
 	texts.clear();

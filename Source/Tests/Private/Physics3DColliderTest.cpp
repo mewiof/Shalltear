@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Asset/AssetImporter.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
+#include "Shalltear/Core/Graphics/PrimitiveMesh.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Module.h"
@@ -594,6 +595,58 @@ TEST_F(Physics3DColliderFixture, MeshColliderHullOrRefused) {
 	SceneSystem::Destroy(dynamicObject);
 	SceneSystem::Destroy(staticObject);
 	SceneSystem::Destroy(refused);
+}
+
+TEST_F(Physics3DColliderFixture, ClosedPrimitivesBuildConvexHulls) {
+	const PrimitiveShape shapes[4] = {PrimitiveShape::Cube, PrimitiveShape::Sphere, PrimitiveShape::Cylinder, PrimitiveShape::Capsule};
+	MeshAsset meshes[4];
+	Handle<SceneObject> objects[4];
+	for (u32 index = 0; index < 4; ++index) {
+		ASSERT_TRUE(BuildPrimitiveMesh(shapes[index], meshes[index]));
+		objects[index] = MakeObject("convex", Vec3{4.0f * static_cast<f32>(index), 5.0f, 0.0f});
+		objects[index]->AddComponent(_rigidbodyType);
+		MeshCollider* collider = static_cast<MeshCollider*>(objects[index]->AddComponent(_meshType).Get());
+		collider->SetConvex(true);
+		collider->SetMesh(Handle<MeshAsset>(&meshes[index]));
+		collider->SetEnabled(false);
+		collider->SetEnabled(true);
+		EXPECT_TRUE(collider->IsInSimulation()) << PrimitiveShapeName(shapes[index]);
+	}
+
+	for (Handle<SceneObject>& object : objects) {
+		SceneSystem::Destroy(object);
+	}
+}
+
+TEST_F(Physics3DColliderFixture, ConvexSphereRestsNearItsRadius) {
+#ifdef SHALLTEAR_PHYSICS_BACKEND_STUB
+	GTEST_SKIP();
+#endif
+	Handle<SceneObject> floor = MakeObject("floor", Vec3{0.0f, -0.5f, 0.0f});
+	Handle<Component> floorBox = floor->AddComponent(_boxType);
+	ASSERT_TRUE(WriteField(_boxType, floorBox.Get(), "_size", Vec3{40.0f, 1.0f, 40.0f}));
+	floorBox->SetEnabled(false);
+	floorBox->SetEnabled(true);
+
+	MeshAsset sphere;
+	ASSERT_TRUE(BuildPrimitiveMesh(PrimitiveShape::Sphere, sphere));
+	Handle<SceneObject> ball = MakeObject("ball", Vec3{0.0f, 2.0f, 0.0f});
+	ball->AddComponent(_rigidbodyType);
+	MeshCollider* collider = static_cast<MeshCollider*>(ball->AddComponent(_meshType).Get());
+	collider->SetConvex(true);
+	collider->SetMesh(Handle<MeshAsset>(&sphere));
+	collider->SetEnabled(false);
+	collider->SetEnabled(true);
+	ASSERT_TRUE(collider->IsInSimulation());
+
+	RunFixedSteps(240);
+
+	const f32 restingY = ball->GetWorldPosition().y;
+	EXPECT_GT(restingY, 0.44f);
+	EXPECT_LT(restingY, 0.51f);
+
+	SceneSystem::Destroy(ball);
+	SceneSystem::Destroy(floor);
 }
 
 TEST_F(Physics3DColliderFixture, ShapeScaledByObject) {

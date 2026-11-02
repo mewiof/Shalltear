@@ -1005,7 +1005,11 @@ namespace Shalltear {
 			Asset* existing = resident->second;
 			if (_keepResident || existing->GetRefCount() > 0) {
 				if (!_keepResident) {
-					SLT_LOG_WARN("Asset", "AssetDatabase: '{}' of '{}' is still referenced (loaded instance stays)", entry->key, _sourceKey);
+					if (existing->CanAdoptReimport() && existing->GetAssetTypeId() == product->GetAssetTypeId()) {
+						existing->AdoptReimport(*product);
+					} else {
+						SLT_LOG_WARN("Asset", "AssetDatabase: '{}' of '{}' is still referenced (loaded instance stays)", entry->key, _sourceKey);
+					}
 				}
 				existing->virtualPath = ProductDisplayPath(_sourceKey, entry->key, entry->name);
 				Delete(product);

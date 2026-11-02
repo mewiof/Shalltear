@@ -25,6 +25,12 @@ namespace {
 		}
 	};
 
+	class AdoptingAsset : public TextAsset {
+	public:
+		bool CanAdoptReimport() const override { return true; }
+		void AdoptReimport(Asset& fresh) override { content = static_cast<TextAsset&>(fresh).content; }
+	};
+
 	class ProbeImporter : public IAssetImporter {
 	public:
 		enum class Keying {
@@ -41,6 +47,8 @@ namespace {
 		bool refuseMainRecord = false;
 
 		bool refuseProductRecord = false;
+
+		bool adoptingProducts = false;
 
 		u32 version = 1;
 
@@ -90,7 +98,9 @@ namespace {
 
 			lastProductGuids.clear();
 			for (size_t i = 0; i < names.size(); ++i) {
-				TextAsset* product = (refuseProductRecord && i == 0) ? New<RefusingAsset>(MemTag::Asset) : New<TextAsset>(MemTag::Asset);
+				TextAsset* product = (refuseProductRecord && i == 0) ? New<RefusingAsset>(MemTag::Asset)
+									 : adoptingProducts				 ? New<AdoptingAsset>(MemTag::Asset)
+																	 : New<TextAsset>(MemTag::Asset);
 				product->content = payloads[i];
 				lastProductGuids.push_back(context.AddProduct(KeyFor(names, i), product, nameProducts ? std::string_view(names[i]) : std::string_view()));
 			}
@@ -277,6 +287,37 @@ namespace {
 	};
 
 } // namespace
+
+TEST_F(SubAssetIdentityFixture, HeldAdoptingProductRefills) {
+	_importer.adoptingProducts = true;
+	WriteSource("project://Assets/held.probe", "Body:6\n");
+	ImportAndDrop("project://Assets/held.probe");
+	const Guid body = ProductGuid("project://Assets/held.probe", "Meshes/Body");
+	Asset* held = AssetDatabase::LoadAssetByGuid(body);
+	ASSERT_NE(held, nullptr);
+
+	WriteSource("project://Assets/held.probe", "Body:7\n");
+	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Assets/held.probe")));
+
+	EXPECT_EQ(AssetDatabase::FindLoadedByGuid(body), held);
+	EXPECT_EQ(static_cast<TextAsset*>(held)->content, "7");
+	AssetDatabase::UnloadAsset(held);
+}
+
+TEST_F(SubAssetIdentityFixture, HeldProductKeepsInstance) {
+	WriteSource("project://Assets/held.probe", "Body:6\n");
+	ImportAndDrop("project://Assets/held.probe");
+	const Guid body = ProductGuid("project://Assets/held.probe", "Meshes/Body");
+	Asset* held = AssetDatabase::LoadAssetByGuid(body);
+	ASSERT_NE(held, nullptr);
+
+	WriteSource("project://Assets/held.probe", "Body:7\n");
+	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Assets/held.probe")));
+
+	EXPECT_EQ(AssetDatabase::FindLoadedByGuid(body), held);
+	EXPECT_EQ(static_cast<TextAsset*>(held)->content, "6");
+	AssetDatabase::UnloadAsset(held);
+}
 
 TEST_F(SubAssetIdentityFixture, ReorderKeepsEachProductsGuidWithContent) {
 	WriteSource("project://Assets/hierarchy.probe", "Body:6\nVisor:3\n");

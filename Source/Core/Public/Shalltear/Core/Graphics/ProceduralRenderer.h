@@ -109,6 +109,7 @@ namespace Shalltear {
 	class SHALLTEAR_CORE_API ProceduralRenderer : public Component {
 	public:
 		SLT_REFLECT_COMPONENT_ABSTRACT(ProceduralRenderer, Component)
+		SLT_REFLECT_FIELD(_renderingLayerMask)
 		SLT_END_REFLECT()
 
 		~ProceduralRenderer() override;
@@ -120,12 +121,16 @@ namespace Shalltear {
 		virtual void RecordView(ComputeContext& context, const ProceduralView& view);
 
 		bool IsCulled() const { return _tested && !_drawn; }
+
+		u32 GetRenderingLayerMask() const { return _renderingLayerMask; }
+		void SetRenderingLayerMask(u32 mask) { _renderingLayerMask = mask; }
 	protected:
 		// overrides must call this
 		void OnEnable() override;
 		void OnDisable() override;
 	private:
 		friend struct GraphicsInternal::ProceduralCulling;
+		u32 _renderingLayerMask = 1;
 		bool _tested = false;
 		bool _drawn = false;
 	};

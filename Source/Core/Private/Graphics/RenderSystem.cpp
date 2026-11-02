@@ -105,6 +105,7 @@ namespace Shalltear {
 				u32 itemCount = 0;
 				u32 firstStep = 0;
 				u32 stepCount = 0;
+				u32 renderingLayerMask = 1;
 				bool tested = false;
 				bool drawn = false;
 			};
@@ -5045,6 +5046,7 @@ namespace Shalltear {
 					entry.firstStep = static_cast<u32>(frame.steps.size());
 					ProceduralPlan plan(GraphicsInternal::ProceduralPlanInit{&frame, static_cast<u32>(frame.renderers.size() - 1)});
 					renderer->Declare(plan);
+					entry.renderingLayerMask = renderer->GetRenderingLayerMask();
 					for (u32 step = entry.firstStep; step < entry.firstStep + entry.stepCount; ++step) {
 						if (!frame.steps[step].writes) {
 							SLT_LOG_WARN("Graphics", "a procedural renderer's view step {} writes nothing. Dropped", frame.steps[step].index);
@@ -5083,7 +5085,7 @@ namespace Shalltear {
 		}
 
 		ProceduralSlice CullProceduralRenderers(RenderState& state, bool isolated, std::span<const u64> onlyScenes,
-												std::span<const u64> skippedTypes, const Mat4& viewProjection) {
+												std::span<const u64> skippedTypes, const Mat4& viewProjection, u32 cullingMask) {
 			GraphicsInternal::ProceduralFrame& frame = state.procedural;
 			ProceduralSlice slice;
 			slice.first = static_cast<u32>(state.proceduralVisible.size());
@@ -5103,7 +5105,7 @@ namespace Shalltear {
 					continue;
 				}
 				renderer.tested = true;
-				if (renderer.bounded && !frustum.Intersects(renderer.bounds)) {
+				if ((renderer.renderingLayerMask & cullingMask) == 0 || (renderer.bounded && !frustum.Intersects(renderer.bounds))) {
 					++state.frameProceduralCulled;
 					continue;
 				}
@@ -5124,13 +5126,13 @@ namespace Shalltear {
 		}
 
 		ProceduralSlice CollectProceduralCasters(RenderState& state, bool isolated, std::span<const u64> onlyScenes,
-												 std::span<const u64> skippedTypes) {
+												 std::span<const u64> skippedTypes, u32 cullingMask) {
 			const GraphicsInternal::ProceduralFrame& frame = state.procedural;
 			ProceduralSlice slice;
 			slice.first = static_cast<u32>(state.proceduralVisible.size());
 			for (u32 index = 0; index < static_cast<u32>(frame.renderers.size()); ++index) {
 				const GraphicsInternal::ProceduralFrame::Renderer& renderer = frame.renderers[index];
-				if (renderer.isolated != isolated) {
+				if (renderer.isolated != isolated || (renderer.renderingLayerMask & cullingMask) == 0) {
 					continue;
 				}
 				if (!onlyScenes.empty() && std::find(onlyScenes.begin(), onlyScenes.end(), renderer.sceneId) == onlyScenes.end()) {
@@ -5815,7 +5817,8 @@ namespace Shalltear {
 
 				const ProceduralSlice procedural = CullProceduralRenderers(
 					state, pending.kind != SceneKind::World, {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
-					{state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount}, pending.projection * pending.view);
+					{state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount}, pending.projection * pending.view,
+					pending.cullingMask);
 				{
 					RenderState::PendingView& slices = state.pendingViews[viewIndex];
 					slices.firstProcedural = procedural.first;
@@ -5837,7 +5840,8 @@ namespace Shalltear {
 				if (viewCasts) {
 					casters = CollectProceduralCasters(state, pending.kind != SceneKind::World,
 													   {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
-													   {state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount});
+													   {state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount},
+													   pending.cullingMask);
 				}
 				state.pendingViews[viewIndex].firstCaster = casters.first;
 				state.pendingViews[viewIndex].casterCount = casters.count;
@@ -6227,7 +6231,8 @@ namespace Shalltear {
 							proceduralView.view = cullOwner->GetWorldMatrix().Inverse();
 							proceduralView.projection = cameraRows.camera->BuildProjection(aspect);
 							proceduralView.cameraPosition = cullOwner->GetWorldPosition();
-							procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view);
+							procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view,
+																 cameraRows.camera->GetCullingMask());
 						}
 						{
 							RenderState::CameraWork& slices = windowWork.cameras[cameraIndex];
@@ -6247,7 +6252,7 @@ namespace Shalltear {
 						ProceduralSlice casters;
 						casters.first = static_cast<u32>(state.proceduralVisible.size());
 						if (windowCasts) {
-							casters = CollectProceduralCasters(state, false, {}, {});
+							casters = CollectProceduralCasters(state, false, {}, {}, cameraRows.camera ? cameraRows.camera->GetCullingMask() : ~0u);
 						}
 						windowWork.cameras[cameraIndex].firstCaster = casters.first;
 						windowWork.cameras[cameraIndex].casterCount = casters.count;

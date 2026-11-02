@@ -15,6 +15,7 @@
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
+#include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
@@ -133,6 +134,15 @@ namespace {
 		InspBareComponent() = default;
 
 		i32 internal = 0;
+	};
+
+	class InspProceduralComponent : public ProceduralRenderer {
+	public:
+		SLT_REFLECT_COMPONENT(InspProceduralComponent, ProceduralRenderer)
+		SLT_END_REFLECT()
+
+		void Declare(ProceduralPlan&) override {}
+		void Record(ProceduralContext&) override {}
 	};
 
 	bool AnyTextContains(UI::Context& context, UI::ElementHandle from, std::string_view needle) {
@@ -965,6 +975,25 @@ TEST_F(InspectorTest, SkinnedRendererRowPerBlendShape) {
 TEST_F(InspectorTest, MeshRendererDrawsRenderingLayerMaskRow) {
 	Handle<SceneObject> object = SceneSystem::CreateObject("Plain", _scene);
 	ASSERT_NE(object.Get()->AddComponent<MeshRenderer>().Get(), nullptr);
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 900};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	EXPECT_TRUE(AnyTextContains(context, root, "renderingLayerMask"));
+}
+
+TEST_F(InspectorTest, ProceduralRendererDrawsLayerMaskRow) {
+	Handle<SceneObject> object = SceneSystem::CreateObject("Effect", _scene);
+	ASSERT_NE(object.Get()->AddComponent<InspProceduralComponent>().Get(), nullptr);
 
 	EditorSelection::Select(Handle<Object>(object.Get()));
 	Handle<EditorPanel> panel = OpenInspector();

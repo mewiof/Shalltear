@@ -9,6 +9,8 @@
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
+#include "Shalltear/Core/Math/HalfFloat.h"
+#include "Shalltear/Core/Window/WindowSystem.h"
 
 #include <filesystem>
 #include <fstream>
@@ -156,6 +158,8 @@ namespace {
 		"\tsurface.baseColor = float3(0.0, 0.0, 0.0);\n"
 		"\tsurface.reflectance = 0.0;\n"
 		"}\n";
+
+	constexpr u32 SPRITE_LAYER = 1u << 3;
 
 	struct SpritePush {
 		Vec3 center{};
@@ -595,6 +599,124 @@ TEST_F(ProceduralRendererFixture, RendererKnowsWhetherLastFrameCulledIt) {
 
 	RenderSystem::DestroyViewTarget(second);
 	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, CameraMaskLeavesLayersOut) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* hidden = LoadUnlit("Hidden.mat", Color(0.0f, 0.0f, 0.0f, 1.0f), false);
+	MaterialAsset* item = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(hidden, nullptr);
+	ASSERT_NE(item, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(hidden, stage));
+	stage.quad->SetActive(false);
+	Handle<TestSprite> sprite = AddSprite(stage.scene, item, Vec3(0.0f, 0.0f, 0.5f), Color::Green());
+	EXPECT_EQ(sprite->GetRenderingLayerMask(), 1u);
+	sprite->SetRenderingLayerMask(SPRITE_LAYER);
+	Handle<Camera> leaving = SceneSystem::CreateObject("Leaving", stage.scene)->AddComponent<Camera>();
+	Handle<Camera> seeing = SceneSystem::CreateObject("Seeing", stage.scene)->AddComponent<Camera>();
+	leaving->SetCullingMask(~SPRITE_LAYER);
+	SceneSystem::EndFrame();
+	const ViewTargetId second = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(second, INVALID_VIEW_TARGET);
+	ViewDesc leavingView = QuadView();
+	leavingView.camera = leaving;
+	ViewDesc seeingView = QuadView();
+	seeingView.camera = seeing;
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+
+	for (const bool leavingFirst : {true, false}) {
+		const u32 before = sprite->recorded;
+		if (leavingFirst) {
+			RenderSystem::SubmitView(stage.target, leavingView);
+			RenderSystem::SubmitView(second, seeingView);
+		} else {
+			RenderSystem::SubmitView(second, seeingView);
+			RenderSystem::SubmitView(stage.target, leavingView);
+		}
+		RenderSystem::RenderAll();
+		const GraphicsStats stats = RenderSystem::GetStats();
+		EXPECT_EQ(sprite->recorded - before, 1u) << leavingFirst;
+		EXPECT_EQ(stats.proceduralDrawn, 1u) << leavingFirst;
+		EXPECT_EQ(stats.proceduralCulled, 1u) << leavingFirst;
+		EXPECT_FALSE(sprite->IsCulled()) << leavingFirst;
+		ASSERT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
+		EXPECT_LT(CenterTexel(pixels, size).y, 20.0f) << leavingFirst;
+		ASSERT_TRUE(RenderSystem::ReadbackViewTarget(second, pixels, size));
+		EXPECT_GT(CenterTexel(pixels, size).y, 150.0f) << leavingFirst;
+	}
+
+	RenderSystem::SubmitView(stage.target, leavingView);
+	RenderSystem::RenderAll();
+	EXPECT_EQ(sprite->recorded, 2u);
+	EXPECT_TRUE(sprite->IsCulled());
+
+	leaving->SetCullingMask(SPRITE_LAYER);
+	RenderSystem::SubmitView(stage.target, leavingView);
+	RenderSystem::RenderAll();
+	EXPECT_EQ(sprite->recorded, 3u);
+	EXPECT_FALSE(sprite->IsCulled());
+	ASSERT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
+	EXPECT_GT(CenterTexel(pixels, size).y, 150.0f);
+
+	RenderSystem::DestroyViewTarget(second);
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, WindowCameraMaskLeavesLayersOut) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* item = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(item, nullptr);
+	WindowDesc windowDesc;
+	windowDesc.title = "ProceduralCullingMask";
+	windowDesc.clientSize = {128, 128};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+
+	Handle<Scene> scene = SceneSystem::CreateScene("WindowMask");
+	Handle<TestSprite> sprite = AddSprite(scene, item, Vec3(0.0f, 0.0f, 0.5f), Color::Green());
+	sprite->SetRenderingLayerMask(SPRITE_LAYER);
+	Handle<SceneObject> cameraObject = SceneSystem::CreateObject("Camera", scene);
+	cameraObject->SetLocalPosition(Vec3(0.0f, 0.0f, 3.0f));
+	cameraObject->SetLocalRotation(Quat::AngleAxis(180.0f, Vec3::Up()));
+	Handle<Camera> camera = cameraObject->AddComponent<Camera>();
+	camera->SetTargetWindow(window);
+	camera->SetClearColor(Color::Black());
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto centerGreen = [&] {
+		for (u32 frame = 0; frame < 3; ++frame) {
+			WindowSystem::PumpEvents();
+			RenderSystem::RenderAll();
+		}
+		if (!RenderSystem::ReadbackWindowSceneColor(window, pixels, size) || size.x <= 0 || size.y <= 0) {
+			return -1.0f;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(pixels.data());
+		return Math::HalfToFloat(halves[(static_cast<size_t>(size.y / 2) * size.x + size.x / 2) * 4 + 1]);
+	};
+
+	camera->SetCullingMask(~SPRITE_LAYER);
+	const f32 culled = centerGreen();
+	EXPECT_EQ(sprite->recorded, 0u);
+	camera->SetCullingMask(~0u);
+	const f32 drawn = centerGreen();
+	EXPECT_GT(sprite->recorded, 0u);
+
+	ASSERT_GE(culled, 0.0f);
+	EXPECT_LT(culled, 0.01f);
+	EXPECT_GT(drawn, 0.5f);
+
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
 }
 
 TEST_F(ProceduralRendererFixture, DepthReaderEnablesPrepass) {
@@ -1037,6 +1159,53 @@ TEST_F(ProceduralRendererFixture, CastingItemShadowsEverywhere) {
 	const u32 castBefore = sprite->shadowRecorded;
 	EXPECT_EQ(shadowed(), 0u);
 	EXPECT_EQ(sprite->shadowRecorded, castBefore);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, CameraMaskLeavesCasterOut) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	WriteProjectFile("Tally.hlsl", SHADOW_TALLY_SHADER);
+	Asset* tallyShader = AssetDatabase::LoadAsset(Path("project://Tally.hlsl"));
+	ASSERT_NE(tallyShader, nullptr);
+	MaterialAsset* ground = LoadMaterial("Tally.mat", tallyShader->assetId, "");
+	MaterialAsset* caster = LoadShaderMaterial("Caster.mat", "Caster.hlsl", CASTER_SPRITE_SHADER, "");
+	ASSERT_NE(ground, nullptr);
+	ASSERT_NE(caster, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(ground, stage));
+	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
+	Handle<TestSprite> sprite = AddSprite(stage.scene, caster, Vec3(0.0f, 0.0f, 1.0f), Color::White());
+	sprite->halfSize = 0.2f;
+	sprite->castShadows = true;
+	sprite->SetRenderingLayerMask(SPRITE_LAYER);
+	Handle<Camera> camera = SceneSystem::CreateObject("Camera", stage.scene)->AddComponent<Camera>();
+	SceneSystem::EndFrame();
+	ViewDesc view = QuadView();
+	view.camera = camera;
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto shadowed = [&] {
+		RenderSystem::SubmitView(stage.target, view);
+		RenderSystem::RenderAll();
+		EXPECT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
+		u32 count = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			count += pixels[i + 2] > 100 && pixels[i + 2] < 180 && pixels[i] < 128 ? 1u : 0u;
+		}
+		return count;
+	};
+
+	camera->SetCullingMask(~SPRITE_LAYER);
+	EXPECT_EQ(shadowed(), 0u);
+	EXPECT_EQ(sprite->shadowRecorded, 0u);
+
+	camera->SetCullingMask(~0u);
+	EXPECT_GT(shadowed(), 30u);
+	EXPECT_GT(sprite->shadowRecorded, 0u);
 
 	TearDownStage(stage);
 }

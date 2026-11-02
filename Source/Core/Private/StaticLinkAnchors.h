@@ -12,6 +12,7 @@
 #define SLT_ASSET_DATABASE_ANCHORS(X) \
 	X(TextAsset)                      \
 	X(TextureAsset)                   \
+	X(SpriteAsset)                    \
 	X(MeshAsset)                      \
 	X(MaterialAsset)                  \
 	X(ShaderAsset)                    \

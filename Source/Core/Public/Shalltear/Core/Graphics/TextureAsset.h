@@ -5,7 +5,10 @@
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
 #include "Shalltear/Core/Graphics/RHITypes.h"
+#include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/Vector.h"
+
+#include <string_view>
 
 namespace Shalltear {
 
@@ -26,6 +29,27 @@ namespace Shalltear {
 	enum class TextureCompression : u8 {
 		None = 0,
 		HighQuality
+	};
+
+	struct SpriteBorder {
+		i32 left = 0;
+		i32 top = 0;
+		i32 right = 0;
+		i32 bottom = 0;
+
+		bool operator==(const SpriteBorder&) const = default;
+	};
+
+	struct TextureSprite {
+		str id;
+		str name;
+		// texels from the image's top-left corner, y down
+		RectI rect;
+		// texels inside rect, unscaled by 9-slicing
+		SpriteBorder border;
+
+		[[nodiscard]] std::string_view Identity() const { return id.empty() ? std::string_view(name) : std::string_view(id); }
+		bool operator==(const TextureSprite&) const = default;
 	};
 
 	class SHALLTEAR_CORE_API TextureAsset : public Asset {
@@ -67,6 +91,11 @@ namespace Shalltear {
 		// convolved with the cosine lobe, divided by PI
 		Vector<Vec3> irradianceSH{GetMemoryResource(MemTag::Asset)};
 
+		Vector<TextureSprite> sprites{GetMemoryResource(MemTag::Asset)};
+
+		// valid until next reimport
+		[[nodiscard]] const TextureSprite* FindSprite(std::string_view identity) const;
+
 		// replaced on reimport, read per frame
 		RHI::TextureHandle texture;
 		RHI::SamplerHandle sampler;
@@ -99,9 +128,10 @@ namespace Shalltear {
 		StringHash GetAssetType() const override { return StringHash("TextureAsset"); }
 		Asset* Import(const Path& sourcePath) override;
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
+		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings, AssetImportContext& context) override;
 		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
 		// bump when the cooked record changes shape
-		u32 GetImporterVersion() const override { return 5; }
+		u32 GetImporterVersion() const override { return 6; }
 	};
 
 } // namespace Shalltear

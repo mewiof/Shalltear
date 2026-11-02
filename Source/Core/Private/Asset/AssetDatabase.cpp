@@ -13,6 +13,7 @@
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Graphics/SkeletonAsset.h"
 #include "Shalltear/Core/Graphics/SkinAsset.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"

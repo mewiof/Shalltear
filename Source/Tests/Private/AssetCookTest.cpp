@@ -8,6 +8,7 @@
 #include "Shalltear/Core/Graphics/ObjectPass.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Math.h"
 #include "Shalltear/Core/Scene.h"
@@ -282,6 +283,41 @@ TEST_F(AssetCookFixture, TextureAssetRoundTripsPixelsAndSettings) {
 	EXPECT_EQ(std::memcmp(restored.pixels.data(), original.pixels.data(), original.pixels.size()), 0);
 
 	EXPECT_EQ(cooked.source.payload.size(), original.pixels.size());
+}
+
+TEST_F(AssetCookFixture, TextureSpritesRoundTrip) {
+	TextureAsset original;
+	original.assetId = Guid(0x7777, 0x8889);
+	original.virtualPath = "project://Assets/Atlas.png";
+	original.size = Vec2I(8, 4);
+	original.format = RHI::Format::RGBA8SRGB;
+	original.pixels.resize(8 * 4 * 4, 200);
+	original.sprites.push_back(TextureSprite{"a1", "Heart", RectI(0, 0, 4, 4), SpriteBorder{1, 1, 1, 1}});
+	original.sprites.push_back(TextureSprite{"", "Star", RectI(4, 1, 4, 3), {}});
+
+	TextureAsset restored;
+	Cooked cooked;
+	ASSERT_TRUE(RoundTrip(original, restored, cooked));
+
+	ASSERT_EQ(restored.sprites.size(), 2u);
+	EXPECT_EQ(restored.sprites[0], original.sprites[0]);
+	EXPECT_EQ(restored.sprites[1], original.sprites[1]);
+	EXPECT_NE(restored.FindSprite("Star"), nullptr);
+}
+
+TEST_F(AssetCookFixture, SpriteRecordNamesItsTexture) {
+	const Guid texture(0x7777, 0x8889);
+	SpriteAsset original(texture, "a1");
+	original.assetId = Guid(0x7777, 0x888A);
+	original.virtualPath = "project://Assets/Atlas.png : Heart";
+
+	SpriteAsset restored;
+	Cooked cooked;
+	ASSERT_TRUE(RoundTrip(original, restored, cooked));
+
+	EXPECT_EQ(restored.GetIdentity(), "a1");
+	ASSERT_EQ(cooked.source.dependencies.size(), 1u);
+	EXPECT_EQ(cooked.source.dependencies[0], texture);
 }
 
 TEST_F(AssetCookFixture, FontAssetRoundTripsItsBytesVerbatim) {

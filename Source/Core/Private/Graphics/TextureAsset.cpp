@@ -2,11 +2,13 @@
 
 #include "Asset/ImportTierInternal.h"
 
+#include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/Math/HalfFloat.h"
 #include "Shalltear/Core/Math/MathUtil.h"
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Serialization/JSON.h"
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstring>
+#include <format>
 
 #include "Graphics/EnvironmentIBL.h"
 #include "Shalltear/Core/Graphics/TextureCodecs.h"
@@ -22,6 +25,15 @@
 namespace Shalltear {
 
 	TextureAsset::~TextureAsset() = default;
+
+	const TextureSprite* TextureAsset::FindSprite(std::string_view identity) const {
+		for (const TextureSprite& sprite : sprites) {
+			if (sprite.Identity() == identity) {
+				return &sprite;
+			}
+		}
+		return nullptr;
+	}
 
 	bool TextureAsset::Import(const Path& sourcePath) {
 		if (const ImportTierTable* tier = ImportTierInternal::Get()) {
@@ -130,7 +142,7 @@ namespace Shalltear {
 		TextureAsset& imported = static_cast<TextureAsset&>(fresh);
 		if (imported.settings == settings && imported.size == size && imported.slices == slices &&
 			imported.format == format && imported.storedMipLevels == storedMipLevels && imported.isCube == isCube &&
-			imported.pixels == pixels && imported.irradianceSH == irradianceSH) {
+			imported.pixels == pixels && imported.irradianceSH == irradianceSH && imported.sprites == sprites) {
 			return;
 		}
 		const bool loaded = GetLoadState() == AssetLoadState::Loaded;
@@ -145,6 +157,7 @@ namespace Shalltear {
 		storedMipLevels = imported.storedMipLevels;
 		isCube = imported.isCube;
 		irradianceSH = std::move(imported.irradianceSH);
+		sprites = std::move(imported.sprites);
 		++version;
 		if (loaded) {
 			OnLoad();
@@ -188,6 +201,13 @@ namespace Shalltear {
 		}
 		descriptor.Write(static_cast<u8>(GetDimension()));
 		descriptor.Write(slices);
+		descriptor.Write(static_cast<u32>(sprites.size()));
+		for (const TextureSprite& sprite : sprites) {
+			descriptor.WriteString(sprite.id);
+			descriptor.WriteString(sprite.name);
+			descriptor.Write(sprite.rect);
+			descriptor.Write(sprite.border);
+		}
 
 		payload.WriteBytes(pixels.data(), pixels.size());
 		return true;
@@ -234,6 +254,17 @@ namespace Shalltear {
 		u32 readSlices = 1;
 		descriptor.Read(dimension);
 		descriptor.Read(readSlices);
+		u32 spriteCount = 0;
+		descriptor.Read(spriteCount);
+		sprites.clear();
+		for (u32 i = 0; i < spriteCount && !descriptor.Failed(); ++i) {
+			TextureSprite sprite;
+			sprite.id = str(descriptor.ReadString());
+			sprite.name = str(descriptor.ReadString());
+			descriptor.Read(sprite.rect);
+			descriptor.Read(sprite.border);
+			sprites.push_back(std::move(sprite));
+		}
 		payload.ReadInto(pixels, pixelCount);
 		if (descriptor.Failed() || payload.Failed()) {
 			return false;
@@ -274,6 +305,91 @@ namespace Shalltear {
 		return true;
 	}
 
+	namespace {
+
+		bool ReadInts(const JSONValue& array, i32* out, size_t count) {
+			if (!array.IsArray() || array.Size() != count) {
+				return false;
+			}
+			for (size_t i = 0; i < count; ++i) {
+				if (!array[i].IsNumber()) {
+					return false;
+				}
+				out[i] = static_cast<i32>(array[i].AsInt());
+			}
+			return true;
+		}
+
+		str RefuseSprite(const TextureSprite& sprite, std::string_view why) {
+			return std::format("sprite '{}' {}", sprite.name.empty() ? sprite.id : sprite.name, why);
+		}
+
+		bool ReadSprite(const JSONValue& entry, Vec2I imageSize, TextureSprite& out, str& error) {
+			out.id = str(entry["id"].AsString());
+			out.name = str(entry["name"].AsString());
+			if (out.name.empty()) {
+				out.name = out.id;
+			}
+			if (out.name.empty()) {
+				error = "a sprite has neither id nor name";
+				return false;
+			}
+			i32 rect[4] = {};
+			if (!ReadInts(entry["rect"], rect, 4)) {
+				error = RefuseSprite(out, "needs rect [x, y, width, height]");
+				return false;
+			}
+			out.rect = RectI(rect[0], rect[1], rect[2], rect[3]);
+			if (out.rect.size.x <= 0 || out.rect.size.y <= 0 || out.rect.Left() < 0 || out.rect.Top() < 0 ||
+				out.rect.Right() > imageSize.x || out.rect.Bottom() > imageSize.y) {
+				error = RefuseSprite(out, std::format("has rect {},{} {}x{} (outside the {}x{} image)", rect[0], rect[1], rect[2],
+													  rect[3], imageSize.x, imageSize.y));
+				return false;
+			}
+			if (entry.HasKey("border")) {
+				i32 border[4] = {};
+				if (!ReadInts(entry["border"], border, 4)) {
+					error = RefuseSprite(out, "needs border [left, top, right, bottom]");
+					return false;
+				}
+				out.border = SpriteBorder{border[0], border[1], border[2], border[3]};
+				const SpriteBorder& b = out.border;
+				if (b.left < 0 || b.top < 0 || b.right < 0 || b.bottom < 0 || b.left + b.right > out.rect.size.x ||
+					b.top + b.bottom > out.rect.size.y) {
+					error = RefuseSprite(out, "has a border larger than its rect");
+					return false;
+				}
+			}
+			return true;
+		}
+
+		void ReadSprites(const JSONValue& list, TextureAsset& texture, const Path& virtualPath) {
+			texture.sprites.clear();
+			if (!list.IsArray() || list.Size() == 0) {
+				return;
+			}
+			if (texture.GetDimension() != RHI::TextureDimension::Texture2D) {
+				SLT_LOG_WARN("Graphics", "TextureAsset: '{}' isn't a 2D texture. Ignoring {} sprite(s)", virtualPath.ToString(), list.Size());
+				return;
+			}
+			for (size_t i = 0; i < list.Size(); ++i) {
+				TextureSprite sprite;
+				str error;
+				if (!ReadSprite(list[i], texture.size, sprite, error)) {
+					SLT_LOG_WARN("Graphics", "TextureAsset: '{}' {}. Skipping", virtualPath.ToString(), error);
+					continue;
+				}
+				if (texture.FindSprite(sprite.Identity())) {
+					SLT_LOG_WARN("Graphics", "TextureAsset: '{}' defines the sprite '{}' twice (2nd ignored)", virtualPath.ToString(),
+								 sprite.Identity());
+					continue;
+				}
+				texture.sprites.push_back(std::move(sprite));
+			}
+		}
+
+	} // anonymous namespace
+
 	Asset* TextureAssetImporter::Import(const Path& sourcePath) {
 		TextureAsset* asset = New<TextureAsset>(MemTag::Asset);
 		if (!asset->Import(sourcePath)) {
@@ -284,7 +400,6 @@ namespace Shalltear {
 	}
 
 	Asset* TextureAssetImporter::ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) {
-		(void)virtualPath;
 		TextureAsset* asset = New<TextureAsset>(MemTag::Asset);
 
 		if (settings.IsObject()) {
@@ -325,7 +440,25 @@ namespace Shalltear {
 			Delete(asset);
 			return nullptr;
 		}
+		if (settings.IsObject()) {
+			ReadSprites(settings["sprites"], *asset, virtualPath);
+		}
 		return asset;
+	}
+
+	Asset* TextureAssetImporter::ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings,
+													AssetImportContext& context) {
+		Asset* imported = ImportWithSettings(sourcePath, virtualPath, settings);
+		auto* texture = static_cast<TextureAsset*>(imported);
+		if (!texture || texture->sprites.empty()) {
+			return texture;
+		}
+		const Guid textureGuid = AssetDatabase::LookupGuid(virtualPath);
+		for (const TextureSprite& sprite : texture->sprites) {
+			context.AddProduct(std::format("Sprites/{}", sprite.Identity()), New<SpriteAsset>(MemTag::Asset, textureGuid, sprite.Identity()),
+							   sprite.name);
+		}
+		return texture;
 	}
 
 	void TextureAssetImporter::SerializeSettings(const Path& sourcePath, JSONValue& out) const {

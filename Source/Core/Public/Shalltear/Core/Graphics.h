@@ -8,6 +8,7 @@
 #include "Shalltear/Core/Graphics/ShaderReflection.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/Camera.h"

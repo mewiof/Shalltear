@@ -118,3 +118,31 @@ TEST_F(ViewPickFixture, PickAnswersAfterFrame) {
 	EXPECT_FALSE(answer.object.IsValid());
 	EXPECT_FALSE(RenderSystem::TakePickAnswer(_target, answer));
 }
+
+TEST_F(ViewPickFixture, ShadowsOnlyIsNotPicked) {
+	RequireDeviceAndCompiler();
+	if (IsSkipped()) {
+		return;
+	}
+	const Vec3 rest(0.0f, 0.5f, 0.0f);
+	Handle<SceneObject> cube = Stage(nullptr, rest);
+	ASSERT_TRUE(cube.IsValid());
+	ASSERT_NE(_target, INVALID_VIEW_TARGET);
+	Handle<MeshRenderer> renderer = cube->GetComponent<MeshRenderer>();
+
+	auto pickAt = [&](u64 tag) {
+		const ViewPick pick{PixelOf(rest), tag};
+		Frame(&pick);
+		PickAnswer answer;
+		for (u32 frames = 0; !RenderSystem::TakePickAnswer(_target, answer) && frames < RHI::FRAMES_IN_FLIGHT; ++frames) {
+			Frame();
+		}
+		EXPECT_EQ(answer.tag, tag);
+		return answer.object;
+	};
+	EXPECT_EQ(pickAt(1), cube);
+	renderer->SetCastShadows(ShadowCasting::ShadowsOnly);
+	EXPECT_FALSE(pickAt(2).IsValid());
+	renderer->SetCastShadows(ShadowCasting::On);
+	EXPECT_EQ(pickAt(3), cube);
+}

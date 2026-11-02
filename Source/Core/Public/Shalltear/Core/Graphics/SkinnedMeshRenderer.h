@@ -4,6 +4,7 @@
 #include "Shalltear/Core/CoreAPI.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
+#include "Shalltear/Core/Graphics/ShadowCasting.h"
 #include "Shalltear/Core/Graphics/Skeleton.h"
 #include "Shalltear/Core/Graphics/SkinAsset.h"
 #include "Shalltear/Core/Handle.h"
@@ -23,6 +24,8 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_skin)
 		SLT_REFLECT_FIELD(_skeleton)
 		SLT_REFLECT_ARRAY(_blendShapeWeights, SLT_HIDDEN)
+		SLT_REFLECT_FIELD(_castShadows)
+		SLT_REFLECT_FIELD(_receiveShadows)
 		SLT_REFLECT_FIELD(_renderingLayerMask)
 		SLT_END_REFLECT()
 
@@ -63,6 +66,12 @@ namespace Shalltear {
 		}
 		void SetBlendShapeWeightCount(u32 count) { _blendShapeWeights.resize(count, 0.0f); }
 
+		ShadowCasting GetCastShadows() const { return _castShadows; }
+		void SetCastShadows(ShadowCasting casting) { _castShadows = casting; }
+
+		bool GetReceiveShadows() const { return _receiveShadows; }
+		void SetReceiveShadows(bool receive) { _receiveShadows = receive; }
+
 		u32 GetRenderingLayerMask() const { return _renderingLayerMask; }
 		void SetRenderingLayerMask(u32 mask) { _renderingLayerMask = mask; }
 
@@ -84,6 +93,9 @@ namespace Shalltear {
 		Vector<f32> _blendShapeWeights{GetMemoryResource(MemTag::Scene)};
 
 		u32 _renderingLayerMask = 1;
+
+		ShadowCasting _castShadows = ShadowCasting::On;
+		bool _receiveShadows = true;
 	};
 
 } // namespace Shalltear

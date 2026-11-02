@@ -4,6 +4,7 @@
 #include "Shalltear/Core/CoreAPI.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
+#include "Shalltear/Core/Graphics/ShadowCasting.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Scene/Component.h"
 
@@ -14,6 +15,8 @@ namespace Shalltear {
 		SLT_REFLECT_COMPONENT(MeshRenderer, Component)
 		SLT_REFLECT_FIELD(_mesh)
 		SLT_REFLECT_ARRAY(_materials, SLT_HIDDEN)
+		SLT_REFLECT_FIELD(_castShadows)
+		SLT_REFLECT_FIELD(_receiveShadows)
 		SLT_REFLECT_FIELD(_renderingLayerMask)
 		SLT_END_REFLECT()
 
@@ -36,6 +39,12 @@ namespace Shalltear {
 			_materials[slot] = material;
 		}
 
+		ShadowCasting GetCastShadows() const { return _castShadows; }
+		void SetCastShadows(ShadowCasting casting) { _castShadows = casting; }
+
+		bool GetReceiveShadows() const { return _receiveShadows; }
+		void SetReceiveShadows(bool receive) { _receiveShadows = receive; }
+
 		u32 GetRenderingLayerMask() const { return _renderingLayerMask; }
 		void SetRenderingLayerMask(u32 mask) { _renderingLayerMask = mask; }
 	protected:
@@ -47,6 +56,9 @@ namespace Shalltear {
 		Vector<Handle<MaterialAsset>> _materials{GetMemoryResource(MemTag::Scene)};
 
 		u32 _renderingLayerMask = 1;
+
+		ShadowCasting _castShadows = ShadowCasting::On;
+		bool _receiveShadows = true;
 	};
 
 } // namespace Shalltear

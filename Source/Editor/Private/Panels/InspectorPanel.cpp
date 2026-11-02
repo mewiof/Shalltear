@@ -3380,16 +3380,16 @@ namespace Shalltear {
 		}
 	}
 
-	void BuildRenderingLayerMaskRow(UI::Context& context, UI::ElementHandle parent, const TypeInfo* type,
-									Handle<Object> target, InspectorPanel* panel) {
+	void BuildRendererRows(UI::Context& context, UI::ElementHandle parent, const TypeInfo* type,
+						   Handle<Object> target, InspectorPanel* panel) {
 		if (!type || !panel) {
 			return;
 		}
 		for (u32 index = 0; index < type->fieldCount; ++index) {
 			const FieldInfo& field = type->fields[index];
-			if (field.name == StringHash("_renderingLayerMask")) {
+			if (field.name == StringHash("_castShadows") || field.name == StringHash("_receiveShadows") ||
+				field.name == StringHash("_renderingLayerMask")) {
 				panel->BuildFieldRow(context, parent, field, target);
-				return;
 			}
 		}
 	}
@@ -3428,7 +3428,7 @@ namespace Shalltear {
 					panel->BuildHandleRow(context, row, target, StringHash("_materials"),
 										  StringHash("MaterialAsset"), label, static_cast<i32>(slot));
 				}
-				BuildRenderingLayerMaskRow(context, parent, MeshRenderer::GetReflectType(), target, panel);
+				BuildRendererRows(context, parent, MeshRenderer::GetReflectType(), target, panel);
 			});
 
 		PropertyDrawers::RegisterComponentInspector(
@@ -3472,7 +3472,7 @@ namespace Shalltear {
 										  StringHash("MaterialAsset"), label, static_cast<i32>(slot));
 				}
 
-				BuildRenderingLayerMaskRow(context, parent, SkinnedMeshRenderer::GetReflectType(), target, panel);
+				BuildRendererRows(context, parent, SkinnedMeshRenderer::GetReflectType(), target, panel);
 
 				if (!mesh || mesh->blendShapes.empty()) {
 					return;

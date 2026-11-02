@@ -5,8 +5,10 @@
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
+#include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Math/HalfFloat.h"
+#include "Shalltear/Core/Serialization/TextSerializer.h"
 #include "Shalltear/Core/Window.h"
 #include "Window/WindowInternal.h"
 
@@ -124,6 +126,32 @@ TEST(RenderSystemHeadlessTest, MaterialListBeats8Slots) {
 	const size_t boundBytes = MemoryManager::GetBytesForTag(MemTag::Scene) - beforeBound;
 
 	EXPECT_LT(unboundBytes, boundBytes);
+}
+
+TEST(RenderSystemHeadlessTest, ShadowFlagsSaveByName) {
+	MeshRenderer mesh;
+	EXPECT_EQ(mesh.GetCastShadows(), ShadowCasting::On);
+	EXPECT_TRUE(mesh.GetReceiveShadows());
+	mesh.SetCastShadows(ShadowCasting::ShadowsOnly);
+	mesh.SetReceiveShadows(false);
+	const str meshText = TextSerializer::Serialize(&mesh, MeshRenderer::GetReflectType());
+	EXPECT_NE(meshText.find("\"ShadowsOnly\""), str::npos) << meshText;
+	MeshRenderer meshLoaded;
+	ASSERT_TRUE(TextSerializer::Deserialize(&meshLoaded, MeshRenderer::GetReflectType(), meshText));
+	EXPECT_EQ(meshLoaded.GetCastShadows(), ShadowCasting::ShadowsOnly);
+	EXPECT_FALSE(meshLoaded.GetReceiveShadows());
+
+	SkinnedMeshRenderer skinned;
+	EXPECT_EQ(skinned.GetCastShadows(), ShadowCasting::On);
+	EXPECT_TRUE(skinned.GetReceiveShadows());
+	skinned.SetCastShadows(ShadowCasting::TwoSided);
+	skinned.SetReceiveShadows(false);
+	const str skinnedText = TextSerializer::Serialize(&skinned, SkinnedMeshRenderer::GetReflectType());
+	EXPECT_NE(skinnedText.find("\"TwoSided\""), str::npos) << skinnedText;
+	SkinnedMeshRenderer skinnedLoaded;
+	ASSERT_TRUE(TextSerializer::Deserialize(&skinnedLoaded, SkinnedMeshRenderer::GetReflectType(), skinnedText));
+	EXPECT_EQ(skinnedLoaded.GetCastShadows(), ShadowCasting::TwoSided);
+	EXPECT_FALSE(skinnedLoaded.GetReceiveShadows());
 }
 
 TEST(RenderSystemHeadlessTest, StatsAreZeroWhenDown) {

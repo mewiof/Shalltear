@@ -373,9 +373,9 @@ TEST_F(ComponentAccessorFixture, EveryMigratedComponentSpellsFieldsForDisk) {
 	Vector<CaMigratedType> migrated;
 	migrated.push_back({Camera::GetReflectType(), "Camera", 11});
 	migrated.push_back({Light::GetReflectType(), "Light", 10});
-	migrated.push_back({MeshRenderer::GetReflectType(), "MeshRenderer", 3});
+	migrated.push_back({MeshRenderer::GetReflectType(), "MeshRenderer", 5});
 	migrated.push_back({Skeleton::GetReflectType(), "Skeleton", 3});
-	migrated.push_back({SkinnedMeshRenderer::GetReflectType(), "SkinnedMeshRenderer", 6});
+	migrated.push_back({SkinnedMeshRenderer::GetReflectType(), "SkinnedMeshRenderer", 8});
 #ifndef SHALLTEAR_SHARED
 	migrated.push_back({Rigidbody::GetReflectType(), "Rigidbody", 20});
 	migrated.push_back({Collider::GetReflectType(), "Collider", 5});
@@ -406,9 +406,9 @@ TEST_F(ComponentAccessorFixture, EveryMigratedComponentSpellsFieldsForDisk) {
 	}
 
 #ifndef SHALLTEAR_SHARED
-	EXPECT_EQ(total, 12u + 4u + 80u + 17u + 3u + 1u + 3u);
+	EXPECT_EQ(total, 12u + 4u + 80u + 17u + 3u + 1u + 3u + 4u);
 #else
-	EXPECT_EQ(total, 12u + 4u + 10u + 3u + 1u + 3u);
+	EXPECT_EQ(total, 12u + 4u + 10u + 3u + 1u + 3u + 4u);
 #endif
 }
 

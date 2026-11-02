@@ -8,6 +8,7 @@
 
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics.h"
+#include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
@@ -3650,6 +3651,295 @@ TEST_F(ShadowViewFixture, LampCastersCulledToView) {
 	if (skipped) {
 		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
 	}
+}
+
+namespace {
+
+	u32 Differing(const Vector<u8>& a, const Vector<u8>& b, Vec2I size) {
+		const ShadowDelta delta = CompareFrames(a, b, size);
+		return delta.darker + delta.brighter;
+	}
+
+} // anonymous namespace
+
+TEST_F(ShadowViewFixture, CasterOffDropsItsShadow) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<Scene> scene = SceneSystem::CreateScene("CasterOff");
+	Handle<Light> sun = BuildOccludedScene(scene, Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
+	Handle<MeshRenderer> occluder = scene->FindObjectByName("Occluder")->GetComponent<MeshRenderer>();
+	ASSERT_TRUE(occluder.IsValid());
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> notCasting{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> again{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, shadowed, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	const u32 castingDraws = RenderSystem::GetStats().drawCalls;
+
+	occluder->SetCastShadows(ShadowCasting::Off);
+	RenderTo(target, notCasting, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	EXPECT_LT(RenderSystem::GetStats().drawCalls, castingDraws);
+
+	sun->SetCastShadows(false);
+	RenderTo(target, unshadowed, size);
+	sun->SetCastShadows(true);
+	occluder->SetCastShadows(ShadowCasting::On);
+	RenderTo(target, again, size);
+
+	const ShadowDelta dropped = CompareFrames(shadowed, notCasting, size);
+	EXPECT_GT(dropped.darker, 50u);
+	EXPECT_EQ(dropped.brighter, 0u);
+	EXPECT_LE(Differing(notCasting, unshadowed, size), 8u);
+	EXPECT_EQ(shadowed, again);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, ShadowsOnlyCasterIsNotDrawn) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<Scene> scene = SceneSystem::CreateScene("ShadowsOnly");
+	BuildOccludedScene(scene, Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
+	Handle<SceneObject> occluderObject = scene->FindObjectByName("Occluder");
+	Handle<MeshRenderer> occluder = occluderObject->GetComponent<MeshRenderer>();
+	ASSERT_TRUE(occluder.IsValid());
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> shadowsOnly{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> removed{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, shadowed, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	const u32 visibleDraws = RenderSystem::GetStats().drawCalls;
+
+	occluder->SetCastShadows(ShadowCasting::ShadowsOnly);
+	RenderTo(target, shadowsOnly, size);
+	const u32 shadowsOnlyDraws = RenderSystem::GetStats().drawCalls;
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	occluderObject->SetActive(false);
+	SceneSystem::EndFrame();
+	RenderTo(target, removed, size);
+	const u32 removedDraws = RenderSystem::GetStats().drawCalls;
+
+	EXPECT_LT(shadowsOnlyDraws, visibleDraws);
+	EXPECT_GT(shadowsOnlyDraws, removedDraws);
+	const ShadowDelta shadow = CompareFrames(shadowsOnly, removed, size);
+	EXPECT_GT(shadow.darker, 50u);
+	EXPECT_EQ(shadow.brighter, 0u);
+	EXPECT_GT(Differing(shadowsOnly, shadowed, size), 50u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, TwoSidedQuadShadowsFromItsBack) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* cubeAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	Asset* quadAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Quad.primitive"));
+	ASSERT_NE(cubeAsset, nullptr);
+	ASSERT_NE(quadAsset, nullptr);
+
+	Handle<Scene> scene = SceneSystem::CreateScene("TwoSided");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.3f, -1.0f, 0.7f));
+	ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeAsset)));
+
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+
+	Handle<SceneObject> casterObject = SceneSystem::CreateObject("Caster", scene);
+	casterObject->SetLocalPosition(Vec3(1.1f, 3.4f, -0.6f));
+	casterObject->SetLocalRotation(Quat::LookRotation(sunObject->TransformDirection(Vec3::Forward()).Normalized()));
+	casterObject->SetLocalScale(Vec3(3.0f, 3.0f, 3.0f));
+	Handle<MeshRenderer> caster = casterObject->AddComponent<MeshRenderer>();
+	caster->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(quadAsset)));
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> oneSided{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> twoSided{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, oneSided, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	sun->SetCastShadows(false);
+	RenderTo(target, unshadowed, size);
+	sun->SetCastShadows(true);
+	caster->SetCastShadows(ShadowCasting::TwoSided);
+	RenderTo(target, twoSided, size);
+
+	EXPECT_LE(Differing(oneSided, unshadowed, size), 8u);
+	const ShadowDelta delta = CompareFrames(twoSided, oneSided, size);
+	EXPECT_GT(delta.darker, 50u);
+	EXPECT_EQ(delta.brighter, 0u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
+TEST_F(ShadowViewFixture, NonReceiverStaysLit) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<Scene> scene = SceneSystem::CreateScene("NonReceiver");
+	Handle<Light> sun = BuildOccludedScene(scene, Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
+	Handle<MeshRenderer> ground = scene->FindObjectByName("Ground")->GetComponent<MeshRenderer>();
+	ASSERT_TRUE(ground.IsValid());
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> notReceiving{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, shadowed, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	const u32 receivingDraws = RenderSystem::GetStats().drawCalls;
+
+	ground->SetReceiveShadows(false);
+	RenderTo(target, notReceiving, size);
+	EXPECT_EQ(RenderSystem::GetStats().drawCalls, receivingDraws);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	sun->SetCastShadows(false);
+	RenderTo(target, unshadowed, size);
+
+	const ShadowDelta dropped = CompareFrames(shadowed, notReceiving, size);
+	EXPECT_GT(dropped.darker, 50u);
+	EXPECT_EQ(dropped.brighter, 0u);
+	EXPECT_LE(Differing(notReceiving, unshadowed, size), 8u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, SkinnedRendererFollowsShadowFlags) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("SkinnedFlags");
+	Handle<SceneObject> groundObject = SceneSystem::CreateObject("Ground", scene);
+	groundObject->SetLocalPosition(Vec3(0.3f, -1.0f, 0.7f));
+	groundObject->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	Handle<SkinnedMeshRenderer> ground = groundObject->AddComponent<SkinnedMeshRenderer>();
+	ground->SetMesh(cube);
+
+	Handle<SceneObject> occluderObject = SceneSystem::CreateObject("Occluder", scene);
+	occluderObject->SetLocalPosition(Vec3(1.1f, 3.4f, -0.6f));
+	occluderObject->SetLocalScale(Vec3(3.0f, 3.0f, 3.0f));
+	Handle<SkinnedMeshRenderer> occluder = occluderObject->AddComponent<SkinnedMeshRenderer>();
+	occluder->SetMesh(cube);
+
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> notCasting{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> notReceiving{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> shadowsOnly{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> removed{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderTo(target, shadowed, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	sun->SetCastShadows(false);
+	RenderTo(target, unshadowed, size);
+	sun->SetCastShadows(true);
+
+	occluder->SetCastShadows(ShadowCasting::Off);
+	RenderTo(target, notCasting, size);
+	occluder->SetCastShadows(ShadowCasting::On);
+	ground->SetReceiveShadows(false);
+	RenderTo(target, notReceiving, size);
+	ground->SetReceiveShadows(true);
+	occluder->SetCastShadows(ShadowCasting::ShadowsOnly);
+	RenderTo(target, shadowsOnly, size);
+	occluderObject->SetActive(false);
+	SceneSystem::EndFrame();
+	RenderTo(target, removed, size);
+
+	EXPECT_GT(CompareFrames(shadowed, unshadowed, size).darker, 50u);
+	EXPECT_LE(Differing(notCasting, unshadowed, size), 8u);
+	EXPECT_LE(Differing(notReceiving, unshadowed, size), 8u);
+	const ShadowDelta shadow = CompareFrames(shadowsOnly, removed, size);
+	EXPECT_GT(shadow.darker, 50u);
+	EXPECT_EQ(shadow.brighter, 0u);
+	EXPECT_GT(Differing(shadowsOnly, shadowed, size), 50u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
 }
 
 TEST_F(ShadowViewFixture, FullAtlasDropsLeastImportant) {

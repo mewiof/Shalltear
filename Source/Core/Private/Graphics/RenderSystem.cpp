@@ -1376,8 +1376,19 @@ namespace Shalltear {
 			Handle<SceneObject> object;
 			bool alpha = false;
 			bool mirrored = false;
+			bool receiveShadows = true;
+			ShadowCasting castShadows = ShadowCasting::On;
 			u64 volumeMask = 0;
 		};
+
+		enum class DrawListUse : u8 {
+			View,
+			Casters
+		};
+
+		bool DrawsFor(ShadowCasting casting, DrawListUse use) {
+			return use == DrawListUse::Casters ? casting != ShadowCasting::Off : casting != ShadowCasting::ShadowsOnly;
+		}
 
 		struct ExtractedDraws {
 			DrawEntry** list = nullptr;
@@ -1755,7 +1766,7 @@ namespace Shalltear {
 			Vec2I extent{1, 1};
 		};
 
-		ExtractedDraws ExtractDrawList(LinearAllocator& arena, SceneKind kind, std::span<const u64> onlyScenes,
+		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
 									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
 									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
 			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
@@ -1792,8 +1803,8 @@ namespace Shalltear {
 
 			ShaderAsset* errorShader = state.standardShader.Get();
 
-			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world,
-								 u32 renderingLayerMask, Handle<SceneObject> object, auto&& materialForSlot) {
+			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world, u32 renderingLayerMask,
+								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
 				AABB worldBounds = bounds.IsValid() ? bounds.Transformed(world) : AABB{};
 				u64 volumeMask = 0;
 				if (bounds.IsValid()) {
@@ -1832,6 +1843,8 @@ namespace Shalltear {
 					entry->depth = depth;
 					entry->volumeMask = volumeMask;
 					entry->renderingLayerMask = renderingLayerMask;
+					entry->castShadows = castShadows;
+					entry->receiveShadows = receiveShadows;
 					entry->object = object;
 
 					if (shader) {
@@ -1880,11 +1893,11 @@ namespace Shalltear {
 				if (!owner || !passesSceneFilter(*owner)) {
 					continue;
 				}
-				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0) {
+				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), use)) {
 					continue;
 				}
-				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(),
-						  renderer->GetRenderingLayerMask(), renderer->GetOwner(),
+				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(), renderer->GetRenderingLayerMask(),
+						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
 						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
 
@@ -1901,7 +1914,7 @@ namespace Shalltear {
 				if (!owner || !passesSceneFilter(*owner)) {
 					continue;
 				}
-				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0) {
+				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), use)) {
 					continue;
 				}
 
@@ -1911,7 +1924,7 @@ namespace Shalltear {
 
 				const RenderState::SkinnedOutput* skinned = i < skinnedOutputs.size() && skinnedOutputs[i].vertexAddress ? &skinnedOutputs[i] : nullptr;
 				emitDraws(mesh, skinned ? skinned->vertexAddress : mesh->vertexBufferAddress, skinned ? skinned->bounds : mesh->bounds, world,
-						  renderer->GetRenderingLayerMask(), renderer->GetOwner(),
+						  renderer->GetRenderingLayerMask(), renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
 						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
 			std::sort(drawList, drawList + drawCount, [](const DrawEntry* a, const DrawEntry* b) {
@@ -1957,7 +1970,7 @@ namespace Shalltear {
 						element.normalMatrix2 = Vec4(normalMatrix.GetColumn(2), 0.0f);
 						element.vertexAddress = entry.vertexAddress;
 						element.alphaClipThreshold = entry.alphaClipThreshold;
-						if (!entry.alpha || state.transparentReceiveShadows) {
+						if (entry.receiveShadows && (!entry.alpha || state.transparentReceiveShadows)) {
 							element.flags |= DRAW_RECEIVES_SHADOWS;
 						}
 						element.flags |= static_cast<u32>(entry.renderState.blend) << DRAW_BLEND_SHIFT;
@@ -3019,7 +3032,8 @@ namespace Shalltear {
 				return 0;
 			}
 
-			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, renderingLayerMask);
+			const ExtractedDraws extracted =
+				ExtractDrawList(arena, DrawListUse::Casters, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, renderingLayerMask);
 
 			RHI::TransientAllocation mapAllocation =
 				device.AllocateTransient(static_cast<u64>(mapCount) * sizeof(GPUShadowMap), 16);
@@ -3106,6 +3120,9 @@ namespace Shalltear {
 						casterState.depth = RHI::DepthMode::TestWrite;
 						casterState.depthCompare = RHI::DepthCompare::NearerOrEqual;
 						casterState.fill = RHI::FillMode::Solid;
+						if (entry.castShadows == ShadowCasting::TwoSided) {
+							casterState.cull = RHI::CullMode::Off;
+						}
 						if (!RecordDepthDraw(cmd, device, bound, entry, casterState, RHI::Format::Unknown, SHADOW_ATLAS_FORMAT,
 											 viewAllocation, extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw))) {
 							continue;
@@ -3150,7 +3167,7 @@ namespace Shalltear {
 			RHI::Device& device = *state.device;
 			const Mat4 viewProjection = projection * view;
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
-			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {&frustum, 1}, cameraPosition, renderingLayerMask);
+			const ExtractedDraws extracted = ExtractDrawList(arena, DrawListUse::View, kind, onlyScenes, {&frustum, 1}, cameraPosition, renderingLayerMask);
 
 			RHI::RenderPassDesc::Attachment normalAttachment;
 			normalAttachment.texture = normals;
@@ -3223,7 +3240,7 @@ namespace Shalltear {
 			const Mat4 viewProjection = pending.projection * pending.view;
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
 			const ExtractedDraws extracted =
-				ExtractDrawList(arena, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
+				ExtractDrawList(arena, DrawListUse::View, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
 								pending.cameraPosition, pending.cullingMask);
 
 			RHI::RenderPassDesc::Attachment maskAttachment;
@@ -3386,7 +3403,7 @@ namespace Shalltear {
 			const Mat4 viewProjection = projection * pending.view;
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(pending.projection * pending.view));
 			const ExtractedDraws extracted =
-				ExtractDrawList(arena, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
+				ExtractDrawList(arena, DrawListUse::View, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
 								pending.cameraPosition, pending.cullingMask);
 
 			RHI::RenderPassDesc::Attachment valueAttachment;
@@ -3782,7 +3799,7 @@ namespace Shalltear {
 				*outViewAllocation = viewAllocation;
 			}
 
-			const ExtractedDraws extracted = ExtractDrawList(arena, kind, onlyScenes, {&frustum, 1}, cameraPosition,
+			const ExtractedDraws extracted = ExtractDrawList(arena, DrawListUse::View, kind, onlyScenes, {&frustum, 1}, cameraPosition,
 															 renderingLayerMask, overrideMaterial);
 			DrawEntry** const drawList = extracted.list;
 			const u32 drawCount = extracted.count;

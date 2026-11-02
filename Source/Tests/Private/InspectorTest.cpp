@@ -1039,6 +1039,84 @@ TEST_F(InspectorTest, ShapelessSkinnedKeepsLayerMask) {
 	EXPECT_TRUE(AnyTextContains(context, root, "renderingLayerMask"));
 }
 
+namespace {
+
+	template <typename Renderer>
+	void DriveShadowRows(UI::Context& context, UI::ElementHandle root, const Renderer& renderer) {
+		UI::ElementHandle castLabel = FindByText(context, root, "castShadows");
+		ASSERT_TRUE(castLabel.IsValid());
+		UI::ElementHandle castRow = context.MakeHandle(context.GetElement(castLabel)->parent);
+		UI::ElementHandle picker = FindByClass(context, castRow, StringHash("slt-dropdown"), 0);
+		ASSERT_TRUE(context.IsAlive(picker));
+		EXPECT_EQ(context.GetTextString(NthChildOf(context, picker, 0)), "On");
+		ClickElement(context, picker);
+		ASSERT_EQ(context.GetOpenPopupCount(), 1u);
+		ClickElement(context, NthChildOf(context, context.GetOpenPopup(0), 3));
+		EXPECT_EQ(renderer.GetCastShadows(), ShadowCasting::ShadowsOnly);
+		context.Update();
+
+		UI::ElementHandle receiveLabel = FindByText(context, root, "receiveShadows");
+		ASSERT_TRUE(receiveLabel.IsValid());
+		UI::ElementHandle receiveRow = context.MakeHandle(context.GetElement(receiveLabel)->parent);
+		UI::ElementHandle box = FindByClass(context, receiveRow, StringHash("slt-checkbox"), 0);
+		ASSERT_TRUE(context.IsAlive(box));
+		ClickElement(context, box);
+		EXPECT_FALSE(renderer.GetReceiveShadows());
+
+		UndoSystem::Undo();
+		EXPECT_TRUE(renderer.GetReceiveShadows());
+		UndoSystem::Undo();
+		EXPECT_EQ(renderer.GetCastShadows(), ShadowCasting::On);
+	}
+
+} // anonymous namespace
+
+TEST_F(InspectorTest, MeshRendererShadowRowsEdit) {
+	Handle<SceneObject> object = SceneSystem::CreateObject("Plain", _scene);
+	Handle<MeshRenderer> renderer = object.Get()->AddComponent<MeshRenderer>();
+	ASSERT_NE(renderer.Get(), nullptr);
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 900};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	DriveShadowRows(context, root, *renderer.Get());
+}
+
+TEST_F(InspectorTest, ShapelessSkinnedShadowRowsEdit) {
+	MeshAsset bare;
+	SubMesh only;
+	only.indexCount = 3;
+	bare.submeshes.push_back(only);
+
+	Handle<SceneObject> object = SceneSystem::CreateObject("Character", _scene);
+	Handle<SkinnedMeshRenderer> renderer = object.Get()->AddComponent<SkinnedMeshRenderer>();
+	ASSERT_NE(renderer.Get(), nullptr);
+	renderer.Get()->SetMesh(Handle<MeshAsset>(&bare));
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 900};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	DriveShadowRows(context, root, *renderer.Get());
+}
+
 TEST_F(InspectorTest, ShapelessMeshHasNoShapeSection) {
 	Handle<SceneObject> object = SceneSystem::CreateObject("Character", _scene);
 	Handle<SkinnedMeshRenderer> rendererHandle = object.Get()->AddComponent<SkinnedMeshRenderer>();

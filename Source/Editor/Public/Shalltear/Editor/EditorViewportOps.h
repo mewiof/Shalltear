@@ -112,6 +112,8 @@ namespace Shalltear {
 
 		SHALLTEAR_EDITOR_API Handle<Camera> FindActiveSceneCamera();
 
+		SHALLTEAR_EDITOR_API void CollectSceneCameras(Vector<Handle<Camera>>& out);
+
 		SHALLTEAR_EDITOR_API void CollectCameraPassRows(const Handle<Camera>& camera,
 														Vector<Handle<RenderPass>>& out);
 

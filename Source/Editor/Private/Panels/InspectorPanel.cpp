@@ -2333,13 +2333,16 @@ namespace Shalltear {
 			}
 		}
 
-		auto vectorField = [&](u32 count, auto read, auto write) {
+		auto vectorField = [&](u32 count, auto read, auto write, const char* const* labels = nullptr) {
 			f64 values[4] = {};
 			read(values);
 			UI::Widgets::VectorFieldDesc desc;
 			desc.componentCount = count;
 			for (u32 i = 0; i < count; ++i) {
 				desc.values[i] = values[i];
+				if (labels) {
+					desc.labels[i] = labels[i];
+				}
 			}
 			desc.font = font;
 			desc.fontSizePx = FieldFont();
@@ -2411,6 +2414,40 @@ namespace Shalltear {
 						UndoSystem::Push(MakeUnique<PropertySetCommand>(target, fieldName, Variant(before), Variant(after)));
 					}
 				});
+			return;
+		}
+
+		if (NameIs(fieldType, "RectF")) {
+			static constexpr const char* RECT_LABELS[4] = {"X", "Y", "W", "H"};
+			vectorField(
+				4,
+				[&](f64* out) {
+					Variant current;
+					if (!GetField(object, ownerType, fieldName, &current) || !current.Is<RectF>()) {
+						return;
+					}
+					const RectF rect = current.As<RectF>();
+					out[0] = rect.position.x;
+					out[1] = rect.position.y;
+					out[2] = rect.size.x;
+					out[3] = rect.size.y;
+				},
+				[target, fieldName](u32 component, f64 next) {
+					Object* live = target.Resolve();
+					if (!live) {
+						return;
+					}
+					Variant current;
+					if (!GetField(live, live->GetType(), fieldName, &current) || !current.Is<RectF>()) {
+						return;
+					}
+					const RectF before = current.As<RectF>();
+					RectF after = before;
+					f32* const components[4] = {&after.position.x, &after.position.y, &after.size.x, &after.size.y};
+					*components[component] = static_cast<f32>(next);
+					UndoSystem::Push(MakeUnique<PropertySetCommand>(target, fieldName, Variant(before), Variant(after)));
+				},
+				RECT_LABELS);
 			return;
 		}
 
@@ -3290,6 +3327,13 @@ namespace Shalltear {
 					values[1] = v.y;
 					values[2] = v.z;
 					values[3] = v.w;
+					valid = true;
+				} else if (binding.componentCount == 4 && current.Is<RectF>()) {
+					const RectF rect = current.As<RectF>();
+					values[0] = rect.position.x;
+					values[1] = rect.position.y;
+					values[2] = rect.size.x;
+					values[3] = rect.size.y;
 					valid = true;
 				} else if (binding.componentCount == 3 && current.Is<Quat>()) {
 					Vec3 v = EditorSceneOps::EulerForDisplay(current.As<Quat>());

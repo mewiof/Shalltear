@@ -5521,7 +5521,7 @@ TEST_F(PrefabInspectorTest, VariantsComponentDrawsFieldsNotNoDrawer) {
 
 	ASSERT_TRUE(AnyTextContains(context, root, "Camera"));
 	EXPECT_FALSE(AnyTextContains(context, root, "no drawer"));
-	EXPECT_EQ(CountByClass(context, root, StringHash("slt-numberfield")), 26u);
+	EXPECT_EQ(CountByClass(context, root, StringHash("slt-numberfield")), 30u);
 }
 
 TEST_F(PrefabInspectorTest, VariantAddedComponentMarked) {
@@ -5785,6 +5785,65 @@ TEST_F(InspectorTest, IntegerVectorScrubsWhole) {
 	UndoSystem::Undo();
 	EXPECT_EQ(vec.Get()->gridSize.x, 4);
 	EXPECT_EQ(vec.Get()->gridSize.y, 3);
+}
+
+TEST_F(InspectorTest, RectFieldDrawsXYWHAndEdits) {
+	Handle<SceneObject> object = SceneSystem::CreateObject("Subject", _scene);
+	Handle<Camera> camera = object.Get()->AddComponent<Camera>();
+	ASSERT_TRUE(camera.IsValid());
+	EditorSelection::Select(Handle<Object>(object.Get()));
+
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 1000};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	UI::ElementHandle row = FindElementByTextContaining(context, root, "viewportRect");
+	ASSERT_TRUE(context.IsAlive(row));
+	Vector<UI::ElementHandle> fields{GetMemoryResource(MemTag::Editor)};
+	while (context.IsAlive(row) && fields.size() < 4) {
+		row = context.MakeHandle(context.GetElement(row)->parent);
+		fields.clear();
+		CollectByClass(context, row, StringHash("slt-textfield"), fields);
+	}
+	ASSERT_EQ(fields.size(), 4u);
+	EXPECT_EQ(context.GetTextString(fields[0]), "0");
+	EXPECT_EQ(context.GetTextString(fields[1]), "0");
+	EXPECT_EQ(context.GetTextString(fields[2]), "1");
+	EXPECT_EQ(context.GetTextString(fields[3]), "1");
+	Vector<UI::ElementHandle> labels{GetMemoryResource(MemTag::Editor)};
+	CollectByClass(context, row, StringHash("slt-number-label"), labels);
+	ASSERT_EQ(labels.size(), 4u);
+	EXPECT_EQ(context.GetTextString(labels[0]), "X");
+	EXPECT_EQ(context.GetTextString(labels[1]), "Y");
+	EXPECT_EQ(context.GetTextString(labels[2]), "W");
+	EXPECT_EQ(context.GetTextString(labels[3]), "H");
+
+	PressAndRelease(context, fields[2]);
+	ASSERT_EQ(context.GetFocused(), fields[2]);
+	context.InjectInput(InspectorKeyPress(Key::A, KeyMod::Ctrl));
+	for (char digit : std::string_view("0.5")) {
+		context.InjectInput(InspectorTextChar(static_cast<char32_t>(digit)));
+	}
+	context.Update();
+	PressAway(context, root);
+	EXPECT_EQ(camera.Get()->GetViewportRect(), RectF(0.0f, 0.0f, 0.5f, 1.0f));
+
+	camera.Get()->SetViewportRect(RectF(0.25f, 0.5f, 0.5f, 0.5f));
+	panel.Get()->OnTick(0.0f);
+	context.Update();
+	EXPECT_EQ(context.GetTextString(fields[0]), "0.25");
+	EXPECT_EQ(context.GetTextString(fields[1]), "0.5");
+
+	camera.Get()->SetViewportRect(RectF(0.0f, 0.0f, 0.5f, 1.0f));
+	UndoSystem::Undo();
+	EXPECT_EQ(camera.Get()->GetViewportRect(), RectF(0.0f, 0.0f, 1.0f, 1.0f));
 }
 
 TEST_F(InspectorTest, QuaternionFieldDrawsAndEditsEulerAngles) {

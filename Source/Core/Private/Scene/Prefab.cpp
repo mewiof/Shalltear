@@ -111,7 +111,7 @@ namespace Shalltear {
 				}
 				if (TryEncodeArrayF<Vec2>(value, out) || TryEncodeArrayF<Vec3>(value, out) ||
 					TryEncodeArrayF<Vec4>(value, out) || TryEncodeArrayF<Quat>(value, out) ||
-					TryEncodeArrayF<Color>(value, out)) {
+					TryEncodeArrayF<Color>(value, out) || TryEncodeArrayF<RectF>(value, out)) {
 					return true;
 				}
 				if (TryEncodeArrayI<Vec2I>(value, out) || TryEncodeArrayI<Vec3I>(value, out) ||
@@ -179,7 +179,7 @@ namespace Shalltear {
 				}
 				if (TryDecodeArray<Vec2, f32>(typeHash, in, "Vec2", out) || TryDecodeArray<Vec3, f32>(typeHash, in, "Vec3", out) ||
 					TryDecodeArray<Vec4, f32>(typeHash, in, "Vec4", out) || TryDecodeArray<Quat, f32>(typeHash, in, "Quat", out) ||
-					TryDecodeArray<Color, f32>(typeHash, in, "Color", out)) {
+					TryDecodeArray<Color, f32>(typeHash, in, "Color", out) || TryDecodeArray<RectF, f32>(typeHash, in, "RectF", out)) {
 					return true;
 				}
 				if (TryDecodeArray<Vec2I, i32>(typeHash, in, "Vec2I", out) || TryDecodeArray<Vec3I, i32>(typeHash, in, "Vec3I", out) ||
@@ -221,7 +221,8 @@ namespace Shalltear {
 					   TryEncodeBinary<Vec4>(value, writer) || TryEncodeBinary<Quat>(value, writer) ||
 					   TryEncodeBinary<Color>(value, writer) || TryEncodeBinary<Color32>(value, writer) ||
 					   TryEncodeBinary<Vec2I>(value, writer) || TryEncodeBinary<Vec3I>(value, writer) ||
-					   TryEncodeBinary<Vec4I>(value, writer) || TryEncodeBinary<RectI>(value, writer);
+					   TryEncodeBinary<Vec4I>(value, writer) || TryEncodeBinary<RectI>(value, writer) ||
+					   TryEncodeBinary<RectF>(value, writer);
 			}
 
 			template <typename T>
@@ -264,7 +265,8 @@ namespace Shalltear {
 					TryDecodeBinary<Vec2I>(typeHash, "Vec2I", payload, length, out) ||
 					TryDecodeBinary<Vec3I>(typeHash, "Vec3I", payload, length, out) ||
 					TryDecodeBinary<Vec4I>(typeHash, "Vec4I", payload, length, out) ||
-					TryDecodeBinary<RectI>(typeHash, "RectI", payload, length, out);
+					TryDecodeBinary<RectI>(typeHash, "RectI", payload, length, out) ||
+					TryDecodeBinary<RectF>(typeHash, "RectF", payload, length, out);
 				if (!decoded && typeHash == StringHash("str").GetValue()) {
 					out = str(reinterpret_cast<const char*>(payload), length);
 					decoded = true;

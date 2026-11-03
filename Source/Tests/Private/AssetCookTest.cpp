@@ -4,6 +4,7 @@
 #include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/Asset/TextAsset.h"
 #include "Shalltear/Core/FileSystem.h"
+#include "Shalltear/Core/Graphics/Camera.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/ObjectPass.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
@@ -1267,6 +1268,40 @@ TEST_F(DocumentCookFixture, CookedSceneCarriesPrefabInstancesAddedComponent) {
 	ASSERT_TRUE(restoredAdded.IsValid());
 	EXPECT_FLOAT_EQ(restoredAdded->health, 3.5f);
 	EXPECT_EQ(restoredAdded->title, "instance only");
+
+	AssetDatabase::UnloadAsset(loaded);
+}
+
+TEST_F(DocumentCookFixture, CookedSceneCarriesViewportRectOverride) {
+	Handle<Scene> scene = SceneSystem::CreateScene("Level1");
+	Handle<SceneObject> rig = SceneSystem::CreateObject("Rig", scene);
+	rig->AddComponent<Camera>();
+	Guid prefabGuid = SceneSystem::SavePrefab(rig, Path("project://Assets/Rig.prefab"));
+	ASSERT_TRUE(prefabGuid.IsValid());
+	rig->GetComponent<Camera>()->SetViewportRect(RectF(0.5f, 0.25f, 0.5f, 0.75f));
+
+	const char* scenePath = "project://Assets/Level1.scene";
+	ASSERT_TRUE(SceneSystem::SaveScene(scene, Path(scenePath), false));
+	ASSERT_TRUE(ExpectTextDocument(scenePath));
+
+	AssetDatabase::ScanProjectDirectory();
+	Guid guid = AssetDatabase::LookupGuid(Path(scenePath));
+	ASSERT_TRUE(guid.IsValid());
+	Asset* loaded = AssetDatabase::LoadAssetByGuid(guid);
+	ASSERT_NE(loaded, nullptr);
+
+	SceneAsset restored;
+	Buffer payload;
+	ASSERT_TRUE(CookThrough(*loaded, restored, payload));
+	EXPECT_TRUE(ExpectBinaryPayload(payload));
+
+	ASSERT_TRUE(FileSystem::WriteFile(Absolute("project://Assets/Cooked.scene"), payload));
+	Handle<Scene> reloaded = SceneSystem::LoadScene(Path("project://Assets/Cooked.scene"));
+	ASSERT_TRUE(reloaded.IsValid());
+	ASSERT_EQ(reloaded->GetRootCount(), 1u);
+	Handle<Camera> camera = reloaded->GetRoot(0)->GetComponent<Camera>();
+	ASSERT_TRUE(camera.IsValid());
+	EXPECT_EQ(camera->GetViewportRect(), RectF(0.5f, 0.25f, 0.5f, 0.75f));
 
 	AssetDatabase::UnloadAsset(loaded);
 }

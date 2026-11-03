@@ -42,6 +42,7 @@
 #include "Graphics/EnvironmentIBL.h"
 #include "Graphics/Exposure.h"
 #include "Shalltear/Core/Graphics/CubeFace.h"
+#include "Graphics/CameraViewport.h"
 #include "Graphics/FramePassInternal.h"
 #include "Graphics/GraphicsSettings.h"
 #include "Graphics/LightCulling.h"
@@ -593,12 +594,22 @@ namespace Shalltear {
 				bool proceduralSceneDepth = false;
 				u32 firstCaster = 0;
 				u32 casterCount = 0;
+				RectI pixels;
+				bool composited = false;
 			};
 			struct WindowWork {
 				Handle<Window> window;
+				ViewTargetId target = INVALID_VIEW_TARGET;
 				Vector<CameraWork> cameras{GetMemoryResource(MemTag::Graphics)};
 			};
 			Vector<WindowWork> frameWork{GetMemoryResource(MemTag::Graphics)};
+			struct CameraSubmission {
+				ViewTargetId target = INVALID_VIEW_TARGET;
+				u32 firstCamera = 0;
+				u32 cameraCount = 0;
+			};
+			Vector<CameraSubmission> cameraSubmissions{GetMemoryResource(MemTag::Graphics)};
+			Vector<Handle<Camera>> submittedCameras{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<Window>> frameOverlayWindows{GetMemoryResource(MemTag::Graphics)};
 
 			GraphicsInternal::RenderGraph graph;
@@ -4446,20 +4457,23 @@ namespace Shalltear {
 				{state.proceduralVisible.data() + pending.firstProcedural, pending.proceduralCount});
 		}
 
+		f32 CameraAspect(const RenderState::CameraWork& work) {
+			return static_cast<f32>(work.pixels.size.x) / static_cast<f32>(work.pixels.size.y);
+		}
+
 		void PassRecordWindowPrepass(GraphExecution& exec, const GraphPass& pass) {
 			RenderState& state = *_state;
 			RenderState::WindowWork& work = state.frameWork[pass.work.index];
-			Camera* camera = work.cameras[pass.work.subIndex].camera;
+			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
+			Camera* camera = cameraWork.camera;
 			SceneObject* cameraOwner = camera ? camera->GetOwner().Get() : nullptr;
-			auto contextIt = state.windowContexts.find(pass.work.key);
-			if (!cameraOwner || contextIt == state.windowContexts.end()) {
+			if (!cameraOwner) {
 				return;
 			}
-			const Vec2I renderSize = contextIt->second.targetSize;
-			const f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
+			const Vec2I renderSize = cameraWork.pixels.size;
+			const f32 aspect = CameraAspect(cameraWork);
 			const Mat4 cameraWorld = cameraOwner->GetWorldMatrix();
 			const bool hasNormals = pass.work.flag;
-			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
 			const ViewRecordScope viewScope(cameraWork);
 			exec.drawCalls += RecordDepthNormalsPass(
 				*exec.cmd, *state.extractionArena, cameraWorld.Inverse(), camera->BuildProjection(aspect),
@@ -4480,12 +4494,11 @@ namespace Shalltear {
 			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
 			Camera* camera = cameraWork.camera;
 			SceneObject* cameraOwner = camera ? camera->GetOwner().Get() : nullptr;
-			auto contextIt = state.windowContexts.find(pass.work.key);
-			if (!cameraOwner || contextIt == state.windowContexts.end()) {
+			if (!cameraOwner) {
 				return;
 			}
-			const Vec2I renderSize = contextIt->second.targetSize;
-			const f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
+			const Vec2I renderSize = cameraWork.pixels.size;
+			const f32 aspect = CameraAspect(cameraWork);
 			const ViewRecordScope viewScope(cameraWork);
 			exec.drawCalls += RecordPrepassItemsOverCopy(
 				*exec.cmd, cameraOwner->GetWorldMatrix().Inverse(), camera->BuildProjection(aspect), cameraOwner->GetWorldPosition(),
@@ -4534,12 +4547,8 @@ namespace Shalltear {
 			if (!row) {
 				return;
 			}
-			auto contextIt = state.windowContexts.find(pass.work.key);
-			if (contextIt == state.windowContexts.end()) {
-				return;
-			}
-			Vec2I renderSize = contextIt->second.targetSize;
-			f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
+			const Vec2I renderSize = cameraWork.pixels.size;
+			const f32 aspect = CameraAspect(cameraWork);
 			Mat4 cameraWorld = cameraOwner->GetWorldMatrix();
 
 			GraphicsInternal::PassContextInit init;
@@ -4888,12 +4897,7 @@ namespace Shalltear {
 			if (!cameraOwner) {
 				return;
 			}
-			auto contextIt = state.windowContexts.find(pass.work.key);
-			if (contextIt == state.windowContexts.end()) {
-				return;
-			}
-			Vec2I renderSize = contextIt->second.targetSize;
-			f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
+			const f32 aspect = CameraAspect(cameraWork);
 			Mat4 cameraWorld = cameraOwner->GetWorldMatrix();
 			const ViewRecordScope viewScope(cameraWork);
 			exec.drawCalls += RecordShadowPass(*exec.cmd, *state.extractionArena, cameraWorld.Inverse(),
@@ -4916,16 +4920,8 @@ namespace Shalltear {
 			if (!cameraOwner) {
 				return;
 			}
-			Window* window = work.window.Get();
-			if (!window) {
-				return;
-			}
-			auto contextIt = state.windowContexts.find(pass.work.key);
-			if (contextIt == state.windowContexts.end()) {
-				return;
-			}
-			Vec2I renderSize = contextIt->second.targetSize;
-			f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
+			const Vec2I renderSize = cameraWork.pixels.size;
+			const f32 aspect = CameraAspect(cameraWork);
 
 			PassTargets targets;
 			targets.color = pass.textures[COLOR];
@@ -4945,6 +4941,60 @@ namespace Shalltear {
 											  {state.proceduralVisible.data() + cameraWork.firstProcedural, cameraWork.proceduralCount},
 											  cameraWork.proceduralSceneDepth ? pass.textures[ProceduralDepthSlot(pass.work.produced)]
 																			  : RHI::TextureHandle{});
+		}
+
+		void PassRecordCameraComposite(GraphExecution& exec, const GraphPass& pass) {
+			enum : u32 { SOURCE = 0,
+						 DESTINATION = 1,
+						 DEPTH = 2 };
+			RenderState& state = *_state;
+			const RenderState::CameraWork& cameraWork = state.frameWork[pass.work.index].cameras[pass.work.subIndex];
+			const bool firstOnChain = pass.work.flag;
+			if (firstOnChain) {
+				RHI::RenderPassDesc::DepthAttachment depth;
+				depth.texture = pass.textures[DEPTH];
+				depth.load = RHI::LoadOp::Clear;
+				depth.clearDepth = 0.0f;
+				RHI::RenderPassDesc clearDesc;
+				clearDesc.depth = &depth;
+				exec.cmd->BeginRenderPass(clearDesc);
+				exec.cmd->EndRenderPass();
+			}
+			RHI::RenderPassDesc::Attachment attachment;
+			attachment.texture = pass.textures[DESTINATION];
+			attachment.load = firstOnChain ? RHI::LoadOp::Clear : RHI::LoadOp::Load;
+			attachment.clearColor = Color::Black();
+			RHI::RenderPassDesc desc;
+			desc.colorAttachments = {&attachment, 1};
+			exec.cmd->BeginRenderPass(desc);
+			ShaderAsset* blit = state.blitShader.Get();
+			RHI::PipelineHandle pipeline =
+				blit ? GetOrCreatePipeline(blit, SCENE_COLOR_FORMAT, RHI::Format::Unknown, nullptr, state.msaaSamples)
+					 : RHI::PipelineHandle{};
+			if (pipeline.IsValid()) {
+				exec.cmd->SetViewportScissor(cameraWork.pixels);
+				exec.cmd->SetPipeline(pipeline);
+				RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
+											.WriteTexture(0, pass.textures[SOURCE])
+											.WriteSampler(1, state.clampSampler)
+											.Commit();
+				exec.cmd->BindTransientSet(1, set);
+				exec.cmd->Draw(3);
+				++exec.drawCalls;
+			}
+			exec.cmd->EndRenderPass();
+		}
+
+		void PassRecordTargetPresent(GraphExecution& exec, const GraphPass& pass) {
+			RenderState& state = *_state;
+			ShaderAsset* presentShader = state.presentShader.Get();
+			RHI::PipelineHandle pipeline = presentShader
+											   ? GetOrCreatePipeline(presentShader, RHI::Format::RGBA8Unorm, RHI::Format::Unknown)
+											   : RHI::PipelineHandle{};
+			if (!pipeline.IsValid()) {
+				return;
+			}
+			PassRecordPresent(exec, pass, pipeline, state.tonemap);
 		}
 
 		void PassRecordWindowPresent(GraphExecution& exec, const GraphPass& pass) {
@@ -5740,6 +5790,238 @@ namespace Shalltear {
 			capture.filled = true;
 		}
 
+		void PrepareCameraWork(RenderState::WindowWork& work, Vec2I renderSize) {
+			for (RenderState::CameraWork& camera : work.cameras) {
+				camera.pixels = GraphicsInternal::ViewportPixels(camera.camera->GetViewportRect(), renderSize);
+				camera.composited = camera.pixels != RectI(0, 0, renderSize.x, renderSize.y);
+			}
+			std::erase_if(work.cameras, [](const RenderState::CameraWork& camera) {
+				return camera.pixels.size.x <= 0 || camera.pixels.size.y <= 0;
+			});
+			std::stable_sort(work.cameras.begin(), work.cameras.end(),
+							 [](const RenderState::CameraWork& a, const RenderState::CameraWork& b) {
+								 return a.camera->GetPriority() < b.camera->GetPriority();
+							 });
+		}
+
+		void DeclareCameraComposition(RenderState& state, RHI::Device& device, GraphicsInternal::RenderGraph& graph, PassWork work,
+									  GraphResourceId sceneTarget, GraphResourceId sceneDepth,
+									  GraphResourceId worldSkin, GraphResourceId worldSkinBuffer) {
+			RenderState::WindowWork& windowWork = state.frameWork[work.index];
+			GraphResourceId windowShadowAtlas = graph.Import(state.shadowAtlas);
+			GraphResourceId windowPunctualAtlas = graph.Import(state.punctualShadowAtlas);
+			const bool windowCasts = PartitionHasShadowCaster(state, SceneKind::World, {});
+
+			SLT_GRAPH_SITE(windowShadowSite, "Render.Window.Shadow");
+			SLT_GRAPH_SITE(windowSceneSite, "Render.Window.Scene");
+			SLT_GRAPH_SITE(windowRowSite, "Render.Window.Row");
+			SLT_GRAPH_SITE(windowCopySite, "Render.Window.ColorCopy");
+			SLT_GRAPH_SITE(windowPrepassSite, "Render.Window.Prepass");
+			SLT_GRAPH_SITE(windowPrepassItemsSite, "Render.Window.PrepassItems");
+			SLT_GRAPH_SITE(cameraResolveSite, "Render.Window.CameraResolve");
+			SLT_GRAPH_SITE(compositeSite, "Render.Window.Composite");
+			bool chainWritten = false;
+			for (u32 cameraIndex = 0; cameraIndex < static_cast<u32>(windowWork.cameras.size()); ++cameraIndex) {
+				work.subIndex = cameraIndex;
+
+				const RenderState::CameraWork& cameraRows = windowWork.cameras[cameraIndex];
+				const Vec2I extent = cameraRows.pixels.size;
+				const f32 aspect = CameraAspect(cameraRows);
+
+				RHI::TextureDesc cameraHDRDesc;
+				RHI::TextureDesc cameraHDRMsDesc;
+				RHI::TextureDesc cameraDepthDesc;
+				SceneChainDescs(extent, state.msaaSamples, cameraHDRDesc, cameraHDRMsDesc, cameraDepthDesc);
+				GraphResourceId cameraTarget = sceneTarget;
+				GraphResourceId cameraDepth = sceneDepth;
+				GraphResourceId cameraColor = GraphicsInternal::INVALID_GRAPH_RESOURCE;
+				if (cameraRows.composited) {
+					cameraHDRDesc.debugName = "CameraColorHDR";
+					cameraHDRMsDesc.debugName = "CameraColorHDRMS";
+					cameraDepthDesc.debugName = "CameraDepth";
+					cameraColor = graph.CreateTransient(cameraHDRDesc);
+					cameraTarget = state.msaaSamples > 1 ? graph.CreateTransient(cameraHDRMsDesc) : cameraColor;
+					cameraDepth = graph.CreateTransient(cameraDepthDesc);
+					EnsureBlitShader();
+				}
+				const bool clearsTarget = cameraRows.composited || !chainWritten;
+				work.flag = clearsTarget;
+
+				u32 colorRequestKey = ROW_KEY_AFTER_LAST;
+				u32 prepassKey = ROW_KEY_AFTER_LAST;
+				PassRequests cameraRequests = PassRequests::None;
+				for (u32 slot = 0; slot < cameraRows.rowCount; ++slot) {
+					const RenderPass* row = state.viewPassRows[cameraRows.firstRow + slot].Get();
+					if (!row) {
+						continue;
+					}
+					const PassRequests requests = row->GetRequests();
+					cameraRequests |= requests;
+					const u32 key = RowSortKey(row->point, row->position);
+					if (HasFlag(requests, PassRequests::SceneColor)) {
+						colorRequestKey = Math::Min(colorRequestKey, key);
+					}
+					if (HasAnyFlag(requests, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
+						prepassKey = Math::Min(prepassKey, key);
+					}
+				}
+				RowProductions productions;
+				{
+					const SceneObject* planOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr;
+					productions = BuildRowPlans(state, graph, cameraRows.firstRow, cameraRows.firstRow + cameraRows.rowCount,
+												extent, planOwner ? planOwner->GetWorldPosition() : Vec3{});
+				}
+				ProceduralSlice procedural;
+				ProceduralView proceduralView;
+				proceduralView.extent = extent;
+				if (const SceneObject* cullOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr) {
+					proceduralView.view = cullOwner->GetWorldMatrix().Inverse();
+					proceduralView.projection = cameraRows.camera->BuildProjection(aspect);
+					proceduralView.cameraPosition = cullOwner->GetWorldPosition();
+					procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view,
+														 cameraRows.camera->GetCullingMask());
+				}
+				{
+					RenderState::CameraWork& slices = windowWork.cameras[cameraIndex];
+					slices.firstProcedural = procedural.first;
+					slices.proceduralCount = procedural.count;
+					slices.proceduralSceneDepth = procedural.sceneDepth;
+				}
+				if (procedural.sceneDepth) {
+					cameraRequests |= PassRequests::SceneDepth;
+					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
+				}
+				const bool prepassRead = prepassKey < ROW_KEY_AFTER_LAST;
+				RenderState::CameraDepthRecord* keptDepth = DepthToKeep(state, cameraRows.camera);
+				if (keptDepth) {
+					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
+				}
+				ProceduralSlice casters;
+				casters.first = static_cast<u32>(state.proceduralVisible.size());
+				if (windowCasts) {
+					casters = CollectProceduralCasters(state, false, {}, {}, cameraRows.camera ? cameraRows.camera->GetCullingMask() : ~0u);
+				}
+				windowWork.cameras[cameraIndex].firstCaster = casters.first;
+				windowWork.cameras[cameraIndex].casterCount = casters.count;
+
+				GraphResourceId sceneColorCopy = GraphicsInternal::INVALID_GRAPH_RESOURCE;
+				if (colorRequestKey < ROW_KEY_AFTER_LAST) {
+					RHI::TextureDesc copyDesc = cameraHDRDesc;
+					copyDesc.usage = copyDesc.usage | RHI::TextureUsage::TransferDst;
+					copyDesc.debugName = "SceneColorCopy";
+					sceneColorCopy = graph.CreateTransient(copyDesc);
+					if (state.msaaSamples <= 1) {
+						EnsureBlitShader();
+					}
+				}
+				const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
+				const bool wantsNormals = HasFlag(cameraRequests, PassRequests::SceneNormals);
+				PrepassImages prepassImages;
+				if (wantsPrepass) {
+					const SceneObject* keptOwner = keptDepth ? cameraRows.camera->GetOwner().Get() : nullptr;
+					prepassImages = DeclarePrepassImages(state, device, graph, keptOwner ? keptDepth : nullptr, extent,
+														 keptOwner ? keptOwner->GetWorldMatrix().Inverse() : Mat4::Identity(),
+														 keptOwner ? cameraRows.camera->BuildProjection(aspect) : Mat4::Identity(),
+														 prepassRead && procedural.opaqueItems);
+				}
+				const GraphResourceId prepassDepth = prepassImages.read;
+				GraphResourceId prepassNormals = GraphicsInternal::INVALID_GRAPH_RESOURCE;
+				if (wantsPrepass) {
+					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
+					if (wantsNormals) {
+						RHI::TextureDesc prepassNormalsDesc;
+						prepassNormalsDesc.size = extent;
+						prepassNormalsDesc.format = SCENE_NORMALS_FORMAT;
+						prepassNormalsDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled;
+						prepassNormalsDesc.debugName = "ScenePrepassNormals";
+						prepassNormals = graph.CreateTransient(prepassNormalsDesc);
+					}
+				}
+
+				DeclareProceduralViewSteps(state, graph, procedural, proceduralView);
+
+				u32 nextCameraKey = 0;
+				const bool nothingToEmit = cameraRows.rowCount == 0 && colorRequestKey >= ROW_KEY_AFTER_LAST && !wantsPrepass;
+				auto flushCameraRowsBefore = [&](u32 anchorKey) {
+					if (nothingToEmit) {
+						nextCameraKey = anchorKey;
+						return;
+					}
+					for (u32 key = nextCameraKey; key < anchorKey; ++key) {
+						if (key == colorRequestKey) {
+							const bool resolveArm = state.msaaSamples > 1;
+							work.flag = resolveArm;
+							graph.AddPass("Render.Window.ColorCopy", windowCopySite, &PassRecordSceneColorCopy, work);
+							graph.Read(cameraTarget, resolveArm ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
+							graph.Write(sceneColorCopy, resolveArm ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
+							work.flag = clearsTarget;
+						}
+						if (wantsPrepass && key == prepassKey) {
+							DeclarePrepassPasses(state, graph, "Render.Window.Prepass", windowPrepassSite, &PassRecordWindowPrepass,
+												 "Render.Window.PrepassItems", windowPrepassItemsSite, &PassRecordWindowPrepassItems,
+												 work, prepassImages, prepassNormals, worldSkin, procedural);
+						}
+						for (u32 slot = 0; slot < cameraRows.rowCount; ++slot) {
+							const RenderPass* row = state.viewPassRows[cameraRows.firstRow + slot].Get();
+							if (!row || RowSortKey(row->point, row->position) != key) {
+								continue;
+							}
+							work.element = slot;
+							DeclareRowPasses(state, graph, "Render.Window.Row", windowRowSite, &PassRecordWindowRow,
+											 work, cameraRows.firstRow + slot,
+											 {cameraTarget, cameraDepth, sceneColorCopy, prepassDepth, prepassNormals, worldSkinBuffer});
+						}
+					}
+					nextCameraKey = anchorKey;
+					work.element = 0;
+				};
+				flushCameraRowsBefore(RowSortKey(PassPoint::Shadows, FrameStagePosition::Normal));
+
+				if (windowCasts) {
+					graph.AddPass("Render.Window.Shadow", windowShadowSite, &PassRecordWindowShadow, work);
+					graph.Write(windowShadowAtlas, RHI::ResourceState::DepthWrite);
+					graph.Write(windowPunctualAtlas, RHI::ResourceState::DepthWrite);
+					graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
+					DeclareProceduralReads(state, graph, casters);
+				}
+
+				flushCameraRowsBefore(RowSortKey(PassPoint::Opaque, FrameStagePosition::Normal));
+				work.produced = productions.ambientOcclusion != GraphicsInternal::INVALID_GRAPH_RESOURCE;
+				graph.AddPass("Render.Window.Scene", windowSceneSite, &PassRecordWindowScene, work);
+				graph.Write(cameraTarget, RHI::ResourceState::RenderTarget);
+				graph.Write(cameraDepth, RHI::ResourceState::DepthWrite);
+				graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
+				graph.Read(windowShadowAtlas, RHI::ResourceState::ShaderResource);
+				graph.Read(windowPunctualAtlas, RHI::ResourceState::ShaderResource);
+				if (work.produced) {
+					graph.Read(productions.ambientOcclusion, RHI::ResourceState::ShaderResource);
+				}
+				work.produced = false;
+				if (procedural.sceneDepth) {
+					graph.Read(prepassDepth, RHI::ResourceState::ShaderResource);
+				}
+				DeclareProceduralReads(state, graph, procedural);
+
+				flushCameraRowsBefore(ROW_KEY_AFTER_LAST);
+
+				if (cameraRows.composited) {
+					if (state.msaaSamples > 1) {
+						graph.AddPass("Render.Window.CameraResolve", cameraResolveSite, &PassRecordResolve, work);
+						graph.Read(cameraTarget, RHI::ResourceState::TransferSrc);
+						graph.Write(cameraColor, RHI::ResourceState::TransferDst);
+					}
+					work.flag = !chainWritten;
+					graph.AddPass("Render.Window.Composite", compositeSite, &PassRecordCameraComposite, work);
+					graph.Read(cameraColor, RHI::ResourceState::ShaderResource);
+					graph.Write(sceneTarget, RHI::ResourceState::RenderTarget);
+					if (work.flag) {
+						graph.Write(sceneDepth, RHI::ResourceState::DepthWrite);
+					}
+				}
+				chainWritten = true;
+			}
+		}
+
 		void BuildFrame(RenderState& state, RHI::Device& device, u32 workCount,
 						bool anyColdView, bool anyOffscreenWork, ShaderAsset* presentShader) {
 			GraphicsInternal::RenderGraph& graph = state.graph;
@@ -6128,6 +6410,49 @@ namespace Shalltear {
 				}
 			}
 
+			for (u32 workIndex = 0; workIndex < workCount; ++workIndex) {
+				RenderState::WindowWork& targetWork = state.frameWork[workIndex];
+				if (targetWork.target == INVALID_VIEW_TARGET) {
+					continue;
+				}
+				auto targetIt = state.viewTargets.find(targetWork.target);
+				if (targetIt == state.viewTargets.end() || !targetIt->second.color.IsValid()) {
+					continue;
+				}
+				const Vec2I renderSize = state.ScaledSize(targetIt->second.size);
+				PrepareCameraWork(targetWork, renderSize);
+				GraphResourceId result = graph.Import(targetIt->second.color, true, RHI::ResourceState::ShaderResource);
+				PassWork work;
+				work.key = targetWork.target;
+				work.index = workIndex;
+				if (targetWork.cameras.empty()) {
+					SLT_GRAPH_SITE(targetClearSite, "Render.View.Cold");
+					graph.AddPass("Render.View.Cold", targetClearSite, &PassRecordViewCold, work);
+					graph.Write(result, RHI::ResourceState::RenderTarget);
+					continue;
+				}
+
+				RHI::TextureDesc hdrDesc;
+				RHI::TextureDesc hdrMsDesc;
+				RHI::TextureDesc depthDesc;
+				SceneChainDescs(renderSize, state.msaaSamples, hdrDesc, hdrMsDesc, depthDesc);
+				GraphResourceId hdrColor = graph.CreateTransient(hdrDesc);
+				GraphResourceId sceneTarget = state.msaaSamples > 1 ? graph.CreateTransient(hdrMsDesc) : hdrColor;
+				GraphResourceId sceneDepth = graph.CreateTransient(depthDesc);
+				DeclareCameraComposition(state, device, graph, work, sceneTarget, sceneDepth, worldSkin, worldSkinBuffer);
+
+				if (state.msaaSamples > 1) {
+					SLT_GRAPH_SITE(targetResolveSite, "Render.Window.Resolve");
+					graph.AddPass("Render.Window.Resolve", targetResolveSite, &PassRecordResolve, work);
+					graph.Read(sceneTarget, RHI::ResourceState::TransferSrc);
+					graph.Write(hdrColor, RHI::ResourceState::TransferDst);
+				}
+				SLT_GRAPH_SITE(targetPresentSite, "Render.Window.TargetPresent");
+				graph.AddPass("Render.Window.TargetPresent", targetPresentSite, &PassRecordTargetPresent, work);
+				graph.Read(hdrColor, RHI::ResourceState::ShaderResource);
+				graph.Write(result, RHI::ResourceState::RenderTarget);
+			}
+
 			if (anyOffscreenWork) {
 				GraphResourceId offscreen = graph.CreateVirtual(true);
 				PassWork offscreenWork;
@@ -6196,6 +6521,7 @@ namespace Shalltear {
 				context.frameSize = frameSize;
 
 				Vec2I renderSize = state.ScaledSize(frameSize);
+				PrepareCameraWork(windowWork, renderSize);
 				if (!windowWork.cameras.empty() && (context.targetSize != renderSize || !context.sceneColor.IsValid())) {
 					if (context.sceneColor.IsValid()) {
 						device.DestroyResource(context.sceneColor);
@@ -6211,11 +6537,6 @@ namespace Shalltear {
 					context.sceneColor = device.CreateTextureResource(colorDesc);
 					context.targetSize = renderSize;
 				}
-
-				std::sort(windowWork.cameras.begin(), windowWork.cameras.end(),
-						  [](const RenderState::CameraWork& a, const RenderState::CameraWork& b) {
-							  return a.camera->GetPriority() < b.camera->GetPriority();
-						  });
 
 				GraphResourceId backbufferId = graph.Import(backbuffer, true, RHI::ResourceState::Present);
 				GraphResourceId frameId = letterboxed ? graph.Import(context.frameColor) : backbufferId;
@@ -6235,184 +6556,7 @@ namespace Shalltear {
 					GraphResourceId sceneTarget = state.msaaSamples > 1 ? graph.CreateTransient(windowHDRMsDesc) : sceneColor;
 					GraphResourceId sceneDepth = graph.CreateTransient(windowDepthDesc);
 
-					GraphResourceId windowShadowAtlas = graph.Import(state.shadowAtlas);
-					GraphResourceId windowPunctualAtlas = graph.Import(state.punctualShadowAtlas);
-					const bool windowCasts = PartitionHasShadowCaster(state, SceneKind::World, {});
-
-					SLT_GRAPH_SITE(windowShadowSite, "Render.Window.Shadow");
-					SLT_GRAPH_SITE(windowSceneSite, "Render.Window.Scene");
-					SLT_GRAPH_SITE(windowRowSite, "Render.Window.Row");
-					SLT_GRAPH_SITE(windowCopySite, "Render.Window.ColorCopy");
-					SLT_GRAPH_SITE(windowPrepassSite, "Render.Window.Prepass");
-					SLT_GRAPH_SITE(windowPrepassItemsSite, "Render.Window.PrepassItems");
-					for (u32 cameraIndex = 0; cameraIndex < static_cast<u32>(windowWork.cameras.size()); ++cameraIndex) {
-						work.subIndex = cameraIndex;
-						work.flag = cameraIndex == 0;
-
-						const RenderState::CameraWork& cameraRows = windowWork.cameras[cameraIndex];
-
-						u32 colorRequestKey = ROW_KEY_AFTER_LAST;
-						u32 prepassKey = ROW_KEY_AFTER_LAST;
-						PassRequests cameraRequests = PassRequests::None;
-						for (u32 slot = 0; slot < cameraRows.rowCount; ++slot) {
-							const RenderPass* row = state.viewPassRows[cameraRows.firstRow + slot].Get();
-							if (!row) {
-								continue;
-							}
-							const PassRequests requests = row->GetRequests();
-							cameraRequests |= requests;
-							const u32 key = RowSortKey(row->point, row->position);
-							if (HasFlag(requests, PassRequests::SceneColor)) {
-								colorRequestKey = Math::Min(colorRequestKey, key);
-							}
-							if (HasAnyFlag(requests, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
-								prepassKey = Math::Min(prepassKey, key);
-							}
-						}
-						RowProductions productions;
-						{
-							const SceneObject* planOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr;
-							productions = BuildRowPlans(state, graph, cameraRows.firstRow, cameraRows.firstRow + cameraRows.rowCount,
-														renderSize, planOwner ? planOwner->GetWorldPosition() : Vec3{});
-						}
-						ProceduralSlice procedural;
-						ProceduralView proceduralView;
-						proceduralView.extent = renderSize;
-						if (const SceneObject* cullOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr) {
-							const f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
-							proceduralView.view = cullOwner->GetWorldMatrix().Inverse();
-							proceduralView.projection = cameraRows.camera->BuildProjection(aspect);
-							proceduralView.cameraPosition = cullOwner->GetWorldPosition();
-							procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view,
-																 cameraRows.camera->GetCullingMask());
-						}
-						{
-							RenderState::CameraWork& slices = windowWork.cameras[cameraIndex];
-							slices.firstProcedural = procedural.first;
-							slices.proceduralCount = procedural.count;
-							slices.proceduralSceneDepth = procedural.sceneDepth;
-						}
-						if (procedural.sceneDepth) {
-							cameraRequests |= PassRequests::SceneDepth;
-							prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
-						}
-						const bool prepassRead = prepassKey < ROW_KEY_AFTER_LAST;
-						RenderState::CameraDepthRecord* keptDepth = DepthToKeep(state, cameraRows.camera);
-						if (keptDepth) {
-							prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
-						}
-						ProceduralSlice casters;
-						casters.first = static_cast<u32>(state.proceduralVisible.size());
-						if (windowCasts) {
-							casters = CollectProceduralCasters(state, false, {}, {}, cameraRows.camera ? cameraRows.camera->GetCullingMask() : ~0u);
-						}
-						windowWork.cameras[cameraIndex].firstCaster = casters.first;
-						windowWork.cameras[cameraIndex].casterCount = casters.count;
-
-						GraphResourceId sceneColorCopy = GraphicsInternal::INVALID_GRAPH_RESOURCE;
-						if (colorRequestKey < ROW_KEY_AFTER_LAST) {
-							RHI::TextureDesc copyDesc = windowHDRDesc;
-							copyDesc.usage = copyDesc.usage | RHI::TextureUsage::TransferDst;
-							copyDesc.debugName = "SceneColorCopy";
-							sceneColorCopy = graph.CreateTransient(copyDesc);
-							if (state.msaaSamples <= 1) {
-								EnsureBlitShader();
-							}
-						}
-						const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
-						const bool wantsNormals = HasFlag(cameraRequests, PassRequests::SceneNormals);
-						PrepassImages prepassImages;
-						if (wantsPrepass) {
-							const SceneObject* keptOwner = keptDepth ? cameraRows.camera->GetOwner().Get() : nullptr;
-							const f32 aspect = static_cast<f32>(renderSize.x) / static_cast<f32>(renderSize.y);
-							prepassImages = DeclarePrepassImages(state, device, graph, keptOwner ? keptDepth : nullptr, renderSize,
-																 keptOwner ? keptOwner->GetWorldMatrix().Inverse() : Mat4::Identity(),
-																 keptOwner ? cameraRows.camera->BuildProjection(aspect) : Mat4::Identity(),
-																 prepassRead && procedural.opaqueItems);
-						}
-						const GraphResourceId prepassDepth = prepassImages.read;
-						GraphResourceId prepassNormals = GraphicsInternal::INVALID_GRAPH_RESOURCE;
-						if (wantsPrepass) {
-							prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
-							if (wantsNormals) {
-								RHI::TextureDesc prepassNormalsDesc;
-								prepassNormalsDesc.size = renderSize;
-								prepassNormalsDesc.format = SCENE_NORMALS_FORMAT;
-								prepassNormalsDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled;
-								prepassNormalsDesc.debugName = "ScenePrepassNormals";
-								prepassNormals = graph.CreateTransient(prepassNormalsDesc);
-							}
-						}
-
-						DeclareProceduralViewSteps(state, graph, procedural, proceduralView);
-
-						u32 nextCameraKey = 0;
-						const bool nothingToEmit = cameraRows.rowCount == 0 && colorRequestKey >= ROW_KEY_AFTER_LAST && !wantsPrepass;
-						auto flushCameraRowsBefore = [&](u32 anchorKey) {
-							if (nothingToEmit) {
-								nextCameraKey = anchorKey;
-								return;
-							}
-							for (u32 key = nextCameraKey; key < anchorKey; ++key) {
-								if (key == colorRequestKey) {
-									const bool resolveArm = state.msaaSamples > 1;
-									work.flag = resolveArm;
-									graph.AddPass("Render.Window.ColorCopy", windowCopySite, &PassRecordSceneColorCopy, work);
-									graph.Read(sceneTarget, resolveArm ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
-									graph.Write(sceneColorCopy, resolveArm ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
-									work.flag = cameraIndex == 0;
-								}
-								if (wantsPrepass && key == prepassKey) {
-									DeclarePrepassPasses(state, graph, "Render.Window.Prepass", windowPrepassSite, &PassRecordWindowPrepass,
-														 "Render.Window.PrepassItems", windowPrepassItemsSite, &PassRecordWindowPrepassItems,
-														 work, prepassImages, prepassNormals, worldSkin, procedural);
-								}
-								for (u32 slot = 0; slot < cameraRows.rowCount; ++slot) {
-									const RenderPass* row = state.viewPassRows[cameraRows.firstRow + slot].Get();
-									if (!row || RowSortKey(row->point, row->position) != key) {
-										continue;
-									}
-									work.element = slot;
-									DeclareRowPasses(state, graph, "Render.Window.Row", windowRowSite, &PassRecordWindowRow,
-													 work, cameraRows.firstRow + slot,
-													 {sceneTarget, sceneDepth, sceneColorCopy, prepassDepth, prepassNormals, worldSkinBuffer});
-								}
-							}
-							nextCameraKey = anchorKey;
-							work.element = 0;
-						};
-						flushCameraRowsBefore(RowSortKey(PassPoint::Shadows, FrameStagePosition::Normal));
-
-						if (windowCasts) {
-							graph.AddPass("Render.Window.Shadow", windowShadowSite, &PassRecordWindowShadow, work);
-							graph.Write(windowShadowAtlas, RHI::ResourceState::DepthWrite);
-							graph.Write(windowPunctualAtlas, RHI::ResourceState::DepthWrite);
-							graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
-							DeclareProceduralReads(state, graph, casters);
-						}
-
-						flushCameraRowsBefore(RowSortKey(PassPoint::Opaque, FrameStagePosition::Normal));
-						work.produced = productions.ambientOcclusion != GraphicsInternal::INVALID_GRAPH_RESOURCE;
-						graph.AddPass("Render.Window.Scene", windowSceneSite, &PassRecordWindowScene, work);
-						graph.Write(sceneTarget, RHI::ResourceState::RenderTarget);
-						graph.Write(sceneDepth, RHI::ResourceState::DepthWrite);
-						graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
-						graph.Read(windowShadowAtlas, RHI::ResourceState::ShaderResource);
-						graph.Read(windowPunctualAtlas, RHI::ResourceState::ShaderResource);
-						if (work.produced) {
-							graph.Read(productions.ambientOcclusion, RHI::ResourceState::ShaderResource);
-						}
-						work.produced = false;
-						if (procedural.sceneDepth) {
-							graph.Read(prepassDepth, RHI::ResourceState::ShaderResource);
-						}
-						DeclareProceduralReads(state, graph, procedural);
-
-						flushCameraRowsBefore(ROW_KEY_AFTER_LAST);
-					}
-					work.subIndex = 0;
-					work.element = 0;
-					work.flag = false;
+					DeclareCameraComposition(state, device, graph, work, sceneTarget, sceneDepth, worldSkin, worldSkinBuffer);
 
 					if (state.msaaSamples > 1) {
 						SLT_GRAPH_SITE(windowResolveSite, "Render.Window.Resolve");
@@ -7251,6 +7395,8 @@ namespace Shalltear {
 			state.viewSkippedTypes.clear();
 			state.viewOutlines.clear();
 			state.passScopes.clear();
+			state.cameraSubmissions.clear();
+			state.submittedCameras.clear();
 
 			for (auto& [key, entry] : state.pipelineCache) {
 				state.device->DestroyResource(entry.pipeline);
@@ -7631,6 +7777,28 @@ namespace Shalltear {
 		state.pendingViews.push_back(pending);
 	}
 
+	void RenderSystem::SubmitCameras(ViewTargetId target, std::span<const Handle<Camera>> cameras) {
+		if (!IsRenderingAvailable()) {
+			return;
+		}
+		RenderState& state = *_state;
+		if (state.viewTargets.find(target) == state.viewTargets.end()) {
+			return;
+		}
+		RenderState::CameraSubmission submission;
+		submission.target = target;
+		submission.firstCamera = static_cast<u32>(state.submittedCameras.size());
+		submission.cameraCount = static_cast<u32>(cameras.size());
+		state.submittedCameras.insert(state.submittedCameras.end(), cameras.begin(), cameras.end());
+		for (RenderState::CameraSubmission& existing : state.cameraSubmissions) {
+			if (existing.target == target) {
+				existing = submission;
+				return;
+			}
+		}
+		state.cameraSubmissions.push_back(submission);
+	}
+
 	void RenderSystem::SetSceneCamerasRenderToWindows(bool enabled) {
 		if (_state) {
 			_state->sceneCamerasRenderToWindows = enabled;
@@ -7868,6 +8036,7 @@ namespace Shalltear {
 		u32 workCount = 0;
 		for (WindowWork& entry : work) {
 			entry.window = {};
+			entry.target = INVALID_VIEW_TARGET;
 			entry.cameras.clear();
 		}
 		auto findWork = [&](Handle<Window> window) -> WindowWork* {
@@ -7885,6 +8054,28 @@ namespace Shalltear {
 			WindowWork& entry = work[workCount++];
 			entry.window = window;
 			return entry;
+		};
+		auto appendCamera = [&](WindowWork& entry, Camera* camera) {
+			RenderState::CameraWork cameraWork;
+			cameraWork.camera = camera;
+			cameraWork.firstRow = static_cast<u32>(state.viewPassRows.size());
+			for (u32 slot = 0; slot < camera->GetPassCount(); ++slot) {
+				Handle<RenderPass> row = camera->GetPass(slot);
+				const RenderPass* pass = row.Get();
+				if (!pass) {
+					continue;
+				}
+				if (!IsPerViewPassPoint(pass->point)) {
+					SLT_LOG_WARN("Graphics", "Camera: a row asked for '{}' (not a per-view point). Dropped",
+								 GetPassPointName(pass->point));
+					continue;
+				}
+				state.viewPassRows.push_back(row);
+			}
+			cameraWork.rowCount = static_cast<u32>(state.viewPassRows.size()) - cameraWork.firstRow;
+			cameraWork.scopeIndex = static_cast<u32>(state.passScopes.size());
+			state.passScopes.push_back({0, 0, SceneKind::World});
+			entry.cameras.push_back(cameraWork);
 		};
 
 		Handle<Window> primary = WindowSystem::GetPrimaryWindow();
@@ -7909,27 +8100,20 @@ namespace Shalltear {
 			if (!entry) {
 				entry = &acquireWork(target);
 			}
+			appendCamera(*entry, camera);
+		}
 
-			RenderState::CameraWork cameraWork;
-			cameraWork.camera = camera;
-			cameraWork.firstRow = static_cast<u32>(state.viewPassRows.size());
-			for (u32 slot = 0; slot < camera->GetPassCount(); ++slot) {
-				Handle<RenderPass> row = camera->GetPass(slot);
-				const RenderPass* pass = row.Get();
-				if (!pass) {
-					continue;
-				}
-				if (!IsPerViewPassPoint(pass->point)) {
-					SLT_LOG_WARN("Graphics", "Camera: a row asked for '{}' (not a per-view point). Dropped",
-								 GetPassPointName(pass->point));
-					continue;
-				}
-				state.viewPassRows.push_back(row);
+		for (const RenderState::CameraSubmission& submission : state.cameraSubmissions) {
+			if (state.viewTargets.find(submission.target) == state.viewTargets.end()) {
+				continue;
 			}
-			cameraWork.rowCount = static_cast<u32>(state.viewPassRows.size()) - cameraWork.firstRow;
-			cameraWork.scopeIndex = static_cast<u32>(state.passScopes.size());
-			state.passScopes.push_back({0, 0, SceneKind::World});
-			entry->cameras.push_back(cameraWork);
+			WindowWork& entry = acquireWork({});
+			entry.target = submission.target;
+			for (u32 index = 0; index < submission.cameraCount; ++index) {
+				if (Camera* camera = state.submittedCameras[submission.firstCamera + index].Get()) {
+					appendCamera(entry, camera);
+				}
+			}
 		}
 
 		if (state.overlay) {
@@ -7980,6 +8164,8 @@ namespace Shalltear {
 			state.viewSkippedTypes.clear();
 			state.viewOutlines.clear();
 			state.passScopes.clear();
+			state.cameraSubmissions.clear();
+			state.submittedCameras.clear();
 			return;
 		}
 
@@ -8000,6 +8186,8 @@ namespace Shalltear {
 			state.viewSkippedTypes.clear();
 			state.viewOutlines.clear();
 			state.passScopes.clear();
+			state.cameraSubmissions.clear();
+			state.submittedCameras.clear();
 			return;
 		}
 
@@ -8037,6 +8225,8 @@ namespace Shalltear {
 		state.viewSkippedTypes.clear();
 		state.viewOutlines.clear();
 		state.passScopes.clear();
+		state.cameraSubmissions.clear();
+		state.submittedCameras.clear();
 
 		device.EndFrame();
 

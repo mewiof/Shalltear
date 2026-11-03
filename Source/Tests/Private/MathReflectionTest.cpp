@@ -209,3 +209,42 @@ TEST(MathReflectionTest, RectIRoundTripsBothSerializers) {
 	ASSERT_TRUE(TextSerializer::Deserialize(&fromText, RectComponent::GetReflectType(), json));
 	EXPECT_EQ(fromText.windowRect, src.windowRect);
 }
+
+namespace {
+
+	class FloatRectComponent : public Object {
+	public:
+		RectF viewport;
+
+		SLT_REFLECT_CLASS(FloatRectComponent)
+		SLT_REFLECT_PARENT(Object)
+		SLT_REFLECT_FIELD(viewport)
+		SLT_END_REFLECT()
+	};
+
+} // anonymous namespace
+
+TEST(MathReflectionTest, RectFRegistersAsPrimitive) {
+	const TypeInfo* info = GetStaticType<RectF>();
+	ASSERT_NE(info, nullptr);
+	EXPECT_EQ(info->name, StringHash("RectF"));
+	EXPECT_EQ(info->size, sizeof(RectF));
+	EXPECT_TRUE(info->flags & TypeFlagPrimitive);
+	EXPECT_TRUE(info->flags & TypeFlagTriviallyCopyable);
+}
+
+TEST(MathReflectionTest, RectFRoundTripsBothSerializers) {
+	FloatRectComponent src;
+	src.viewport = RectF(0.125f, -0.5f, 0.75f, 2.5f);
+
+	Buffer binary = BinarySerializer::Serialize(&src, FloatRectComponent::GetReflectType());
+	ASSERT_TRUE(binary);
+	FloatRectComponent fromBinary;
+	ASSERT_TRUE(BinarySerializer::Deserialize(&fromBinary, FloatRectComponent::GetReflectType(), binary));
+	EXPECT_EQ(fromBinary.viewport, src.viewport);
+
+	str json = TextSerializer::Serialize(&src, FloatRectComponent::GetReflectType());
+	FloatRectComponent fromText;
+	ASSERT_TRUE(TextSerializer::Deserialize(&fromText, FloatRectComponent::GetReflectType(), json));
+	EXPECT_EQ(fromText.viewport, src.viewport);
+}

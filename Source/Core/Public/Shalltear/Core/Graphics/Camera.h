@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Graphics/RenderPass.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Color.h"
+#include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/MathReflect.h"
 #include "Shalltear/Core/Math/Matrix.h"
 #include "Shalltear/Core/Scene/Component.h"
@@ -21,6 +22,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_priority)
 		SLT_REFLECT_FIELD(_clearColor)
 		SLT_REFLECT_FIELD(_cullingMask)
+		SLT_REFLECT_FIELD(_viewportRect)
 		SLT_REFLECT_FIELD(_iso)
 		SLT_REFLECT_FIELD(_shutterSpeed)
 		SLT_REFLECT_FIELD(_aperture, SLT_RANGE(0.7f, 32.0f))
@@ -47,6 +49,10 @@ namespace Shalltear {
 
 		u32 GetCullingMask() const { return _cullingMask; }
 		void SetCullingMask(u32 mask) { _cullingMask = mask; }
+
+		// normalized to target, (0, 0) at bottom left
+		RectF GetViewportRect() const { return _viewportRect; }
+		void SetViewportRect(const RectF& rect) { _viewportRect = rect; }
 
 		i32 GetIso() const { return _iso; }
 		void SetIso(i32 iso) { _iso = iso; }
@@ -84,6 +90,7 @@ namespace Shalltear {
 		i32 _priority = 0;
 		Color _clearColor = Color::Black();
 		u32 _cullingMask = ~0u;
+		RectF _viewportRect{0.0f, 0.0f, 1.0f, 1.0f};
 		i32 _iso = 200;
 		f32 _shutterSpeed = 1.0f / 200.0f;
 		f32 _aperture = 16.0f;

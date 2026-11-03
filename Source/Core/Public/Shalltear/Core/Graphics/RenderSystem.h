@@ -179,6 +179,9 @@ namespace Shalltear {
 
 		static void SubmitView(ViewTargetId target, const ViewDesc& desc);
 
+		// composed like a window's cameras, latest submission per target
+		static void SubmitCameras(ViewTargetId target, std::span<const Handle<Camera>> cameras);
+
 		static u32 GetCascadeFit(ViewTargetId target, std::span<CascadeFit> out);
 
 		static bool TakePickAnswer(ViewTargetId target, PickAnswer& out);

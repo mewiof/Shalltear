@@ -114,7 +114,12 @@ namespace Shalltear {
 			const Quat rotation = owner->GetWorldRotation();
 			const Color32 color = CameraWire();
 			const Mat4 view = Mat4::TRS(position, rotation, Vec3::One()).Inverse();
-			const Mat4 projection = camera->BuildProjection(context.viewAspect <= 0.0f ? 1.0f : context.viewAspect);
+			const RectF rect = camera->GetViewportRect();
+			f32 aspect = context.viewAspect <= 0.0f ? 1.0f : context.viewAspect;
+			if (rect.size.x > 0.0f && rect.size.y > 0.0f) {
+				aspect *= rect.size.x / rect.size.y;
+			}
+			const Mat4 projection = camera->BuildProjection(aspect);
 			AppendFrustum(*context.lines, (projection * view).Inverse(), color);
 		}
 

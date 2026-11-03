@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Shalltear/Core/Containers.h"
-#include "Shalltear/Core/Graphics/RenderPass.h"
+#include "Shalltear/Core/Graphics/Camera.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Vector.h"
 #include "Shalltear/Core/Types.h"
@@ -58,7 +58,7 @@ namespace Shalltear {
 		u64 _toggleVersion = 0;
 		Vector<u8> _toggleStates{GetMemoryResource(MemTag::Editor)};
 		UI::ElementHandle _screenLayer;
-		Vector<Handle<RenderPass>> _passRows{GetMemoryResource(MemTag::Editor)};
+		Vector<Handle<Camera>> _cameras{GetMemoryResource(MemTag::Editor)};
 		bool _labelSaysCamera = false;
 		bool _focusPending = false;
 		bool _pointerInScreen = false;

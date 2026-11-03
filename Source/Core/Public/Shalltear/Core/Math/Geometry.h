@@ -46,6 +46,23 @@ namespace Shalltear {
 
 	static_assert(sizeof(RectI) == 4 * sizeof(i32), "RectI must stay 4 contiguous i32s for the flat serialization path");
 
+	struct RectF {
+		Vec2 position;
+		Vec2 size;
+
+		constexpr RectF() noexcept : position(), size() {}
+		constexpr RectF(Vec2 position, Vec2 size) noexcept : position(position), size(size) {}
+		constexpr RectF(f32 x, f32 y, f32 width, f32 height) noexcept
+			: position(x, y), size(width, height) {}
+
+		[[nodiscard]] constexpr bool operator==(const RectF& rhs) const noexcept {
+			return position == rhs.position && size == rhs.size;
+		}
+		[[nodiscard]] constexpr bool operator!=(const RectF& rhs) const noexcept { return !(*this == rhs); }
+	};
+
+	static_assert(sizeof(RectF) == 4 * sizeof(f32), "RectF must stay 4 contiguous f32s for the flat serialization path");
+
 	struct Ray {
 		Vec3 origin;
 		Vec3 direction;

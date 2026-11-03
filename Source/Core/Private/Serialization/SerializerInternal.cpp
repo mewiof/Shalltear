@@ -105,6 +105,7 @@ namespace Shalltear {
 					{StringHash("Vec4I"), {MathPrimDesc::Comp::I32, 4}},
 					{StringHash("Color32"), {MathPrimDesc::Comp::U8, 4}},
 					{StringHash("RectI"), {MathPrimDesc::Comp::I32, 4}},
+					{StringHash("RectF"), {MathPrimDesc::Comp::F32, 4}},
 				};
 				for (const Entry& entry : entries) {
 					if (type->name == entry.name) {

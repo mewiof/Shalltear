@@ -172,6 +172,17 @@ namespace Shalltear::EditorViewportOps {
 			}
 		}
 
+		void CameraCollector(SceneObject& object, void* user) {
+			Vector<Handle<Camera>>& out = *static_cast<Vector<Handle<Camera>>*>(user);
+			if (!object.IsActiveInHierarchy()) {
+				return;
+			}
+			Camera* camera = object.GetComponent<Camera>().Get();
+			if (camera && camera->IsEnabledSelf()) {
+				out.push_back(Handle<Camera>(camera));
+			}
+		}
+
 		bool HasSelectedAncestor(Handle<SceneObject> object) {
 			SceneObject* raw = object.Get();
 			if (!raw) {
@@ -615,6 +626,17 @@ namespace Shalltear::EditorViewportOps {
 			}
 		}
 		return search.best ? Handle<Camera>(search.best) : Handle<Camera>{};
+	}
+
+	void CollectSceneCameras(Vector<Handle<Camera>>& out) {
+		out.clear();
+		Vector<Handle<Scene>> scenes{GetMemoryResource(MemTag::Editor)};
+		EditorSceneOps::GetStageScenes(scenes);
+		for (const Handle<Scene>& sceneHandle : scenes) {
+			if (Scene* scene = sceneHandle.Get()) {
+				scene->ForEachObject(&CameraCollector, &out);
+			}
+		}
 	}
 
 	namespace {

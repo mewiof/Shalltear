@@ -585,6 +585,32 @@ TEST_F(ViewportOpsFixture, ActiveCameraIsTheHighestPriorityOne) {
 	EXPECT_EQ(Ops::FindActiveSceneCamera(), otherCamera);
 }
 
+TEST_F(ViewportOpsFixture, SceneCamerasAreTheActiveEnabledOnes) {
+	Vector<Handle<Camera>> cameras{GetMemoryResource(MemTag::Editor)};
+	Ops::CollectSceneCameras(cameras);
+	EXPECT_TRUE(cameras.empty());
+
+	Handle<Camera> shown = SceneSystem::CreateObject("Shown", _scene).Get()->AddComponent<Camera>();
+	Handle<SceneObject> inactiveObject = SceneSystem::CreateObject("Inactive", _scene);
+	inactiveObject.Get()->AddComponent<Camera>();
+	inactiveObject.Get()->SetActive(false);
+	Handle<Camera> disabled = SceneSystem::CreateObject("Disabled", _scene).Get()->AddComponent<Camera>();
+	disabled.Get()->SetEnabled(false);
+	Handle<Scene> other = SceneSystem::CreateScene("Other");
+	Handle<Camera> elsewhere = SceneSystem::CreateObject("Elsewhere", other).Get()->AddComponent<Camera>();
+
+	Ops::CollectSceneCameras(cameras);
+	ASSERT_EQ(cameras.size(), 2u);
+	EXPECT_EQ(cameras[0], shown);
+	EXPECT_EQ(cameras[1], elsewhere);
+
+	SceneSystem::UnloadScene(other);
+	SceneSystem::EndFrame();
+	Ops::CollectSceneCameras(cameras);
+	ASSERT_EQ(cameras.size(), 1u);
+	EXPECT_EQ(cameras[0], shown);
+}
+
 TEST_F(ViewportOpsFixture, ResolveSceneObjectRejectsUnrelatedObjects) {
 	Handle<SceneObject> box = MakeBox("Box", Vec3::Zero());
 	EXPECT_EQ(Ops::ResolveSceneObject(Handle<Object>(box.Get())), box);

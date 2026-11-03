@@ -1619,6 +1619,45 @@ TEST_F(SceneViewLatencyFixture, RuntimeViewDrawsCamerasPassRows) {
 	RenderSystem::SetSceneCamerasRenderToWindows(restoreWindows);
 }
 
+TEST_F(SceneViewLatencyFixture, RuntimeViewComposesEveryCamera) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	const bool restoreWindows = RenderSystem::GetSceneCamerasRenderToWindows();
+	RenderSystem::SetSceneCamerasRenderToWindows(false);
+
+	Handle<Camera> left = SceneSystem::CreateObject("Left", _scene).Get()->AddComponent<Camera>();
+	left.Get()->SetClearColor(Color(1.0f, 0.0f, 0.0f, 1.0f));
+	left.Get()->SetViewportRect(RectF(0.0f, 0.0f, 0.5f, 1.0f));
+	Handle<Camera> right = SceneSystem::CreateObject("Right", _scene).Get()->AddComponent<Camera>();
+	right.Get()->SetClearColor(Color(0.0f, 0.0f, 1.0f, 1.0f));
+	right.Get()->SetViewportRect(RectF(0.5f, 0.0f, 0.5f, 1.0f));
+	right.Get()->SetPriority(-1);
+
+	ASSERT_TRUE(OpenPanel("RuntimeViewPanel"_hash));
+	for (int frame = 0; frame < 3; ++frame) {
+		_driver.Frame();
+	}
+
+	Vec2I size{};
+	Vector<u8> out{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(RenderSystem::ReadbackViewTarget(PANEL_TARGET, out, size));
+	ASSERT_GT(size.x, 8);
+	auto texel = [&](i32 x, i32 y) {
+		const size_t at = (static_cast<size_t>(y) * size.x + x) * 4;
+		return Vec3(out[at], out[at + 1], out[at + 2]);
+	};
+	const i32 seam = size.x / 2;
+	for (i32 y : {0, size.y / 2, size.y - 1}) {
+		EXPECT_GT(texel(0, y).x, 128.0f);
+		EXPECT_LT(texel(seam - 2, y).z, 16.0f);
+		EXPECT_GT(texel(seam + 2, y).z, 128.0f);
+		EXPECT_LT(texel(size.x - 1, y).x, 16.0f);
+	}
+
+	RenderSystem::SetSceneCamerasRenderToWindows(restoreWindows);
+}
+
 #ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN

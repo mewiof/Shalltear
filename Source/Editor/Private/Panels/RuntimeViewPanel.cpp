@@ -371,21 +371,11 @@ namespace Shalltear {
 			return;
 		}
 
-		Camera* camera = EditorViewportOps::FindActiveSceneCamera().Get();
-		SceneObject* owner = camera ? camera->GetOwner().Get() : nullptr;
-		if (!owner) {
+		EditorViewportOps::CollectSceneCameras(_cameras);
+		if (_cameras.empty()) {
 			return;
 		}
-
-		ViewDesc desc;
-		desc.view = owner->GetWorldMatrix().Inverse();
-		desc.projection = camera->BuildProjection(_viewport.GetAspect());
-		desc.cameraPosition = owner->GetWorldPosition();
-		desc.clearColor = camera->GetClearColor();
-		EditorViewportOps::CollectCameraPassRows(Handle<Camera>(camera), _passRows);
-		desc.passes = {_passRows.data(), _passRows.size()};
-		desc.camera = Handle<Camera>(camera);
-		RenderSystem::SubmitView(_viewport.GetTarget(), desc);
+		RenderSystem::SubmitCameras(_viewport.GetTarget(), {_cameras.data(), _cameras.size()});
 	}
 
 	EditorIcons::Icon RuntimeViewPanel::GetTabIcon() const {

@@ -148,7 +148,7 @@ namespace Shalltear {
 		u32 GetImporterVersion() const override { return 2; }
 
 		bool CanCreateAsset() const override { return true; }
-		std::string_view GetCreateMenuLabel() const override { return "UI Document"; }
+		std::string_view GetCreateMenuLabel() const override { return "UI/UI Document"; }
 		std::string_view GetCreateDefaultFileName() const override { return "New UI Document.slxml"; }
 		Asset* CreateAsset() override;
 	};

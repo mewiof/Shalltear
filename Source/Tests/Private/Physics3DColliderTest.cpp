@@ -274,7 +274,8 @@ TEST_F(Physics3DColliderFixture, PhysicsMaterialIsCreatableDataAsset) {
 	ASSERT_NE(importer, nullptr);
 	EXPECT_EQ(importer->GetAssetType(), StringHash("PhysicsMaterial"));
 	EXPECT_TRUE(importer->CanCreateAsset());
-	EXPECT_EQ(importer->GetCreateMenuLabel(), "Physics Material");
+	EXPECT_EQ(importer->GetCreateMenuLabel(), "Physics/Physics Material");
+	EXPECT_EQ(importer->GetCreateDefaultFileName(), "New Physics Material.physmat");
 
 	for (const TypeInfo* type : {_boxType, _sphereType, _capsuleType, _meshType}) {
 		const FieldInfo* field = FindTypeField(type, "_material");

@@ -40,6 +40,14 @@ namespace {
 		SLT_END_REFLECT()
 	};
 
+	class DeclaredProbeTonic : public DataAsset {
+	public:
+		SLT_REFLECT_CLASS(DeclaredProbeTonic)
+		SLT_REFLECT_PARENT(DataAsset)
+		SLT_CREATE_ASSET_MENU("Probes/Probe Tonic", ".probetonic")
+		SLT_END_REFLECT()
+	};
+
 	class DeclaredProbeUndeclared : public DataAsset {
 	public:
 		SLT_REFLECT_CLASS(DeclaredProbeUndeclared)
@@ -86,6 +94,7 @@ namespace {
 SLT_REGISTER_TYPE(DeclaredProbePotion)
 SLT_REGISTER_TYPE(DeclaredProbeElixir)
 SLT_REGISTER_TYPE(DeclaredProbeImpostor)
+SLT_REGISTER_TYPE(DeclaredProbeTonic)
 SLT_REGISTER_TYPE(DeclaredProbeUndeclared)
 
 TEST_F(DeclaredAssetImporterFixture, MenuMacroDeclaresImporter) {
@@ -99,6 +108,15 @@ TEST_F(DeclaredAssetImporterFixture, MenuMacroDeclaresImporter) {
 	EXPECT_EQ(importer->GetCreateDefaultFileName(), "New Probe Potion.probepotion");
 	EXPECT_EQ(AssetImporterRegistry::FindByExtension(".probepotion"), importer);
 	EXPECT_EQ(AssetImporterRegistry::FindByExtension(".PROBEPOTION"), importer);
+}
+
+TEST_F(DeclaredAssetImporterFixture, DefaultFileNameUsesLastSegment) {
+	ASSERT_TRUE(AssetImporterRegistry::RegisterDeclared(DeclaredProbeTonic::GetReflectType(), &_owner));
+
+	IAssetImporter* importer = AssetImporterRegistry::Find(DeclaredProbeTonic::GetReflectType()->name);
+	ASSERT_NE(importer, nullptr);
+	EXPECT_EQ(importer->GetCreateMenuLabel(), "Probes/Probe Tonic");
+	EXPECT_EQ(importer->GetCreateDefaultFileName(), "New Probe Tonic.probetonic");
 }
 
 TEST_F(DeclaredAssetImporterFixture, MenuMacroMakesTypeCreatable) {

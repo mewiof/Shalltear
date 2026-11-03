@@ -13,7 +13,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_CLASS(PostProcessProfile)
 		SLT_REFLECT_PARENT(DataAsset)
-		SLT_CREATE_ASSET_MENU("Post Process Profile", ".slpp")
+		SLT_CREATE_ASSET_MENU("Rendering/Post Process Profile", ".slpp")
 
 		SLT_REFLECT_FIELD(colorGrading, SLT_HEADER("Color Grading"))
 		SLT_REFLECT_FIELD(postExposure)

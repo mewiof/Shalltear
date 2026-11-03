@@ -215,7 +215,7 @@ TEST_F(StyleSheetFixture, CreateMintsStarterSheetThatImporterAccepts) {
 	IAssetImporter* importer = AssetImporterRegistry::FindByExtension(".slss");
 	ASSERT_NE(importer, nullptr);
 	EXPECT_TRUE(importer->CanCreateAsset());
-	EXPECT_EQ(importer->GetCreateMenuLabel(), "Style Sheet");
+	EXPECT_EQ(importer->GetCreateMenuLabel(), "UI/Style Sheet");
 
 	Guid created = AssetDatabase::CreateAsset(Path("project://Assets/New Style Sheet.slss"), StringHash("StyleSheetAsset"));
 	ASSERT_TRUE(created.IsValid());

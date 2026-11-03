@@ -87,7 +87,7 @@ namespace Shalltear {
 		Asset* Import(const Path& sourcePath) override;
 
 		bool CanCreateAsset() const override { return true; }
-		std::string_view GetCreateMenuLabel() const override { return "Graphics Profile"; }
+		std::string_view GetCreateMenuLabel() const override { return "Rendering/Graphics Profile"; }
 		std::string_view GetCreateDefaultFileName() const override { return "New Graphics Profile.slprofile"; }
 		Asset* CreateAsset() override;
 	};

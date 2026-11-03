@@ -92,7 +92,7 @@ namespace Shalltear {
 		Asset* Import(const Path& sourcePath) override;
 
 		bool CanCreateAsset() const override { return true; }
-		std::string_view GetCreateMenuLabel() const override { return "Panel Settings"; }
+		std::string_view GetCreateMenuLabel() const override { return "UI/Panel Settings"; }
 		std::string_view GetCreateDefaultFileName() const override { return "New Panel Settings.slpanel"; }
 		Asset* CreateAsset() override;
 	};

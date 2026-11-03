@@ -33,7 +33,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_CLASS(PhysicsMaterial)
 		SLT_REFLECT_PARENT(DataAsset)
-		SLT_CREATE_ASSET_MENU("Physics Material", ".physmat")
+		SLT_CREATE_ASSET_MENU("Physics/Physics Material", ".physmat")
 		SLT_REFLECT_FIELD(friction, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(bounciness, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(rollingResistance, SLT_RANGE(0.0f, 1.0f))

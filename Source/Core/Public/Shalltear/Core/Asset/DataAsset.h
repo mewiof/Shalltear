@@ -6,6 +6,7 @@
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Reflection.h"
 
+#include <cstddef>
 #include <string_view>
 #include <type_traits>
 
@@ -56,14 +57,34 @@ namespace Shalltear {
 		std::string_view _defaultFileName;
 	};
 
+	template <std::size_t N>
+	struct DeclaredAssetFileName {
+		char text[N] = {};
+
+		constexpr DeclaredAssetFileName(std::string_view menuLabel, std::string_view extension) {
+			std::size_t at = 0;
+			for (char c : std::string_view("New ")) {
+				text[at++] = c;
+			}
+			for (char c : menuLabel.substr(menuLabel.find_last_of('/') + 1)) {
+				text[at++] = c;
+			}
+			for (char c : extension) {
+				text[at++] = c;
+			}
+		}
+	};
+
 } // namespace Shalltear
 
 #define SLT_CREATE_ASSET_MENU(MenuLabel, Extension)                                                  \
 	SLT_REFLECT_CREATABLE()                                                                          \
 	static_assert(std::is_base_of_v<::Shalltear::Asset, Self>,                                       \
 				  "SLT_CREATE_ASSET_MENU belongs in the reflection block of an Asset subclass");     \
+	static constexpr ::Shalltear::DeclaredAssetFileName<sizeof("New " MenuLabel Extension)>          \
+		_sltDefaultFileName(MenuLabel, Extension);                                                   \
 	static ::Shalltear::DeclaredAssetImporter _sltDeclaredImporter(                                  \
 		+[]() -> const ::Shalltear::TypeInfo* { return Self::GetReflectType(); },                    \
 		+[]() -> ::Shalltear::Asset* { return ::Shalltear::New<Self>(::Shalltear::MemTag::Asset); }, \
-		MenuLabel, Extension, "New " MenuLabel Extension);                                           \
+		MenuLabel, Extension, _sltDefaultFileName.text);                                             \
 	::Shalltear::DeclaredAssetImporter::Declare(builder, &_sltDeclaredImporter);

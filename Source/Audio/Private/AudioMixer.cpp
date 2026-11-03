@@ -1258,7 +1258,7 @@ namespace Shalltear {
 			u32 GetImporterVersion() const override { return 7; }
 
 			bool CanCreateAsset() const override { return true; }
-			std::string_view GetCreateMenuLabel() const override { return "Audio Mixer"; }
+			std::string_view GetCreateMenuLabel() const override { return "Audio/Audio Mixer"; }
 			std::string_view GetCreateDefaultFileName() const override { return "New Audio Mixer.mixer"; }
 
 			Asset* CreateAsset() override {

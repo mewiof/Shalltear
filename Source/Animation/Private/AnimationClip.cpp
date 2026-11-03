@@ -445,7 +445,7 @@ namespace Shalltear {
 			}
 
 			bool CanCreateAsset() const override { return true; }
-			std::string_view GetCreateMenuLabel() const override { return "Animation Clip"; }
+			std::string_view GetCreateMenuLabel() const override { return "Animation/Animation Clip"; }
 			std::string_view GetCreateDefaultFileName() const override { return "New Animation Clip.anim"; }
 
 			Asset* CreateAsset() override {

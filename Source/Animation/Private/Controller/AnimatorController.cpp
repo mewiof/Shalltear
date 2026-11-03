@@ -622,7 +622,7 @@ namespace Shalltear {
 			}
 
 			bool CanCreateAsset() const override { return true; }
-			std::string_view GetCreateMenuLabel() const override { return "Animator Controller"; }
+			std::string_view GetCreateMenuLabel() const override { return "Animation/Animator Controller"; }
 			std::string_view GetCreateDefaultFileName() const override { return "New Animator Controller.controller"; }
 
 			Asset* CreateAsset() override {

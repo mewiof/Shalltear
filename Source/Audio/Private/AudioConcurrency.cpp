@@ -35,7 +35,7 @@ namespace Shalltear {
 			}
 
 			bool CanCreateAsset() const override { return true; }
-			std::string_view GetCreateMenuLabel() const override { return "Audio Concurrency"; }
+			std::string_view GetCreateMenuLabel() const override { return "Audio/Audio Concurrency"; }
 			std::string_view GetCreateDefaultFileName() const override { return "New Audio Concurrency.concurrency"; }
 			Asset* CreateAsset() override { return New<AudioConcurrency>(MemTag::Asset); }
 		};

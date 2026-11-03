@@ -215,7 +215,7 @@ TEST_F(UIPanelSettingsFixture, ImporterOwnsExtensionAndCanMintOne) {
 	UIPanelSettingsImporter importer;
 	EXPECT_EQ(importer.GetAssetType(), StringHash("UIPanelSettings"));
 	EXPECT_TRUE(importer.CanCreateAsset());
-	EXPECT_EQ(importer.GetCreateMenuLabel(), "Panel Settings");
+	EXPECT_EQ(importer.GetCreateMenuLabel(), "UI/Panel Settings");
 
 	Asset* minted = importer.CreateAsset();
 	ASSERT_NE(minted, nullptr);

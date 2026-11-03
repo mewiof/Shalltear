@@ -16,6 +16,7 @@
 #include "Shalltear/Editor/EditorExtensions.h"
 #include "Shalltear/Editor/EditorDragData.h"
 #include "Shalltear/Editor/EditorEvents.h"
+#include "Shalltear/Editor/EditorIcons.h"
 #include "Shalltear/Editor/EditorPreviews.h"
 #include "Shalltear/Editor/EditorSceneOps.h"
 #include "Shalltear/Editor/EditorSelection.h"
@@ -3145,6 +3146,37 @@ TEST_F(AssetBrowserPanelTest, SideGapRightClickOpensMenu) {
 
 	ASSERT_EQ(build.context.GetOpenPopupCount(), 1u);
 	EXPECT_TRUE(MenuRowNamed(build.context, build.context.GetOpenPopup(0), "New Folder").IsValid());
+}
+
+TEST_F(AssetBrowserPanelTest, CreateMenuNestsTypesUnderCategory) {
+	Handle<EditorPanel> panel = OpenBrowser();
+	ASSERT_TRUE(panel.IsValid());
+	PanelBuild build{BrowserContextDesc()};
+	BuildAndSettle(*panel.Get(), build);
+
+	UI::ElementHandle add = ControlWearing(build.context, build.root, EditorIcons::GetGlyph(EditorIcons::Glyph::Add),
+										   StringHash("slt-button"));
+	ASSERT_TRUE(build.context.IsAlive(add));
+	ClickAt(build.context, *panel.Get(), CenterOf(build.context, add));
+	ASSERT_EQ(build.context.GetOpenPopupCount(), 1u);
+
+	UI::ElementHandle create = MenuRowNamed(build.context, build.context.GetOpenPopup(0), "Create");
+	ASSERT_TRUE(build.context.IsAlive(create));
+	ClickAt(build.context, *panel.Get(), CenterOf(build.context, create));
+	ASSERT_EQ(build.context.GetOpenPopupCount(), 2u);
+
+	UI::ElementHandle types = build.context.GetOpenPopup(1);
+	EXPECT_TRUE(MenuRowNamed(build.context, types, "Material").IsValid());
+	EXPECT_FALSE(MenuRowNamed(build.context, types, "UI Document").IsValid());
+	UI::ElementHandle ui = MenuRowNamed(build.context, types, "UI");
+	ASSERT_TRUE(build.context.IsAlive(ui));
+	ClickAt(build.context, *panel.Get(), CenterOf(build.context, ui));
+	ASSERT_EQ(build.context.GetOpenPopupCount(), 3u);
+
+	UI::ElementHandle document = MenuRowNamed(build.context, build.context.GetOpenPopup(2), "UI Document");
+	ASSERT_TRUE(build.context.IsAlive(document));
+	ClickAt(build.context, *panel.Get(), CenterOf(build.context, document));
+	EXPECT_TRUE(std::filesystem::exists(_root / "Assets" / "New UI Document.slxml"));
 }
 
 TEST_F(AssetBrowserPanelTest, CellResizeKeepsColumnsSameFrame) {

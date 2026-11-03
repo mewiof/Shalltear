@@ -152,7 +152,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_CLASS(AudioRandomContainer)
 		SLT_REFLECT_PARENT(AudioContainer)
-		SLT_CREATE_ASSET_MENU("Audio Random Container", ".randomcontainer")
+		SLT_CREATE_ASSET_MENU("Audio/Audio Random Container", ".randomcontainer")
 		SLT_REFLECT_FIELD(volume, SLT_RANGE(0, 1))
 		SLT_REFLECT_FIELD(volumeRandomizationRange)
 		SLT_REFLECT_FIELD(pitch, SLT_RANGE(-1902, 1902))
@@ -206,7 +206,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_CLASS(AudioLayeredContainer)
 		SLT_REFLECT_PARENT(AudioContainer)
-		SLT_CREATE_ASSET_MENU("Audio Layered Container", ".layeredcontainer")
+		SLT_CREATE_ASSET_MENU("Audio/Audio Layered Container", ".layeredcontainer")
 		SLT_REFLECT_ARRAY(layers)
 		SLT_END_REFLECT()
 
@@ -263,7 +263,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_CLASS(AudioInteractiveContainer)
 		SLT_REFLECT_PARENT(AudioContainer)
-		SLT_CREATE_ASSET_MENU("Audio Interactive Container", ".interactivecontainer")
+		SLT_CREATE_ASSET_MENU("Audio/Audio Interactive Container", ".interactivecontainer")
 		SLT_REFLECT_FIELD(beatsPerMinute)
 		SLT_REFLECT_FIELD(beatsPerBar)
 		SLT_REFLECT_FIELD(initialClip)

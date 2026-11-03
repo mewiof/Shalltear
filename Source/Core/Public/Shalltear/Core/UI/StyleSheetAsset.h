@@ -40,7 +40,7 @@ namespace Shalltear {
 		Asset* Import(const Path& sourcePath) override;
 
 		bool CanCreateAsset() const override { return true; }
-		std::string_view GetCreateMenuLabel() const override { return "Style Sheet"; }
+		std::string_view GetCreateMenuLabel() const override { return "UI/Style Sheet"; }
 		std::string_view GetCreateDefaultFileName() const override { return "New Style Sheet.slss"; }
 		Asset* CreateAsset() override;
 	};

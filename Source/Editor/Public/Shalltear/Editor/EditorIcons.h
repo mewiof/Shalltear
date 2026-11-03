@@ -79,6 +79,14 @@ namespace Shalltear::EditorIcons {
 		inline constexpr Icon AssetPhysicsMaterial{"\uf434"};
 		inline constexpr Icon AssetAudioClip{"\uf1c7"};
 		inline constexpr Icon AssetShaderSubgraph{"\ue157"};
+		inline constexpr Icon AssetEffectGraph{"\ue900"};
+		inline constexpr Icon AssetEffectOperator{"\ue901"};
+		inline constexpr Icon AssetEffectBlock{"\ue902"};
+		inline constexpr Icon AssetAudioMixer{"\ue903"};
+		inline constexpr Icon AssetAudioConcurrency{"\ue904"};
+		inline constexpr Icon AssetAudioRandomContainer{"\ue905"};
+		inline constexpr Icon AssetAudioLayeredContainer{"\ue906"};
+		inline constexpr Icon AssetAudioInteractiveContainer{"\ue907"};
 
 		inline constexpr Icon SceneObject{"\uf1b2", Face::Regular};
 

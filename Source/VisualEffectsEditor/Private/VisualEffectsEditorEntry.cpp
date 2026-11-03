@@ -23,6 +23,8 @@
 #include "Shalltear/Editor/EditorCommands.h"
 #include "Shalltear/Editor/EditorExtensions.h"
 #include "Shalltear/Editor/EditorGizmos.h"
+#include "Shalltear/Editor/EditorIcons.h"
+#include "Shalltear/Editor/EditorPreviews.h"
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PanelManager.h"
 #include "Shalltear/Editor/EditorViewportOps.h"
@@ -523,12 +525,15 @@ namespace Shalltear::VisualEffectsEditor {
 		EditorGizmos::RegisterSceneGizmo(StringHash("VisualEffects.BlockShape"), &DrawShapes, owner);
 		EditorGizmos::RegisterSceneHandles(StringHash("VisualEffects.BlockShape"), &OfferShapes, &WriteShape, owner);
 		EffectAssetInspector::Register(owner);
+		EditorPreviews::AssetBadges::Register(VisualEffectAsset::GetReflectType()->name, EditorIcons::Glyph::AssetEffectGraph,
+											  EditorTheme::ColorToken::AssetEffect, owner);
 		SceneViewOverlays::Register("Play Controls", VisualEffect::GetReflectType()->name, &BuildPlayControls, owner);
 		EffectGraphWindowRegistry::RegisterOpener(owner);
 		PropertyDrawers::RegisterFieldDrawerFor(
 			VisualEffect::GetReflectType()->name, StringHash("properties"),
 			[owner](UI::Context& context, UI::ElementHandle row, FieldRef, EditTarget target) { DrawSheet(context, row, target, owner); }, owner);
 		ComponentMenu::Register(VisualEffectBinder::GetReflectType()->name, "Visual Effects", owner);
+		RegisterComponentIcons(owner);
 		EditorState& state = State();
 		if (!state.staged) {
 			state.staged = FrameStages::Register(FrameStage::EndFrame, FrameStagePosition::Early, &EndFrameStage, nullptr, &STAGE_TOKEN);

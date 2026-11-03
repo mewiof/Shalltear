@@ -397,7 +397,7 @@ TEST_F(Physics3DEditorFixture, ControllerGizmoStaysUpright) {
 	ASSERT_TRUE(LoadEditorExtensions());
 	const TypeInfo* controllerType = TypeRegistry::FindType(StringHash("CharacterController"));
 	ASSERT_NE(controllerType, nullptr);
-	EXPECT_EQ(EditorIcons::ComponentIcons::For(controllerType), EditorIcons::ComponentIcons::For(_capsuleType));
+	EXPECT_EQ(EditorIcons::ComponentIcons::For(controllerType), "engine://Icons/Components/CharacterController.svg");
 	EXPECT_EQ(ComponentMenu::CategoryFor(controllerType), "Physics");
 
 	Handle<SceneObject> object = MakeObject("hero", Vec3{5.0f, 0.0f, 0.0f});

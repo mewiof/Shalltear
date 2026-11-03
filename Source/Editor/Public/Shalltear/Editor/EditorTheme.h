@@ -117,6 +117,7 @@
 	X(AssetProfile, "--ed-asset-profile", "#e0917f")                             \
 	X(AssetAnimation, "--ed-asset-animation", "#9b82e8")                         \
 	X(AssetAudio, "--ed-asset-audio", "#e8a24a")                                 \
+	X(AssetEffect, "--ed-asset-effect", "#f0c94a")                               \
 	X(BrowserFoldBand, "--ed-browser-fold-band", "#36373c")                      \
 	X(BrowserFoldButton, "--ed-browser-fold-button", "#2c2d31")                  \
 	X(BrowserFoldButtonHover, "--ed-browser-fold-button-hover", "#3e3f44")       \

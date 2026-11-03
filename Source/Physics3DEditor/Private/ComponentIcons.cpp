@@ -19,6 +19,7 @@ namespace Shalltear::Physics3DEditor {
 		constexpr std::string_view SphereMark = "engine://Icons/Components/SphereCollider.svg";
 		constexpr std::string_view CapsuleMark = "engine://Icons/Components/CapsuleCollider.svg";
 		constexpr std::string_view MeshMark = "engine://Icons/Components/MeshCollider.svg";
+		constexpr std::string_view CharacterControllerMark = "engine://Icons/Components/CharacterController.svg";
 		constexpr std::string_view RigidbodyMark = "engine://Icons/Components/Rigidbody.svg";
 
 		constexpr std::string_view JointMark = "engine://Icons/Components/Joint.svg";
@@ -39,7 +40,7 @@ namespace Shalltear::Physics3DEditor {
 		Register(SphereCollider::GetReflectType()->name, SphereMark, owner);
 		Register(CapsuleCollider::GetReflectType()->name, CapsuleMark, owner);
 		Register(MeshCollider::GetReflectType()->name, MeshMark, owner);
-		Register(CharacterController::GetReflectType()->name, CapsuleMark, owner);
+		Register(CharacterController::GetReflectType()->name, CharacterControllerMark, owner);
 		Register(Rigidbody::GetReflectType()->name, RigidbodyMark, owner);
 		Register(Joint::GetReflectType()->name, JointMark, owner);
 		Register(HingeJoint::GetReflectType()->name, HingeMark, owner);

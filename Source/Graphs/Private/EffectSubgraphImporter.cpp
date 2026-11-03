@@ -6,6 +6,9 @@
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
+#include "Shalltear/Editor/EditorIcons.h"
+#include "Shalltear/Editor/EditorPreviews.h"
+#include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/GraphDocument.h"
 
 #include <cstring>
@@ -68,6 +71,10 @@ namespace Shalltear {
 			static EffectSubgraphImporter blocks(GraphSubgraphKind::EffectBlock);
 			AssetImporterRegistry::Register(operators.GetAssetType(), &operators, {GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION}, owner);
 			AssetImporterRegistry::Register(blocks.GetAssetType(), &blocks, {GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION}, owner);
+			EditorPreviews::AssetBadges::Register(operators.GetAssetType(), EditorIcons::Glyph::AssetEffectOperator,
+												  EditorTheme::ColorToken::AssetEffect, owner);
+			EditorPreviews::AssetBadges::Register(blocks.GetAssetType(), EditorIcons::Glyph::AssetEffectBlock,
+												  EditorTheme::ColorToken::AssetEffect, owner);
 		}
 
 	} // namespace EffectSubgraphImporters

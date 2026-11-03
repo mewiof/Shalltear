@@ -37,6 +37,8 @@ namespace Shalltear {
 
 		void RegisterComponentIcons(const void* owner);
 
+		void RegisterAssetBadges(const void* owner);
+
 		void RegisterSettingsPage(const void* owner);
 
 		void RegisterGameMute(const void* owner);

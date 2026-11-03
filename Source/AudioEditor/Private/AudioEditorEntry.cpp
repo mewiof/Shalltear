@@ -12,6 +12,7 @@ namespace Shalltear::AudioEditor {
 		RegisterWaveforms(owner);
 		RegisterSourceGraph(owner);
 		RegisterComponentIcons(owner);
+		RegisterAssetBadges(owner);
 		RegisterSettingsPage(owner);
 		RegisterGameMute(owner);
 		RegisterProfilerModule(owner);

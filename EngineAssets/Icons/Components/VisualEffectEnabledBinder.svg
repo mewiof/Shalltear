@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Visual Effect Enabled Binder</title>
+	<path fill="#a63d4a" d="M12 9L52 9C56.42 9 60 12.58 60 17L60 47C60 51.42 56.42 55 52 55L12 55C7.58 55 4 51.42 4 47L4 17C4 12.58 7.58 9 12 9Z"/>
+	<path fill="#ffc6b8" d="M23 21L41 21C47.08 21 52 25.92 52 32C52 38.08 47.08 43 41 43L23 43C16.92 43 12 38.08 12 32C12 25.92 16.92 21 23 21ZM48 32C48 28.13 44.87 25 41 25C37.13 25 34 28.13 34 32C34 35.87 37.13 39 41 39C44.87 39 48 35.87 48 32Z"/>
+</svg>

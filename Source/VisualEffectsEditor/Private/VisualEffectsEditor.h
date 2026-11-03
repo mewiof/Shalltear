@@ -10,6 +10,7 @@ namespace Shalltear::VisualEffectsEditor {
 	void RegisterVectorFieldImporter(const void* owner);
 
 	void RegisterEditorExtensions(const void* owner);
+	void RegisterComponentIcons(const void* owner);
 	void ShutdownEditor();
 
 } // namespace Shalltear::VisualEffectsEditor

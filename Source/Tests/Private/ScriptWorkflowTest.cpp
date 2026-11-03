@@ -849,15 +849,14 @@ TEST_F(ScriptWorkflowFixture, LaunchStripsVariablesThatRedefineChildProgram) {
 	ASSERT_EQ(::_putenv_s("ELECTRON_RUN_AS_NODE", "1"), 0);
 	EXPECT_TRUE(ScriptProjectOps::OpenInExternalEditor(Root(), command, {}, 0, 0));
 
-	for (int attempt = 0; attempt < 100 && !std::filesystem::exists(receipt); ++attempt) {
+	str seen = Read("child-saw.txt");
+	for (int attempt = 0; attempt < 100 && seen.find('\n') == str::npos; ++attempt) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		seen = Read("child-saw.txt");
 	}
 	::_putenv_s("ELECTRON_RUN_AS_NODE", "");
 
-	ASSERT_TRUE(std::filesystem::exists(receipt));
-	std::ifstream file(receipt);
-	str seen;
-	std::getline(file, seen);
+	ASSERT_NE(seen.find('\n'), str::npos) << seen;
 	EXPECT_EQ(seen.find("[1]"), str::npos) << seen;
 	EXPECT_NE(seen.find("[%ELECTRON_RUN_AS_NODE%]"), str::npos) << seen;
 #else

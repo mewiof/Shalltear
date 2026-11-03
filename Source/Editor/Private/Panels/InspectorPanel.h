@@ -215,5 +215,7 @@ namespace Shalltear {
 	void RegisterPrefabAssetInspector();
 	void RegisterTextureAssetInspector();
 	void TerminateTextureAssetInspector();
+	void RegisterFontAssetInspector();
+	void TerminateFontAssetInspector();
 
 } // namespace Shalltear

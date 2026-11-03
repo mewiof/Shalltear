@@ -86,6 +86,9 @@ namespace Shalltear::UI {
 
 		virtual u32 GetAtlasGeneration() const { return 0; }
 
+		// bumped when a font changes, re-measure cached text
+		virtual u32 GetMetricsGeneration() const { return 0; }
+
 		virtual TextStats GetTextStats() const { return {}; }
 		virtual void ResetTextStats() {}
 	};

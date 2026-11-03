@@ -220,6 +220,7 @@ namespace Shalltear::UI {
 		u32 contextId = 0;
 		ContextDesc desc;
 		IFontSystem* fontSystem = nullptr;
+		u32 metricsGeneration = 0;
 		IVectorIconSystem* iconSystem = nullptr;
 
 		Vector<Element> elements{GetMemoryResource(MemTag::UI)};
@@ -327,6 +328,7 @@ namespace Shalltear::UI {
 		void DestroyRecursive(u32 index);
 		void MarkLayoutDirty(u32 index);
 		void MarkLayoutDirtyUpwards(u32 index);
+		void RemeasureAll();
 		void MarkContentDirty(u32 index);
 		void ResolveContentDirty();
 		bool NotifyScrollMoved();

@@ -1292,6 +1292,7 @@ namespace Shalltear {
 		state.frameQuads = 0;
 
 		if (state.fontSystem) {
+			state.fontSystem->SweepFonts();
 			state.fontSystem->ReclaimIfFull();
 		}
 

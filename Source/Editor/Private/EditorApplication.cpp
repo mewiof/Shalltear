@@ -383,6 +383,7 @@ namespace Shalltear {
 		AssetOpeners::Terminate();
 		MaterialInspectorOps::TerminateShaderSources();
 		TerminateTextureAssetInspector();
+		TerminateFontAssetInspector();
 		UndoSystem::Terminate();
 		EditorSelection::Terminate();
 		SceneAnnotations::Terminate();

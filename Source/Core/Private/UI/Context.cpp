@@ -198,6 +198,18 @@ namespace Shalltear::UI {
 		layoutDirty = true;
 	}
 
+	void ContextImpl::RemeasureAll() {
+		for (TextComponent& text : texts) {
+			if (text.inUse) {
+				text.ResetCaches();
+			}
+		}
+		for (u32 index = 0; index < elements.size(); ++index) {
+			MarkLayoutDirty(index);
+		}
+		layoutDirty = true;
+	}
+
 	void ContextImpl::InvalidatePaintInkUpwards(u32 index) {
 		while (index != INVALID_UI_INDEX) {
 			subtreeInk[index] = UnknownInk;
@@ -1017,6 +1029,7 @@ namespace Shalltear::UI {
 		_impl->contextId = NextContextId();
 		_impl->desc = desc;
 		_impl->fontSystem = fontSystem;
+		_impl->metricsGeneration = fontSystem ? fontSystem->GetMetricsGeneration() : 0;
 		_impl->iconSystem = iconSystem;
 
 		_impl->elements.reserve(256);
@@ -1899,6 +1912,10 @@ namespace Shalltear::UI {
 
 	void Context::SettleLayout() {
 		SLT_PROFILE_ZONE("UI.Settle");
+		if (_impl->fontSystem && _impl->fontSystem->GetMetricsGeneration() != _impl->metricsGeneration) {
+			_impl->metricsGeneration = _impl->fontSystem->GetMetricsGeneration();
+			_impl->RemeasureAll();
+		}
 		{
 			SLT_PROFILE_ZONE("UI.ContentDirty");
 			_impl->ResolveContentDirty();
@@ -2009,15 +2026,7 @@ namespace Shalltear::UI {
 			return;
 		}
 		_impl->desc.contentScale = scale;
-		for (TextComponent& text : _impl->texts) {
-			if (text.inUse) {
-				text.ResetCaches();
-			}
-		}
-		for (u32 index = 0; index < _impl->elements.size(); ++index) {
-			_impl->MarkLayoutDirty(index);
-		}
-		_impl->layoutDirty = true;
+		_impl->RemeasureAll();
 	}
 
 	Vec2I Context::GetSize() const {

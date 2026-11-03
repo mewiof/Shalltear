@@ -39,6 +39,7 @@ namespace Shalltear {
 		RegisterBuiltInAssetInspectors();
 		RegisterPrefabAssetInspector();
 		RegisterTextureAssetInspector();
+		RegisterFontAssetInspector();
 		EditorPreviews::RegisterBuiltIns();
 		EditorIcons::ComponentIcons::RegisterBuiltIns();
 		EditorPreviews::AssetBadges::RegisterBuiltIns();

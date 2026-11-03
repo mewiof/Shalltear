@@ -4,6 +4,7 @@
 #include "Shalltear/Core/Asset/AssetImporter.h"
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Handle.h"
 
 namespace Shalltear {
 
@@ -20,17 +21,41 @@ namespace Shalltear {
 		// font faces point into these bytes
 		Vector<u8> data{GetMemoryResource(MemTag::Asset)};
 
+		// searched in order for a missing glyph, depth first
+		Vector<Guid> fallbacks{GetMemoryResource(MemTag::Asset)};
+
+		u32 version = 0;
+
+		// loaded on 1st call + held while font is loaded
+		FontAsset* GetFallback(size_t index) const;
+
 		bool Import(const Path& sourcePath) override;
 		StringHash GetAssetTypeId() const override { return FontAsset::GetReflectType()->name; }
 
+		bool CanAdoptReimport() const override { return true; }
+		void AdoptReimport(Asset& fresh) override;
+
 		bool Cook(CookWriter& descriptor, CookWriter& payload) const override;
 		bool LoadCooked(CookReader& descriptor, CookReader& payload) override;
+	protected:
+		void OnUnload() override;
+	private:
+		struct Held {
+			Handle<FontAsset> font;
+			bool holds = false;
+			bool refused = false;
+		};
+		mutable Vector<Held> _held{GetMemoryResource(MemTag::Asset)};
 	};
 
 	class SHALLTEAR_CORE_API FontAssetImporter : public IAssetImporter {
 	public:
 		StringHash GetAssetType() const override { return StringHash("FontAsset"); }
 		Asset* Import(const Path& sourcePath) override;
+		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
+		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
+		// bump when cooked record changes shape
+		u32 GetImporterVersion() const override { return 2; }
 	};
 
 } // namespace Shalltear

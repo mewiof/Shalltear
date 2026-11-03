@@ -2,6 +2,8 @@
 
 #include "Shalltear/Core/UI/FontAsset.h"
 
+#include FT_TRUETYPE_TABLES_H
+
 #include <algorithm>
 #include <cmath>
 
@@ -15,6 +17,10 @@ namespace Shalltear::UI {
 
 		bool IsSpaceCodepoint(u32 codepoint) {
 			return codepoint == ' ' || codepoint == '\t';
+		}
+
+		bool IsControlCodepoint(u32 codepoint) {
+			return codepoint < 0x20 || (codepoint >= 0x7F && codepoint < 0xA0);
 		}
 
 		constexpr u32 ELLIPSIS_CODEPOINT = 0x2026;
@@ -41,17 +47,59 @@ namespace Shalltear::UI {
 
 	FreeTypeFontSystem::~FreeTypeFontSystem() {
 		for (auto& [key, face] : _faces) {
-			if (face.face) {
-				FT_Done_Face(face.face);
-			}
+			CloseFace(face);
 		}
 		_faces.clear();
+		for (auto& [file, face] : _systemFaces) {
+			CloseFace(face);
+		}
+		_systemFaces.clear();
 		if (_stroker) {
 			FT_Stroker_Done(_stroker);
 		}
 		if (_library) {
 			FT_Done_FreeType(_library);
 		}
+	}
+
+	bool FreeTypeFontSystem::OpenFace(FontFace& face, const u8* data, size_t size, u32 faceIndex) {
+		FT_Face ftFace = nullptr;
+		if (FT_New_Memory_Face(_library, data, static_cast<FT_Long>(size), static_cast<FT_Long>(faceIndex), &ftFace) != 0) {
+			return false;
+		}
+		face.face = ftFace;
+		face.slot = _nextSlot++;
+		const auto* os2 = static_cast<const TT_OS2*>(FT_Get_Sfnt_Table(ftFace, FT_SFNT_OS2));
+		face.weight = os2 && os2->usWeightClass >= 100 && os2->usWeightClass <= 999
+						  ? os2->usWeightClass
+						  : static_cast<u16>((ftFace->style_flags & FT_STYLE_FLAG_BOLD) != 0 ? 700 : 400);
+		face.italic = (ftFace->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
+		_faceSlots[face.slot] = &face;
+		return true;
+	}
+
+	void FreeTypeFontSystem::CloseFace(FontFace& face) {
+		if (face.face) {
+			FT_Done_Face(face.face);
+			face.face = nullptr;
+		}
+		_faceSlots.erase(face.slot);
+		face.slot = 0;
+		face.charIndices.clear();
+		face.kernings.clear();
+	}
+
+	bool FreeTypeFontSystem::IsCurrent(const FontFace& face) const {
+		if (face.system) {
+			return true;
+		}
+		const FontAsset* asset = face.asset.Get();
+		return asset && asset->version == face.version;
+	}
+
+	FreeTypeFontSystem::FontFace* FreeTypeFontSystem::FaceForSlot(u32 slot) {
+		auto it = _faceSlots.find(slot);
+		return it != _faceSlots.end() && IsCurrent(*it->second) ? it->second : nullptr;
 	}
 
 	FreeTypeFontSystem::FontFace* FreeTypeFontSystem::GetOrCreateFace(Handle<FontAsset> font) {
@@ -62,27 +110,133 @@ namespace Shalltear::UI {
 		u64 key = font.GetInstanceId();
 		auto it = _faces.find(key);
 		if (it != _faces.end()) {
+			FontFace& face = it->second;
 			if (!asset) {
-				if (it->second.face) {
-					FT_Done_Face(it->second.face);
-				}
+				CloseFace(face);
 				_faces.erase(it);
 				return nullptr;
 			}
-			return &it->second;
+			if (face.version == asset->version) {
+				return &face;
+			}
+			CloseFace(face);
+			_faces.erase(it);
+			_fontsChanged = true;
 		}
 		if (!asset || asset->data.empty()) {
 			return nullptr;
 		}
-		FT_Face ftFace = nullptr;
-		if (FT_New_Memory_Face(_library, asset->data.data(), static_cast<FT_Long>(asset->data.size()), 0, &ftFace) != 0) {
+		auto [inserted, ok] = _faces.emplace(key, FontFace{});
+		FontFace& face = inserted->second;
+		if (!OpenFace(face, asset->data.data(), asset->data.size(), 0)) {
 			SLT_LOG_ERROR("UI", "FontAsset '{}' rejected by FreeType", asset->virtualPath);
+			_faces.erase(inserted);
 			return nullptr;
 		}
-		FontFace face;
-		face.face = ftFace;
-		auto [inserted, ok] = _faces.emplace(key, std::move(face));
-		return &inserted->second;
+		face.asset = font;
+		face.version = asset->version;
+		return &face;
+	}
+
+	FreeTypeFontSystem::FontFace* FreeTypeFontSystem::GetOrCreateSystemFace(const SystemFontFile& file) {
+		auto it = _systemFaces.find(&file);
+		if (it != _systemFaces.end()) {
+			return it->second.face ? &it->second : nullptr;
+		}
+		auto [inserted, ok] = _systemFaces.emplace(&file, FontFace{});
+		FontFace& face = inserted->second;
+		face.system = true;
+		return OpenFace(face, file.data, file.size, file.faceIndex) ? &face : nullptr;
+	}
+
+	void FreeTypeFontSystem::SweepFonts() {
+		bool changed = _fontsChanged;
+		for (auto it = _faces.begin(); it != _faces.end();) {
+			const FontAsset* asset = it->second.asset.Get();
+			if (!asset) {
+				CloseFace(it->second);
+				it = _faces.erase(it);
+				continue;
+			}
+			changed |= asset->version != it->second.version;
+			++it;
+		}
+		_fontsChanged = false;
+		if (changed) {
+			ClearPage();
+			++_metricsGeneration;
+		}
+	}
+
+	u32 FreeTypeFontSystem::GlyphIndexOf(FontFace& face, u32 codepoint) {
+		auto it = face.charIndices.find(codepoint);
+		if (it != face.charIndices.end()) {
+			return it->second;
+		}
+		const u32 glyphIndex = FT_Get_Char_Index(face.face, codepoint);
+		face.charIndices.emplace(codepoint, glyphIndex);
+		return glyphIndex;
+	}
+
+	FreeTypeFontSystem::FontFace* FreeTypeFontSystem::FindInFallbacks(const FontAsset& font, u32 codepoint) {
+		for (size_t i = 0; i < font.fallbacks.size(); ++i) {
+			const Guid& guid = font.fallbacks[i];
+			if (std::find(_scratchVisited.begin(), _scratchVisited.end(), guid) != _scratchVisited.end()) {
+				continue;
+			}
+			_scratchVisited.push_back(guid);
+			FontAsset* next = font.GetFallback(i);
+			if (!next) {
+				continue;
+			}
+			FontFace* face = GetOrCreateFace(Handle<FontAsset>(next));
+			if (face && GlyphIndexOf(*face, codepoint) != 0) {
+				return face;
+			}
+			if (FontFace* nested = FindInFallbacks(*next, codepoint)) {
+				return nested;
+			}
+		}
+		return nullptr;
+	}
+
+	FreeTypeFontSystem::FontFace& FreeTypeFontSystem::ResolveOwner(FontFace& primary, u32 codepoint) {
+		if (IsControlCodepoint(codepoint) || GlyphIndexOf(primary, codepoint) != 0) {
+			return primary;
+		}
+		if (const FontAsset* font = primary.asset.Get(); font && !font->fallbacks.empty()) {
+			_scratchVisited.clear();
+			_scratchVisited.push_back(font->assetId);
+			if (FontFace* found = FindInFallbacks(*font, codepoint)) {
+				return *found;
+			}
+		}
+		if (const SystemFontFile* file = _systemFallback.Find(codepoint, primary.weight, primary.italic)) {
+			FontFace* system = GetOrCreateSystemFace(*file);
+			if (system && GlyphIndexOf(*system, codepoint) != 0) {
+				return *system;
+			}
+		}
+		return primary;
+	}
+
+	f32 FreeTypeFontSystem::KerningBetween(FontFace& primary, const GlyphEntry* previous, const GlyphEntry* current) {
+		if (!previous || !current || previous->faceSlot != current->faceSlot || previous->glyphIndex == 0 ||
+			current->glyphIndex == 0) {
+			return 0.0f;
+		}
+		FontFace* face = current->faceSlot == primary.slot ? &primary : FaceForSlot(current->faceSlot);
+		if (!face || !FT_HAS_KERNING(face->face)) {
+			return 0.0f;
+		}
+		const u64 pairKey = (static_cast<u64>(previous->glyphIndex) << 32) | current->glyphIndex;
+		auto it = face->kernings.find(pairKey);
+		if (it == face->kernings.end()) {
+			FT_Vector kerning{};
+			FT_Get_Kerning(face->face, previous->glyphIndex, current->glyphIndex, FT_KERNING_DEFAULT, &kerning);
+			it = face->kernings.emplace(pairKey, static_cast<i32>(kerning.x)).first;
+		}
+		return static_cast<f32>(it->second) / 64.0f;
 	}
 
 	bool FreeTypeFontSystem::EnsureSize(FontFace& face, u16 sizePx) {
@@ -136,43 +290,41 @@ namespace Shalltear::UI {
 						  _atlasSize.y);
 			_overflowLogged = true;
 		}
+		ClearPage();
+		_reclaimedLast = true;
+	}
+
+	void FreeTypeFontSystem::ClearPage() {
 		_glyphs.clear();
 		_shelfX = 1;
 		_shelfY = 1;
 		_shelfHeight = 0;
 		_pageFull = false;
 		++_generation;
-		_reclaimedLast = true;
 	}
 
-	FreeTypeFontSystem::GlyphEntry* FreeTypeFontSystem::GetOrCreateGlyph(FontFace& face, u64 faceKey, u16 sizePx, u32 codepoint, u16 strokePx) {
-		GlyphKey key{faceKey, codepoint, sizePx, strokePx};
+	FreeTypeFontSystem::GlyphEntry* FreeTypeFontSystem::GetOrCreateGlyph(FontFace& primary, u16 sizePx, u32 codepoint, u16 strokePx) {
+		GlyphKey key{primary.slot, codepoint, sizePx, strokePx};
 		auto it = _glyphs.find(key);
 		if (it != _glyphs.end()) {
 			return &it->second;
 		}
+		FontFace& owner = ResolveOwner(primary, codepoint);
+		u32 glyphIndex = GlyphIndexOf(owner, codepoint);
+		if (glyphIndex == 0) {
+			glyphIndex = GlyphIndexOf(owner, static_cast<u32>('?'));
+		}
 		GlyphEntry entry;
-		RasterizeAndPack(face, codepoint, strokePx, entry);
+		entry.faceSlot = owner.slot;
+		RasterizeAndPack(owner, sizePx, glyphIndex, strokePx, entry);
 		auto [inserted, ok] = _glyphs.emplace(key, entry);
 		return &inserted->second;
 	}
 
-	bool FreeTypeFontSystem::RasterizeAndPack(FontFace& face, u32 codepoint, u16 strokePx, GlyphEntry& out) {
+	bool FreeTypeFontSystem::RasterizeAndPack(FontFace& face, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out) {
 		FT_Face ftFace = face.face;
-
-		auto indexIt = face.charIndices.find(codepoint);
-		u32 glyphIndex;
-		if (indexIt != face.charIndices.end()) {
-			glyphIndex = indexIt->second;
-		} else {
-			glyphIndex = FT_Get_Char_Index(ftFace, codepoint);
-			if (glyphIndex == 0) {
-				glyphIndex = FT_Get_Char_Index(ftFace, static_cast<u32>('?'));
-			}
-			face.charIndices.emplace(codepoint, glyphIndex);
-		}
 		out.glyphIndex = glyphIndex;
-		if (glyphIndex == 0) {
+		if (glyphIndex == 0 || !EnsureSize(face, sizePx)) {
 			return false;
 		}
 
@@ -255,7 +407,6 @@ namespace Shalltear::UI {
 		if (!EnsureSize(*face, sizePx)) {
 			return false;
 		}
-		u64 faceKey = query.font.GetInstanceId();
 		u16 strokePx = query.outlineWidth > 0.0f
 						   ? static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.outlineWidth))))
 						   : 0;
@@ -268,24 +419,9 @@ namespace Shalltear::UI {
 		}
 		out.lineHeight = lineHeight;
 
-		const bool hasKerning = FT_HAS_KERNING(ftFace) != 0;
-		auto kerningBetween = [&](u32 previousIndex, u32 currentIndex) -> f32 {
-			if (!hasKerning || previousIndex == 0 || currentIndex == 0) {
-				return 0.0f;
-			}
-			u64 pairKey = (static_cast<u64>(previousIndex) << 32) | currentIndex;
-			auto it = face->kernings.find(pairKey);
-			if (it == face->kernings.end()) {
-				FT_Vector kerning{};
-				FT_Get_Kerning(ftFace, previousIndex, currentIndex, FT_KERNING_DEFAULT, &kerning);
-				it = face->kernings.emplace(pairKey, static_cast<i32>(kerning.x)).first;
-			}
-			return static_cast<f32>(it->second) / 64.0f;
-		};
-
 		const f32 letterSpacing = query.letterSpacing;
-		auto stepBefore = [&](u32 previousIndex, u32 currentIndex, bool first) -> f32 {
-			return (first ? 0.0f : letterSpacing) + kerningBetween(previousIndex, currentIndex);
+		auto stepBefore = [&](const GlyphEntry* previous, const GlyphEntry* current, bool first) -> f32 {
+			return (first ? 0.0f : letterSpacing) + KerningBetween(*face, previous, current);
 		};
 
 		f32 penY = 0.0f;
@@ -311,7 +447,7 @@ namespace Shalltear::UI {
 			f32 baseline = penY + ascender;
 			f32 x = 0.0f;
 			f32 inked = 0.0f;
-			u32 previousIndex = 0;
+			const GlyphEntry* previous = nullptr;
 			bool first = true;
 			if (align) {
 				_scratchSpans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()),
@@ -323,11 +459,11 @@ namespace Shalltear::UI {
 				if (!entry) {
 					continue;
 				}
-				x += stepBefore(previousIndex, entry->glyphIndex, first);
+				x += stepBefore(previous, entry, first);
 				first = false;
 
 				if (emit && strokePx > 0) {
-					GlyphEntry* stroke = GetOrCreateGlyph(*face, faceKey, sizePx, pending.codepoint, strokePx);
+					GlyphEntry* stroke = GetOrCreateGlyph(*face, sizePx, pending.codepoint, strokePx);
 					if (stroke && stroke->inAtlas) {
 						ShapedGlyph glyph;
 						glyph.rect = {Snap(x + stroke->bearingX), Snap(baseline - stroke->bearingY),
@@ -349,7 +485,7 @@ namespace Shalltear::UI {
 					inked = x;
 				}
 				pushCaretStop(pending.byteEnd, x);
-				previousIndex = entry->glyphIndex;
+				previous = entry;
 			}
 			if (align) {
 				_scratchSpans.back().width = query.editable && !softWrap ? x : inked;
@@ -373,13 +509,13 @@ namespace Shalltear::UI {
 		u32 overflowByte = length;
 
 		auto appendEllipsis = [&]() {
-			GlyphEntry* mark = GetOrCreateGlyph(*face, faceKey, sizePx, ELLIPSIS_CODEPOINT, 0);
+			GlyphEntry* mark = GetOrCreateGlyph(*face, sizePx, ELLIPSIS_CODEPOINT, 0);
 			if (!mark) {
 				return;
 			}
 			const f32 markAdvance = static_cast<f32>(mark->advance);
 			f32 x = 0.0f;
-			u32 previousIndex = 0;
+			const GlyphEntry* previous = nullptr;
 			bool first = true;
 			size_t keep = 0;
 			u32 cutByte = overflowByte;
@@ -389,15 +525,14 @@ namespace Shalltear::UI {
 					keep = n + 1;
 					continue;
 				}
-				f32 pen = x + stepBefore(previousIndex, entry->glyphIndex, first);
-				f32 withMark = pen + static_cast<f32>(entry->advance) +
-							   stepBefore(entry->glyphIndex, mark->glyphIndex, false) + markAdvance;
+				f32 pen = x + stepBefore(previous, entry, first);
+				f32 withMark = pen + static_cast<f32>(entry->advance) + stepBefore(entry, mark, false) + markAdvance;
 				if (withMark > budget) {
 					cutByte = _scratchLine[n].byteOffset;
 					break;
 				}
 				x = pen + static_cast<f32>(entry->advance);
-				previousIndex = entry->glyphIndex;
+				previous = entry;
 				first = false;
 				keep = n + 1;
 			}
@@ -450,10 +585,10 @@ namespace Shalltear::UI {
 			}
 
 			++_textStats.glyphsResolved;
-			GlyphEntry* entry = GetOrCreateGlyph(*face, faceKey, sizePx, codepoint, 0);
+			GlyphEntry* entry = GetOrCreateGlyph(*face, sizePx, codepoint, 0);
 			f32 step = 0.0f;
 			if (!_scratchLine.empty() && _scratchLine.back().entry && entry) {
-				step = stepBefore(_scratchLine.back().entry->glyphIndex, entry->glyphIndex, false);
+				step = stepBefore(_scratchLine.back().entry, entry, false);
 			}
 			f32 advance = entry ? static_cast<f32>(entry->advance) : 0.0f;
 			f32 nextAdvance = lineAdvance + step + advance;
@@ -472,20 +607,20 @@ namespace Shalltear::UI {
 				lineStartByte = _scratchLine.empty() ? byteOffset : _scratchLine.front().byteOffset;
 
 				lineAdvance = 0.0f;
-				u32 previousIndex = 0;
+				const GlyphEntry* previous = nullptr;
 				bool firstOnLine = true;
 				for (const Pending& pending : _scratchLine) {
 					if (!pending.entry) {
 						continue;
 					}
-					lineAdvance += stepBefore(previousIndex, pending.entry->glyphIndex, firstOnLine);
+					lineAdvance += stepBefore(previous, pending.entry, firstOnLine);
 					lineAdvance += static_cast<f32>(pending.entry->advance);
 					firstOnLine = false;
-					previousIndex = pending.entry->glyphIndex;
+					previous = pending.entry;
 				}
 				step = 0.0f;
 				if (!_scratchLine.empty() && _scratchLine.back().entry && entry) {
-					step = stepBefore(_scratchLine.back().entry->glyphIndex, entry->glyphIndex, false);
+					step = stepBefore(_scratchLine.back().entry, entry, false);
 				}
 				nextAdvance = lineAdvance + step + advance;
 			}

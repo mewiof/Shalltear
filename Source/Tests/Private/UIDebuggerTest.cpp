@@ -17,6 +17,7 @@
 
 #include "Shalltear/Editor/EditorEvents.h"
 #include "Shalltear/Editor/EditorExtensions.h"
+#include "Shalltear/Editor/EditorIcons.h"
 #include "Shalltear/Editor/EditorSelection.h"
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PanelManager.h"
@@ -1710,10 +1711,9 @@ namespace {
 		ASSERT_EQ(WindowContext().GetLiveCount(), settled);
 		EXPECT_TRUE(WindowContext().IsAlive(rowOfA));
 
-		UI::ElementHandle search = FindByText(WindowContext(), hostA, "Search");
-		if (!search.IsValid()) {
-			GTEST_SKIP();
-		}
+		UI::ElementHandle search = ControlWearing(WindowContext(), hostA, EditorIcons::GetGlyph(EditorIcons::Glyph::Search),
+												  StringHash("slt-button"));
+		ASSERT_TRUE(WindowContext().IsAlive(search));
 		ClickElement(WindowContext(), search);
 		for (int i = 0; i < 3; ++i) {
 			Frame(*a.Get());

@@ -162,7 +162,9 @@ namespace Shalltear {
 			return block.lit;
 		}
 
-		constexpr const char* SURFACE_NO_SCENE = "a material's draw is handed no image of the scene (a Fullscreen graph's is)";
+		constexpr const char* SURFACE_NO_SCENE = "an opaque material's draw is handed no image of the scene (a transparent one's is)";
+		constexpr const char* SURFACE_NO_NORMALS = "only a Fullscreen graph samples the scene's normals";
+		constexpr const char* EFFECT_NO_SCENE = "a particle's node shader is handed no image of the scene";
 		constexpr const char* NO_MOTION_VECTORS = "nothing renders motion vectors";
 		constexpr const char* SKY_ONLY = "only a Sky graph is handed the sky's ray and its sun";
 
@@ -232,6 +234,7 @@ namespace Shalltear {
 			{"SceneColor", "", GraphValueType::Texture2D, GraphStageAll, SURFACE_NO_SCENE},
 			{"SceneDepth", "", GraphValueType::Texture2D, GraphStageAll, SURFACE_NO_SCENE},
 			{"SceneNormals", "", GraphValueType::Texture2D, GraphStageAll, SURFACE_NO_SCENE},
+			{"SceneColorScale", "(1.0 / ShalltearGetExposure())", GraphValueType::Float, GraphStageAll},
 			{"MotionVectors", "", GraphValueType::Texture2D, GraphStageAll, NO_MOTION_VECTORS},
 			{"SkyDirection", "0.0", GraphValueType::Float3, GraphStageAll, SKY_ONLY},
 			{"SkySunDirection", "0.0", GraphValueType::Float3, GraphStageAll, SKY_ONLY},
@@ -240,6 +243,20 @@ namespace Shalltear {
 			{"SkySunEnabled", "false", GraphValueType::Bool, GraphStageAll, SKY_ONLY},
 			{"SkyCapturing", "false", GraphValueType::Bool, GraphStageAll, SKY_ONLY},
 			{"SkySunDisc", "0.0", GraphValueType::Float3, GraphStageAll, SKY_ONLY},
+		};
+
+		constexpr GraphStageMask SCENE_STAGES = static_cast<GraphStageMask>(GraphStageFragment | GraphStageLighting);
+
+		const GraphBinding TRANSPARENT_SCENE_BINDINGS[] = {
+			{"SceneColor", "sltSceneColor", GraphValueType::Texture2D, SCENE_STAGES, {}, "sltSceneSampler"},
+			{"SceneDepth", "sltSceneDepth", GraphValueType::Texture2D, SCENE_STAGES, {}, "sltSceneSampler"},
+			{"SceneNormals", "", GraphValueType::Texture2D, GraphStageAll, SURFACE_NO_NORMALS},
+		};
+
+		const GraphBinding EFFECT_SCENE_BINDINGS[] = {
+			{"SceneColor", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
+			{"SceneDepth", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
+			{"SceneNormals", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
 		};
 
 		const GraphBinding LIGHTING_BINDINGS[] = {
@@ -430,6 +447,7 @@ float3 ShalltearGraphPredisplacementOS(ShalltearVertexInput input)
 			{"SceneColor", "sltSceneColor", GraphValueType::Texture2D, FULLSCREEN, {}, "sltSceneSampler"},
 			{"SceneDepth", "sltSceneDepth", GraphValueType::Texture2D, FULLSCREEN, {}, "sltSceneSampler"},
 			{"SceneNormals", "sltSceneNormals", GraphValueType::Texture2D, FULLSCREEN, {}, "sltSceneSampler"},
+			{"SceneColorScale", "1.0", GraphValueType::Float, FULLSCREEN},
 			{"MotionVectors", "", GraphValueType::Texture2D, FULLSCREEN, NO_MOTION_VECTORS},
 			{"SkyDirection", "0.0", GraphValueType::Float3, FULLSCREEN, SKY_ONLY},
 			{"SkySunDirection", "0.0", GraphValueType::Float3, FULLSCREEN, SKY_ONLY},
@@ -561,6 +579,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			{"SceneColor", "", GraphValueType::Texture2D, SKY, "a sky's draw is handed no image of the scene"},
 			{"SceneDepth", "", GraphValueType::Texture2D, SKY, "a sky's draw is handed no image of the scene"},
 			{"SceneNormals", "", GraphValueType::Texture2D, SKY, "a sky's draw is handed no image of the scene"},
+			{"SceneColorScale", "1.0", GraphValueType::Float, SKY},
 			{"MotionVectors", "", GraphValueType::Texture2D, SKY, NO_MOTION_VECTORS},
 
 			{"SkyDirection", "input.directionWS", GraphValueType::Float3, SKY},
@@ -940,7 +959,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 		}
 
 		bool Functions(const GraphDocument& document, StackRead& stack, GraphDefinitions& resolver, GraphSurfaceFunctions& out,
-					   Vector<GraphDiagnostic>& diagnostics, size_t firstDiagnostic) {
+					   Vector<GraphDiagnostic>& diagnostics, size_t firstDiagnostic, bool shadesMesh) {
 			const Settings& settings = stack.settings;
 			Vector<GraphCompileRoot>& roots = stack.roots;
 			const Vector<const Block*>& rooted = stack.rooted;
@@ -950,6 +969,14 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			Vector<const VertexBlock*> vertexRooted{GetMemoryResource(MemTag::Editor)};
 			Vector<Interpolant> interpolants{GetMemoryResource(MemTag::Editor)};
 			Vector<GraphBinding> bindings{SURFACE_BINDINGS, SURFACE_BINDINGS + std::size(SURFACE_BINDINGS), GetMemoryResource(MemTag::Editor)};
+			const bool readsScene = shadesMesh && settings.blend != RHI::BlendMode::Opaque;
+			if (readsScene || !shadesMesh) {
+				for (const GraphBinding& scene : readsScene ? std::span<const GraphBinding>(TRANSPARENT_SCENE_BINDINGS) : std::span<const GraphBinding>(EFFECT_SCENE_BINDINGS)) {
+					for (GraphBinding& binding : bindings) {
+						binding = binding.name == scene.name ? scene : binding;
+					}
+				}
+			}
 			if (vertex != nullptr) {
 				Vector<str> names{GetMemoryResource(MemTag::Editor)};
 				for (const GraphNode& node : vertex->blocks) {
@@ -1125,6 +1152,9 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			}
 
 			str text;
+			if (readsScene) {
+				text += GraphSurface::PassDeclarations(program);
+			}
 			Vector<LineSegment> segments{GetMemoryResource(MemTag::Editor)};
 			segments.push_back({LineOf(text), &both.functionLineNodes});
 			text += both.functions;
@@ -1213,7 +1243,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			}
 
 			GraphSurfaceFunctions functions;
-			if (!Functions(document, stack, resolver, functions, diagnostics, firstDiagnostic)) {
+			if (!Functions(document, stack, resolver, functions, diagnostics, firstDiagnostic, true)) {
 				return false;
 			}
 
@@ -1270,7 +1300,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			if (diagnostics.size() != firstDiagnostic) {
 				return false;
 			}
-			return Functions(document, stack, resolver, out, diagnostics, firstDiagnostic);
+			return Functions(document, stack, resolver, out, diagnostics, firstDiagnostic, false);
 		}
 
 		bool SupportsEffects(const GraphDocument& document) {

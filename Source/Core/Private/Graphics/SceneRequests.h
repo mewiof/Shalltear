@@ -52,4 +52,22 @@ namespace Shalltear::SceneRequests {
 		return requests;
 	}
 
+	// bindings sorted by set in MergeReflections
+	inline bool DeclaresSceneSet(const ShaderAsset& shader) { return !shader.bindings.empty() && shader.bindings.back().set == SET; }
+
+	inline bool MayReadSceneOnMesh(const ShaderAsset& shader) {
+		return DeclaresSceneSet(shader) && DeclaresViewSet(shader) && DeclaredBy(shader) != PassRequests::None;
+	}
+
+	u32 CountLiveMeshReaders();
+
+	inline bool ReadsOnlyScene(const ShaderAsset& shader) {
+		for (const ShaderResourceInfo& resource : shader.resources) {
+			if (resource.set == SET && resource.type != RHI::DescriptorType::Sampler && RequestNamed(resource.name) == PassRequests::None) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 } // namespace Shalltear::SceneRequests

@@ -92,7 +92,9 @@ namespace Shalltear {
 		RHI::Format _colorFormat = RHI::Format::Unknown;
 		RHI::Format _depthFormat = RHI::Format::Unknown;
 		u32 _samples = 1;
+		RHI::TextureHandle _sceneColor;
 		RHI::TextureHandle _sceneDepth;
+		RHI::TextureHandle _sceneNormals;
 		RHI::TransientAllocation _viewBlock{};
 		RHI::TextureHandle _shadowAtlas;
 		RHI::TextureHandle _punctualAtlas;

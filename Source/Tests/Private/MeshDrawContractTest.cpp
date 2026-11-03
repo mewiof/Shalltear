@@ -2,6 +2,9 @@
 
 #include "ShadingHarness.h"
 
+#include "Graphics/SceneRequests.h"
+
+#include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
@@ -87,6 +90,31 @@ namespace {
 		"float4 PSMain(VSOutput input) : SV_Target { return float4(tint.rgb * gPush.color.rgb, 1); }\n";
 
 	constexpr const char* PASS_INPUT_SHADER =
+		"#pragma shalltear_blend opaque\n"
+		"#pragma shalltear_depth test_write\n"
+		"#pragma shalltear_cull off\n"
+		"#include \"ShalltearCommon.hlsli\"\n"
+		"[[vk::push_constant]] ShalltearDrawHeader gDraw;\n"
+		"[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 tint; };\n"
+		"[[vk::binding(0, 2)]] Texture2D sltPassInput0;\n"
+		"[[vk::binding(1, 2)]] SamplerState sltSceneSampler;\n"
+		"struct VSOutput { float4 positionCS : SV_Position; };\n"
+		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
+		"\tShalltearPerDraw draw = ShalltearLoadPerDraw(gDraw.drawAddress);\n"
+		"\tShalltearVertex vertex = ShalltearLoadVertex(draw.vertexAddress, vertexId);\n"
+		"\tVSOutput output;\n"
+		"\toutput.positionCS = mul(sltViewProjection, ShalltearTransformPosition(draw, vertex.position));\n"
+		"\treturn output;\n"
+		"}\n"
+		"float4 PSMain(VSOutput input) : SV_Target {\n"
+		"\tfloat4 color = float4(tint.rgb, 1);\n"
+		"\tif (tint.a < 0.0) {\n"
+		"\t\tcolor = sltPassInput0.Sample(sltSceneSampler, float2(0.5, 0.5));\n"
+		"\t}\n"
+		"\treturn color;\n"
+		"}\n";
+
+	constexpr const char* SCENE_READER_SHADER =
 		"#pragma shalltear_blend opaque\n"
 		"#pragma shalltear_depth test_write\n"
 		"#pragma shalltear_cull off\n"
@@ -284,6 +312,87 @@ TEST_F(MeshDrawContractFixture, AShaderReadingPassInputsIsRefused) {
 	const Vec3 reference = ErrorMaterial();
 	ExpectTheErrorMaterial(DrawnWith(material), reference, "a shader reading a pass input drew on a mesh with the set unbound");
 }
+
+TEST_F(MeshDrawContractFixture, OpaqueSceneReaderRefusedByName) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device, or no compiler";
+	}
+	ShaderAsset* shader = AddShader("SceneReader.hlsl", SCENE_READER_SHADER);
+	ASSERT_NE(shader, nullptr);
+	ASSERT_TRUE(DeclaresPassInputs(*shader));
+	MaterialAsset* material = LoadMaterial("SceneReader.mat", shader->assetId, GREEN_TINT);
+	ASSERT_NE(material, nullptr);
+
+	const Vec3 reference = ErrorMaterial();
+	ScopedLogCapture capture;
+	ASSERT_TRUE(capture.Armed());
+	const Vec3 drawn = DrawnWith(material);
+	DrawnWith(material);
+	const str captured = capture.Finish();
+
+	ExpectTheErrorMaterial(drawn, reference, "an opaque material reading the scene drew on a mesh");
+	EXPECT_EQ(Occurrences(captured, REFUSAL), 1u) << captured;
+	EXPECT_NE(captured.find("reads the scene"), str::npos) << captured;
+	EXPECT_NE(captured.find("SceneReader.mat"), str::npos) << captured;
+}
+
+TEST_F(MeshDrawContractFixture, TransparentSceneReaderDraws) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device, or no compiler";
+	}
+	ShaderAsset* shader = AddShader("SceneReader.hlsl", SCENE_READER_SHADER);
+	ASSERT_NE(shader, nullptr);
+	MaterialAsset* material = LoadMaterial("SceneReader.mat", shader->assetId, str("\t\"blend\": \"alpha\",\n") + GREEN_TINT);
+	ASSERT_NE(material, nullptr);
+
+	ExpectGreen(DrawnWith(material), "a transparent material reading the scene was refused");
+}
+
+#ifndef SHALLTEAR_SHARED
+TEST_F(MeshDrawContractFixture, SceneReaderShadersAreCounted) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device, or no compiler";
+	}
+	const u32 before = SceneRequests::CountLiveMeshReaders();
+	ShaderAsset* shader = AddShader("Counted.hlsl", SCENE_READER_SHADER);
+	ASSERT_NE(shader, nullptr);
+	EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 1);
+	{
+		ShaderAsset alone;
+		ASSERT_TRUE(alone.Import(FileSystem::Resolve(Path("project://Counted.hlsl"))));
+		EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 2);
+	}
+	EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 1);
+	{
+		Vector<u8> descriptorBytes{GetMemoryResource(MemTag::Asset)};
+		Vector<u8> payloadBytes{GetMemoryResource(MemTag::Asset)};
+		PakStringPool pool;
+		CookWriter descriptor(descriptorBytes, pool);
+		CookWriter payload(payloadBytes, pool);
+		ASSERT_TRUE(shader->Cook(descriptor, payload));
+		Vector<u8> stringBytes{GetMemoryResource(MemTag::Asset)};
+		PakWriteStringBlob(stringBytes, pool.Texts());
+		PakStringTable table;
+		ASSERT_TRUE(PakReadStringBlob(stringBytes.data(), stringBytes.size(), table));
+		ShaderAsset cooked;
+		CookReader descriptorReader(descriptorBytes.data(), descriptorBytes.size(), table);
+		CookReader payloadReader(payloadBytes.data(), payloadBytes.size(), table);
+		ASSERT_TRUE(cooked.LoadCooked(descriptorReader, payloadReader));
+		EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 2);
+	}
+	EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 1);
+
+	MaterialAsset* material = LoadMaterial("Counted.mat", shader->assetId, GREEN_TINT);
+	ASSERT_NE(material, nullptr);
+	DrawnWith(material);
+	Edit("Counted.hlsl", CONTRACT_SHADER);
+	DrawnWith(material);
+	EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before);
+	Edit("Counted.hlsl", SCENE_READER_SHADER);
+	DrawnWith(material);
+	EXPECT_EQ(SceneRequests::CountLiveMeshReaders(), before + 1);
+}
+#endif
 
 TEST_F(MeshDrawContractFixture, ContractRawShaderDraws) {
 	if (!Ready()) {

@@ -181,6 +181,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			{"SceneColor", "sltSceneColor", GraphValueType::Texture2D, GraphStageFragment, {}, "sltSceneSampler"},
 			{"SceneDepth", "sltSceneDepth", GraphValueType::Texture2D, GraphStageFragment, {}, "sltSceneSampler"},
 			{"SceneNormals", "sltSceneNormals", GraphValueType::Texture2D, GraphStageFragment, {}, "sltSceneSampler"},
+			{"SceneColorScale", "1.0", GraphValueType::Float, GraphStageFragment},
 			{"MotionVectors", "", GraphValueType::Texture2D, GraphStageFragment, "nothing renders motion vectors"},
 
 			{"SkyDirection", "pv.normalWS", GraphValueType::Float3, GraphStageFragment},

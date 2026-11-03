@@ -160,7 +160,9 @@ namespace Shalltear {
 			Mat4 view = Mat4::Identity();
 			Mat4 projection = Mat4::Identity();
 			Vec3 cameraPosition{};
+			RHI::TextureHandle sceneColor;
 			RHI::TextureHandle sceneDepth;
+			RHI::TextureHandle sceneNormals;
 			RHI::TransientAllocation viewBlock{};
 			RHI::TextureHandle shadowAtlas;
 			RHI::TextureHandle punctualAtlas;
@@ -429,6 +431,16 @@ namespace Shalltear {
 			GraphicsInternal::SkinDeformer isolatedSkinDeformer;
 			Vector<Mat4> skinMatrices{GetMemoryResource(MemTag::Graphics)};
 
+			struct SceneReader {
+				AABB bounds;
+				bool bounded = false;
+				u64 sceneId = 0;
+				u32 renderingLayerMask = 1;
+				PassRequests reads = PassRequests::None;
+				bool isolated = false;
+			};
+			Vector<SceneReader> sceneReaders{GetMemoryResource(MemTag::Graphics)};
+
 			Vector<Handle<ProceduralRenderer>> proceduralRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ProceduralRenderer>> isolatedProceduralRenderers{GetMemoryResource(MemTag::Graphics)};
 			GraphicsInternal::ProceduralFrame procedural;
@@ -491,7 +503,7 @@ namespace Shalltear {
 				u32 scopeIndex = 0;
 				u32 firstProcedural = 0;
 				u32 proceduralCount = 0;
-				bool proceduralSceneDepth = false;
+				PassRequests sceneReads = PassRequests::None;
 				u32 firstCaster = 0;
 				u32 casterCount = 0;
 				u32 firstOutline = 0;
@@ -591,7 +603,7 @@ namespace Shalltear {
 				u32 scopeIndex = 0;
 				u32 firstProcedural = 0;
 				u32 proceduralCount = 0;
-				bool proceduralSceneDepth = false;
+				PassRequests sceneReads = PassRequests::None;
 				u32 firstCaster = 0;
 				u32 casterCount = 0;
 				RectI pixels;
@@ -1405,6 +1417,7 @@ namespace Shalltear {
 			bool mirrored = false;
 			bool receiveShadows = true;
 			ShadowCasting castShadows = ShadowCasting::On;
+			PassRequests sceneReads = PassRequests::None;
 			u64 volumeMask = 0;
 		};
 
@@ -1629,6 +1642,7 @@ namespace Shalltear {
 			PushBlockIsNotTheHeader,
 			ReadsPassInputs,
 			IsASky,
+			OpaqueReadsScene,
 		};
 
 		MeshDrawRefusal ClassifyMeshDraw(const ShaderAsset& shader) {
@@ -1643,10 +1657,23 @@ namespace Shalltear {
 			if (shader.pushConstantSize != DRAW_HEADER_BYTES) {
 				return MeshDrawRefusal::PushBlockIsNotTheHeader;
 			}
-			if (bindings.back().set > MATERIAL_DESCRIPTOR_SET) {
+			if (SceneRequests::DeclaresSceneSet(shader) && !SceneRequests::ReadsOnlyScene(shader)) {
 				return MeshDrawRefusal::ReadsPassInputs;
 			}
 			return MeshDrawRefusal::None;
+		}
+
+		PassRequests MeshSceneReads(const ShaderAsset& shader) {
+			return SceneRequests::DeclaresSceneSet(shader) ? SceneRequests::DeclaredBy(shader) : PassRequests::None;
+		}
+
+		MeshDrawRefusal ClassifyMeshDraw(const ShaderAsset& shader, const MaterialAsset& material) {
+			const MeshDrawRefusal refusal = ClassifyMeshDraw(shader);
+			if (refusal == MeshDrawRefusal::None && MeshSceneReads(shader) != PassRequests::None &&
+				material.ResolveRenderState(shader.renderState).blend == RHI::BlendMode::Opaque) {
+				return MeshDrawRefusal::OpaqueReadsScene;
+			}
+			return refusal;
 		}
 
 		bool FirstNamingOf(Vector<RenderState::NamedRefusal>& named, ShaderAsset& shader) {
@@ -1687,6 +1714,11 @@ namespace Shalltear {
 			case MeshDrawRefusal::IsASky:
 				SLT_LOG_WARN("Graphics", "material '{}' can't be drawn on a mesh. Its shader '{}' is a sky (drawn behind "
 										 "everything from an Environment's Sky Material) -> error material",
+							 material.virtualPath, shader.virtualPath);
+				break;
+			case MeshDrawRefusal::OpaqueReadsScene:
+				SLT_LOG_WARN("Graphics", "material '{}' can't be drawn on a mesh. It draws opaque, its shader '{}' reads the scene "
+										 "(transparent only) -> error material",
 							 material.virtualPath, shader.virtualPath);
 				break;
 			case MeshDrawRefusal::None:
@@ -1836,7 +1868,7 @@ namespace Shalltear {
 					MaterialAsset* material = materialForSlot(submesh.materialSlot);
 					ShaderAsset* shader = material ? material->shader.Get() : nullptr;
 					if (shader) {
-						if (const MeshDrawRefusal refusal = ClassifyMeshDraw(*shader); refusal != MeshDrawRefusal::None) {
+						if (const MeshDrawRefusal refusal = ClassifyMeshDraw(*shader, *material); refusal != MeshDrawRefusal::None) {
 							NameMeshDrawRefusal(*shader, *material, refusal);
 							shader = nullptr;
 						}
@@ -1865,6 +1897,7 @@ namespace Shalltear {
 						entry->alphaClipThreshold = material->alphaClipThreshold;
 						entry->sortingPriority = material->sortingPriority;
 						entry->alpha = entry->renderState.blend != RHI::BlendMode::Opaque;
+						entry->sceneReads = MeshSceneReads(*shader);
 					} else if (errorShader) {
 						entry->shader = errorShader;
 						entry->materialId = 0;
@@ -2869,6 +2902,9 @@ namespace Shalltear {
 				bound.material = ~0ull;
 				cmd.BindTransientSet(0, CreateViewSet(device, pipeline, *entry.shader, viewAllocation,
 													  RHI::TextureHandle{}, RHI::TextureHandle{}));
+				if (SceneRequests::DeclaresSceneSet(*entry.shader)) {
+					BindSceneTextureSet(cmd, device, pipeline, *entry.shader, SceneRequestTextures{}, PassView{});
+				}
 			}
 			if (entry.materialId != bound.material || !bound.materialSet.IsValid()) {
 				if (RHI::TransientSet set = BindMaterialSet(cmd, device, pipeline, entry); set.IsValid()) {
@@ -3542,6 +3578,7 @@ namespace Shalltear {
 			f32 depth = 0.0f;
 			i32 sortingPriority = 0;
 			bool alpha = false;
+			bool readsColor = false;
 		};
 
 		u64 ProceduralSortKey(const ProceduralDraw& draw, u32 place) {
@@ -3580,6 +3617,7 @@ namespace Shalltear {
 					draw.renderer = index;
 					draw.item = item;
 					draw.alpha = material->ResolveRenderState(shader->renderState).blend != RHI::BlendMode::Opaque;
+					draw.readsColor = draw.alpha && HasFlag(SceneRequests::DeclaredBy(*shader), PassRequests::SceneColor);
 					draw.sortingPriority = material->sortingPriority;
 					draw.depth = Vec3::DistanceSquared(cameraPosition, frame.items[item].sortPoint);
 				}
@@ -3608,6 +3646,54 @@ namespace Shalltear {
 			return draw.depth > entry.depth;
 		}
 
+		// states set by caller
+		u32 RecordSceneColorCopy(RHI::CommandList& cmd, RHI::Device& device, RHI::TextureHandle source, RHI::TextureHandle destination,
+								 bool resolve) {
+			if (resolve) {
+				cmd.ResolveTexture(source, destination);
+				return 0;
+			}
+			ShaderAsset* blit = _state->blitShader.Get();
+			RHI::PipelineHandle pipeline = blit ? GetOrCreatePipeline(blit, SCENE_COLOR_FORMAT, RHI::Format::Unknown) : RHI::PipelineHandle{};
+			if (!pipeline.IsValid()) {
+				return 0;
+			}
+			RHI::RenderPassDesc::Attachment attachment;
+			attachment.texture = destination;
+			attachment.load = RHI::LoadOp::DontCare;
+			RHI::RenderPassDesc desc;
+			desc.colorAttachments = {&attachment, 1};
+			cmd.BeginRenderPass(desc);
+			cmd.SetPipeline(pipeline);
+			RHI::TransientSet set = device.CreateTransientSet(pipeline, 1).WriteTexture(0, source).WriteSampler(1, _state->clampSampler).Commit();
+			cmd.BindTransientSet(1, set);
+			cmd.Draw(3);
+			cmd.EndRenderPass();
+			return 1;
+		}
+
+		struct ScenePassReads {
+			RHI::TextureHandle color;
+			RHI::TextureHandle depth;
+			RHI::TextureHandle normals;
+			bool copiesColor = false;
+		};
+
+		bool TransparentReadsColor(DrawEntry* const* drawList, u32 first, u32 count, const ProceduralDraw* proceduralDraws, u32 firstProcedural,
+								   u32 proceduralCount) {
+			for (u32 i = first; i < count; ++i) {
+				if (HasFlag(drawList[i]->sceneReads, PassRequests::SceneColor)) {
+					return true;
+				}
+			}
+			for (u32 i = firstProcedural; i < proceduralCount; ++i) {
+				if (proceduralDraws[i].readsColor) {
+					return true;
+				}
+			}
+			return false;
+		}
+
 		u32 RecordScenePass(RHI::CommandList& cmd, LinearAllocator& arena,
 							const Mat4& view, const Mat4& projection, const Vec3& cameraPosition,
 							const Color& clearColor, const PassTargets& targets, u32& outTriangles,
@@ -3618,10 +3704,13 @@ namespace Shalltear {
 							RHI::TextureHandle ambientOcclusion = {},
 							RHI::TransientAllocation* outViewAllocation = nullptr,
 							std::span<const u32> procedural = {},
-							RHI::TextureHandle proceduralSceneDepth = {},
+							const ScenePassReads& reads = {},
 							bool reflectionProbes = true) {
 			RenderState& state = *_state;
 			RHI::Device& device = *state.device;
+
+			SceneRequestTextures bound{reads.copiesColor ? RHI::TextureHandle{} : reads.color, reads.depth, reads.normals, {}, {}, {}};
+			const PassView passView{view, projection, targets.extent};
 
 			const bool isolated = kind != SceneKind::World;
 			Mat4 viewProjection = projection * view;
@@ -3848,6 +3937,9 @@ namespace Shalltear {
 					viewSet = CreateViewSet(device, pipeline, *entry.shader, viewAllocation, state.shadowAtlas,
 											state.punctualShadowAtlas, environment.cube[0], ambientOcclusion, environment.cube[1]);
 					cmd.BindTransientSet(0, viewSet);
+					if (SceneRequests::DeclaresSceneSet(*entry.shader)) {
+						BindSceneTextureSet(cmd, device, pipeline, *entry.shader, bound, passView);
+					}
 				}
 
 				if (entry.materialId != boundMaterial || !materialSet.IsValid()) {
@@ -3887,7 +3979,9 @@ namespace Shalltear {
 				init.view = view;
 				init.projection = projection;
 				init.cameraPosition = cameraPosition;
-				init.sceneDepth = proceduralSceneDepth;
+				init.sceneColor = bound.color;
+				init.sceneDepth = bound.depth;
+				init.sceneNormals = bound.normals;
 				init.viewBlock = viewAllocation;
 				init.shadowAtlas = state.shadowAtlas;
 				init.punctualAtlas = state.punctualShadowAtlas;
@@ -3953,6 +4047,23 @@ namespace Shalltear {
 					cmd.Draw(3);
 					++drawCalls;
 				}
+			}
+
+			if (reads.copiesColor && reads.color.IsValid() &&
+				TransparentReadsColor(drawList, firstBlended, shadedDrawCount, proceduralDraws, nextProcedural, proceduralDrawCount)) {
+				cmd.EndRenderPass();
+				const bool resolve = targets.samples > 1;
+				cmd.TransitionTexture(targets.color, resolve ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
+				cmd.TransitionTexture(reads.color, resolve ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
+				drawCalls += RecordSceneColorCopy(cmd, device, targets.color, reads.color, resolve);
+				cmd.TransitionTexture(reads.color, RHI::ResourceState::ShaderResource);
+				cmd.TransitionTexture(targets.color, RHI::ResourceState::RenderTarget);
+				colorAttachment.load = RHI::LoadOp::Load;
+				depthAttachment.load = RHI::LoadOp::Load;
+				cmd.BeginRenderPass(pass);
+				boundPipeline = RHI::PipelineHandle{};
+				boundMaterial = ~0ull;
+				bound.color = reads.color;
 			}
 
 			for (u32 i = firstBlended; i < shadedDrawCount; ++i) {
@@ -4139,16 +4250,87 @@ namespace Shalltear {
 			pending.cascadeCount = state.pendingShadow.cascadeCount;
 		}
 
-		constexpr u32 SCENE_PASS_AMBIENT_OCCLUSION_SLOT = 5;
-		u32 ProceduralDepthSlot(bool produced) {
-			return SCENE_PASS_AMBIENT_OCCLUSION_SLOT + (produced ? 1u : 0u);
+		constexpr u32 SCENE_PASS_FIRST_READ = 5;
+
+		struct ScenePassSlots {
+			u32 ambientOcclusion = 0;
+			u32 depth = 0;
+			u32 normals = 0;
+			u32 color = 0;
+		};
+
+		// must match DeclareScenePassReads
+		ScenePassSlots ResolveScenePassSlots(bool produced, PassRequests reads) {
+			ScenePassSlots slots;
+			u32 next = SCENE_PASS_FIRST_READ;
+			if (produced) {
+				slots.ambientOcclusion = next++;
+			}
+			if (HasFlag(reads, PassRequests::SceneDepth)) {
+				slots.depth = next++;
+			}
+			if (HasFlag(reads, PassRequests::SceneNormals)) {
+				slots.normals = next++;
+			}
+			if (HasFlag(reads, PassRequests::SceneColor)) {
+				slots.color = next++;
+			}
+			return slots;
+		}
+
+		GraphResourceId DeclareOpaqueColor(GraphicsInternal::RenderGraph& graph, const RHI::TextureDesc& colorDesc, PassRequests reads) {
+			if (!HasFlag(reads, PassRequests::SceneColor)) {
+				return GraphicsInternal::INVALID_GRAPH_RESOURCE;
+			}
+			RHI::TextureDesc desc = colorDesc;
+			desc.usage = desc.usage | RHI::TextureUsage::TransferDst;
+			desc.debugName = "SceneOpaqueColor";
+			if (_state->msaaSamples <= 1) {
+				EnsureBlitShader();
+			}
+			return graph.CreateTransient(desc);
+		}
+
+		void DeclareScenePassReads(GraphicsInternal::RenderGraph& graph, GraphResourceId ambientOcclusion, PassRequests reads,
+								   GraphResourceId prepassDepth, GraphResourceId prepassNormals, GraphResourceId colorCopy) {
+			if (ambientOcclusion != GraphicsInternal::INVALID_GRAPH_RESOURCE) {
+				graph.Read(ambientOcclusion, RHI::ResourceState::ShaderResource);
+			}
+			if (HasFlag(reads, PassRequests::SceneDepth)) {
+				graph.Read(prepassDepth, RHI::ResourceState::ShaderResource);
+			}
+			if (HasFlag(reads, PassRequests::SceneNormals)) {
+				graph.Read(prepassNormals, RHI::ResourceState::ShaderResource);
+			}
+			if (HasFlag(reads, PassRequests::SceneColor)) {
+				graph.Write(colorCopy, RHI::ResourceState::RenderTarget);
+			}
+		}
+
+		RHI::TextureHandle ScenePassOcclusion(const GraphPass& pass) {
+			return pass.work.produced ? pass.textures[ResolveScenePassSlots(true, PassRequests::None).ambientOcclusion] : RHI::TextureHandle{};
+		}
+
+		ScenePassReads ScenePassReadsOf(const GraphPass& pass, PassRequests reads) {
+			const ScenePassSlots slots = ResolveScenePassSlots(pass.work.produced, reads);
+			ScenePassReads out;
+			if (HasFlag(reads, PassRequests::SceneDepth)) {
+				out.depth = pass.textures[slots.depth];
+			}
+			if (HasFlag(reads, PassRequests::SceneNormals)) {
+				out.normals = pass.textures[slots.normals];
+			}
+			if (HasFlag(reads, PassRequests::SceneColor)) {
+				out.color = pass.textures[slots.color];
+				out.copiesColor = true;
+			}
+			return out;
 		}
 
 		void PassRecordViewScene(GraphExecution& exec, const GraphPass& pass) {
 			// builder's declaration order = this table
 			enum : u32 { COLOR = 0,
-						 DEPTH = 1,
-						 AMBIENT_OCCLUSION = SCENE_PASS_AMBIENT_OCCLUSION_SLOT };
+						 DEPTH = 1 };
 			RenderState& state = *_state;
 			RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const ViewRecordScope viewScope(pending);
@@ -4165,13 +4347,9 @@ namespace Shalltear {
 											  pending.cameraPosition, pending.clearColor, targets, exec.triangles,
 											  {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
 											  pending.fill, pending.wireColor, pending.kind, ShadowOwnerToken(pass.work),
-											  pending.cullingMask, nullptr,
-											  pass.work.produced ? pass.textures[AMBIENT_OCCLUSION] : RHI::TextureHandle{},
-											  &pending.viewAllocation,
+											  pending.cullingMask, nullptr, ScenePassOcclusion(pass), &pending.viewAllocation,
 											  {state.proceduralVisible.data() + pending.firstProcedural, pending.proceduralCount},
-											  pending.proceduralSceneDepth ? pass.textures[ProceduralDepthSlot(pass.work.produced)]
-																		   : RHI::TextureHandle{},
-											  !pending.radianceCapture);
+											  ScenePassReadsOf(pass, pending.sceneReads), !pending.radianceCapture);
 		}
 
 		struct RowTextureSlots {
@@ -4587,32 +4765,7 @@ namespace Shalltear {
 		void PassRecordSceneColorCopy(GraphExecution& exec, const GraphPass& pass) {
 			enum : u32 { SOURCE = 0,
 						 DESTINATION = 1 };
-			RenderState& state = *_state;
-			if (pass.work.flag) {
-				exec.cmd->ResolveTexture(pass.textures[SOURCE], pass.textures[DESTINATION]);
-				return;
-			}
-			ShaderAsset* blit = state.blitShader.Get();
-			RHI::PipelineHandle pipeline = blit ? GetOrCreatePipeline(blit, SCENE_COLOR_FORMAT, RHI::Format::Unknown)
-												: RHI::PipelineHandle{};
-			if (!pipeline.IsValid()) {
-				return;
-			}
-			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
-			attachment.load = RHI::LoadOp::DontCare;
-			RHI::RenderPassDesc desc;
-			desc.colorAttachments = {&attachment, 1};
-			exec.cmd->BeginRenderPass(desc);
-			exec.cmd->SetPipeline(pipeline);
-			RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-										.WriteTexture(0, pass.textures[SOURCE])
-										.WriteSampler(1, state.clampSampler)
-										.Commit();
-			exec.cmd->BindTransientSet(1, set);
-			exec.cmd->Draw(3);
-			++exec.drawCalls;
-			exec.cmd->EndRenderPass();
+			exec.drawCalls += RecordSceneColorCopy(*exec.cmd, *exec.device, pass.textures[SOURCE], pass.textures[DESTINATION], pass.work.flag);
 		}
 
 		struct GPUDebugViewPush {
@@ -4910,8 +5063,7 @@ namespace Shalltear {
 
 		void PassRecordWindowScene(GraphExecution& exec, const GraphPass& pass) {
 			enum : u32 { COLOR = 0,
-						 DEPTH = 1,
-						 AMBIENT_OCCLUSION = SCENE_PASS_AMBIENT_OCCLUSION_SLOT };
+						 DEPTH = 1 };
 			RenderState& state = *_state;
 			RenderState::WindowWork& work = state.frameWork[pass.work.index];
 			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
@@ -4935,12 +5087,9 @@ namespace Shalltear {
 											  camera->BuildProjection(aspect), cameraOwner->GetWorldPosition(),
 											  camera->GetClearColor(), targets, exec.triangles, {}, ViewFill::Solid,
 											  Color32::White(), SceneKind::World, ShadowOwnerToken(pass.work),
-											  camera->GetCullingMask(), nullptr,
-											  pass.work.produced ? pass.textures[AMBIENT_OCCLUSION] : RHI::TextureHandle{},
-											  nullptr,
+											  camera->GetCullingMask(), nullptr, ScenePassOcclusion(pass), nullptr,
 											  {state.proceduralVisible.data() + cameraWork.firstProcedural, cameraWork.proceduralCount},
-											  cameraWork.proceduralSceneDepth ? pass.textures[ProceduralDepthSlot(pass.work.produced)]
-																			  : RHI::TextureHandle{});
+											  ScenePassReadsOf(pass, cameraWork.sceneReads));
 		}
 
 		void PassRecordCameraComposite(GraphExecution& exec, const GraphPass& pass) {
@@ -5168,7 +5317,7 @@ namespace Shalltear {
 		struct ProceduralSlice {
 			u32 first = 0;
 			u32 count = 0;
-			bool sceneDepth = false;
+			PassRequests reads = PassRequests::None;
 			bool opaqueItems = false;
 		};
 
@@ -5213,8 +5362,12 @@ namespace Shalltear {
 				for (u32 item = renderer.firstItem; item < renderer.firstItem + renderer.itemCount; ++item) {
 					const MaterialAsset* material = frame.items[item].material.Get();
 					const ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-					if (shader && HasFlag(SceneRequests::DeclaredBy(*shader), PassRequests::SceneDepth)) {
-						slice.sceneDepth = true;
+					if (shader) {
+						const PassRequests declared = SceneRequests::DeclaredBy(*shader);
+						slice.reads |= declared & (PassRequests::SceneDepth | PassRequests::SceneNormals);
+						if (material->ResolveRenderState(shader->renderState).blend != RHI::BlendMode::Opaque) {
+							slice.reads |= declared & PassRequests::SceneColor;
+						}
 					}
 					slice.opaqueItems = slice.opaqueItems || DrawsInPrepass(frame.items[item]);
 				}
@@ -5248,6 +5401,75 @@ namespace Shalltear {
 			}
 			slice.count = static_cast<u32>(state.proceduralVisible.size()) - slice.first;
 			return slice;
+		}
+
+		PassRequests TransparentSceneReads(const MaterialAsset* material) {
+			const ShaderAsset* shader = material ? material->shader.Get() : nullptr;
+			if (!shader || !SceneRequests::DeclaresSceneSet(*shader) || ClassifyMeshDraw(*shader, *material) != MeshDrawRefusal::None) {
+				return PassRequests::None;
+			}
+			return SceneRequests::DeclaredBy(*shader);
+		}
+
+		void GatherSceneReaders(RenderState& state) {
+			state.sceneReaders.clear();
+			if (SceneRequests::CountLiveMeshReaders() == 0) {
+				return;
+			}
+			auto gather = [&state](const auto& renderers, bool isolated, bool skinned) {
+				for (const auto& handle : renderers) {
+					const auto* renderer = handle.Get();
+					if (!renderer || renderer->GetCastShadows() == ShadowCasting::ShadowsOnly) {
+						continue;
+					}
+					PassRequests reads = PassRequests::None;
+					for (u32 slot = 0; slot < renderer->GetMaterialCount(); ++slot) {
+						reads |= TransparentSceneReads(renderer->GetMaterial(slot).Get());
+					}
+					const SceneObject* owner = reads != PassRequests::None ? renderer->GetOwner().Get() : nullptr;
+					const MeshAsset* mesh = owner ? renderer->GetMesh().Get() : nullptr;
+					if (!mesh) {
+						continue;
+					}
+					RenderState::SceneReader reader;
+					// posed bounds unknown until Render.Skinning
+					reader.bounded = !skinned && mesh->bounds.IsValid();
+					if (reader.bounded) {
+						reader.bounds = mesh->bounds.Transformed(owner->GetWorldMatrix());
+					}
+					reader.sceneId = owner->GetScene().GetInstanceId();
+					reader.renderingLayerMask = renderer->GetRenderingLayerMask();
+					reader.reads = reads;
+					reader.isolated = isolated;
+					state.sceneReaders.push_back(reader);
+				}
+			};
+			gather(state.meshRenderers, false, false);
+			gather(state.skinnedMeshRenderers, false, true);
+			gather(state.isolatedMeshRenderers, true, false);
+			gather(state.isolatedSkinnedMeshRenderers, true, true);
+		}
+
+		PassRequests SceneReadsInView(const RenderState& state, bool isolated, std::span<const u64> onlyScenes, const Mat4& viewProjection,
+									  u32 cullingMask) {
+			PassRequests reads = PassRequests::None;
+			if (state.sceneReaders.empty()) {
+				return reads;
+			}
+			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
+			for (const RenderState::SceneReader& reader : state.sceneReaders) {
+				if (reader.isolated != isolated || (reader.renderingLayerMask & cullingMask) == 0) {
+					continue;
+				}
+				if (!onlyScenes.empty() && std::find(onlyScenes.begin(), onlyScenes.end(), reader.sceneId) == onlyScenes.end()) {
+					continue;
+				}
+				if (reader.bounded && !frustum.Intersects(reader.bounds)) {
+					continue;
+				}
+				reads |= reader.reads;
+			}
+			return reads;
 		}
 
 		void DeclareProceduralReads(const RenderState& state, GraphicsInternal::RenderGraph& graph, const ProceduralSlice& slice) {
@@ -5872,6 +6094,7 @@ namespace Shalltear {
 												extent, planOwner ? planOwner->GetWorldPosition() : Vec3{});
 				}
 				ProceduralSlice procedural;
+				PassRequests sceneReads = PassRequests::None;
 				ProceduralView proceduralView;
 				proceduralView.extent = extent;
 				if (const SceneObject* cullOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr) {
@@ -5880,15 +6103,17 @@ namespace Shalltear {
 					proceduralView.cameraPosition = cullOwner->GetWorldPosition();
 					procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view,
 														 cameraRows.camera->GetCullingMask());
+					sceneReads = procedural.reads | SceneReadsInView(state, false, {}, proceduralView.projection * proceduralView.view,
+																	 cameraRows.camera->GetCullingMask());
 				}
 				{
 					RenderState::CameraWork& slices = windowWork.cameras[cameraIndex];
 					slices.firstProcedural = procedural.first;
 					slices.proceduralCount = procedural.count;
-					slices.proceduralSceneDepth = procedural.sceneDepth;
+					slices.sceneReads = sceneReads;
 				}
-				if (procedural.sceneDepth) {
-					cameraRequests |= PassRequests::SceneDepth;
+				if (HasAnyFlag(sceneReads, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
+					cameraRequests |= sceneReads & (PassRequests::SceneDepth | PassRequests::SceneNormals);
 					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
 				}
 				const bool prepassRead = prepassKey < ROW_KEY_AFTER_LAST;
@@ -5914,6 +6139,7 @@ namespace Shalltear {
 						EnsureBlitShader();
 					}
 				}
+				const GraphResourceId opaqueColor = DeclareOpaqueColor(graph, cameraHDRDesc, sceneReads);
 				const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
 				const bool wantsNormals = HasFlag(cameraRequests, PassRequests::SceneNormals);
 				PrepassImages prepassImages;
@@ -5993,13 +6219,8 @@ namespace Shalltear {
 				graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
 				graph.Read(windowShadowAtlas, RHI::ResourceState::ShaderResource);
 				graph.Read(windowPunctualAtlas, RHI::ResourceState::ShaderResource);
-				if (work.produced) {
-					graph.Read(productions.ambientOcclusion, RHI::ResourceState::ShaderResource);
-				}
+				DeclareScenePassReads(graph, productions.ambientOcclusion, sceneReads, prepassDepth, prepassNormals, opaqueColor);
 				work.produced = false;
-				if (procedural.sceneDepth) {
-					graph.Read(prepassDepth, RHI::ResourceState::ShaderResource);
-				}
 				DeclareProceduralReads(state, graph, procedural);
 
 				flushCameraRowsBefore(ROW_KEY_AFTER_LAST);
@@ -6045,6 +6266,7 @@ namespace Shalltear {
 			}
 
 			DeclareProceduralRenderers(state);
+			GatherSceneReaders(state);
 
 			state.skinnedOutputs.assign(state.skinnedMeshRenderers.size(), {});
 			state.isolatedSkinnedOutputs.assign(state.isolatedSkinnedMeshRenderers.size(), {});
@@ -6152,14 +6374,20 @@ namespace Shalltear {
 					state, pending.kind != SceneKind::World, {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
 					{state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount}, pending.projection * pending.view,
 					pending.cullingMask);
+				const PassRequests sceneReads =
+					procedural.reads | (pending.fill == ViewFill::Wireframe
+											? PassRequests::None
+											: SceneReadsInView(state, pending.kind != SceneKind::World,
+															   {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
+															   pending.projection * pending.view, pending.cullingMask));
 				{
 					RenderState::PendingView& slices = state.pendingViews[viewIndex];
 					slices.firstProcedural = procedural.first;
 					slices.proceduralCount = procedural.count;
-					slices.proceduralSceneDepth = procedural.sceneDepth;
+					slices.sceneReads = sceneReads;
 				}
-				if (procedural.sceneDepth) {
-					viewRequests |= PassRequests::SceneDepth;
+				if (HasAnyFlag(sceneReads, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
+					viewRequests |= sceneReads & (PassRequests::SceneDepth | PassRequests::SceneNormals);
 					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
 				}
 				const bool prepassRead = prepassKey < ROW_KEY_AFTER_LAST;
@@ -6193,6 +6421,7 @@ namespace Shalltear {
 						EnsureBlitShader();
 					}
 				}
+				const GraphResourceId opaqueColor = DeclareOpaqueColor(graph, hdrDesc, sceneReads);
 
 				const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
 				const bool wantsNormals = HasFlag(viewRequests, PassRequests::SceneNormals);
@@ -6288,13 +6517,8 @@ namespace Shalltear {
 				graph.Read(skin, RHI::ResourceState::ShaderResource);
 				graph.Read(shadowAtlas, RHI::ResourceState::ShaderResource);
 				graph.Read(punctualAtlas, RHI::ResourceState::ShaderResource);
-				if (viewWork.produced) {
-					graph.Read(productions.ambientOcclusion, RHI::ResourceState::ShaderResource);
-				}
+				DeclareScenePassReads(graph, productions.ambientOcclusion, sceneReads, prepassDepth, prepassNormals, opaqueColor);
 				viewWork.produced = false;
-				if (procedural.sceneDepth) {
-					graph.Read(prepassDepth, RHI::ResourceState::ShaderResource);
-				}
 				DeclareProceduralReads(state, graph, procedural);
 
 				if (pending.debugView != DebugView::None && wantsPrepass) {
@@ -6981,7 +7205,8 @@ namespace Shalltear {
 											  Color::Black(), targets, triangles,
 											  {state->viewScenes.data() + scope.firstScene, scope.sceneCount},
 											  ViewFill::Solid, Color32::White(), scope.kind, 0,
-											  renderingLayerMask, overrideMaterial.Get());
+											  renderingLayerMask, overrideMaterial.Get(), {}, nullptr, {},
+											  ScenePassReads{_sceneColor, _sceneDepth, _sceneNormals, false});
 		_exec->drawCalls += drawCalls;
 		_exec->triangles += triangles;
 		return drawCalls > 0;
@@ -7078,7 +7303,8 @@ namespace Shalltear {
 		: _cmd(init.cmd), _device(init.device), _frame(init.frame), _flatItem(init.item),
 		  _item(init.frame ? init.frame->items[init.item].index : 0), _pass(init.pass), _value(init.value),
 		  _colorFormat(init.colorFormat), _depthFormat(init.depthFormat), _samples(init.samples),
-		  _sceneDepth(init.sceneDepth), _viewBlock(init.viewBlock), _shadowAtlas(init.shadowAtlas),
+		  _sceneColor(init.sceneColor), _sceneDepth(init.sceneDepth), _sceneNormals(init.sceneNormals), _viewBlock(init.viewBlock),
+		  _shadowAtlas(init.shadowAtlas),
 		  _punctualAtlas(init.punctualAtlas), _environmentCube(init.environmentCube), _environmentCube2(init.environmentCube2), _ambientOcclusion(init.ambientOcclusion),
 		  _drawCalls(init.drawCalls), _view(init.view), _projection(init.projection), _cameraPosition(init.cameraPosition),
 		  _extent(init.extent) {}
@@ -7121,7 +7347,7 @@ namespace Shalltear {
 													_environmentCube, _ambientOcclusion, _environmentCube2));
 		}
 		BindMaterialSet(*_cmd, *_device, pipeline, entry);
-		BindSceneTextureSet(*_cmd, *_device, pipeline, *shader, SceneRequestTextures{{}, _sceneDepth, {}, {}, {}, {}},
+		BindSceneTextureSet(*_cmd, *_device, pipeline, *shader, SceneRequestTextures{_sceneColor, _sceneDepth, _sceneNormals, {}, {}, {}},
 							PassView{_view, _projection, _extent});
 		if (!pushConstants.empty()) {
 			_cmd->PushConstants(pushConstants);

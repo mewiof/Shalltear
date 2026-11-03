@@ -817,6 +817,10 @@ namespace Shalltear {
 	}
 
 	bool ShaderAsset::ImportFromSource(const Path& virtualOrPhysical) {
+		struct Recount {
+			ShaderAsset& shader;
+			~Recount() { shader.RecountMeshReader(); }
+		} recount{*this};
 		if (!FileSystem::Exists(virtualOrPhysical)) {
 			SLT_LOG_ERROR("Graphics", "ShaderAsset: source '{}' doesn't exist", virtualOrPhysical.ToString());
 			return false;

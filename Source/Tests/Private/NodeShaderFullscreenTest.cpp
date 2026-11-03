@@ -213,6 +213,53 @@ TEST(NodeShaderFullscreenTest, ScenesImagesAreFullScreenDraws) {
 	EXPECT_FALSE(GenerateFullscreen(raw.document).Says("cbuffer sltViewRecord"));
 }
 
+TEST(NodeShaderFullscreenTest, TransparentSurfaceDeclaresSceneReads) {
+	struct Reader {
+		const char* def;
+		const char* port;
+		const char* key;
+		const char* value;
+		const char* image;
+	};
+	const Reader READERS[] = {
+		{"Input/SceneColor", "Out", "", "", "Texture2D sltSceneColor"},
+		{"Input/SceneDepth", "Out", "Sampling Mode", "\"Raw\"", "Texture2D sltSceneDepth"},
+		{"Input/SceneDepth", "Out", "Sampling Mode", "\"Eye\"", "Texture2D sltSceneDepth"},
+	};
+	for (const Reader& reader : READERS) {
+		UnlitBuilder surface;
+		surface.Graph("blend", "\"alpha\"");
+		GraphNode& node = surface.Node(20, reader.def);
+		if (*reader.key != '\0') {
+			DocumentBuilder::Setting(node, reader.key, reader.value);
+		}
+		Paint(surface, 20, reader.port);
+		Generated drawn;
+		drawn.ok = GraphSurface::Generate(surface.document, "Test.slshader", drawn.text, drawn.diagnostics);
+		ASSERT_TRUE(drawn.ok) << reader.def << " " << reader.value << ": " << drawn.First();
+		EXPECT_TRUE(drawn.Says(reader.image)) << reader.def;
+		EXPECT_TRUE(drawn.Says("SamplerState sltSceneSampler")) << reader.def;
+		EXPECT_FALSE(drawn.Says("cbuffer sltViewRecord")) << reader.def;
+		EXPECT_EQ(drawn.Says("ShalltearGetExposure"), str(reader.def) == "Input/SceneColor") << reader.def;
+
+		GraphSurfaceFunctions particle;
+		Vector<GraphDiagnostic> said{GetMemoryResource(MemTag::Editor)};
+		EXPECT_FALSE(GraphSurface::GenerateFunctions(surface.document, particle, said)) << reader.def;
+		EXPECT_TRUE(std::any_of(said.begin(), said.end(), [](const GraphDiagnostic& diagnostic) {
+			return diagnostic.node == 20 && diagnostic.message.find("particle") != str::npos;
+		})) << reader.def;
+	}
+
+	UnlitBuilder normals;
+	normals.Graph("blend", "\"alpha\"");
+	DocumentBuilder::Setting(normals.Node(20, "Input/SampleBuffer"), "Source Buffer", "\"NormalWorldSpace\"");
+	Paint(normals, 20, "Output");
+	Generated refused;
+	refused.ok = GraphSurface::Generate(normals.document, "Test.slshader", refused.text, refused.diagnostics);
+	EXPECT_FALSE(refused.ok);
+	EXPECT_TRUE(refused.Names(20, "normals")) << refused.First();
+}
+
 TEST(NodeShaderFullscreenTest, SampleBufferIsAsWideAsBuffer) {
 	const std::pair<std::string_view, GraphValueType> BUFFERS[] = {{"\"NormalWorldSpace\"", GraphValueType::Float3},
 																   {"\"BlitSource\"", GraphValueType::Float4}};
@@ -504,5 +551,113 @@ TEST_F(NodeShaderFullscreenFixture, SampleBufferReadsTheScenesNormal) {
 	EXPECT_NEAR(texel.x, expected.x, 3.0f);
 	EXPECT_NEAR(texel.y, expected.y, 3.0f);
 	EXPECT_NEAR(texel.z, expected.z, 3.0f);
+	TearDownStage(stage);
+}
+
+TEST_F(NodeShaderFullscreenFixture, TransparentGraphReadsOpaqueImage) {
+	if (!Available()) {
+		GTEST_SKIP() << _why;
+	}
+	Asset* unlit = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
+	ASSERT_NE(unlit, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(LoadMaterial("Surface.mat", unlit->assetId, "\t\"colors\": { \"baseColor\": [0.8, 0.4, 0.1, 1] }"), stage));
+	Vector<u8> scene{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, scene, size));
+	const i32 cx = size.x / 2;
+	const i32 cy = size.y / 2;
+	const Vec3 quad = TexelAt(scene, size, cx, cy);
+	ASSERT_GT(quad.x, quad.y + 20.0f);
+	ASSERT_GT(quad.y, quad.z + 20.0f);
+
+	UnlitBuilder b;
+	b.Graph("blend", "\"alpha\"");
+	b.Node(20, "Input/SceneColor");
+	b.Node(21, "Channel/Split");
+	b.Connect(20, "Out", 21, "In");
+	b.Node(22, "Channel/Combine");
+	b.Connect(21, "G", 22, "R");
+	b.Connect(21, "B", 22, "G");
+	b.Connect(21, "R", 22, "B");
+	b.Connect(22, "RGB", 2, "Value");
+	MaterialAsset* material = AddGraphMaterial("Turn.slshader", b.document, "Turn.mat");
+	ASSERT_NE(material, nullptr);
+	ASSERT_TRUE(AddQuad(stage, material, 0.5f));
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	const Vec3 turned = TexelAt(pixels, size, cx, cy);
+	EXPECT_NEAR(turned.x, quad.y, 2.0f);
+	EXPECT_NEAR(turned.y, quad.z, 2.0f);
+	EXPECT_NEAR(turned.z, quad.x, 2.0f);
+	TearDownStage(stage);
+}
+
+TEST_F(NodeShaderFullscreenFixture, TransparentGraphReadsWallDepth) {
+	if (!Available()) {
+		GTEST_SKIP() << _why;
+	}
+	UnlitBuilder b;
+	b.Graph("blend", "\"alpha\"");
+	DocumentBuilder::Setting(b.Node(20, "Input/SceneDepth"), "Sampling Mode", "\"Eye\"");
+	b.Node(21, "Math/Divide");
+	b.Connect(20, "Out", 21, "A");
+	DocumentBuilder::Constant(b.document.nodes.back(), "B", "[4]");
+	b.Connect(21, "Out", 2, "Value");
+	MaterialAsset* material = AddGraphMaterial("Depth.slshader", b.document, "Depth.mat");
+	ASSERT_NE(material, nullptr);
+
+	ShadingStage stage;
+	ASSERT_TRUE(BuildSurfaceStage(stage));
+	ASSERT_TRUE(AddQuad(stage, material, 0.5f));
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+
+	const f32 expected = ExpectedTexel(Vec3(Eye.z / 4.0f, Eye.z / 4.0f, Eye.z / 4.0f)).x;
+	const Vec3 texel = TexelAt(pixels, size, size.x / 2, size.y / 2);
+	EXPECT_NEAR(texel.x, expected, 2.0f);
+	EXPECT_NEAR(texel.y, expected, 2.0f);
+	EXPECT_NEAR(texel.z, expected, 2.0f);
+	TearDownStage(stage);
+}
+
+TEST_F(NodeShaderFullscreenFixture, TransparentGraphSceneColorKeepsExposure) {
+	if (!Available()) {
+		GTEST_SKIP() << _why;
+	}
+	Asset* unlit = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
+	ASSERT_NE(unlit, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(LoadMaterial("Surface.mat", unlit->assetId, "\t\"colors\": { \"baseColor\": [0.2, 0.1, 0.05, 1] }"), stage));
+	Handle<Environment> environment = SceneSystem::CreateObject("Environment", stage.scene)->AddComponent<Environment>();
+	environment->SetSkyMode(SkyMode::None);
+	environment->SetExposureCompensation(1.0f);
+	SceneSystem::EndFrame();
+	Vector<u8> scene{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, scene, size));
+	const i32 cx = size.x / 2;
+	const i32 cy = size.y / 2;
+	const Vec3 wall = TexelAt(scene, size, cx, cy);
+	const Vec3 exposed = ExpectedTexel(Vec3(0.4f, 0.2f, 0.1f));
+	ASSERT_NEAR(wall.x, exposed.x, 2.0f);
+	ASSERT_NEAR(wall.z, exposed.z, 2.0f);
+
+	UnlitBuilder b;
+	b.Graph("blend", "\"alpha\"");
+	b.Node(20, "Input/SceneColor");
+	b.Connect(20, "Out", 2, "Value");
+	MaterialAsset* material = AddGraphMaterial("Pass.slshader", b.document, "Pass.mat");
+	ASSERT_NE(material, nullptr);
+	ASSERT_TRUE(AddQuad(stage, material, 0.5f));
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	const Vec3 seen = TexelAt(pixels, size, cx, cy);
+	EXPECT_NEAR(seen.x, wall.x, 2.0f);
+	EXPECT_NEAR(seen.y, wall.y, 2.0f);
+	EXPECT_NEAR(seen.z, wall.z, 2.0f);
 	TearDownStage(stage);
 }

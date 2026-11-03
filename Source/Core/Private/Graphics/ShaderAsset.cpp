@@ -1,6 +1,7 @@
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 
 #include "Asset/ImportTierInternal.h"
+#include "Graphics/SceneRequests.h"
 
 #include "Shalltear/Core/Graphics/ShaderReflection.h"
 
@@ -12,6 +13,7 @@
 #include "Shalltear/Core/StringUtil.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <charconv>
 #include <cstring>
@@ -20,7 +22,31 @@
 
 namespace Shalltear {
 
-	ShaderAsset::~ShaderAsset() = default;
+	namespace {
+
+		std::atomic<u32> liveMeshReaders{0};
+
+	} // anonymous namespace
+
+	u32 SceneRequests::CountLiveMeshReaders() { return liveMeshReaders.load(std::memory_order_relaxed); }
+
+	ShaderAsset::~ShaderAsset() {
+		if (_meshReader) {
+			liveMeshReaders.fetch_sub(1, std::memory_order_relaxed);
+		}
+	}
+
+	void ShaderAsset::RecountMeshReader() {
+		const bool reads = SceneRequests::MayReadSceneOnMesh(*this);
+		if (reads != _meshReader) {
+			_meshReader = reads;
+			if (reads) {
+				liveMeshReaders.fetch_add(1, std::memory_order_relaxed);
+			} else {
+				liveMeshReaders.fetch_sub(1, std::memory_order_relaxed);
+			}
+		}
+	}
 
 	bool ShaderAsset::Import(const Path& virtualOrPhysical) {
 		if (const ImportTierTable* tier = ImportTierInternal::Get()) {
@@ -171,6 +197,8 @@ namespace Shalltear {
 		keywordBindings = std::move(imported.keywordBindings);
 		memberLabels = std::move(imported.memberLabels);
 		dependencies = std::move(imported.dependencies);
+		RecountMeshReader();
+		imported.RecountMeshReader();
 	}
 
 	const ShaderMemberRange* ShaderAsset::FindMemberRange(std::string_view memberName) const {
@@ -500,6 +528,7 @@ namespace Shalltear {
 		textureDefaults = std::move(readTextureDefaults);
 		variants = std::move(readVariants);
 		keywords = std::move(readKeywords);
+		RecountMeshReader();
 		return true;
 	}
 

@@ -39,7 +39,7 @@ namespace Shalltear::GraphicsInternal {
 		bool accessed = false;
 	};
 
-	inline constexpr u32 MAX_PASS_ACCESSES = 7;
+	inline constexpr u32 MAX_PASS_ACCESSES = 9;
 
 	struct GraphAccess {
 		GraphResourceId resource = INVALID_GRAPH_RESOURCE;

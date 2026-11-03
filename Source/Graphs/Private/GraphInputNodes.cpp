@@ -377,7 +377,7 @@ namespace Shalltear {
 
 		void EyeIndexBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("EyeIndex"); }
 
-		constexpr GraphPortDefinition SCENE_UV_INPUT[] = {{"UV", P::Float4, {}, "ScreenPosition"}};
+		constexpr GraphPortDefinition SCENE_UV_INPUT[] = {{"UV", P::Float4, {}, "NDCPosition"}};
 
 		GraphValueId SampleScene(GraphBodyContext& c, std::string_view image) {
 			B& b = c.builder;
@@ -385,7 +385,9 @@ namespace Shalltear {
 			return b.TextureOp(GraphOp::SampleTextureLevel, operands);
 		}
 
-		void SceneColorBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Swizzle(SampleScene(c, "SceneColor"), "xyz"); }
+		GraphValueId SampleSceneColor(GraphBodyContext& c) { return c.builder.Multiply(SampleScene(c, "SceneColor"), c.Binding("SceneColorScale")); }
+
+		void SceneColorBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Swizzle(SampleSceneColor(c), "xyz"); }
 
 		// raw = reversed z, 1 at the near plane
 		constexpr std::string_view SCENE_DEPTH_MODES[] = {"Linear01", "Raw", "Eye"};
@@ -415,7 +417,7 @@ namespace Shalltear {
 				c.outputs[0] = b.Swizzle(SampleScene(c, "MotionVectors"), "xy");
 				return;
 			case 2:
-				c.outputs[0] = SampleScene(c, "SceneColor");
+				c.outputs[0] = SampleSceneColor(c);
 				return;
 			default: {
 				GraphValueId encoded = b.Swizzle(SampleScene(c, "SceneNormals"), "xyz");

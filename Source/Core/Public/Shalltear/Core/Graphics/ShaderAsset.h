@@ -162,7 +162,10 @@ namespace Shalltear {
 	private:
 		bool ImportFromSource(const Path& virtualOrPhysical);
 		u32 CompileVariant(std::span<const str> wanted, u64 keywordHash);
+		void RecountMeshReader();
 		friend struct ImportTierBuilder;
+
+		bool _meshReader = false;
 	};
 
 	class SHALLTEAR_CORE_API ShaderAssetImporter : public IAssetImporter {

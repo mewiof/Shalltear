@@ -70,6 +70,32 @@ namespace {
 		"\treturn float4(depth * 20.0, 0.0, 0.0, 1.0);\n"
 		"}\n";
 
+	constexpr const char* COLOR_READING_SHADER =
+		"#pragma shalltear_blend alpha\n"
+		"#pragma shalltear_depth test_only\n"
+		"#pragma shalltear_cull off\n"
+		"#include \"ViewData.hlsli\"\n"
+		"[[vk::binding(0, 2)]] cbuffer sltViewRecord { ShalltearViewData sltPassView; };\n"
+		"[[vk::binding(1, 2)]] Texture2D sltSceneColor;\n"
+		"struct SpritePush { float3 center; float halfSize; float4 color; };\n"
+		"[[vk::push_constant]] SpritePush gSprite;\n"
+		"struct VSOutput { float4 positionCS : SV_Position; };\n"
+		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
+		"\tfloat x = (vertexId == 1 || vertexId == 3 || vertexId == 4) ? 1.0 : -1.0;\n"
+		"\tfloat y = (vertexId == 2 || vertexId == 4 || vertexId == 5) ? 1.0 : -1.0;\n"
+		"\tfloat4x4 view = ShalltearViewDataMatrix(sltPassView.view[0], sltPassView.view[1], sltPassView.view[2], sltPassView.view[3]);\n"
+		"\tfloat4x4 projection = ShalltearViewDataMatrix(sltPassView.projection[0], sltPassView.projection[1],\n"
+		"\t\tsltPassView.projection[2], sltPassView.projection[3]);\n"
+		"\tfloat3 world = gSprite.center + float3(x, y, 0.0) * gSprite.halfSize;\n"
+		"\tVSOutput output;\n"
+		"\toutput.positionCS = mul(projection, mul(view, float4(world, 1.0)));\n"
+		"\treturn output;\n"
+		"}\n"
+		"float4 PSMain(VSOutput input) : SV_Target {\n"
+		"\tfloat3 scene = sltSceneColor.Load(int3(int2(input.positionCS.xy), 0)).rgb;\n"
+		"\treturn float4(scene.gbr, 1.0);\n"
+		"}\n";
+
 	constexpr const char* POINT_SHADER =
 		"#pragma shalltear_blend opaque\n"
 		"#pragma shalltear_depth test_write\n"
@@ -737,6 +763,34 @@ TEST_F(ProceduralRendererFixture, DepthReaderEnablesPrepass) {
 	ASSERT_TRUE(RenderStage(stage, pixels, size));
 	ASSERT_EQ(sprite->recorded, 1u);
 	EXPECT_GT(CenterTexel(pixels, size).x, 100.0f);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, BlendedItemReadsOpaqueColor) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* wall = LoadUnlit("Wall.mat", Color(1.0f, 0.0f, 0.0f, 1.0f), false);
+	MaterialAsset* veil = LoadUnlit("Veil.mat", Color(0.0f, 1.0f, 0.0f, 0.5f), true);
+	MaterialAsset* item = LoadShaderMaterial("Turn.mat", "Turn.hlsl", COLOR_READING_SHADER, "");
+	ASSERT_NE(wall, nullptr);
+	ASSERT_NE(veil, nullptr);
+	ASSERT_NE(item, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(wall, stage));
+	ASSERT_TRUE(AddQuad(stage, veil, 0.25f));
+	Handle<TestSprite> sprite = AddSprite(stage.scene, item, Vec3(0.0f, 0.0f, 0.5f), Color::White());
+	sprite->halfSize = 0.25f;
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	ASSERT_EQ(sprite->recorded, 1u);
+	const Vec3 texel = CenterTexel(pixels, size);
+	EXPECT_LT(texel.x, 3.0f);
+	EXPECT_LT(texel.y, 3.0f);
+	EXPECT_GT(texel.z, 252.0f);
 
 	TearDownStage(stage);
 }

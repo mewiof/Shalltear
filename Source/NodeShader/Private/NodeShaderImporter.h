@@ -14,7 +14,7 @@ namespace Shalltear {
 
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
 
-		u32 GetImporterVersion() const override { return 10; }
+		u32 GetImporterVersion() const override { return 11; }
 
 		bool CanCreateAsset() const override { return true; }
 		std::string_view GetCreateMenuLabel() const override { return GetCreateTemplateLabel(0); }

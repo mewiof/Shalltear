@@ -39,6 +39,7 @@ namespace Shalltear {
 
 		struct ImportDraft {
 			Guid asset;
+			u32 version = 0;
 			TextureAsset::Settings settings;
 			TextureAsset::Settings saved;
 		};
@@ -55,12 +56,13 @@ namespace Shalltear {
 			return settings;
 		}
 
-		ImportDraft& ImportDraftFor(const Guid& guid, const Path& path) {
+		ImportDraft& ImportDraftFor(const Guid& guid, const Path& path, const TextureAsset& texture) {
 			if (!_import) {
 				_import = New<ImportDraft>(MemTag::Editor);
 			}
-			if (_import->asset != guid) {
+			if (_import->asset != guid || _import->version != texture.version) {
 				_import->asset = guid;
+				_import->version = texture.version;
 				_import->saved = ReadSavedSettings(path);
 				_import->settings = _import->saved;
 			}
@@ -566,7 +568,7 @@ namespace Shalltear {
 		void BuildImportRows(Context& context, ElementHandle parent, const Guid& guid, const Path& path, const TextureAsset& texture,
 							 const std::function<void()>& rebuild) {
 			using Settings = TextureAsset::Settings;
-			const Settings& shown = ImportDraftFor(guid, path).settings;
+			const Settings& shown = ImportDraftFor(guid, path, texture).settings;
 			auto change = [rebuild](auto&& edit) {
 				return [rebuild, edit](auto value) {
 					if (_import) {

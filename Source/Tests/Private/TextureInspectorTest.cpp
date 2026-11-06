@@ -201,3 +201,27 @@ TEST_F(TextureInspectorFixture, AnisoLevelRevertsThenApplies) {
 	EXPECT_EQ(Texture().settings.anisoLevel, 0);
 	EXPECT_EQ(Saved("filter"), "trilinear");
 }
+
+TEST_F(TextureInspectorFixture, ReimportElsewhereRefreshesDraft) {
+	UITest::MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 1200};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root;
+	Build(context, root);
+	EXPECT_TRUE(UITest::FindByText(context, Row(context, root, "Texture Type"), "Default").IsValid());
+	EXPECT_TRUE(Row(context, root, "sRGB (Color Texture)").IsValid());
+
+	const Path path("project://Assets/Bricks.tga");
+	JSONValue settings = JSONValue::MakeObject();
+	settings.AddMember("compression", JSONValue::MakeString("none"));
+	settings.AddMember("textureType", JSONValue::MakeString("normalMap"));
+	ASSERT_TRUE(AssetDatabase::WriteImporterSettings(path, settings));
+	ASSERT_TRUE(AssetDatabase::ReimportAsset(path));
+	ASSERT_EQ(Texture().settings.type, TextureType::NormalMap);
+
+	Rebuild(context, root);
+	EXPECT_TRUE(UITest::FindByText(context, Row(context, root, "Texture Type"), "Normal Map").IsValid());
+	EXPECT_FALSE(Row(context, root, "sRGB (Color Texture)").IsValid());
+	EXPECT_TRUE(context.HasClass(Button(context, root, "Apply"), EditorTheme::Class::Disabled));
+}

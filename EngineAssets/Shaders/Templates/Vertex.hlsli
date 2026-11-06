@@ -40,13 +40,19 @@ struct ShalltearVaryings {
 #if SHALLTEAR_INTERPOLATORS_FLAT > 0
 	nointerpolation float4 interpolatorsFlat[SHALLTEAR_INTERPOLATORS_FLAT] : SHALLTEAR_FLAT;
 #endif
+	nointerpolation uint instance : SHALLTEAR_INSTANCE;
 };
 
-ShalltearVaryings VSMain(uint vertexId : SV_VertexID) {
-	ShalltearPerDraw draw = ShalltearLoadPerDraw(gDraw.drawAddress);
+uint64_t ShalltearVaryingsDrawAddress(ShalltearVaryings input) {
+	return ShalltearInstanceDrawAddress(gDraw.drawAddress, input.instance);
+}
+
+ShalltearVaryings VSMain(uint vertexId : SV_VertexID, uint instance : SV_InstanceID) {
+	ShalltearPerDraw draw = ShalltearLoadPerDraw(ShalltearInstanceDrawAddress(gDraw.drawAddress, instance));
 	ShalltearVertex vertex = ShalltearLoadVertex(draw.vertexAddress, vertexId);
 
 	ShalltearVaryings output;
+	output.instance = instance;
 #ifdef SHALLTEAR_VERTEX_FUNCTION
 	ShalltearVertexInput vertexInput = ShalltearBuildVertexInput(draw, vertex, vertexId);
 	ShalltearVertexOutput displaced = ShalltearDefaultVertexOutput(vertexInput);
@@ -85,7 +91,7 @@ ShalltearVaryings VSMain(uint vertexId : SV_VertexID) {
 
 ShalltearSurfaceInput ShalltearBuildPixelSurfaceInput(ShalltearVaryings input, bool isFrontFace) {
 	ShalltearSurfaceInput surfaceInput = ShalltearBuildSurfaceInput(input.positionCS, input.positionWS, input.normalWS, input.tangentWS,
-																	input.uv, input.color, gDraw.drawAddress);
+																	input.uv, input.color, ShalltearVaryingsDrawAddress(input));
 	surfaceInput.isFrontFace = isFrontFace;
 #if SHALLTEAR_INTERPOLATORS_LINEAR > 0
 	[unroll] for (uint linearSlot = 0; linearSlot < SHALLTEAR_INTERPOLATORS_LINEAR; ++linearSlot) {

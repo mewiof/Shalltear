@@ -25,7 +25,7 @@ float4 ShalltearUnpackColor(uint packed) {
 		float((packed >> 24) & 0xFF) / 255.0);
 }
 
-// push block has only address of this draw's element
+// push block has only address of first instance's element
 struct ShalltearDrawHeader {
 	uint64_t drawAddress;
 	uint value;
@@ -59,6 +59,10 @@ struct ShalltearPerDraw {
 // passing block by value miscompiles in DXC
 ShalltearPerDraw ShalltearLoadPerDraw(uint64_t drawAddress) {
 	return vk::RawBufferLoad<ShalltearPerDraw>(drawAddress, 16);
+}
+
+uint64_t ShalltearInstanceDrawAddress(uint64_t drawAddress, uint instance) {
+	return drawAddress + uint64_t(instance) * SHALLTEAR_PER_DRAW_STRIDE;
 }
 
 #define SHALLTEAR_ALPHA_CLIP_OFFSET 120

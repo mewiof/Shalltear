@@ -185,8 +185,8 @@ namespace Shalltear {
 		if (context.IsAlive(_renderLabel)) {
 			GraphicsStats stats = RenderSystem::GetStats();
 			context.SetTextString(_renderLabel,
-								  std::format("Render: {} draws, {} tris   VRAM {} / {} MiB   {} tex, {} buf, {} pso",
-											  stats.drawCalls, stats.triangles,
+								  std::format("Render: {} draws ({} saved by batching), {} tris   VRAM {} / {} MiB   {} tex, {} buf, {} pso",
+											  stats.drawCalls, stats.drawCallsSaved, stats.triangles,
 											  stats.vramUsedBytes >> 20, stats.vramBudgetBytes >> 20,
 											  stats.liveTextures, stats.liveBuffers, stats.livePipelines));
 		}

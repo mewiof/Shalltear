@@ -8,15 +8,16 @@
 
 float4 PSMain(ShalltearVaryings input, bool isFrontFace : SV_IsFrontFace) : SV_Target {
 	ShalltearSurfaceInput surfaceInput = ShalltearBuildPixelSurfaceInput(input, isFrontFace);
+	const uint64_t drawAddress = ShalltearVaryingsDrawAddress(input);
 
 	ShalltearSurface surface = ShalltearDefaultSurface();
 	ShalltearSurfaceFunction(surfaceInput, surface);
 
 #ifdef SHALLTEAR_ALPHA_CLIP
-	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(gDraw.drawAddress));
+	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(drawAddress));
 #endif
 
-	uint blend = ShalltearLoadDrawBlend(gDraw.drawAddress);
+	uint blend = ShalltearLoadDrawBlend(drawAddress);
 	return ShalltearExpose(ShalltearApplyFog(float4(surface.baseColor + surface.emissive, surface.alpha), surfaceInput.positionWS, blend),
 						   blend);
 }

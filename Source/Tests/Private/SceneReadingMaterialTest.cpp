@@ -133,7 +133,8 @@ namespace {
 
 		u32 DrawCalls(const ShadingStage& stage) {
 			Center(stage);
-			return RenderSystem::GetStats().drawCalls;
+			const GraphicsStats stats = RenderSystem::GetStats();
+			return stats.drawCalls + stats.drawCallsSaved;
 		}
 
 		void ExpectOpaqueImageTurned(const ShadingStage& stage) {

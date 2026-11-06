@@ -12,7 +12,7 @@ ShalltearSurface ShalltearDepthSurface(ShalltearVaryings input, bool isFrontFace
 	ShalltearSurfaceFunction(surfaceInput, surface);
 
 #ifdef SHALLTEAR_ALPHA_CLIP
-	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(gDraw.drawAddress));
+	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(ShalltearVaryingsDrawAddress(input)));
 #endif
 	return surface;
 }

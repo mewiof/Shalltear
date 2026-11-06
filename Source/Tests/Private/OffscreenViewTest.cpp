@@ -45,6 +45,11 @@ namespace {
 		return {};
 	}
 
+	u32 UnbatchedDraws() {
+		const GraphicsStats stats = RenderSystem::GetStats();
+		return stats.drawCalls + stats.drawCallsSaved;
+	}
+
 	class OffscreenViewFixture : public ::testing::Test {
 	protected:
 		bool _mounted = false;
@@ -2620,7 +2625,7 @@ TEST_F(ShadowViewFixture, CrowdedSceneDrawsAllCubes) {
 	auto drawCalls = [&]() {
 		SceneSystem::EndFrame();
 		RenderFrom(target, Vec3(0.0f, 300.0f, -1.0f), Vec3::Zero(), pixels, size);
-		return RenderSystem::GetStats().drawCalls;
+		return UnbatchedDraws();
 	};
 
 	addCube(0, 0);
@@ -3456,7 +3461,7 @@ TEST_F(ShadowViewFixture, SkyViewDrawsNoCasters) {
 		RenderSystem::SubmitView(target, desc);
 		RenderSystem::RenderAll();
 		EXPECT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, size));
-		return RenderSystem::GetStats().drawCalls;
+		return UnbatchedDraws();
 	};
 
 	const Vec3 up = Vec3(0.0f, std::sin(80.0f * Math::DEG_TO_RAD), std::cos(80.0f * Math::DEG_TO_RAD));
@@ -3690,12 +3695,12 @@ TEST_F(ShadowViewFixture, CasterOffDropsItsShadow) {
 		SceneSystem::UnloadScene(scene);
 		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
 	}
-	const u32 castingDraws = RenderSystem::GetStats().drawCalls;
+	const u32 castingDraws = UnbatchedDraws();
 
 	occluder->SetCastShadows(ShadowCasting::Off);
 	RenderTo(target, notCasting, size);
 	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
-	EXPECT_LT(RenderSystem::GetStats().drawCalls, castingDraws);
+	EXPECT_LT(UnbatchedDraws(), castingDraws);
 
 	sun->SetCastShadows(false);
 	RenderTo(target, unshadowed, size);
@@ -3742,16 +3747,16 @@ TEST_F(ShadowViewFixture, ShadowsOnlyCasterIsNotDrawn) {
 		SceneSystem::UnloadScene(scene);
 		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
 	}
-	const u32 visibleDraws = RenderSystem::GetStats().drawCalls;
+	const u32 visibleDraws = UnbatchedDraws();
 
 	occluder->SetCastShadows(ShadowCasting::ShadowsOnly);
 	RenderTo(target, shadowsOnly, size);
-	const u32 shadowsOnlyDraws = RenderSystem::GetStats().drawCalls;
+	const u32 shadowsOnlyDraws = UnbatchedDraws();
 	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
 	occluderObject->SetActive(false);
 	SceneSystem::EndFrame();
 	RenderTo(target, removed, size);
-	const u32 removedDraws = RenderSystem::GetStats().drawCalls;
+	const u32 removedDraws = UnbatchedDraws();
 
 	EXPECT_LT(shadowsOnlyDraws, visibleDraws);
 	EXPECT_GT(shadowsOnlyDraws, removedDraws);

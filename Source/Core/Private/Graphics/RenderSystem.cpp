@@ -631,6 +631,7 @@ namespace Shalltear {
 				RHI::PipelineHandle pipeline;
 				u64 shaderId = 0;
 				u32 shaderVersion = 0;
+				bool instanced = false;
 			};
 			HashMap<u64, PipelineEntry> pipelineCache{GetMemoryResource(MemTag::Graphics)};
 			u32 pipelineCacheSwept = 0;
@@ -882,6 +883,8 @@ namespace Shalltear {
 			u32 frameProceduralCulled = 0;
 			u32 lastProceduralDrawn = 0;
 			u32 lastProceduralCulled = 0;
+			u32 frameDrawCallsSaved = 0;
+			u32 lastDrawCallsSaved = 0;
 
 			Vector<GraphicsInternal::LightCandidate> lightCandidates{GetMemoryResource(MemTag::Graphics)};
 			Vector<u32> clusterTable{GetMemoryResource(MemTag::Graphics)};
@@ -1113,11 +1116,47 @@ namespace Shalltear {
 			return key;
 		}
 
+		bool ReadsInstanceIndex(std::span<const u8> spirv) {
+			constexpr u32 OP_LOAD = 61;
+			constexpr u32 OP_DECORATE = 71;
+			constexpr u32 DECORATION_BUILT_IN = 11;
+			constexpr u32 BUILT_IN_INSTANCE_INDEX = 43;
+			constexpr size_t HEADER_WORDS = 5;
+			if (spirv.size() % 4 != 0 || spirv.size() / 4 <= HEADER_WORDS) {
+				return false;
+			}
+			const size_t count = spirv.size() / 4;
+			auto word = [&](size_t at) {
+				u32 value = 0;
+				std::memcpy(&value, spirv.data() + at * 4, 4);
+				return value;
+			};
+			u32 instanceIndex = 0;
+			for (size_t at = HEADER_WORDS; at < count;) {
+				const u32 first = word(at);
+				const u32 length = first >> 16;
+				const u32 op = first & 0xFFFFu;
+				if (length == 0 || at + length > count) {
+					return false;
+				}
+				if (op == OP_DECORATE && length >= 4 && word(at + 2) == DECORATION_BUILT_IN && word(at + 3) == BUILT_IN_INSTANCE_INDEX) {
+					instanceIndex = word(at + 1);
+				} else if (op == OP_LOAD && length >= 4 && instanceIndex != 0 && word(at + 3) == instanceIndex) {
+					return true;
+				}
+				at += length;
+			}
+			return false;
+		}
+
 		RHI::PipelineHandle GetOrCreatePipeline(ShaderAsset* shader, RHI::Format colorFormat, RHI::Format depthFormat,
 												const RHI::ShaderRenderState* stateOverride = nullptr, u32 samples = 1,
 												u32 variant = SHADER_BASE_VARIANT,
-												ShaderProgramKind kind = ShaderProgramKind::Forward) {
+												ShaderProgramKind kind = ShaderProgramKind::Forward, bool* outInstanced = nullptr) {
 			RenderState& state = *_state;
+			if (outInstanced) {
+				*outInstanced = false;
+			}
 			const ShaderVariant* code = shader->GetVariant(variant);
 			if (!code) {
 				code = shader->GetVariant(SHADER_BASE_VARIANT);
@@ -1134,13 +1173,19 @@ namespace Shalltear {
 			u64 key = PipelineKey(shaderId, shader->version, variant, kind, colorFormat, depthFormat, RenderStateKey(pipelineState), samples);
 			auto it = state.pipelineCache.find(key);
 			if (it != state.pipelineCache.end()) {
+				if (outInstanced) {
+					*outInstanced = it->second.instanced;
+				}
 				return it->second.pipeline;
 			}
-			auto remember = [&](RHI::PipelineHandle pipeline) {
+			auto remember = [&](RHI::PipelineHandle pipeline, bool instanced = false) {
 				if (pipeline.IsValid()) {
 					SweepDeadPipelines();
-					state.pipelineCache.emplace(key, RenderState::PipelineEntry{pipeline, shaderId, shader->version});
+					state.pipelineCache.emplace(key, RenderState::PipelineEntry{pipeline, shaderId, shader->version, instanced});
 					state.shaderRegistry.emplace(shaderId, Handle<ShaderAsset>(shader));
+					if (outInstanced) {
+						*outInstanced = instanced;
+					}
 				}
 				return pipeline;
 			};
@@ -1183,7 +1228,7 @@ namespace Shalltear {
 			desc.samples = samples;
 			desc.debugName = shader->virtualPath.c_str();
 
-			return remember(state.device->CreateGraphicsPipeline(desc));
+			return remember(state.device->CreateGraphicsPipeline(desc), ReadsInstanceIndex(desc.vertexSpirv));
 		}
 
 		bool ShaderDeclaresBinding(const ShaderAsset& shader, u32 set, u32 binding) {
@@ -1437,6 +1482,36 @@ namespace Shalltear {
 
 		bool DrawsFor(ShadowCasting casting, DrawListUse use) {
 			return use == DrawListUse::Casters ? casting != ShadowCasting::Off : casting != ShadowCasting::ShadowsOnly;
+		}
+
+		// 4 bands per distance octave (wider bands cost overdraw)
+		u32 DepthBand(f32 depthSquared) {
+			u32 bits = 0;
+			std::memcpy(&bits, &depthSquared, sizeof(bits));
+			return bits >> 22;
+		}
+
+		struct DrawOrder {
+			u64 key[3] = {};
+			f32 depth = 0.0f;
+			u32 entry = 0;
+		};
+
+		// an id's low 32 bits = its live registry slot
+		DrawOrder OrderOf(const DrawEntry& entry, u32 depthBand, u32 index) {
+			DrawOrder order;
+			order.entry = index;
+			order.key[0] = (static_cast<u64>(entry.alpha) << 32) | (static_cast<u32>(entry.sortingPriority) ^ 0x80000000u);
+			if (entry.alpha) {
+				order.depth = -entry.depth;
+				return order;
+			}
+			const u64 submesh = Math::Min<u64>(static_cast<u64>(entry.submesh - entry.mesh->submeshes.data()), 0xFFFF);
+			order.key[1] = (static_cast<u64>(static_cast<u32>(entry.shader->GetInstanceId())) << 32) | static_cast<u32>(entry.materialId);
+			order.key[2] = (static_cast<u64>(depthBand) << 50) | (static_cast<u64>(static_cast<u32>(entry.mesh->GetInstanceId())) << 18) |
+						   (submesh << 2) | (static_cast<u64>(entry.mirrored) << 1) | static_cast<u64>(entry.castShadows == ShadowCasting::TwoSided);
+			order.depth = entry.depth;
+			return order;
 		}
 
 		struct ExtractedDraws {
@@ -1886,6 +1961,7 @@ namespace Shalltear {
 				}
 			}
 			DrawEntry** drawList = arena.AllocateAs<DrawEntry*>(drawCapacity ? drawCapacity : 1);
+			DrawOrder* orders = arena.AllocateAs<DrawOrder>(drawCapacity ? drawCapacity : 1);
 			u32 drawCount = 0;
 
 			ShaderAsset* errorShader = state.standardShader.Get();
@@ -1909,6 +1985,7 @@ namespace Shalltear {
 					}
 				}
 				f32 depth = Vec3::DistanceSquared(sortOrigin, worldBounds.Center());
+				const u32 depthBand = use == DrawListUse::View ? DepthBand(depth) : 0u;
 				const bool mirrored = world.ToMat3().Determinant() < 0.0f;
 
 				for (const SubMesh& submesh : mesh->submeshes) {
@@ -1956,6 +2033,7 @@ namespace Shalltear {
 					} else {
 						continue;
 					}
+					orders[drawCount] = OrderOf(*entry, depthBand, drawCount);
 					drawList[drawCount++] = entry;
 				}
 			};
@@ -2015,26 +2093,19 @@ namespace Shalltear {
 						  renderer->GetRenderingLayerMask(), renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
 						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
-			std::sort(drawList, drawList + drawCount, [](const DrawEntry* a, const DrawEntry* b) {
-				if (a->alpha != b->alpha) {
-					return !a->alpha;
+			std::sort(orders, orders + drawCount, [](const DrawOrder& a, const DrawOrder& b) {
+				for (u32 word = 0; word < 3; ++word) {
+					if (a.key[word] != b.key[word]) {
+						return a.key[word] < b.key[word];
+					}
 				}
-				if (a->sortingPriority != b->sortingPriority) {
-					return a->sortingPriority < b->sortingPriority;
-				}
-				if (a->alpha) {
-					return a->depth > b->depth;
-				}
-				u64 shaderA = a->shader->GetInstanceId();
-				u64 shaderB = b->shader->GetInstanceId();
-				if (shaderA != shaderB) {
-					return shaderA < shaderB;
-				}
-				if (a->materialId != b->materialId) {
-					return a->materialId < b->materialId;
-				}
-				return a->depth < b->depth;
+				return a.depth < b.depth;
 			});
+			DrawEntry** sorted = arena.AllocateAs<DrawEntry*>(drawCount ? drawCount : 1);
+			for (u32 i = 0; i < drawCount; ++i) {
+				sorted[i] = drawList[orders[i].entry];
+			}
+			drawList = sorted;
 
 			u64 perDrawAddress = 0;
 			if (drawCount > 0) {
@@ -2926,11 +2997,30 @@ namespace Shalltear {
 			return device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
 		}
 
-		void DrawMesh(RHI::CommandList& cmd, const DrawEntry& entry) {
+		void DrawMesh(RHI::CommandList& cmd, const DrawEntry& entry, u32 instances = 1) {
 			cmd.SetFrontFace(entry.mirrored ? RHI::FrontFace::CounterClockwise : RHI::FrontFace::Clockwise);
 			cmd.BindIndexBuffer(entry.mesh->indexBuffer);
-			cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex);
+			cmd.DrawIndexed(entry.submesh->indexCount, entry.submesh->firstIndex, instances);
 		}
+
+		bool SharesInstancedDraw(const DrawEntry& first, const DrawEntry& next) {
+			return next.mesh == first.mesh && next.submesh == first.submesh && next.shader == first.shader &&
+				   next.variant == first.variant && next.materialId == first.materialId && next.mirrored == first.mirrored;
+		}
+
+		// record = first + instance, a run can't skip entries
+		template <typename Joins>
+		u32 InstanceRunLength(DrawEntry* const* list, u32 first, u32 end, const Joins& joins) {
+			u32 last = first + 1;
+			while (last < end && SharesInstancedDraw(*list[first], *list[last]) && joins(*list[last])) {
+				++last;
+			}
+			return last - first;
+		}
+
+		struct SingleInstance {
+			u32 operator()() const { return 1; }
+		};
 
 		struct DepthDrawBinding {
 			RHI::PipelineHandle pipeline{};
@@ -2938,11 +3028,11 @@ namespace Shalltear {
 			RHI::TransientSet materialSet{};
 		};
 
-		bool RecordDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, DrawEntry& entry,
-							 const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
-							 const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value = 0) {
-			RHI::PipelineHandle pipeline =
-				GetOrCreatePipeline(entry.shader, colorFormat, depthFormat, &drawState, 1, entry.variant, ShaderProgramKind::Depth);
+		bool BindDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, const DrawEntry& entry,
+						   const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
+						   const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value, bool& instanced) {
+			RHI::PipelineHandle pipeline = GetOrCreatePipeline(entry.shader, colorFormat, depthFormat, &drawState, 1, entry.variant,
+															   ShaderProgramKind::Depth, &instanced);
 			if (!pipeline.IsValid()) {
 				return false;
 			}
@@ -2966,8 +3056,22 @@ namespace Shalltear {
 			header.drawAddress = drawAddress;
 			header.value = value;
 			cmd.PushConstants({reinterpret_cast<const u8*>(&header), DRAW_HEADER_BYTES});
-			DrawMesh(cmd, entry);
 			return true;
+		}
+
+		template <typename RunLength = SingleInstance>
+		u32 RecordDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, DrawEntry& entry,
+							const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
+							const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value = 0,
+							const RunLength& runLength = {}) {
+			bool instanced = false;
+			if (!BindDepthDraw(cmd, device, bound, entry, drawState, colorFormat, depthFormat, viewAllocation, drawAddress, value,
+							   instanced)) {
+				return 0;
+			}
+			const u32 instances = instanced ? runLength() : 1u;
+			DrawMesh(cmd, entry, instances);
+			return instances;
 		}
 
 		u32 RecordShadowPass(RHI::CommandList& cmd, LinearAllocator& arena,
@@ -3200,29 +3304,37 @@ namespace Shalltear {
 
 					DepthDrawBinding bound;
 					const u64 mapBit = 1ull << map;
-					for (u32 i = 0; i < extracted.count; ++i) {
+					for (u32 i = 0; i < extracted.count;) {
 						DrawEntry& entry = *extracted.list[i];
-						if ((entry.volumeMask & mapBit) == 0) {
-							continue;
-						}
-						if (entry.alpha) {
+						if ((entry.volumeMask & mapBit) == 0 || entry.alpha) {
+							++i;
 							continue;
 						}
 
+						const bool twoSided = entry.castShadows == ShadowCasting::TwoSided;
 						RHI::ShaderRenderState casterState = entry.renderState;
 						casterState.blend = RHI::BlendMode::Opaque;
 						casterState.depth = RHI::DepthMode::TestWrite;
 						casterState.depthCompare = RHI::DepthCompare::NearerOrEqual;
 						casterState.fill = RHI::FillMode::Solid;
-						if (entry.castShadows == ShadowCasting::TwoSided) {
+						if (twoSided) {
 							casterState.cull = RHI::CullMode::Off;
 						}
-						if (!RecordDepthDraw(cmd, device, bound, entry, casterState, RHI::Format::Unknown, SHADOW_ATLAS_FORMAT,
-											 viewAllocation, extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw))) {
+						const u32 drawn = RecordDepthDraw(
+							cmd, device, bound, entry, casterState, RHI::Format::Unknown, SHADOW_ATLAS_FORMAT, viewAllocation,
+							extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw), 0, [&] {
+								return InstanceRunLength(extracted.list, i, extracted.count, [&](const DrawEntry& next) {
+									return (next.volumeMask & mapBit) != 0 && (next.castShadows == ShadowCasting::TwoSided) == twoSided;
+								});
+							});
+						if (drawn == 0) {
+							++i;
 							continue;
 						}
 						++drawCalls;
-						outTriangles += entry.submesh->indexCount / 3;
+						state.frameDrawCallsSaved += drawn - 1;
+						outTriangles += entry.submesh->indexCount / 3 * drawn;
+						i += drawn;
 					}
 					if (!casters.empty()) {
 						ProceduralDepthView itemView;
@@ -3294,9 +3406,10 @@ namespace Shalltear {
 
 			u32 drawCalls = 0;
 			DepthDrawBinding bound;
-			for (u32 i = 0; i < extracted.count; ++i) {
+			for (u32 i = 0; i < extracted.count;) {
 				DrawEntry& entry = *extracted.list[i];
 				if (entry.alpha) {
+					++i;
 					continue;
 				}
 				RHI::ShaderRenderState prepassState = entry.renderState;
@@ -3304,13 +3417,19 @@ namespace Shalltear {
 				prepassState.depth = RHI::DepthMode::TestWrite;
 				prepassState.depthCompare = RHI::DepthCompare::NearerOrEqual;
 				prepassState.fill = RHI::FillMode::Solid;
-				if (!RecordDepthDraw(cmd, device, bound, entry, prepassState,
-									 hasNormals ? SCENE_NORMALS_FORMAT : RHI::Format::Unknown, SCENE_DEPTH_FORMAT,
-									 viewAllocation, extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw))) {
+				const u32 drawn = RecordDepthDraw(
+					cmd, device, bound, entry, prepassState, hasNormals ? SCENE_NORMALS_FORMAT : RHI::Format::Unknown, SCENE_DEPTH_FORMAT,
+					viewAllocation, extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw), 0, [&] {
+						return InstanceRunLength(extracted.list, i, extracted.count, [](const DrawEntry&) { return true; });
+					});
+				if (drawn == 0) {
+					++i;
 					continue;
 				}
 				++drawCalls;
-				outTriangles += entry.submesh->indexCount / 3;
+				state.frameDrawCallsSaved += drawn - 1;
+				outTriangles += entry.submesh->indexCount / 3 * drawn;
+				i += drawn;
 			}
 			if (!procedural.empty()) {
 				ProceduralDepthView itemView;
@@ -3973,12 +4092,12 @@ namespace Shalltear {
 			RHI::TransientSet materialSet{};
 
 			const u32 shadedDrawCount = fill == ViewFill::Wireframe ? 0 : drawCount;
-			auto drawShaded = [&](u32 i) {
-				DrawEntry& entry = *drawList[i];
-				RHI::PipelineHandle pipeline = GetOrCreatePipeline(entry.shader, targets.colorFormat, targets.depthFormat,
-																   &entry.renderState, targets.samples, entry.variant);
+			auto bindShaded = [&](const DrawEntry& entry, u64 drawAddress, bool& instanced) {
+				RHI::PipelineHandle pipeline =
+					GetOrCreatePipeline(entry.shader, targets.colorFormat, targets.depthFormat, &entry.renderState, targets.samples,
+										entry.variant, ShaderProgramKind::Forward, &instanced);
 				if (!pipeline.IsValid()) {
-					return;
+					return false;
 				}
 				if (!(pipeline == boundPipeline)) {
 					cmd.SetPipeline(pipeline);
@@ -4000,12 +4119,22 @@ namespace Shalltear {
 				}
 
 				GPUDrawHeader header;
-				header.drawAddress = perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw);
+				header.drawAddress = drawAddress;
 				cmd.PushConstants({reinterpret_cast<const u8*>(&header), DRAW_HEADER_BYTES});
-
-				DrawMesh(cmd, entry);
+				return true;
+			};
+			auto drawShaded = [&](u32 i, u32 end, const auto& joins) -> u32 {
+				DrawEntry& entry = *drawList[i];
+				bool instanced = false;
+				if (!bindShaded(entry, perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw), instanced)) {
+					return 1;
+				}
+				const u32 instances = instanced ? InstanceRunLength(drawList, i, end, joins) : 1u;
+				DrawMesh(cmd, entry, instances);
 				++drawCalls;
-				outTriangles += entry.submesh->indexCount / 3;
+				state.frameDrawCallsSaved += instances - 1;
+				outTriangles += entry.submesh->indexCount / 3 * instances;
+				return instances;
 			};
 
 			ProceduralDraw* proceduralDraws = nullptr;
@@ -4052,8 +4181,8 @@ namespace Shalltear {
 					break;
 				}
 			}
-			for (u32 i = 0; i < firstBlended; ++i) {
-				drawShaded(i);
+			for (u32 i = 0; i < firstBlended;) {
+				i += drawShaded(i, firstBlended, [](const DrawEntry&) { return true; });
 			}
 			while (nextProcedural < proceduralDrawCount && !proceduralDraws[nextProcedural].alpha) {
 				drawProcedural(proceduralDraws[nextProcedural++]);
@@ -4116,11 +4245,13 @@ namespace Shalltear {
 				bound.color = reads.color;
 			}
 
-			for (u32 i = firstBlended; i < shadedDrawCount; ++i) {
+			for (u32 i = firstBlended; i < shadedDrawCount;) {
 				while (nextProcedural < proceduralDrawCount && ProceduralSortsBefore(proceduralDraws[nextProcedural], *drawList[i])) {
 					drawProcedural(proceduralDraws[nextProcedural++]);
 				}
-				drawShaded(i);
+				i += drawShaded(i, shadedDrawCount, [&](const DrawEntry& next) {
+					return nextProcedural >= proceduralDrawCount || !ProceduralSortsBefore(proceduralDraws[nextProcedural], next);
+				});
 			}
 			while (nextProcedural < proceduralDrawCount) {
 				drawProcedural(proceduralDraws[nextProcedural++]);
@@ -7858,6 +7989,7 @@ namespace Shalltear {
 		stats.shadowLightsDropped = _state->lastShadowLightsDropped;
 		stats.proceduralDrawn = _state->lastProceduralDrawn;
 		stats.proceduralCulled = _state->lastProceduralCulled;
+		stats.drawCallsSaved = _state->lastDrawCallsSaved;
 		return stats;
 	}
 
@@ -8490,6 +8622,7 @@ namespace Shalltear {
 			state.lastShadowLightsDropped = 0;
 			state.lastProceduralDrawn = 0;
 			state.lastProceduralCulled = 0;
+			state.lastDrawCallsSaved = 0;
 			state.viewLines.clear();
 			state.viewPassRows.clear();
 			state.viewScenes.clear();
@@ -8583,6 +8716,7 @@ namespace Shalltear {
 		state.lastShadowLightsDropped = state.frameShadowLightsDropped;
 		state.lastProceduralDrawn = state.frameProceduralDrawn;
 		state.lastProceduralCulled = state.frameProceduralCulled;
+		state.lastDrawCallsSaved = state.frameDrawCallsSaved;
 		state.frameLightsBinned = 0;
 		state.frameLightsDropped = 0;
 		state.frameClusterLightsDropped = 0;
@@ -8591,6 +8725,7 @@ namespace Shalltear {
 		state.frameShadowLightsDropped = 0;
 		state.frameProceduralDrawn = 0;
 		state.frameProceduralCulled = 0;
+		state.frameDrawCallsSaved = 0;
 	}
 
 	FramePassPlan::FramePassPlan(const GraphicsInternal::FramePassPlanInit& init)

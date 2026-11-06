@@ -1,8 +1,13 @@
 #include "InspectorPanel.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
+#include "Shalltear/Core/FileSystem.h"
+#include "Shalltear/Core/Graphics/GraphicsProfile.h"
+#include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
+#include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
@@ -25,6 +30,64 @@ namespace Shalltear {
 		namespace Ops = SpriteEditorOps;
 
 		constexpr std::array<std::string_view, 3> SLICE_MODES{"Grid By Cell Size", "Grid By Cell Count", "Automatic"};
+		constexpr std::array<std::string_view, 2> TEXTURE_TYPES{"Default", "Normal Map"};
+		constexpr std::array<std::string_view, 5> TEXTURE_SHAPES{"Auto", "2D", "Cube", "2D Array", "3D"};
+		constexpr std::array<std::string_view, 3> WRAP_MODES{"Repeat", "Clamp", "Mirror"};
+		constexpr std::array<std::string_view, 3> FILTER_MODES{"Point (no filter)", "Bilinear", "Trilinear"};
+		constexpr std::array<std::string_view, 2> COMPRESSIONS{"None", "High Quality"};
+		constexpr f32 IMPORT_LABEL_PX = 140.0f;
+
+		struct ImportDraft {
+			Guid asset;
+			TextureAsset::Settings settings;
+			TextureAsset::Settings saved;
+		};
+		ImportDraft* _import = nullptr;
+
+		TextureAsset::Settings ReadSavedSettings(const Path& path) {
+			TextureAsset::Settings settings;
+			const str text = FileSystem::ReadTextFile(FileSystem::Resolve(AssetDatabase::GetMetaPath(path)), MemTag::Editor);
+			if (!text.empty()) {
+				LinearAllocator arena(text.size() + 64, MemTag::Editor);
+				const JSONValue root = JSONParse(text, arena);
+				TextureAssetImporter::ReadSettings(root["importer"]["settings"], settings);
+			}
+			return settings;
+		}
+
+		ImportDraft& ImportDraftFor(const Guid& guid, const Path& path) {
+			if (!_import) {
+				_import = New<ImportDraft>(MemTag::Editor);
+			}
+			if (_import->asset != guid) {
+				_import->asset = guid;
+				_import->saved = ReadSavedSettings(path);
+				_import->settings = _import->saved;
+			}
+			return *_import;
+		}
+
+		bool ApplyImportSettings(const Path& path, const TextureAsset::Settings& settings) {
+			const str text = FileSystem::ReadTextFile(FileSystem::Resolve(AssetDatabase::GetMetaPath(path)), MemTag::Editor);
+			LinearAllocator arena(text.size() + 64, MemTag::Editor);
+			const JSONValue existing = text.empty() ? JSONValue() : JSONParse(text, arena);
+			JSONValue merged = JSONValue::MakeObject();
+			TextureAssetImporter::WriteSettings(settings, merged);
+			const JSONValue& previous = existing["importer"]["settings"];
+			for (size_t i = 0; i < previous.MemberCount(); ++i) {
+				if (!merged.HasKey(previous.KeyAt(i))) {
+					merged.AddMember(previous.KeyAt(i), previous.ChildAt(i));
+				}
+			}
+			if (!AssetDatabase::WriteImporterSettings(path, merged)) {
+				return false;
+			}
+			if (!AssetDatabase::ReimportAsset(path)) {
+				SLT_LOG_WARN("Editor", "'{}': settings saved, the texture couldn't be re-imported. Close what uses it and re-import", path.ToString());
+				return false;
+			}
+			return true;
+		}
 
 		struct SpriteDraft {
 			Guid asset;
@@ -89,12 +152,12 @@ namespace Shalltear {
 			return row;
 		}
 
-		ElementHandle AddLabeledRow(Context& context, ElementHandle parent, std::string_view text) {
+		ElementHandle AddLabeledRow(Context& context, ElementHandle parent, std::string_view text, f32 labelPx = 90.0f) {
 			ElementHandle row = AddRow(context, parent);
 			ElementHandle label = context.CreateElement();
 			context.AppendChild(row, label);
 			Style style;
-			style.width = Length::Pixel(90.0f);
+			style.width = Length::Pixel(labelPx);
 			style.flexShrink = 0.0f;
 			context.SetStyle(label, style);
 			context.SetHoverable(label, false);
@@ -475,11 +538,160 @@ namespace Shalltear {
 			Widgets::Button(context, actions, remove);
 		}
 
+		void AddDropdown(Context& context, ElementHandle row, std::span<const std::string_view> items, u32 selected, std::function<void(u32)> onSelect) {
+			Widgets::DropdownDesc desc;
+			desc.items = items;
+			desc.selected = selected;
+			desc.font = UISystem::GetDefaultFont();
+			desc.fontSizePx = BodyPx();
+			desc.onSelect = std::move(onSelect);
+			Grow(context, Widgets::Dropdown(context, row, desc).root);
+		}
+
+		void ShowImportActions(Context& context, const std::array<ElementHandle, 2>& actions) {
+			const bool live = _import && !(_import->settings == _import->saved);
+			for (ElementHandle button : actions) {
+				if (!context.IsAlive(button)) {
+					continue;
+				}
+				if (live) {
+					context.RemoveClass(button, EditorTheme::Class::Disabled);
+				} else {
+					context.AddClass(button, EditorTheme::Class::Disabled);
+				}
+				context.SetHoverable(button, live);
+			}
+		}
+
+		void BuildImportRows(Context& context, ElementHandle parent, const Guid& guid, const Path& path, const TextureAsset& texture,
+							 const std::function<void()>& rebuild) {
+			using Settings = TextureAsset::Settings;
+			const Settings& shown = ImportDraftFor(guid, path).settings;
+			auto change = [rebuild](auto&& edit) {
+				return [rebuild, edit](auto value) {
+					if (_import) {
+						edit(_import->settings, value);
+					}
+					rebuild();
+				};
+			};
+			const auto actions = std::make_shared<std::array<ElementHandle, 2>>();
+			Context* const contextPtr = &context;
+			auto tweak = [actions, contextPtr](auto&& edit) {
+				return [actions, contextPtr, edit](auto value) {
+					if (_import) {
+						edit(_import->settings, value);
+					}
+					ShowImportActions(*contextPtr, *actions);
+				};
+			};
+			auto labeled = [&context, parent](std::string_view text) { return AddLabeledRow(context, parent, text, IMPORT_LABEL_PX); };
+
+			AddDropdown(context, labeled("Texture Type"), TEXTURE_TYPES, static_cast<u32>(shown.type),
+						change([](Settings& s, u32 value) { s.type = static_cast<TextureType>(std::min<u32>(value, 1)); }));
+			AddDropdown(context, labeled("Texture Shape"), TEXTURE_SHAPES, static_cast<u32>(shown.shape),
+						change([](Settings& s, u32 value) { s.shape = static_cast<TextureShape>(std::min<u32>(value, 4)); }));
+			if (shown.shape == TextureShape::Texture2DArray || shown.shape == TextureShape::Texture3D) {
+				AddInts(context, labeled("Columns & Rows"), {static_cast<i32>(shown.columns), static_cast<i32>(shown.rows)}, {"C", "R", "", ""},
+						[actions, contextPtr](u32 component, i32 value) {
+							if (_import) {
+								(component == 0 ? _import->settings.columns : _import->settings.rows) = static_cast<u32>(std::max(1, value));
+							}
+							ShowImportActions(*contextPtr, *actions);
+						});
+			}
+			if (shown.shape == TextureShape::Cube || (shown.shape == TextureShape::Auto && texture.isCube)) {
+				Widgets::NumberFieldDesc face;
+				face.value = static_cast<f64>(shown.cubeFaceSize);
+				face.minValue = 0.0;
+				face.maxValue = 4096.0;
+				face.decimals = 0;
+				face.font = UISystem::GetDefaultFont();
+				face.fontSizePx = BodyPx();
+				face.onChange = tweak([](Settings& s, f64 value) { s.cubeFaceSize = static_cast<i32>(std::lround(value)); });
+				Grow(context, Widgets::NumberField(context, labeled("Face Size"), face).root);
+				Widgets::Checkbox(context, labeled("Convolve IBL"), shown.convolveIBL, change([](Settings& s, bool value) { s.convolveIBL = value; }));
+			}
+			if (shown.type != TextureType::NormalMap) {
+				Widgets::Checkbox(context, labeled("sRGB (Color Texture)"), shown.sRGB, change([](Settings& s, bool value) { s.sRGB = value; }));
+			}
+			Widgets::Checkbox(context, labeled("Generate Mipmaps"), shown.generateMips, change([](Settings& s, bool value) { s.generateMips = value; }));
+
+			AddDropdown(context, labeled("Wrap Mode"), WRAP_MODES, static_cast<u32>(shown.addressMode),
+						change([](Settings& s, u32 value) { s.addressMode = static_cast<RHI::AddressMode>(std::min<u32>(value, 2)); }));
+			AddDropdown(context, labeled("Filter Mode"), FILTER_MODES, static_cast<u32>(shown.filter),
+						change([](Settings& s, u32 value) { s.filter = static_cast<TextureFilter>(std::min<u32>(value, 2)); }));
+			ElementHandle aniso = labeled("Aniso Level");
+			if (shown.filter == TextureFilter::Point || shown.shape == TextureShape::Texture3D) {
+				ElementHandle level = context.CreateElement();
+				context.AppendChild(aniso, level);
+				context.SetHoverable(level, false);
+				context.SetText(level, UISystem::GetDefaultFont(), BodyPx(), EditorTheme::GetColor(ColorToken::WidgetTextDim), std::to_string(shown.anisoLevel));
+			} else {
+				Widgets::SliderDesc slider;
+				slider.minValue = 0.0f;
+				slider.maxValue = 16.0f;
+				slider.value = static_cast<f32>(shown.anisoLevel);
+				slider.showValueField = true;
+				slider.decimals = 0;
+				slider.font = UISystem::GetDefaultFont();
+				slider.fontSizePx = BodyPx();
+				slider.onChange = tweak([](Settings& s, f32 value) { s.anisoLevel = static_cast<u8>(std::clamp(std::lround(value), 0l, 16l)); });
+				Grow(context, Widgets::Slider(context, aniso, slider).root);
+				const GraphicsProfile* profile = RenderSystem::GetActiveProfile();
+				if (shown.anisoLevel > 1 && profile && profile->anisotropicFiltering == TextureAnisotropy::Disabled) {
+					AddLine(context, parent, "Anisotropic filtering disabled for all textures by the graphics profile");
+				} else if (shown.anisoLevel > 1 && profile && profile->anisotropicFiltering == TextureAnisotropy::ForcedOn) {
+					AddLine(context, parent, "Anisotropic filtering forced on for all textures by the graphics profile");
+				}
+			}
+			AddDropdown(context, labeled("Compression"), COMPRESSIONS, static_cast<u32>(shown.compression),
+						change([](Settings& s, u32 value) { s.compression = static_cast<TextureCompression>(std::min<u32>(value, 1)); }));
+
+			ElementHandle row = AddRow(context, parent);
+			Style end = context.GetStyle(row);
+			end.justifyContent = Align::End;
+			end.margin = {0.0f, 6.0f, 0.0f, 2.0f};
+			context.SetStyle(row, end);
+
+			Widgets::ButtonDesc revert;
+			revert.label = "Revert";
+			revert.font = UISystem::GetDefaultFont();
+			revert.fontSizePx = BodyPx();
+			revert.onClick = [rebuild]() {
+				if (_import && !(_import->settings == _import->saved)) {
+					_import->asset = Guid{};
+					rebuild();
+				}
+			};
+			(*actions)[0] = Widgets::Button(context, row, revert);
+
+			Widgets::ButtonDesc apply;
+			apply.label = "Apply";
+			apply.font = UISystem::GetDefaultFont();
+			apply.fontSizePx = BodyPx();
+			apply.onClick = [path, rebuild]() {
+				if (!_import || _import->settings == _import->saved) {
+					return;
+				}
+				rebuild();
+				const Settings settings = _import->settings;
+				ApplyImportSettings(path, settings);
+				_import->asset = Guid{};
+			};
+			(*actions)[1] = Widgets::Button(context, row, apply);
+			ShowImportActions(context, *actions);
+		}
+
 		void DrawTextureInspector(Context& context, ElementHandle parent, const Guid& guid, Asset& asset) {
 			TextureAsset& texture = static_cast<TextureAsset&>(asset);
 			const Path path = AssetDatabase::LookupPath(guid);
 			const Handle<TextureAsset> subject(&texture);
 			const std::function<void()> rebuild = PropertyDrawers::GetInspectorRebuilder();
+
+			if (!path.ToString().empty()) {
+				BuildImportRows(context, parent, guid, path, texture, rebuild);
+			}
 
 			AddInspectorHeader(context, parent, "Sprites", EditorTheme::GetColor(ColorToken::TextStrong));
 			if (texture.GetDimension() != RHI::TextureDimension::Texture2D) {
@@ -542,6 +754,10 @@ namespace Shalltear {
 		if (_draft) {
 			Delete(_draft);
 			_draft = nullptr;
+		}
+		if (_import) {
+			Delete(_import);
+			_import = nullptr;
 		}
 	}
 

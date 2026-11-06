@@ -1449,29 +1449,33 @@ namespace Shalltear {
 			u32 samplerBinding = 0;
 		};
 
-		struct DrawEntry {
-			MeshAsset* mesh = nullptr;
-			const SubMesh* submesh = nullptr;
-			u64 vertexAddress = 0;
+		struct DrawMaterial {
 			ShaderAsset* shader = nullptr;
 			u32 variant = SHADER_BASE_VARIANT;
 			u64 materialId = 0;
+			u64 sortGroup = 0;
 			const u8* materialBlock = nullptr;
 			u32 materialBlockSize = 0;
 			const DrawTexture* textures = nullptr;
 			u32 textureCount = 0;
 			RHI::ShaderRenderState renderState;
 			f32 alphaClipThreshold = 0.0f;
+			i32 sortingPriority = 0;
+			bool alpha = false;
+			PassRequests sceneReads = PassRequests::None;
+		};
+
+		struct DrawEntry : DrawMaterial {
+			MeshAsset* mesh = nullptr;
+			const SubMesh* submesh = nullptr;
+			u64 vertexAddress = 0;
 			Mat4 world;
 			f32 depth = 0.0f;
-			i32 sortingPriority = 0;
 			u32 renderingLayerMask = 1;
 			Handle<SceneObject> object;
-			bool alpha = false;
 			bool mirrored = false;
 			bool receiveShadows = true;
 			ShadowCasting castShadows = ShadowCasting::On;
-			PassRequests sceneReads = PassRequests::None;
 			u64 volumeMask = 0;
 		};
 
@@ -1507,7 +1511,7 @@ namespace Shalltear {
 				return order;
 			}
 			const u64 submesh = Math::Min<u64>(static_cast<u64>(entry.submesh - entry.mesh->submeshes.data()), 0xFFFF);
-			order.key[1] = (static_cast<u64>(static_cast<u32>(entry.shader->GetInstanceId())) << 32) | static_cast<u32>(entry.materialId);
+			order.key[1] = entry.sortGroup;
 			order.key[2] = (static_cast<u64>(depthBand) << 50) | (static_cast<u64>(static_cast<u32>(entry.mesh->GetInstanceId())) << 18) |
 						   (submesh << 2) | (static_cast<u64>(entry.mirrored) << 1) | static_cast<u64>(entry.castShadows == ShadowCasting::TwoSided);
 			order.depth = entry.depth;
@@ -1520,7 +1524,7 @@ namespace Shalltear {
 			u64 perDrawAddress = 0;
 		};
 
-		void PackMaterialBlock(DrawEntry& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
+		void PackMaterialBlock(DrawMaterial& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
 			const UniformBlockLayout* layout = target ? target->GetMaterialParamLayout() : nullptr;
 			if (!layout || layout->sizeBytes == 0 || layout->sizeBytes > MAX_MATERIAL_BLOCK_BYTES) {
 				return;
@@ -1582,7 +1586,7 @@ namespace Shalltear {
 			return handle;
 		}
 
-		void ResolveMaterialTextures(DrawEntry& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
+		void ResolveMaterialTextures(DrawMaterial& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
 			RenderState& state = *_state;
 			u32 slotCount = target ? CountMaterialTextureSlots(*target) : 0;
 			if (slotCount == 0) {
@@ -1627,7 +1631,7 @@ namespace Shalltear {
 		}
 
 		RHI::TransientSet BindMaterialSet(RHI::CommandList& cmd, RHI::Device& device,
-										  RHI::PipelineHandle pipeline, const DrawEntry& entry) {
+										  RHI::PipelineHandle pipeline, const DrawMaterial& entry) {
 			if (entry.materialBlockSize == 0 && entry.textureCount == 0) {
 				return {};
 			}
@@ -1928,6 +1932,105 @@ namespace Shalltear {
 			Vec2I extent{1, 1};
 		};
 
+		// results valid until arena reset
+		class DrawMaterials {
+		public:
+			DrawMaterials(LinearAllocator& arena, ShaderAsset* errorShader) : _arena(arena), _errorShader(errorShader) {}
+
+			bool Resolve(MaterialAsset* material, DrawMaterial& out) {
+				if (!material) {
+					return Error(out);
+				}
+				if (material == _lastKey) {
+					out = *_lastValue;
+					return true;
+				}
+				if (!_slots) {
+					_slots = _arena.AllocateAs<Slot>(SLOT_COUNT);
+					std::fill(_slots, _slots + SLOT_COUNT, Slot{});
+				}
+				Slot& slot = _slots[SlotOf(material)];
+				if (slot.key == material) {
+					out = *slot.value;
+				} else {
+					if (!Build(*material, out)) {
+						return false;
+					}
+					slot = Slot{material, &out};
+				}
+				_lastKey = material;
+				_lastValue = slot.value;
+				return true;
+			}
+		private:
+			struct Slot {
+				const MaterialAsset* key = nullptr;
+				const DrawMaterial* value = nullptr;
+			};
+
+			static constexpr u32 SLOT_BITS = 10;
+			static constexpr u32 SLOT_COUNT = 1u << SLOT_BITS;
+
+			static u32 SlotOf(const MaterialAsset* material) {
+				return static_cast<u32>((reinterpret_cast<uintptr_t>(material) * 0x9E3779B97F4A7C15ull) >> (64 - SLOT_BITS));
+			}
+
+			static u64 SortGroupOf(const ShaderAsset& shader, u64 materialId) {
+				return (static_cast<u64>(static_cast<u32>(shader.GetInstanceId())) << 32) | static_cast<u32>(materialId);
+			}
+
+			bool Build(MaterialAsset& material, DrawMaterial& out) {
+				ShaderAsset* shader = material.shader.Get();
+				if (shader) {
+					if (const MeshDrawRefusal refusal = ClassifyMeshDraw(*shader, material); refusal != MeshDrawRefusal::None) {
+						NameMeshDrawRefusal(*shader, material, refusal);
+						shader = nullptr;
+					}
+				}
+				if (!shader) {
+					return Error(out);
+				}
+				out.shader = shader;
+				out.variant = shader->FindVariant(material.keywordHash);
+				out.materialId = material.GetInstanceId();
+				out.sortGroup = SortGroupOf(*shader, out.materialId);
+				PackMaterialBlock(out, _arena, shader, &material);
+				ResolveMaterialTextures(out, _arena, shader, &material);
+				out.renderState = material.ResolveRenderState(shader->renderState);
+				out.alphaClipThreshold = material.alphaClipThreshold;
+				out.sortingPriority = material.sortingPriority;
+				out.alpha = out.renderState.blend != RHI::BlendMode::Opaque;
+				out.sceneReads = MeshSceneReads(*shader);
+				return true;
+			}
+
+			bool Error(DrawMaterial& out) {
+				if (!_error && _errorShader) {
+					DrawMaterial* error = _arena.Construct<DrawMaterial>();
+					error->shader = _errorShader;
+					error->sortGroup = SortGroupOf(*_errorShader, 0);
+					MaterialAsset errorMaterial;
+					errorMaterial.SetColor("baseColor", Color::Magenta());
+					PackMaterialBlock(*error, _arena, _errorShader, &errorMaterial);
+					ResolveMaterialTextures(*error, _arena, _errorShader, nullptr);
+					error->renderState = _errorShader->renderState;
+					_error = error;
+				}
+				if (!_error) {
+					return false;
+				}
+				out = *_error;
+				return true;
+			}
+
+			LinearAllocator& _arena;
+			ShaderAsset* _errorShader = nullptr;
+			const DrawMaterial* _error = nullptr;
+			Slot* _slots = nullptr;
+			const MaterialAsset* _lastKey = nullptr;
+			const DrawMaterial* _lastValue = nullptr;
+		};
+
 		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
 									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
 									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
@@ -1964,7 +2067,7 @@ namespace Shalltear {
 			DrawOrder* orders = arena.AllocateAs<DrawOrder>(drawCapacity ? drawCapacity : 1);
 			u32 drawCount = 0;
 
-			ShaderAsset* errorShader = state.standardShader.Get();
+			DrawMaterials materials(arena, state.standardShader.Get());
 
 			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world, u32 renderingLayerMask,
 								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
@@ -1989,16 +2092,10 @@ namespace Shalltear {
 				const bool mirrored = world.ToMat3().Determinant() < 0.0f;
 
 				for (const SubMesh& submesh : mesh->submeshes) {
-					MaterialAsset* material = materialForSlot(submesh.materialSlot);
-					ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-					if (shader) {
-						if (const MeshDrawRefusal refusal = ClassifyMeshDraw(*shader, *material); refusal != MeshDrawRefusal::None) {
-							NameMeshDrawRefusal(*shader, *material, refusal);
-							shader = nullptr;
-						}
-					}
-
 					DrawEntry* entry = arena.Construct<DrawEntry>();
+					if (!materials.Resolve(materialForSlot(submesh.materialSlot), *entry)) {
+						continue;
+					}
 					entry->mesh = mesh;
 					entry->submesh = &submesh;
 					entry->vertexAddress = vertexAddress;
@@ -2010,29 +2107,6 @@ namespace Shalltear {
 					entry->castShadows = castShadows;
 					entry->receiveShadows = receiveShadows;
 					entry->object = object;
-
-					if (shader) {
-						entry->shader = shader;
-						entry->variant = shader->FindVariant(material->keywordHash);
-						entry->materialId = material->GetInstanceId();
-						PackMaterialBlock(*entry, arena, shader, material);
-						ResolveMaterialTextures(*entry, arena, shader, material);
-						entry->renderState = material->ResolveRenderState(shader->renderState);
-						entry->alphaClipThreshold = material->alphaClipThreshold;
-						entry->sortingPriority = material->sortingPriority;
-						entry->alpha = entry->renderState.blend != RHI::BlendMode::Opaque;
-						entry->sceneReads = MeshSceneReads(*shader);
-					} else if (errorShader) {
-						entry->shader = errorShader;
-						entry->materialId = 0;
-						MaterialAsset errorMaterial;
-						errorMaterial.SetColor("baseColor", Color::Magenta());
-						PackMaterialBlock(*entry, arena, errorShader, &errorMaterial);
-						ResolveMaterialTextures(*entry, arena, errorShader, nullptr);
-						entry->renderState = errorShader->renderState;
-					} else {
-						continue;
-					}
 					orders[drawCount] = OrderOf(*entry, depthBand, drawCount);
 					drawList[drawCount++] = entry;
 				}

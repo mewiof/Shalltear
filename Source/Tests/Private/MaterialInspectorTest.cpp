@@ -10,6 +10,7 @@
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Graphics/ShaderCompileQueue.h"
 #include "Shalltear/Core/Graphics/ShaderReflection.h"
+#include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/UISystem.h"
 
@@ -1397,6 +1398,160 @@ TEST_F(ShaderDropdownFixture, DroppedTextureIsHeld) {
 
 	AssetDatabase::UnloadAsset(loaded);
 	AssetDatabase::UnloadAsset(shader);
+}
+
+namespace {
+
+	constexpr std::string_view NORMAL_WARNING = "Texture not imported as a normal map";
+
+	UI::ElementHandle ParentOf(UI::Context& context, UI::ElementHandle element) {
+		const UI::Element* found = context.GetElement(element);
+		return found ? context.MakeHandle(found->parent) : UI::ElementHandle{};
+	}
+
+	bool NormalWarningShown(UI::Context& context, UI::ElementHandle root) {
+		const UI::ElementHandle row = ParentOf(context, UITest::FindByText(context, root, NORMAL_WARNING));
+		return context.IsAlive(row) && context.GetStyle(row).display != UI::Display::None;
+	}
+
+	class NormalMapFixFixture : public ShaderDropdownFixture {
+	protected:
+		Path _texturePath{"project://Assets/Bumps.tga"};
+		Guid _texture;
+		Asset* _material = nullptr;
+		ShaderAsset _shader;
+
+		void SetUp() override {
+			ShaderDropdownFixture::SetUp();
+			if (::testing::Test::IsSkipped()) {
+				return;
+			}
+			const u8 red[4] = {255, 0, 0, 255};
+			TestImages::WriteTga(_project / "Assets" / "Bumps.tga", red);
+			_texture = AssetDatabase::EnsureAssetIdentity(_texturePath);
+			ASSERT_TRUE(_texture.IsValid());
+			JSONValue settings = JSONValue::MakeObject();
+			settings.AddMember("filter", JSONValue::MakeString("point"));
+			settings.AddMember("compression", JSONValue::MakeString("none"));
+			settings.AddMember("future", JSONValue::MakeString("kept"));
+			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(_texturePath, settings));
+
+			FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Assets/Bumpy.mat")), str(R"({"floats": {}, "colors": {}, "textures": {}})"));
+			_material = AssetDatabase::LoadAssetByGuid(AssetDatabase::EnsureAssetIdentity(Path("project://Assets/Bumpy.mat")));
+			ASSERT_NE(_material, nullptr);
+			DeclareScalarInterface(_shader);
+			_shader.textureDefaults.push_back({"baseColorTexture", ShaderTextureFallback::Normal});
+			Material().shader = Handle<ShaderAsset>(&_shader);
+		}
+
+		void TearDown() override {
+			if (_material) {
+				Material().shader = {};
+				AssetDatabase::UnloadAsset(_material);
+			}
+			ShaderDropdownFixture::TearDown();
+		}
+
+		MaterialAsset& Material() const { return *static_cast<MaterialAsset*>(_material); }
+
+		TextureAsset* Texture() const { return static_cast<TextureAsset*>(AssetDatabase::FindLoadedByGuid(_texture)); }
+
+		str Saved(std::string_view key) const {
+			const str text = FileSystem::ReadTextFile(FileSystem::Resolve(AssetDatabase::GetMetaPath(_texturePath)), MemTag::Editor);
+			LinearAllocator arena(text.size() + 64, MemTag::Editor);
+			const JSONValue root = JSONParse(text, arena);
+			return str(root["importer"]["settings"][key].AsString());
+		}
+
+		UI::DragPayload Payload() const {
+			UI::DragPayload payload;
+			payload.type = "Asset"_hash;
+			payload.data = Variant(AssetDragData{_texture, StringHash("TextureAsset").GetValue()});
+			return payload;
+		}
+	};
+
+} // anonymous namespace
+
+TEST_F(NormalMapFixFixture, FixNowMarksNormalMap) {
+	UI::ContextDesc desc;
+	desc.sizePx = {420, 900};
+	UI::Context first(desc, UISystem::GetFontSystem());
+	UI::Context second(desc, UISystem::GetFontSystem());
+	UI::ElementHandle firstRoot = first.CreateElement();
+	UI::ElementHandle secondRoot = second.CreateElement();
+	first.AppendChild(first.GetRoot(), firstRoot);
+	second.AppendChild(second.GetRoot(), secondRoot);
+	BuildInspector(first, firstRoot, Material());
+	BuildInspector(second, secondRoot, Material());
+	EXPECT_FALSE(NormalWarningShown(first, firstRoot));
+	EXPECT_FALSE(NormalWarningShown(second, secondRoot));
+
+	UI::ElementHandle field = ParentOf(first, UITest::FindByText(first, firstRoot, "None (normal)"));
+	while (first.IsAlive(field) && !first.HasClass(field, EditorTheme::Class::ObjectField)) {
+		field = ParentOf(first, field);
+	}
+	ASSERT_TRUE(first.IsAlive(field));
+	auto& events = first.Events(field);
+	ASSERT_TRUE(events.onDragOver && events.onDrop);
+	ASSERT_TRUE(events.onDragOver(Payload()));
+	events.onDrop(Payload(), {});
+	ASSERT_NE(Texture(), nullptr);
+	ASSERT_EQ(Texture()->settings.type, TextureType::Default);
+
+	PropertyDrawers::RefreshRows(first);
+	PropertyDrawers::RefreshRows(second);
+	first.Update();
+	second.Update();
+	EXPECT_TRUE(NormalWarningShown(first, firstRoot));
+	ASSERT_TRUE(NormalWarningShown(second, secondRoot));
+
+	const TextureAsset* before = Texture();
+	ClickElement(second, ParentOf(second, UITest::FindByText(second, secondRoot, "Fix Now")));
+	EXPECT_EQ(Saved("textureType"), "normalMap");
+	EXPECT_EQ(Saved("filter"), "point");
+	EXPECT_EQ(Saved("compression"), "none");
+	EXPECT_EQ(Saved("future"), "kept");
+	ASSERT_NE(Texture(), nullptr);
+	EXPECT_EQ(Texture(), before);
+	EXPECT_EQ(Texture()->settings.type, TextureType::NormalMap);
+	EXPECT_EQ(Material().GetTexture(StringHash("baseColorTexture")).Get(), before);
+
+	PropertyDrawers::RefreshRows(first);
+	PropertyDrawers::RefreshRows(second);
+	EXPECT_FALSE(NormalWarningShown(first, firstRoot));
+	EXPECT_FALSE(NormalWarningShown(second, secondRoot));
+}
+
+TEST_F(NormalMapFixFixture, NormalWarningOnlyUnderNormalSlot) {
+	UI::ContextDesc desc;
+	desc.sizePx = {420, 900};
+	Material().SetTexture("baseColorTexture", _texture);
+	ASSERT_NE(Texture(), nullptr);
+
+	ShaderAsset plain;
+	DeclareScalarInterface(plain);
+	Material().shader = Handle<ShaderAsset>(&plain);
+	UI::Context plainContext(desc, UISystem::GetFontSystem());
+	UI::ElementHandle plainRoot = plainContext.CreateElement();
+	plainContext.AppendChild(plainContext.GetRoot(), plainRoot);
+	BuildInspector(plainContext, plainRoot, Material());
+	PropertyDrawers::RefreshRows(plainContext);
+	EXPECT_TRUE(plainContext.IsAlive(UITest::FindByText(plainContext, plainRoot, "Bumps.tga")));
+	EXPECT_FALSE(plainContext.IsAlive(UITest::FindByText(plainContext, plainRoot, NORMAL_WARNING)));
+
+	Material().shader = Handle<ShaderAsset>(&_shader);
+	UI::Context context(desc, UISystem::GetFontSystem());
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	BuildInspector(context, root, Material());
+	ASSERT_TRUE(NormalWarningShown(context, root));
+
+	ClickElement(context, UITest::FindByText(context, root, "\xC3\x97"));
+	context.Update();
+	ASSERT_EQ(Material().GetTexture(StringHash("baseColorTexture")).Get(), nullptr);
+	PropertyDrawers::RefreshRows(context);
+	EXPECT_FALSE(NormalWarningShown(context, root));
 }
 
 TEST_F(ShaderDropdownFixture, LateVariantUsesNewImport) {

@@ -16,6 +16,7 @@
 #include "Shalltear/Editor/MaterialInspectorOps.h"
 #include "Shalltear/Editor/ObjectField.h"
 #include "Shalltear/Editor/PropertyDrawers.h"
+#include "Shalltear/Editor/TextureInspectorOps.h"
 
 #include <algorithm>
 #include <format>
@@ -298,6 +299,55 @@ namespace Shalltear {
 				if (ctx.GetTextString(captionText) != now) {
 					ctx.SetTextString(captionText, now);
 				} }, nullptr);
+		}
+
+		bool NeedsNormalMapFix(const MaterialAsset& material, std::string_view slot, Path& texturePath) {
+			const TextureAsset* bound = material.GetTexture(StringHash(slot)).Get();
+			if (!bound || bound->settings.type == TextureType::NormalMap) {
+				return false;
+			}
+			texturePath = AssetDatabase::LookupPath(bound->assetId);
+			return !texturePath.ToString().empty();
+		}
+
+		void BuildNormalMapFixRow(UI::Context& context, UI::ElementHandle parent, MaterialAsset* target, const str& slotName) {
+			UI::ElementHandle row = MakeRow(context, parent, "");
+			UI::ElementHandle message = context.CreateElement();
+			context.AppendChild(row, message);
+			UI::Style messageStyle;
+			messageStyle.flexGrow = 1.0f;
+			messageStyle.flexShrink = 1.0f;
+			context.SetStyle(message, messageStyle);
+			context.SetHoverable(message, false);
+			context.SetText(message, UISystem::GetDefaultFont(), FieldFont(), EditorTheme::GetColor(ColorToken::StatusWarn),
+							"Texture not imported as a normal map");
+
+			UI::Widgets::ButtonDesc fix;
+			fix.label = "Fix Now";
+			fix.font = UISystem::GetDefaultFont();
+			fix.fontSizePx = FieldFont();
+			fix.onClick = [target, slotName]() {
+				Path texturePath;
+				if (!NeedsNormalMapFix(*target, slotName, texturePath)) {
+					return;
+				}
+				TextureAsset::Settings settings = TextureInspectorOps::ReadImportSettings(texturePath);
+				settings.type = TextureType::NormalMap;
+				TextureInspectorOps::ApplyImportSettings(texturePath, settings);
+			};
+			UI::Widgets::Button(context, row, fix);
+
+			auto show = [target, slotName, row](UI::Context& ctx) {
+				Path texturePath;
+				const UI::Display wanted = NeedsNormalMapFix(*target, slotName, texturePath) ? UI::Display::Flex : UI::Display::None;
+				UI::Style style = ctx.GetStyle(row);
+				if (style.display != wanted) {
+					style.display = wanted;
+					ctx.SetStyle(row, style);
+				}
+			};
+			show(context);
+			PropertyDrawers::SetRowRefresh(context, row, show, nullptr);
 		}
 
 		void EnsureVariantCompiled(MaterialAsset* target, ShaderAsset* shader) {
@@ -682,6 +732,9 @@ namespace Shalltear {
 				for (const MaterialInspectorOps::Row& spec : group.rows) {
 					UI::ElementHandle row = MakeRow(context, parent, spec.DisplayName());
 					BuildRow(context, row, target, guidCopy, shader, spec);
+					if (spec.kind == MaterialInspectorOps::RowKind::Texture && shader.GetTextureFallback(spec.name) == ShaderTextureFallback::Normal) {
+						BuildNormalMapFixRow(context, parent, target, spec.name);
+					}
 				}
 			}
 

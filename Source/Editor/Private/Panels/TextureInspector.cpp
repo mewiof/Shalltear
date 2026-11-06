@@ -7,13 +7,13 @@
 #include "Shalltear/Core/Graphics/TextureAsset.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
-#include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PropertyDrawers.h"
 #include "Shalltear/Editor/SpriteEditorOps.h"
+#include "Shalltear/Editor/TextureInspectorOps.h"
 
 #include <array>
 #include <cmath>
@@ -45,17 +45,6 @@ namespace Shalltear {
 		};
 		ImportDraft* _import = nullptr;
 
-		TextureAsset::Settings ReadSavedSettings(const Path& path) {
-			TextureAsset::Settings settings;
-			const str text = FileSystem::ReadTextFile(FileSystem::Resolve(AssetDatabase::GetMetaPath(path)), MemTag::Editor);
-			if (!text.empty()) {
-				LinearAllocator arena(text.size() + 64, MemTag::Editor);
-				const JSONValue root = JSONParse(text, arena);
-				TextureAssetImporter::ReadSettings(root["importer"]["settings"], settings);
-			}
-			return settings;
-		}
-
 		ImportDraft& ImportDraftFor(const Guid& guid, const Path& path, const TextureAsset& texture) {
 			if (!_import) {
 				_import = New<ImportDraft>(MemTag::Editor);
@@ -63,32 +52,10 @@ namespace Shalltear {
 			if (_import->asset != guid || _import->version != texture.version) {
 				_import->asset = guid;
 				_import->version = texture.version;
-				_import->saved = ReadSavedSettings(path);
+				_import->saved = TextureInspectorOps::ReadImportSettings(path);
 				_import->settings = _import->saved;
 			}
 			return *_import;
-		}
-
-		bool ApplyImportSettings(const Path& path, const TextureAsset::Settings& settings) {
-			const str text = FileSystem::ReadTextFile(FileSystem::Resolve(AssetDatabase::GetMetaPath(path)), MemTag::Editor);
-			LinearAllocator arena(text.size() + 64, MemTag::Editor);
-			const JSONValue existing = text.empty() ? JSONValue() : JSONParse(text, arena);
-			JSONValue merged = JSONValue::MakeObject();
-			TextureAssetImporter::WriteSettings(settings, merged);
-			const JSONValue& previous = existing["importer"]["settings"];
-			for (size_t i = 0; i < previous.MemberCount(); ++i) {
-				if (!merged.HasKey(previous.KeyAt(i))) {
-					merged.AddMember(previous.KeyAt(i), previous.ChildAt(i));
-				}
-			}
-			if (!AssetDatabase::WriteImporterSettings(path, merged)) {
-				return false;
-			}
-			if (!AssetDatabase::ReimportAsset(path)) {
-				SLT_LOG_WARN("Editor", "'{}': settings saved, the texture couldn't be re-imported. Close what uses it and re-import", path.ToString());
-				return false;
-			}
-			return true;
 		}
 
 		struct SpriteDraft {
@@ -678,7 +645,7 @@ namespace Shalltear {
 				}
 				rebuild();
 				const Settings settings = _import->settings;
-				ApplyImportSettings(path, settings);
+				TextureInspectorOps::ApplyImportSettings(path, settings);
 				_import->asset = Guid{};
 			};
 			(*actions)[1] = Widgets::Button(context, row, apply);

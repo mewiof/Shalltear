@@ -38,7 +38,7 @@ namespace Shalltear {
 
 		i32 adapter = -1;
 
-#if defined(SHALLTEAR_CONFIG_RELEASE)
+#if defined(NDEBUG) || defined(SHALLTEAR_CONFIG_RELEASE)
 		bool validation = false;
 #else
 		bool validation = true;

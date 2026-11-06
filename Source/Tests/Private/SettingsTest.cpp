@@ -415,7 +415,7 @@ TEST_F(SettingsFixture, ValidationDefaultTracksTheBuildConfiguration) {
 	const GraphicsSettings* graphics =
 		Settings::DeclareCategory<GraphicsSettings>("Graphics", SettingScope::Project, true);
 	ASSERT_NE(graphics, nullptr);
-#if defined(SHALLTEAR_CONFIG_RELEASE)
+#if defined(NDEBUG) || defined(SHALLTEAR_CONFIG_RELEASE)
 	EXPECT_FALSE(graphics->validation);
 #else
 	EXPECT_TRUE(graphics->validation);

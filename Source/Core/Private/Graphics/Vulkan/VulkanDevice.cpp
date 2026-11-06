@@ -589,6 +589,9 @@ namespace Shalltear::RHI {
 					 VK_API_VERSION_MAJOR(impl->adapters[selected].apiVersion),
 					 VK_API_VERSION_MINOR(impl->adapters[selected].apiVersion),
 					 VK_API_VERSION_PATCH(impl->adapters[selected].apiVersion));
+		if (impl->validation) {
+			SLT_LOG_INFO("Graphics", "Vulkan validation layer on (slower frames). Set [Graphics] validation = false to disable");
+		}
 
 		{
 			VkPhysicalDeviceProperties2 props{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};

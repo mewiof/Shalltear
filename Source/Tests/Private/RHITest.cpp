@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Graphics/RHISwapChain.h"
 #include "Shalltear/Core/Graphics/RHITypes.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
+#include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Window.h"
 
 #include "ZoneProbe.h"
@@ -13,9 +14,46 @@
 #include <cstring>
 #include <filesystem>
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 using namespace Shalltear;
 
 namespace {
+
+	class LayerLineSink : public ILogSink {
+	public:
+		static constexpr const char* SENTINEL = "rhi-layer-sentinel";
+
+		void ReceiveLog(const LogEvent& event) override {
+			std::lock_guard lock(_mutex);
+			if (event.message.find(SENTINEL) != str::npos) {
+				_armed = true;
+				return;
+			}
+			if (_armed) {
+				_messages.push_back(str(event.message));
+			}
+		}
+		void Flush() override {}
+
+		bool Armed() const {
+			std::lock_guard lock(_mutex);
+			return _armed;
+		}
+		u32 CountMatching(const char* text) const {
+			std::lock_guard lock(_mutex);
+			u32 count = 0;
+			for (const str& message : _messages) {
+				count += message.find(text) != str::npos ? 1u : 0u;
+			}
+			return count;
+		}
+	private:
+		mutable std::mutex _mutex;
+		bool _armed = false;
+		std::vector<str> _messages;
+	};
 
 	class RHIFixture : public ::testing::Test {
 	protected:
@@ -1564,6 +1602,42 @@ TEST_F(RHIFixture, BarrierOrdersKernelWrites) {
 	_device->DestroyResource(pipeline);
 	_device->DestroyResource(values);
 	FlushDeferredDeletes(*_device);
+}
+
+TEST(RHIValidationTest, LoadedLayerIsLogged) {
+	JobSystem::Initialize();
+	LogManager::Initialize({false, false});
+	LogManager::SetGlobalLevel(LogLevel::Trace);
+	auto sink = std::make_shared<LayerLineSink>();
+	LogManager::AddSink(sink);
+	for (int attempt = 0; attempt < 200 && !sink->Armed(); ++attempt) {
+		SLT_LOG_INFO("Graphics", "{}", LayerLineSink::SENTINEL);
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	const bool armed = sink->Armed();
+
+	RHI::DeviceDesc desc;
+	desc.headless = true;
+	desc.enableValidation = true;
+	RHI::Device* validated = RHI::Device::Create(desc);
+	const bool layerLoaded = ::GetModuleHandleA("VkLayer_khronos_validation.dll") != nullptr;
+	if (validated) {
+		RHI::Device::Destroy(validated);
+	}
+	desc.enableValidation = false;
+	RHI::Device* plain = RHI::Device::Create(desc);
+	if (plain) {
+		RHI::Device::Destroy(plain);
+	}
+
+	LogManager::Terminate();
+	JobSystem::Terminate();
+	ASSERT_TRUE(armed);
+	if (!validated || !plain) {
+		GTEST_SKIP() << "no Vulkan ICD available";
+	}
+	ASSERT_EQ(sink->CountMatching("Selected adapter"), 2u);
+	EXPECT_EQ(sink->CountMatching("validation layer on"), layerLoaded ? 1u : 0u);
 }
 
 TEST(RHISwapChainTest, CreateResizeDestroyAgainstHiddenWindow) {

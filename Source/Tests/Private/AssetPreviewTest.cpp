@@ -25,6 +25,7 @@
 #include "Shalltear/Editor/PanelManager.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
+#include <algorithm>
 #include <fstream>
 #include <regex>
 
@@ -1314,6 +1315,13 @@ namespace {
 			RHI::TextureHandle texture;
 			UI::SamplerKind sampler = UI::SamplerKind::LinearClamp;
 		};
+		static bool ShownOver(const UI::UIQuad& quad, const UI::Rect& area) {
+			const f32 left = std::max({quad.rect.x, quad.clipRect.x, area.x});
+			const f32 top = std::max({quad.rect.y, quad.clipRect.y, area.y});
+			const f32 right = std::min({quad.rect.x + quad.rect.w, quad.clipRect.x + quad.clipRect.w, area.x + area.w});
+			const f32 bottom = std::min({quad.rect.y + quad.rect.h, quad.clipRect.y + quad.clipRect.h, area.y + area.h});
+			return left < right && top < bottom;
+		}
 		static Vector<PaintedPicture> PicturesIn(UI::Context& context, UI::ElementHandle well) {
 			Vector<PaintedPicture> pictures{GetMemoryResource(MemTag::Editor)};
 			if (!context.IsAlive(well)) {
@@ -1329,9 +1337,7 @@ namespace {
 				for (u32 i = command.firstQuad; i < command.firstQuad + command.quadCount; ++i) {
 					const UI::UIQuad& quad = list.quads[i];
 					const bool whole = quad.uv.x == 0.0f && quad.uv.y == 0.0f && quad.uv.w == 1.0f && quad.uv.h == 1.0f;
-					const bool over = quad.rect.x < area.x + area.w && quad.rect.x + quad.rect.w > area.x &&
-									  quad.rect.y < area.y + area.h && quad.rect.y + quad.rect.h > area.y;
-					if (whole && over) {
+					if (whole && ShownOver(quad, area)) {
 						pictures.push_back({quad.rect, command.texture, command.sampler});
 					}
 				}
@@ -2871,9 +2877,7 @@ namespace {
 				}
 				for (u32 i = 0; i < command.quadCount; ++i) {
 					const UI::UIQuad& quad = list.quads[command.firstQuad + i];
-					const bool inside = quad.rect.x < box.x + box.w && quad.rect.x + quad.rect.w > box.x &&
-										quad.rect.y < box.y + box.h && quad.rect.y + quad.rect.h > box.y;
-					if ((quad.flags & UI::QUAD_FLAG_GLYPH) == 0u && inside) {
+					if ((quad.flags & UI::QUAD_FLAG_GLYPH) == 0u && ShownOver(quad, box)) {
 						out.push_back(command.texture);
 					}
 				}

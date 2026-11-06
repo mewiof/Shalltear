@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Math/MathUtil.h"
 #include "Shalltear/Core/Memory.h"
+#include "Shalltear/Core/UI/RenderList.h"
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
@@ -329,6 +330,25 @@ namespace Shalltear::CurveEditor {
 		view.valueMin -= up;
 		view.valueMax += up;
 		return view;
+	}
+
+	void PaintPreview(UI::Context& context, UI::ElementHandle part, UI::PaintScope& paint, const AnimationCurve& curve) {
+		const UI::Rect box = context.GetLayout(part).borderBox;
+		if (!(box.w > 2.0f) || !(box.h > 2.0f)) {
+			return;
+		}
+		const View view = Frame(curve);
+		const f32 scale = context.GetContentScale() > 0.0f ? context.GetContentScale() : 1.0f;
+		const auto y = [&](f32 value) { return box.y + (1.0f - (value - view.valueMin) / (view.valueMax - view.valueMin)) * box.h; };
+		const auto timeAt = [&](f32 px) { return view.timeMin + (px - box.x) / box.w * (view.timeMax - view.timeMin); };
+		const Color ink = EditorTheme::GetColor(ColorToken::CurveLine);
+		const f32 stride = Math::Max(1.0f, scale);
+		Vec2 previous(box.x, y(curve.Evaluate(timeAt(box.x))));
+		for (f32 px = box.x + stride; px <= box.x + box.w; px += stride) {
+			const Vec2 next(px, y(curve.Evaluate(timeAt(px))));
+			paint.EmitLine(previous, next, scale, ink, UI::LineCap::Round);
+			previous = next;
+		}
 	}
 
 	UI::ElementHandle Open(UI::Context& context, UI::ElementHandle anchor, const AnimationCurve& curve, std::function<void(const AnimationCurve&)> onChange,

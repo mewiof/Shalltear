@@ -35,6 +35,8 @@
 #include "Shalltear/Editor/SceneViewOverlays.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
+#include "Shalltear/VisualEffects/LineRenderer.h"
+#include "Shalltear/VisualEffects/TrailRenderer.h"
 #include "Shalltear/VisualEffects/VisualEffect.h"
 #include "Shalltear/VisualEffects/VisualEffectBinder.h"
 
@@ -204,6 +206,64 @@ TEST_F(VisualEffectsEditorFixture, EditorHalfRegistersEachLoad) {
 	EXPECT_TRUE(listed());
 	EXPECT_TRUE(drawn());
 	EXPECT_TRUE(filed());
+}
+
+TEST_F(VisualEffectsEditorFixture, EffectsMenuCreatesLineAndTrail) {
+	ASSERT_NE(_moduleBase, nullptr);
+	Handle<Scene> scene = SceneSystem::CreateScene("Ribbons");
+	const auto effects = [&scene]() {
+		Vector<UI::Widgets::MenuItem> menu{GetMemoryResource(MemTag::Editor)};
+		EditorSceneOps::BuildCreateMenu(scene, {}, menu);
+		Vector<UI::Widgets::MenuItem> found{GetMemoryResource(MemTag::Editor)};
+		for (UI::Widgets::MenuItem& item : menu) {
+			if (item.label == "Effects") {
+				found = std::move(item.children);
+			}
+		}
+		return found;
+	};
+	Vector<UI::Widgets::MenuItem> entries = effects();
+	ASSERT_EQ(entries.size(), 2u);
+	EXPECT_EQ(entries[0].label, "Line");
+	EXPECT_EQ(entries[1].label, "Trail");
+	entries[0].onSelect();
+	entries[1].onSelect();
+	Asset* fallback = AssetDatabase::LoadAsset(Path("engine://Materials/Default.mat"));
+	ASSERT_NE(fallback, nullptr);
+	const TypeInfo* lineType = TypeRegistry::FindType(StringHash("LineRenderer"));
+	const TypeInfo* trailType = TypeRegistry::FindType(StringHash("TrailRenderer"));
+	ASSERT_NE(lineType, nullptr);
+	ASSERT_NE(trailType, nullptr);
+	u32 lines = 0;
+	u32 trails = 0;
+	for (u32 i = 0; i < scene->GetRootCount(); ++i) {
+		SceneObject* root = scene->GetRoot(i).Get();
+		for (u32 slot = 0; slot < root->GetComponentCount(); ++slot) {
+			Component* component = root->GetComponentAt(slot).Get();
+			if (component && component->GetType() == lineType) {
+				++lines;
+				EXPECT_EQ(root->name, "Line");
+				const LineRenderer& renderer = *static_cast<const LineRenderer*>(component);
+				ASSERT_EQ(renderer.materials.size(), 1u);
+				EXPECT_EQ(renderer.materials[0].Get(), fallback);
+			}
+			if (component && component->GetType() == trailType) {
+				++trails;
+				const TrailRenderer& renderer = *static_cast<const TrailRenderer*>(component);
+				ASSERT_EQ(renderer.materials.size(), 1u);
+				EXPECT_EQ(renderer.materials[0].Get(), fallback);
+			}
+		}
+	}
+	EXPECT_EQ(lines, 1u);
+	EXPECT_EQ(trails, 1u);
+
+	EditorExtensions::Unload(_moduleBase);
+	EXPECT_TRUE(effects().empty());
+	ASSERT_TRUE(EditorExtensions::Load(_moduleBase));
+	EXPECT_EQ(effects().size(), 2u);
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
 }
 
 TEST_F(VisualEffectsEditorFixture, EditModePlaybackFollowsView) {

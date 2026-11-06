@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/RHITypes.h"
+#include "Shalltear/Core/Graphics/ShadowCasting.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/Matrix.h"
@@ -35,7 +37,7 @@ namespace Shalltear {
 
 		void SetBounds(const AABB& worldBounds);
 
-		u32 AddItem(const Handle<MaterialAsset>& material, const Vec3& sortPoint, bool castShadows = false);
+		u32 AddItem(const Handle<MaterialAsset>& material, const Vec3& sortPoint, ShadowCasting castShadows = ShadowCasting::Off);
 
 		u32 AddViewStep();
 
@@ -75,12 +77,15 @@ namespace Shalltear {
 
 		bool DrawIndirect(std::span<const u8> pushConstants, RHI::BufferHandle arguments, u64 offset = 0);
 
+		// world space, mesh winding. Item material should be a mesh surface
+		bool DrawTriangles(std::span<const MeshVertex> vertices, bool receiveShadows);
+
 		const Mat4& GetView() const { return _view; }
 		const Mat4& GetProjection() const { return _projection; }
 		const Vec3& GetCameraPosition() const { return _cameraPosition; }
 		Vec2I GetExtent() const { return _extent; }
 	private:
-		bool BindItem(std::span<const u8> pushConstants) const;
+		bool BindItem(std::span<const u8> pushConstants, bool surface) const;
 
 		RHI::CommandList* _cmd = nullptr;
 		RHI::Device* _device = nullptr;

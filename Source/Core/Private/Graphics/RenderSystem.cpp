@@ -118,7 +118,7 @@ namespace Shalltear {
 				u32 firstRead = 0;
 				u32 readCount = 0;
 				u32 index = 0;
-				bool castShadows = false;
+				ShadowCasting castShadows = ShadowCasting::Off;
 			};
 			struct Read {
 				RHI::BufferHandle buffer;
@@ -1728,12 +1728,34 @@ namespace Shalltear {
 
 		bool IsProceduralShader(const ShaderAsset& shader) { return shader.integrator == ShaderTemplate::None && !shader.IsKernel(); }
 
+		bool IsMeshSurface(const ShaderAsset& shader, const MaterialAsset& material) {
+			return !shader.IsKernel() && ClassifyMeshDraw(shader, material) == MeshDrawRefusal::None;
+		}
+
+		bool DrawsProceduralItem(const ShaderAsset& shader, const MaterialAsset& material) {
+			return IsProceduralShader(shader) || IsMeshSurface(shader, material);
+		}
+
 		void NameProceduralDrawRefusal(ShaderAsset& shader, const MaterialAsset& material) {
 			if (!FirstNamingOf(_state->namedProceduralRefusals, shader)) {
 				return;
 			}
-			SLT_LOG_WARN("Graphics", "material '{}' can't draw a procedural item. Its shader '{}' is a template surface (its "
-									 "vertex stage places a mesh vertex) -> item draws nothing",
+			SLT_LOG_WARN("Graphics", "material '{}' can't draw a procedural item. Its shader '{}' is neither a procedural program "
+									 "nor a mesh surface -> item draws nothing",
+						 material.virtualPath, shader.virtualPath);
+		}
+
+		void NameProceduralCallRefusal(ShaderAsset& shader, const MaterialAsset& material, bool surface) {
+			if (!FirstNamingOf(_state->namedProceduralRefusals, shader)) {
+				return;
+			}
+			if (surface) {
+				SLT_LOG_WARN("Graphics", "material '{}' has the mesh surface '{}'. Draw it with ProceduralContext::DrawTriangles",
+							 material.virtualPath, shader.virtualPath);
+				return;
+			}
+			SLT_LOG_WARN("Graphics", "material '{}' has the procedural program '{}' (not a mesh surface). Draw it with "
+									 "ProceduralContext::Draw/DrawIndirect",
 						 material.virtualPath, shader.virtualPath);
 		}
 
@@ -2063,13 +2085,16 @@ namespace Shalltear {
 				for (u32 item = declared.firstItem; item < declared.firstItem + declared.itemCount; ++item) {
 					MaterialAsset* material = frame.items[item].material.Get();
 					ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-					if (!shader || !IsProceduralShader(*shader)) {
+					if (!shader || !DrawsProceduralItem(*shader, *material)) {
 						continue;
 					}
+					const ShadowCasting casting = frame.items[item].castShadows;
 					if (depthView.pass == ProceduralPass::Shadow) {
-						if (!frame.items[item].castShadows) {
+						if (casting == ShadowCasting::Off) {
 							continue;
 						}
+					} else if (casting == ShadowCasting::ShadowsOnly) {
+						continue;
 					} else if (depthView.pass != ProceduralPass::Value &&
 							   material->ResolveRenderState(shader->renderState).blend != RHI::BlendMode::Opaque) {
 						continue;
@@ -3605,10 +3630,10 @@ namespace Shalltear {
 				for (u32 item = renderer.firstItem; item < renderer.firstItem + renderer.itemCount; ++item) {
 					MaterialAsset* material = frame.items[item].material.Get();
 					ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-					if (!shader) {
+					if (!shader || frame.items[item].castShadows == ShadowCasting::ShadowsOnly) {
 						continue;
 					}
-					if (!IsProceduralShader(*shader)) {
+					if (!DrawsProceduralItem(*shader, *material)) {
 						NameProceduralDrawRefusal(*shader, *material);
 						continue;
 					}
@@ -5324,7 +5349,8 @@ namespace Shalltear {
 		bool DrawsInPrepass(const GraphicsInternal::ProceduralFrame::Item& item) {
 			const MaterialAsset* material = item.material.Get();
 			const ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-			if (!shader || !IsProceduralShader(*shader) || material->ResolveRenderState(shader->renderState).blend != RHI::BlendMode::Opaque) {
+			if (!shader || !DrawsProceduralItem(*shader, *material) || item.castShadows == ShadowCasting::ShadowsOnly ||
+				material->ResolveRenderState(shader->renderState).blend != RHI::BlendMode::Opaque) {
 				return false;
 			}
 			const ShaderVariant* code = shader->GetVariant(shader->FindVariant(material->keywordHash));
@@ -5393,7 +5419,7 @@ namespace Shalltear {
 					continue;
 				}
 				for (u32 item = renderer.firstItem; item < renderer.firstItem + renderer.itemCount; ++item) {
-					if (frame.items[item].castShadows) {
+					if (frame.items[item].castShadows != ShadowCasting::Off) {
 						state.proceduralVisible.push_back(index);
 						break;
 					}
@@ -7221,7 +7247,7 @@ namespace Shalltear {
 		renderer.bounded = worldBounds.IsValid();
 	}
 
-	u32 ProceduralPlan::AddItem(const Handle<MaterialAsset>& material, const Vec3& sortPoint, bool castShadows) {
+	u32 ProceduralPlan::AddItem(const Handle<MaterialAsset>& material, const Vec3& sortPoint, ShadowCasting castShadows) {
 		GraphicsInternal::ProceduralFrame& frame = *_frame;
 		GraphicsInternal::ProceduralFrame::Renderer& renderer = frame.renderers[_renderer];
 		GraphicsInternal::ProceduralFrame::Item& item = frame.items.emplace_back();
@@ -7309,14 +7335,19 @@ namespace Shalltear {
 		  _drawCalls(init.drawCalls), _view(init.view), _projection(init.projection), _cameraPosition(init.cameraPosition),
 		  _extent(init.extent) {}
 
-	bool ProceduralContext::BindItem(std::span<const u8> pushConstants) const {
+	bool ProceduralContext::BindItem(std::span<const u8> pushConstants, bool surface) const {
 		RenderState* state = _state;
 		if (!state || !_cmd || !_frame) {
 			return false;
 		}
-		MaterialAsset* material = _frame->items[_flatItem].material.Get();
+		const GraphicsInternal::ProceduralFrame::Item& item = _frame->items[_flatItem];
+		MaterialAsset* material = item.material.Get();
 		ShaderAsset* shader = material ? material->shader.Get() : nullptr;
-		if (!shader || !IsProceduralShader(*shader)) {
+		if (!shader) {
+			return false;
+		}
+		if (surface ? !IsMeshSurface(*shader, *material) : !IsProceduralShader(*shader)) {
+			NameProceduralCallRefusal(*shader, *material, !surface);
 			return false;
 		}
 		if (pushConstants.size() > shader->pushConstantSize) {
@@ -7332,6 +7363,9 @@ namespace Shalltear {
 			renderState.depth = RHI::DepthMode::TestWrite;
 			renderState.depthCompare = RHI::DepthCompare::NearerOrEqual;
 			renderState.fill = RHI::FillMode::Solid;
+			if (_pass == ProceduralPass::Shadow && item.castShadows == ShadowCasting::TwoSided) {
+				renderState.cull = RHI::CullMode::Off;
+			}
 		}
 		const u32 variant = shader->FindVariant(material->keywordHash);
 		RHI::PipelineHandle pipeline = GetOrCreatePipeline(shader, _colorFormat, _depthFormat, &renderState, _samples, variant, program);
@@ -7356,10 +7390,50 @@ namespace Shalltear {
 	}
 
 	bool ProceduralContext::Draw(std::span<const u8> pushConstants, u32 vertexCount, u32 instanceCount) {
-		if (vertexCount == 0 || instanceCount == 0 || !BindItem(pushConstants)) {
+		if (vertexCount == 0 || instanceCount == 0 || !BindItem(pushConstants, false)) {
 			return false;
 		}
 		_cmd->Draw(vertexCount, instanceCount);
+		++*_drawCalls;
+		return true;
+	}
+
+	bool ProceduralContext::DrawTriangles(std::span<const MeshVertex> vertices, bool receiveShadows) {
+		RenderState* state = _state;
+		MaterialAsset* material = _frame ? _frame->items[_flatItem].material.Get() : nullptr;
+		ShaderAsset* shader = material ? material->shader.Get() : nullptr;
+		if (!state || !_device || !shader || vertices.size() < 3) {
+			return false;
+		}
+		RHI::TransientAllocation allocation = _device->AllocateTransient(sizeof(GPUPerDraw) + vertices.size_bytes(), 16);
+		if (!allocation.IsValid()) {
+			return false;
+		}
+		const u64 drawAddress = _device->GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
+		GPUPerDraw element;
+		element.world = Mat4::Identity();
+		element.normalMatrix0 = Vec4(1.0f, 0.0f, 0.0f, 0.0f);
+		element.normalMatrix1 = Vec4(0.0f, 1.0f, 0.0f, 0.0f);
+		element.normalMatrix2 = Vec4(0.0f, 0.0f, 1.0f, 0.0f);
+		element.vertexAddress = drawAddress + sizeof(GPUPerDraw);
+		element.alphaClipThreshold = material->alphaClipThreshold;
+		const RHI::BlendMode blend = material->ResolveRenderState(shader->renderState).blend;
+		if (receiveShadows && (blend == RHI::BlendMode::Opaque || state->transparentReceiveShadows)) {
+			element.flags |= DRAW_RECEIVES_SHADOWS;
+		}
+		element.flags |= static_cast<u32>(blend) << DRAW_BLEND_SHIFT;
+		u8* cpu = static_cast<u8*>(allocation.cpu);
+		std::memcpy(cpu, &element, sizeof(GPUPerDraw));
+		std::memcpy(cpu + sizeof(GPUPerDraw), vertices.data(), vertices.size_bytes());
+
+		GPUDrawHeader header;
+		header.drawAddress = drawAddress;
+		header.value = _value;
+		if (!BindItem({reinterpret_cast<const u8*>(&header), DRAW_HEADER_BYTES}, true)) {
+			return false;
+		}
+		_cmd->SetFrontFace(RHI::FrontFace::Clockwise);
+		_cmd->Draw(static_cast<u32>(vertices.size()));
 		++*_drawCalls;
 		return true;
 	}
@@ -7378,7 +7452,7 @@ namespace Shalltear {
 			SLT_LOG_WARN("Graphics", "a procedural item's indirect draw read arguments it didn't declare as an IndirectArgument read. Dropped");
 			return false;
 		}
-		if (!BindItem(pushConstants)) {
+		if (!BindItem(pushConstants, false)) {
 			return false;
 		}
 		_cmd->DrawIndirect(arguments, offset);

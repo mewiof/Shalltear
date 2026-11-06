@@ -2,6 +2,7 @@
 
 #include "EffectAsset.h"
 #include "EffectInstance.h"
+#include "Ribbon.h"
 
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
@@ -93,6 +94,7 @@ namespace Shalltear::VisualEffectsImpl {
 			UpdateBinders(deltaTime);
 			AdvanceEffects(TickEffectClock(deltaTime, Time::GetUnscaledDeltaTime()));
 			DeliverEffectEvents();
+			AdvanceTrails(deltaTime);
 		}
 
 	} // anonymous namespace

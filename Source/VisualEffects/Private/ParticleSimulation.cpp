@@ -620,7 +620,7 @@ namespace Shalltear::VisualEffectsImpl {
 		if (!IsCreated() || output >= _desc.outputs.size() || !_desc.outputs[output].material.IsValid()) {
 			return false;
 		}
-		plan.AddItem(_desc.outputs[output].material, sortPoint, _desc.outputs[output].castShadows);
+		plan.AddItem(_desc.outputs[output].material, sortPoint, _desc.outputs[output].castShadows ? ShadowCasting::On : ShadowCasting::Off);
 		plan.Read(_batch->lists, RHI::ResourceState::ShaderResource);
 		plan.Read(_batch->attributes, RHI::ResourceState::ShaderResource);
 		plan.Read(_batch->arguments, RHI::ResourceState::IndirectArgument);

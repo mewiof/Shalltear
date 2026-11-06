@@ -4,6 +4,8 @@
 
 #include "Shalltear/Editor/EditorIcons.h"
 
+#include "Shalltear/VisualEffects/LineRenderer.h"
+#include "Shalltear/VisualEffects/TrailRenderer.h"
 #include "Shalltear/VisualEffects/VisualEffect.h"
 #include "Shalltear/VisualEffects/VisualEffectBinder.h"
 
@@ -18,6 +20,8 @@ namespace Shalltear::VisualEffectsEditor {
 		constexpr std::string_view VelocityMark = "engine://Icons/Components/VisualEffectVelocityBinder.svg";
 		constexpr std::string_view TransformMark = "engine://Icons/Components/VisualEffectTransformBinder.svg";
 		constexpr std::string_view EnabledMark = "engine://Icons/Components/VisualEffectEnabledBinder.svg";
+		constexpr std::string_view LineMark = "engine://Icons/Components/LineRenderer.svg";
+		constexpr std::string_view TrailMark = "engine://Icons/Components/TrailRenderer.svg";
 
 	} // anonymous namespace
 
@@ -30,6 +34,8 @@ namespace Shalltear::VisualEffectsEditor {
 		Register(VisualEffectVelocityBinder::GetReflectType()->name, VelocityMark, owner);
 		Register(VisualEffectTransformBinder::GetReflectType()->name, TransformMark, owner);
 		Register(VisualEffectEnabledBinder::GetReflectType()->name, EnabledMark, owner);
+		Register(LineRenderer::GetReflectType()->name, LineMark, owner);
+		Register(TrailRenderer::GetReflectType()->name, TrailMark, owner);
 	}
 
 } // namespace Shalltear::VisualEffectsEditor

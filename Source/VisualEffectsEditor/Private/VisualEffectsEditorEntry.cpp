@@ -18,6 +18,7 @@
 #include "Shalltear/Core/Time.h"
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
+#include "Shalltear/Editor/AuthoringDefaults.h"
 #include "Shalltear/Editor/ComponentMenu.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
 #include "Shalltear/Editor/EditorCommands.h"
@@ -25,6 +26,7 @@
 #include "Shalltear/Editor/EditorGizmos.h"
 #include "Shalltear/Editor/EditorIcons.h"
 #include "Shalltear/Editor/EditorPreviews.h"
+#include "Shalltear/Editor/EditorSceneOps.h"
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PanelManager.h"
 #include "Shalltear/Editor/EditorViewportOps.h"
@@ -34,6 +36,8 @@
 #include "Shalltear/Editor/SceneViewOverlays.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
+#include "Shalltear/VisualEffects/LineRenderer.h"
+#include "Shalltear/VisualEffects/TrailRenderer.h"
 #include "Shalltear/VisualEffects/VisualEffect.h"
 #include "Shalltear/VisualEffects/VisualEffectBinder.h"
 
@@ -53,6 +57,9 @@ namespace Shalltear::VisualEffectsEditor {
 	namespace {
 
 		constexpr f64 QUIET_SECONDS = 0.3;
+
+		constexpr std::string_view DEFAULT_RIBBON_MATERIALS =
+			R"([{"_handle": true, "pointeeType": "MaterialAsset", "assetId": "a7bb05359f19e1c7-de8c21623bc85d05"}])";
 
 		const char STAGE_TOKEN = 0;
 
@@ -533,6 +540,11 @@ namespace Shalltear::VisualEffectsEditor {
 			VisualEffect::GetReflectType()->name, StringHash("properties"),
 			[owner](UI::Context& context, UI::ElementHandle row, FieldRef, EditTarget target) { DrawSheet(context, row, target, owner); }, owner);
 		ComponentMenu::Register(VisualEffectBinder::GetReflectType()->name, "Visual Effects", owner);
+		for (const TypeInfo* ribbon : {LineRenderer::GetReflectType(), TrailRenderer::GetReflectType()}) {
+			AuthoringDefaults::Register(ribbon->name, StringHash("materials"), DEFAULT_RIBBON_MATERIALS, owner);
+		}
+		EditorSceneOps::RegisterCreateEntry("Effects", "Line", LineRenderer::GetReflectType()->name, owner);
+		EditorSceneOps::RegisterCreateEntry("Effects", "Trail", TrailRenderer::GetReflectType()->name, owner);
 		RegisterComponentIcons(owner);
 		EditorState& state = State();
 		if (!state.staged) {

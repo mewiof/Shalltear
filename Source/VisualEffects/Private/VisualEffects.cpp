@@ -4,6 +4,9 @@
 
 #include "EffectPass.h"
 #include "ParticleSimulation.h"
+#include "Ribbon.h"
+#include "Shalltear/VisualEffects/LineRenderer.h"
+#include "Shalltear/VisualEffects/TrailRenderer.h"
 #include "Shalltear/VisualEffects/VisualEffect.h"
 #include "Shalltear/VisualEffects/VisualEffectAsset.h"
 #include "Shalltear/VisualEffects/VisualEffectBinder.h"
@@ -24,6 +27,8 @@ namespace Shalltear::VisualEffectsImpl {
 		VisualEffectVelocityBinder::GetReflectType();
 		VisualEffectTransformBinder::GetReflectType();
 		VisualEffectEnabledBinder::GetReflectType();
+		LineRenderer::GetReflectType();
+		TrailRenderer::GetReflectType();
 #if defined(SLT_WITH_EDITOR)
 		VisualEffectsEditor::RegisterImporter(owner);
 #endif
@@ -38,6 +43,8 @@ namespace Shalltear::VisualEffectsImpl {
 #endif
 		ShutdownEffects();
 		ShutdownSimulation();
+		ShutdownTrails();
+		ShutdownRibbons();
 	}
 
 } // namespace Shalltear::VisualEffectsImpl

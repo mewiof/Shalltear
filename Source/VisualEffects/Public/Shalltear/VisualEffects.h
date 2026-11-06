@@ -1,6 +1,8 @@
 #pragma once
 
 // IWYU pragma: begin_exports
+#include "Shalltear/VisualEffects/LineRenderer.h"
+#include "Shalltear/VisualEffects/TrailRenderer.h"
 #include "Shalltear/VisualEffects/VisualEffect.h"
 #include "Shalltear/VisualEffects/VisualEffectAsset.h"
 #include "Shalltear/VisualEffects/VisualEffectBinder.h"

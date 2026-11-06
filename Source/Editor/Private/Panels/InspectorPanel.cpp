@@ -846,7 +846,7 @@ namespace Shalltear {
 			for (const TypeInfo* walk = instance ? instance->GetType() : nullptr; walk; walk = walk->parent) {
 				for (u32 i = 0; i < walk->fieldCount; ++i) {
 					const FieldInfo& field = walk->fields[i];
-					if (!field.addrFn || CustomDrawerFor(field)) {
+					if (!field.addrFn || ((field.flags & FieldFlagEditorVisible) != 0 && CustomDrawerFor(field))) {
 						continue;
 					}
 					if (field.flags & FieldFlagContainer) {

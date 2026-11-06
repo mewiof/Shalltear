@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Trail Renderer</title>
+	<path fill="#a63d4a" d="M33 8L38.5 13.5L11 41L8 38Z"/>
+	<path fill="#f07a6a" d="M39.7 11.3L52.7 24.3L8 58L6 56Z"/>
+	<path fill="#ffc6b8" d="M55 18C55 22.97 50.97 27 46 27C41.03 27 37 22.97 37 18C37 13.03 41.03 9 46 9C50.97 9 55 13.03 55 18Z"/>
+</svg>

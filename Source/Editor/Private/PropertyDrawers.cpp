@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Memory.h"
 
 #include "Panels/InspectorPanel.h"
+#include "ValueDrawers.h"
 
 #include <algorithm>
 
@@ -67,6 +68,7 @@ namespace Shalltear {
 	void PropertyDrawers::Initialize() {
 		if (!_state) {
 			_state = New<DrawerState>(MemTag::Editor);
+			ValueDrawers::RegisterBuiltIns();
 		}
 	}
 

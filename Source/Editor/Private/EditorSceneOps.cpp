@@ -177,7 +177,24 @@ namespace Shalltear {
 		}
 	}
 
+	namespace {
+
+		struct CreateEntry {
+			str group;
+			str label;
+			StringHash component;
+			const void* owner = nullptr;
+		};
+
+		Vector<CreateEntry>* _createEntries = nullptr;
+
+	} // anonymous namespace
+
 	void EditorSceneOps::Terminate() {
+		if (_createEntries) {
+			Delete(_createEntries);
+			_createEntries = nullptr;
+		}
 		if (_state) {
 			ReleasePrefabPreview();
 			EventBus::GetGlobal().UnsubscribeAll(_state->GetInstanceId());
@@ -521,6 +538,55 @@ namespace Shalltear {
 			SelectCreated(CreateWithComponent("Environment", StringHash("Environment"), target, under));
 		};
 		out.push_back(std::move(environment));
+
+		if (!_createEntries) {
+			return;
+		}
+		Vector<const CreateEntry*> entries{GetMemoryResource(MemTag::Editor)};
+		for (const CreateEntry& entry : *_createEntries) {
+			entries.push_back(&entry);
+		}
+		std::sort(entries.begin(), entries.end(), [](const CreateEntry* a, const CreateEntry* b) {
+			return a->group != b->group ? a->group < b->group : a->label < b->label;
+		});
+		for (const CreateEntry* entry : entries) {
+			if (out.empty() || out.back().label != entry->group || out.back().children.empty()) {
+				UI::Widgets::MenuItem group;
+				group.label = entry->group;
+				out.push_back(std::move(group));
+			}
+			UI::Widgets::MenuItem item;
+			item.label = entry->label;
+			item.onSelect = [target, under, label = entry->label, component = entry->component]() {
+				SelectCreated(CreateWithComponent(label, component, target, under));
+			};
+			out.back().children.push_back(std::move(item));
+		}
+	}
+
+	bool EditorSceneOps::RegisterCreateEntry(std::string_view group, std::string_view label, StringHash component, const void* owner) {
+		if (group.empty() || label.empty() || !TypeRegistry::FindType(component)) {
+			SLT_LOG_WARN("Editor", "ignoring Create menu entry '{}/{}' (needs group/label + a registered component)", group, label);
+			return false;
+		}
+		if (!_createEntries) {
+			_createEntries = New<Vector<CreateEntry>>(MemTag::Editor, GetMemoryResource(MemTag::Editor));
+		}
+		for (const CreateEntry& entry : *_createEntries) {
+			if (entry.group == group && entry.label == label) {
+				SLT_LOG_WARN("Editor", "ignoring Create menu entry '{}/{}' (already registered)", group, label);
+				return false;
+			}
+		}
+		_createEntries->push_back({str(group), str(label), component, owner});
+		return true;
+	}
+
+	u32 EditorSceneOps::UnregisterCreateEntriesOwnedBy(const void* owner) {
+		if (!_createEntries || !owner) {
+			return 0;
+		}
+		return static_cast<u32>(std::erase_if(*_createEntries, [owner](const CreateEntry& entry) { return entry.owner == owner; }));
 	}
 
 	UI::Widgets::MenuItem EditorSceneOps::BuildCreateSubmenu(std::string_view label, Handle<Scene> scene,

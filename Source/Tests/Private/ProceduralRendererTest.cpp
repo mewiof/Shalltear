@@ -244,7 +244,7 @@ namespace {
 					plan.Write(arguments, RHI::ResourceState::UnorderedAccess);
 				}
 			}
-			plan.AddItem(material, Center(), castShadows);
+			plan.AddItem(material, Center(), castShadows ? ShadowCasting::On : ShadowCasting::Off);
 			if (arguments.IsValid()) {
 				plan.Read(arguments, RHI::ResourceState::IndirectArgument);
 			}
@@ -282,6 +282,57 @@ namespace {
 	};
 
 	SLT_REGISTER_TYPE(TestSprite)
+
+	class TestSurface : public ProceduralRenderer {
+	public:
+		SLT_REFLECT_COMPONENT(TestSurface, ProceduralRenderer)
+		SLT_END_REFLECT()
+
+		Handle<MaterialAsset> material;
+		Vector<MeshVertex> triangles{GetMemoryResource(MemTag::Scene)};
+		ShadowCasting castShadows = ShadowCasting::Off;
+		bool raw = false;
+		u32 recorded = 0;
+		u32 shadowRecorded = 0;
+		bool drew = false;
+
+		void Declare(ProceduralPlan& plan) override {
+			AABB bounds = AABB::Empty();
+			for (const MeshVertex& vertex : triangles) {
+				bounds.Encapsulate(vertex.position);
+			}
+			plan.SetBounds(bounds);
+			plan.AddItem(material, bounds.Center(), castShadows);
+		}
+
+		void Record(ProceduralContext& context) override {
+			++(context.GetPass() == ProceduralPass::Shadow ? shadowRecorded : recorded);
+			if (raw) {
+				const SpritePush push;
+				drew = context.Draw({reinterpret_cast<const u8*>(&push), sizeof(push)}, 6);
+				return;
+			}
+			drew = context.DrawTriangles(triangles, true);
+		}
+	};
+
+	SLT_REGISTER_TYPE(TestSurface)
+
+	Vector<MeshVertex> Square(const Vec3& center, f32 half, bool front) {
+		const Vec3 corners[4] = {center + Vec3(-half, -half, 0.0f), center + Vec3(half, -half, 0.0f), center + Vec3(half, half, 0.0f),
+								 center + Vec3(-half, half, 0.0f)};
+		const u32 order[6] = {0, 1, 2, 0, 2, 3};
+		Vector<MeshVertex> out{GetMemoryResource(MemTag::Scene)};
+		for (u32 i = 0; i < 6; ++i) {
+			const u32 corner = order[front ? i : 5 - i];
+			MeshVertex vertex;
+			vertex.position = corners[corner];
+			vertex.normal = Vec3(0.0f, 0.0f, front ? 1.0f : -1.0f);
+			vertex.tangent = Vec3(1.0f, 0.0f, 0.0f);
+			out.push_back(vertex);
+		}
+		return out;
+	}
 
 	class ArgumentsPass final : public FramePass {
 	public:
@@ -795,24 +846,131 @@ TEST_F(ProceduralRendererFixture, BlendedItemReadsOpaqueColor) {
 	TearDownStage(stage);
 }
 
-TEST_F(ProceduralRendererFixture, TemplatedShaderItemRefused) {
+TEST_F(ProceduralRendererFixture, SurfaceItemDrawsMeshMaterial) {
 	if (!Ready()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
 	MaterialAsset* hidden = LoadUnlit("Hidden.mat", Color(0.0f, 0.0f, 0.0f, 1.0f), false);
-	MaterialAsset* templated = LoadUnlit("Templated.mat", Color(0.0f, 1.0f, 0.0f, 1.0f), false);
+	MaterialAsset* surface = LoadUnlit("Surface.mat", Color(0.0f, 1.0f, 0.0f, 1.0f), false);
 	ASSERT_NE(hidden, nullptr);
-	ASSERT_NE(templated, nullptr);
+	ASSERT_NE(surface, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(hidden, stage));
 	stage.quad->SetActive(false);
-	Handle<TestSprite> sprite = AddSprite(stage.scene, templated, Vec3(0.0f, 0.0f, 0.5f), Color::Green());
+	Handle<SceneObject> object = SceneSystem::CreateObject("Surface", stage.scene);
+	Handle<TestSurface> item = object->AddComponent<TestSurface>();
+	item->material = Handle<MaterialAsset>(surface);
+	item->triangles = Square(Vec3(0.0f, 0.0f, 0.5f), 0.5f, true);
+	SceneSystem::EndFrame();
 
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
 	ASSERT_TRUE(RenderStage(stage, pixels, size));
-	EXPECT_EQ(sprite->recorded, 0u);
+	EXPECT_EQ(item->recorded, 1u);
+	EXPECT_TRUE(item->drew);
+	Vec3 center = CenterTexel(pixels, size);
+	EXPECT_GT(center.y, 240.0f);
+	EXPECT_LT(center.x, 20.0f);
+	EXPECT_LT(TexelAt(pixels, size, 1, 1).g, 20);
+
+	item->triangles = Square(Vec3(0.0f, 0.0f, 0.5f), 0.5f, false);
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	EXPECT_TRUE(item->drew);
 	EXPECT_LT(CenterTexel(pixels, size).y, 20.0f);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, DrawCallMustMatchMaterial) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* hidden = LoadUnlit("Hidden.mat", Color(0.0f, 0.0f, 0.0f, 1.0f), false);
+	MaterialAsset* surface = LoadUnlit("Surface.mat", Color(0.0f, 1.0f, 0.0f, 1.0f), false);
+	MaterialAsset* program = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(hidden, nullptr);
+	ASSERT_NE(surface, nullptr);
+	ASSERT_NE(program, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(hidden, stage));
+	stage.quad->SetActive(false);
+	Handle<SceneObject> object = SceneSystem::CreateObject("Surface", stage.scene);
+	Handle<TestSurface> item = object->AddComponent<TestSurface>();
+	item->material = Handle<MaterialAsset>(surface);
+	item->triangles = Square(Vec3(0.0f, 0.0f, 0.5f), 0.5f, true);
+	item->raw = true;
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	EXPECT_EQ(item->recorded, 1u);
+	EXPECT_FALSE(item->drew);
+	EXPECT_LT(CenterTexel(pixels, size).y, 20.0f);
+
+	item->raw = false;
+	item->material = Handle<MaterialAsset>(program);
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	EXPECT_EQ(item->recorded, 2u);
+	EXPECT_FALSE(item->drew);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, ShadowsOnlyItemCastsUnseen) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	WriteProjectFile("Tally.hlsl", SHADOW_TALLY_SHADER);
+	Asset* tallyShader = AssetDatabase::LoadAsset(Path("project://Tally.hlsl"));
+	ASSERT_NE(tallyShader, nullptr);
+	MaterialAsset* ground = LoadMaterial("Tally.mat", tallyShader->assetId, "");
+	MaterialAsset* surface = LoadUnlit("Surface.mat", Color(0.0f, 1.0f, 0.0f, 1.0f), false);
+	ASSERT_NE(ground, nullptr);
+	ASSERT_NE(surface, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(ground, stage));
+	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
+	Handle<SceneObject> object = SceneSystem::CreateObject("Surface", stage.scene);
+	Handle<TestSurface> item = object->AddComponent<TestSurface>();
+	item->material = Handle<MaterialAsset>(surface);
+	item->triangles = Square(Vec3(0.0f, 0.0f, 1.0f), 0.2f, true);
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto shadowed = [&] {
+		EXPECT_TRUE(RenderStage(stage, pixels, size));
+		u32 count = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			count += pixels[i + 2] > 100 && pixels[i + 2] < 180 && pixels[i] < 128 ? 1u : 0u;
+		}
+		return count;
+	};
+	const auto green = [&] {
+		u32 count = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			count += pixels[i + 1] > 200 && pixels[i + 2] < 60 ? 1u : 0u;
+		}
+		return count;
+	};
+
+	EXPECT_EQ(shadowed(), 0u);
+	EXPECT_GT(green(), 30u);
+
+	item->castShadows = ShadowCasting::ShadowsOnly;
+	const u32 seenBefore = item->recorded;
+	EXPECT_GT(shadowed(), 30u);
+	EXPECT_EQ(green(), 0u);
+	EXPECT_EQ(item->recorded, seenBefore);
+	EXPECT_GT(item->shadowRecorded, 0u);
+
+	item->triangles = Square(Vec3(0.0f, 0.0f, 1.0f), 0.2f, false);
+	item->castShadows = ShadowCasting::On;
+	EXPECT_EQ(shadowed(), 0u);
+	item->castShadows = ShadowCasting::TwoSided;
+	EXPECT_GT(shadowed(), 30u);
+	EXPECT_EQ(green(), 0u);
 
 	TearDownStage(stage);
 }

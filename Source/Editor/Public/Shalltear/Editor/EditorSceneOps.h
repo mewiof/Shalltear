@@ -71,6 +71,10 @@ namespace Shalltear {
 		static UI::Widgets::MenuItem BuildCreateSubmenu(std::string_view label, Handle<Scene> scene,
 														Handle<SceneObject> parent);
 
+		// label = created object's name
+		static bool RegisterCreateEntry(std::string_view group, std::string_view label, StringHash component, const void* owner);
+		static u32 UnregisterCreateEntriesOwnedBy(const void* owner);
+
 		static u32 BindDefaultMaterials(Handle<Object> renderer, u64 meshInstanceId);
 
 		static Handle<Scene> OpenPrefab(const Guid& prefabId);

@@ -19,6 +19,8 @@ namespace Shalltear::CurveEditor {
 
 	SHALLTEAR_EDITOR_API View Frame(const AnimationCurve& curve);
 
+	SHALLTEAR_EDITOR_API void PaintPreview(UI::Context& context, UI::ElementHandle part, UI::PaintScope& paint, const AnimationCurve& curve);
+
 	SHALLTEAR_EDITOR_API UI::ElementHandle Open(UI::Context& context, UI::ElementHandle anchor, const AnimationCurve& curve,
 												std::function<void(const AnimationCurve&)> onChange, std::function<void()> onEditBegin = {},
 												std::function<void()> onEditEnd = {});

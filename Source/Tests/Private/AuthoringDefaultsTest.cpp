@@ -208,6 +208,45 @@ TEST_F(AuthoringDefaultsFixture, NewEnvironmentDrawsDefaultSky) {
 	EXPECT_EQ(UndoSystem::GetUndoLabel(), "Create Environment");
 }
 
+TEST_F(AuthoringDefaultsFixture, ModuleCreateEntryJoinsMenu) {
+	const auto group = [this](std::string_view label) {
+		Vector<UI::Widgets::MenuItem> menu{GetMemoryResource(MemTag::Editor)};
+		EditorSceneOps::BuildCreateMenu(_scene, {}, menu);
+		Vector<UI::Widgets::MenuItem> found{GetMemoryResource(MemTag::Editor)};
+		for (UI::Widgets::MenuItem& item : menu) {
+			if (item.label == label) {
+				found = std::move(item.children);
+			}
+		}
+		return found;
+	};
+	const StringHash environment = Environment::GetReflectType()->name;
+	EXPECT_TRUE(EditorSceneOps::RegisterCreateEntry("Rigs", "Sky B", environment, &_moduleA));
+	EXPECT_TRUE(EditorSceneOps::RegisterCreateEntry("Rigs", "Sky A", environment, &_moduleB));
+	EXPECT_FALSE(EditorSceneOps::RegisterCreateEntry("Rigs", "Sky A", environment, &_moduleA));
+	EXPECT_FALSE(EditorSceneOps::RegisterCreateEntry("Rigs", "Ghost", StringHash("NoSuchComponent"), &_moduleA));
+	EXPECT_FALSE(EditorSceneOps::RegisterCreateEntry("", "Sky C", environment, &_moduleA));
+
+	Vector<UI::Widgets::MenuItem> rigs = group("Rigs");
+	ASSERT_EQ(rigs.size(), 2u);
+	EXPECT_EQ(rigs[0].label, "Sky A");
+	EXPECT_EQ(rigs[1].label, "Sky B");
+	rigs[1].onSelect();
+	ASSERT_EQ(_scene->GetRootCount(), 1u);
+	Handle<SceneObject> created = _scene->GetRoot(0);
+	EXPECT_EQ(created->name, "Sky B");
+	ASSERT_NE(Find<Environment>(created), nullptr);
+	ExpectDefaultSky(*Find<Environment>(created), "Create > Rigs > Sky B");
+	EXPECT_EQ(UndoSystem::GetUndoLabel(), "Create Sky B");
+
+	EXPECT_EQ(EditorSceneOps::UnregisterCreateEntriesOwnedBy(&_moduleA), 1u);
+	rigs = group("Rigs");
+	ASSERT_EQ(rigs.size(), 1u);
+	EXPECT_EQ(rigs[0].label, "Sky A");
+	EXPECT_EQ(EditorSceneOps::UnregisterCreateEntriesOwnedBy(&_moduleB), 1u);
+	EXPECT_TRUE(group("Rigs").empty());
+}
+
 TEST_F(AuthoringDefaultsFixture, ModuleDefaultRestoresOverride) {
 	const StringHash environmentType = Environment::GetReflectType()->name;
 	ASSERT_TRUE(AuthoringDefaults::Register(environmentType, StringHash("_skyIntensity"), "2.5", &_moduleA));

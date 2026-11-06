@@ -23,6 +23,7 @@
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Math.h"
 #include "Shalltear/Core/Math/AnimationCurve.h"
+#include "Shalltear/Core/Math/Gradient.h"
 #include "Shalltear/Core/Config.h"
 #include "Shalltear/Core/Window.h"
 #include "Shalltear/Core/Screen.h"

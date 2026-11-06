@@ -2201,6 +2201,60 @@ TEST_F(PreviewStoreTest, PictureStaleAfterAssetChange) {
 	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 0u);
 }
 
+TEST_F(PreviewStoreTest, ProductStaleAfterSourceChange) {
+	struct BundleImporter : IAssetImporter {
+		StringHash GetAssetType() const override { return StringHash("BundleAsset"); }
+		Asset* Import(const Path& sourcePath) override {
+			TextAsset* asset = New<TextAsset>(MemTag::Asset);
+			asset->Import(sourcePath);
+			return asset;
+		}
+		Asset* ImportWithSettings(const Path& sourcePath, const Path&, const JSONValue&, AssetImportContext& context) override {
+			context.AddProduct("Pages/One", New<TextAsset>(MemTag::Asset));
+			return Import(sourcePath);
+		}
+	} importer;
+	struct Registered {
+		IAssetImporter* importer;
+		~Registered() { AssetImporterRegistry::Unregister(importer); }
+	} registered{&importer};
+	AssetImporterRegistry::Register(StringHash("BundleAsset"), &importer, {".bundle"});
+
+	FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Assets/book.bundle")), "b");
+	AssetDatabase::ScanProjectDirectory();
+	const Guid source = AssetDatabase::LookupGuid(Path("project://Assets/book.bundle"));
+	ASSERT_TRUE(source.IsValid());
+	Asset* loaded = AssetDatabase::LoadAssetByGuid(source);
+	ASSERT_NE(loaded, nullptr);
+	Vector<AssetProduct> products{GetMemoryResource(MemTag::Editor)};
+	AssetDatabase::GetProducts(source, products);
+	AssetDatabase::UnloadAsset(loaded);
+	ASSERT_EQ(products.size(), 1u);
+	const Guid page = products[0].guid;
+	ASSERT_EQ(AssetDatabase::GetProductSource(page), source);
+
+	auto produced = std::make_shared<int>(0);
+	EditorPreviews::RegisterProducer(StringHash("TextAsset"), [produced](const AssetPreviewRequest&, AssetPreviewImage& out) {
+		static constexpr u8 PIXELS[4] = {255, 255, 255, 255};
+		out.size = {1, 1};
+		out.pixelsFormat = RHI::Format::RGBA8Unorm;
+		out.pixels = PIXELS;
+		out.detail = std::format("produce {}", ++*produced);
+		return true;
+	});
+	ASSERT_TRUE(Settle(page));
+	AssetPreviewEntry entry;
+	ASSERT_TRUE(EditorPreviewStore::Request(page, entry));
+	ASSERT_EQ(entry.detail, "produce 1");
+
+	EditorPreviewStore::Invalidate(source);
+	EXPECT_TRUE(EditorPreviewStore::Request(page, entry));
+	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
+	EditorPreviewStore::Drain();
+	ASSERT_TRUE(EditorPreviewStore::Request(page, entry));
+	EXPECT_EQ(entry.detail, "produce 2");
+}
+
 TEST_F(PreviewStoreTest, AnInvalidatedDeclineIsAskedAgain) {
 	FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Assets/later.txt")), "l");
 	AssetDatabase::ScanProjectDirectory();
@@ -2425,6 +2479,65 @@ TEST_F(PreviewStorePipelineTest, OvertakenProduceLandsStale) {
 	ASSERT_EQ(EditorPreviewStore::GetPendingCount(), 0u);
 
 	EXPECT_TRUE(EditorPreviewStore::Request(cells[0], entry));
+	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
+	EditorPreviewStore::Drain();
+	SceneSystem::EndFrame();
+	RenderSystem::RenderAll();
+}
+
+TEST_F(PreviewStorePipelineTest, ProductOvertakenBySourceLandsStale) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Vector<Guid> cells{GetMemoryResource(MemTag::Editor)};
+	if (!StageMaterials(1, cells)) {
+		GTEST_SKIP() << "engine://Materials/Default.mat unavailable (no dxcompiler.dll?)";
+	}
+	struct ShelfImporter : IAssetImporter {
+		StringHash GetAssetType() const override { return StringHash("ShelfAsset"); }
+		Asset* Import(const Path& sourcePath) override {
+			TextAsset* asset = New<TextAsset>(MemTag::Asset);
+			asset->Import(sourcePath);
+			return asset;
+		}
+		Asset* ImportWithSettings(const Path& sourcePath, const Path&, const JSONValue&, AssetImportContext& context) override {
+			MaterialAsset* material = New<MaterialAsset>(MemTag::Asset);
+			material->Import(sourcePath);
+			context.AddProduct("Materials/One", material);
+			return Import(sourcePath);
+		}
+	} importer;
+	struct Registered {
+		IAssetImporter* importer;
+		~Registered() { AssetImporterRegistry::Unregister(importer); }
+	} registered{&importer};
+	AssetImporterRegistry::Register(StringHash("ShelfAsset"), &importer, {".shelf"});
+
+	std::error_code ec;
+	std::filesystem::copy_file(_projectRoot / "Assets" / "M0.mat", _projectRoot / "Assets" / "set.shelf", ec);
+	ASSERT_FALSE(ec);
+	AssetDatabase::ScanProjectDirectory();
+	const Guid source = AssetDatabase::LookupGuid(Path("project://Assets/set.shelf"));
+	ASSERT_TRUE(source.IsValid());
+	Asset* loaded = AssetDatabase::LoadAssetByGuid(source);
+	ASSERT_NE(loaded, nullptr);
+	Vector<AssetProduct> products{GetMemoryResource(MemTag::Editor)};
+	AssetDatabase::GetProducts(source, products);
+	AssetDatabase::UnloadAsset(loaded);
+	ASSERT_EQ(products.size(), 1u);
+	const Guid product = products[0].guid;
+
+	AssetPreviewEntry entry;
+	ASSERT_FALSE(EditorPreviewStore::Request(product, entry));
+	EditorPreviewStore::Drain();
+	ASSERT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
+	EditorPreviewStore::Invalidate(source);
+	SceneSystem::EndFrame();
+	RenderSystem::RenderAll();
+	EditorPreviewStore::Drain();
+	ASSERT_EQ(EditorPreviewStore::GetPendingCount(), 0u);
+
+	EXPECT_TRUE(EditorPreviewStore::Request(product, entry));
 	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
 	EditorPreviewStore::Drain();
 	SceneSystem::EndFrame();

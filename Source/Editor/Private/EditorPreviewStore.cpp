@@ -113,7 +113,15 @@ namespace Shalltear {
 			}
 		}
 
+		void AddSourceOfProduct(const Guid& guid, Vector<Guid>& dependencies) {
+			const Guid source = AssetDatabase::GetProductSource(guid);
+			if (source.IsValid() && std::find(dependencies.begin(), dependencies.end(), source) == dependencies.end()) {
+				dependencies.push_back(source);
+			}
+		}
+
 		void Insert(const Guid& guid, StoreEntry&& entry) {
+			AddSourceOfProduct(guid, entry.dependencies);
 			auto existing = _state->entries.find(guid);
 			if (existing != _state->entries.end()) {
 				entry.revision = existing->second.revision;
@@ -265,6 +273,7 @@ namespace Shalltear {
 				image.texture == RenderSystem::GetViewTargetTexture(_state->target)) {
 				_state->inFlight = {true, false, guid, stage, asset, image.sampler, std::move(image.detail)};
 				_state->inFlight.dependencies = std::move(image.dependencies);
+				AddSourceOfProduct(guid, _state->inFlight.dependencies);
 				return true;
 			}
 

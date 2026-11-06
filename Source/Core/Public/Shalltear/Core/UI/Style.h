@@ -52,9 +52,11 @@ namespace Shalltear::UI {
 		Align textAlign = Align::Start;
 		Align textAlignVertical = Align::Start;
 		TextOverflow textOverflow = TextOverflow::Wrap;
+		FontStyle fontStyle = FontStyle::Normal;
 		f32 textOutlineWidth = 0.0f;
 		Color textOutlineColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
 		f32 letterSpacing = 0.0f;
+		u16 fontWeight = 400;
 
 		bool pointerEvents = true;
 		SystemCursor cursor = SystemCursor::Arrow;

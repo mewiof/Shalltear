@@ -60,6 +60,15 @@ namespace Shalltear::UI {
 		bool editable = false;
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
+		u16 fontWeight = 400;
+		FontStyle fontStyle = FontStyle::Normal;
+	};
+
+	struct FontFaceInfo {
+		u16 weightMin = 400;
+		u16 weightMax = 400;
+		bool italic = false;
+		bool variableItalic = false;
 	};
 
 	struct TextStats {
@@ -78,6 +87,12 @@ namespace Shalltear::UI {
 		virtual Vec2 MeasureText(const TextQuery& query) = 0;
 
 		virtual f32 GetLineHeight(Handle<FontAsset> font, f32 sizePx) = 0;
+
+		virtual bool DescribeFont(Handle<FontAsset> font, FontFaceInfo& out) {
+			(void)font;
+			(void)out;
+			return false;
+		}
 
 		virtual bool GetAtlasPage(AtlasPage& out) const {
 			(void)out;

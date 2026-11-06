@@ -15,7 +15,7 @@ namespace Shalltear {
 namespace Shalltear::FontInspectorOps {
 
 	// invalid ids, font itself + repeats dropped
-	SHALLTEAR_EDITOR_API bool ApplyFallbacks(const Path& fontPath, std::span<const Guid> fallbacks);
+	SHALLTEAR_EDITOR_API bool Apply(const Path& fontPath, std::span<const Guid> faces, std::span<const Guid> fallbacks);
 
 	SHALLTEAR_EDITOR_API void CollectCandidates(const Guid& font, std::span<const Guid> listed,
 												Vector<AssetBrowserOps::AssignableAsset>& out);

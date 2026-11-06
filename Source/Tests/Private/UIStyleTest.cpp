@@ -411,6 +411,42 @@ TEST(UIStyleTest, FilterReadsBackAsFieldHoldsIt) {
 	EXPECT_EQ(UI::ReadStyleProperty(none, StringHash("filter"), buffer, sizeof(buffer)), "none");
 }
 
+TEST(UIStyleTest, FontWeightKeywordsAndNumbers) {
+	auto weight = [](std::string_view value) {
+		UI::Style style;
+		EXPECT_TRUE(UI::ApplyStyleDeclaration(style, StringHash("font-weight"), value, nullptr)) << value;
+		return style.fontWeight;
+	};
+	EXPECT_EQ(weight("bold"), 700);
+	EXPECT_EQ(weight("normal"), 400);
+	EXPECT_EQ(weight("600"), 600);
+	EXPECT_EQ(weight("1"), 1);
+	EXPECT_EQ(weight("1000"), 1000);
+	EXPECT_EQ(weight("1001"), 400);
+	EXPECT_EQ(weight("0"), 400);
+	EXPECT_EQ(weight("bolder"), 400);
+
+	auto style = [](std::string_view value) {
+		UI::Style parsed;
+		parsed.fontStyle = UI::FontStyle::Italic;
+		EXPECT_TRUE(UI::ApplyStyleDeclaration(parsed, StringHash("font-style"), value, nullptr)) << value;
+		return parsed.fontStyle;
+	};
+	EXPECT_EQ(style("italic"), UI::FontStyle::Italic);
+	EXPECT_EQ(style("oblique"), UI::FontStyle::Italic);
+	EXPECT_EQ(style("normal"), UI::FontStyle::Normal);
+
+	char buffer[UI::MAX_STYLE_VALUE_TEXT];
+	UI::Style written;
+	EXPECT_EQ(UI::ReadStyleProperty(written, StringHash("font-weight"), buffer, sizeof(buffer)), "normal");
+	written.fontWeight = 700;
+	EXPECT_EQ(UI::ReadStyleProperty(written, StringHash("font-weight"), buffer, sizeof(buffer)), "bold");
+	written.fontWeight = 350;
+	EXPECT_EQ(UI::ReadStyleProperty(written, StringHash("font-weight"), buffer, sizeof(buffer)), "350");
+	written.fontStyle = UI::FontStyle::Italic;
+	EXPECT_EQ(UI::ReadStyleProperty(written, StringHash("font-style"), buffer, sizeof(buffer)), "italic");
+}
+
 static_assert(sizeof(UI::Style) == 552, "Style changed shape. See UIStyleVocabulary.h");
 
 TEST(UIStyleTest, EveryStyleFieldHasAStylesheetSpelling) {

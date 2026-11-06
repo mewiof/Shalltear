@@ -3,6 +3,8 @@
 #include "Shalltear/Core/UI/FontAsset.h"
 
 #include FT_TRUETYPE_TABLES_H
+#include FT_MULTIPLE_MASTERS_H
+#include FT_SYNTHESIS_H
 
 #include <algorithm>
 #include <cmath>
@@ -10,6 +12,12 @@
 namespace Shalltear::UI {
 
 	namespace {
+
+		constexpr f32 BOLD_WEIGHT = 600.0f;
+		// css's preferred oblique angle for italic
+		constexpr f32 ITALIC_OBLIQUE_DEGREES = 11.0f;
+		// tan(14 deg) in 16.16, css's default oblique angle
+		constexpr FT_Fixed SYNTHETIC_OBLIQUE_SHEAR = 0x3FD3;
 
 		bool IsBreakCodepoint(u32 codepoint) {
 			return codepoint == ' ' || codepoint == '\t' || codepoint == '-' || codepoint == '/';
@@ -74,7 +82,57 @@ namespace Shalltear::UI {
 						  ? os2->usWeightClass
 						  : static_cast<u16>((ftFace->style_flags & FT_STYLE_FLAG_BOLD) != 0 ? 700 : 400);
 		face.italic = (ftFace->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
+		ReadAxes(face);
 		_faceSlots[face.slot] = &face;
+		return true;
+	}
+
+	void FreeTypeFontSystem::ReadAxes(FontFace& face) {
+		face.wght = face.ital = face.slnt = face.opsz = {};
+		face.defaultCoords.clear();
+		face.appliedCoords.clear();
+		FT_MM_Var* variation = nullptr;
+		if (!FT_HAS_MULTIPLE_MASTERS(face.face) || FT_Get_MM_Var(face.face, &variation) != 0 || !variation) {
+			return;
+		}
+		for (FT_UInt i = 0; i < variation->num_axis; ++i) {
+			const FT_Var_Axis& axis = variation->axis[i];
+			face.defaultCoords.push_back(axis.def);
+			FontFace::Axis* known = nullptr;
+			switch (axis.tag) {
+			case FT_MAKE_TAG('w', 'g', 'h', 't'):
+				known = &face.wght;
+				break;
+			case FT_MAKE_TAG('i', 't', 'a', 'l'):
+				known = &face.ital;
+				break;
+			case FT_MAKE_TAG('s', 'l', 'n', 't'):
+				known = &face.slnt;
+				break;
+			case FT_MAKE_TAG('o', 'p', 's', 'z'):
+				known = &face.opsz;
+				break;
+			default:
+				break;
+			}
+			if (known) {
+				*known = {static_cast<i32>(i), static_cast<f32>(axis.minimum) / 65536.0f, static_cast<f32>(axis.maximum) / 65536.0f};
+			}
+		}
+		FT_Done_MM_Var(_library, variation);
+		face.appliedCoords = face.defaultCoords;
+	}
+
+	bool FreeTypeFontSystem::DescribeFont(Handle<FontAsset> font, FontFaceInfo& out) {
+		FontFace* face = GetOrCreateFace(font);
+		if (!face) {
+			return false;
+		}
+		const bool variable = face->wght.index >= 0;
+		out.weightMin = variable ? static_cast<u16>(std::lround(face->wght.min)) : face->weight;
+		out.weightMax = variable ? static_cast<u16>(std::lround(face->wght.max)) : face->weight;
+		out.italic = face->italic;
+		out.variableItalic = face->ital.index >= 0 || face->slnt.index >= 0;
 		return true;
 	}
 
@@ -178,7 +236,156 @@ namespace Shalltear::UI {
 		return glyphIndex;
 	}
 
-	FreeTypeFontSystem::FontFace* FreeTypeFontSystem::FindInFallbacks(const FontAsset& font, u32 codepoint) {
+	FreeTypeFontSystem::StyledFace FreeTypeFontSystem::ResolveStyle(FontFace& family, u16 weight, FontStyle style) {
+		const bool italic = style == FontStyle::Italic;
+		const f32 wanted = static_cast<f32>(weight);
+		auto canItalic = [](const FontFace& face) { return face.italic || (face.ital.index >= 0 && face.ital.max >= 1.0f); };
+		auto canOblique = [](const FontFace& face) { return face.slnt.index >= 0 && face.slnt.min < 0.0f; };
+		auto canUpright = [](const FontFace& face) {
+			return !face.italic || (face.ital.index >= 0 && face.ital.min <= 0.0f) || (face.slnt.index >= 0 && face.slnt.max >= 0.0f);
+		};
+		auto range = [](const FontFace& face, f32& lo, f32& hi) {
+			lo = face.wght.index >= 0 ? face.wght.min : static_cast<f32>(face.weight);
+			hi = face.wght.index >= 0 ? face.wght.max : static_cast<f32>(face.weight);
+		};
+		enum class Lean : u8 {
+			Upright,
+			Italic,
+			Oblique,
+			Synthetic
+		};
+		auto finish = [&](FontFace& face, Lean lean) {
+			StyledFace styled;
+			styled.face = &face;
+			f32 lo, hi;
+			range(face, lo, hi);
+			styled.weight = std::clamp(wanted, lo, hi);
+			if (face.ital.index >= 0) {
+				styled.ital = std::clamp(lean == Lean::Italic ? 1.0f : 0.0f, face.ital.min, face.ital.max);
+			}
+			if (face.slnt.index >= 0) {
+				styled.slnt = std::clamp(lean == Lean::Oblique ? -ITALIC_OBLIQUE_DEGREES : 0.0f, face.slnt.min, face.slnt.max);
+			}
+			styled.embolden = wanted >= BOLD_WEIGHT && styled.weight < BOLD_WEIGHT;
+			styled.oblique = lean == Lean::Synthetic;
+			return styled;
+		};
+
+		f32 familyLo, familyHi;
+		range(family, familyLo, familyHi);
+		if ((italic ? canItalic(family) : canUpright(family)) && familyLo <= wanted && wanted <= familyHi) {
+			return finish(family, italic ? Lean::Italic : Lean::Upright);
+		}
+
+		_scratchCandidates.clear();
+		_scratchCandidates.push_back(&family);
+		const FontAsset* asset = family.system ? nullptr : family.asset.Get();
+		for (size_t i = 0; asset && i < asset->faces.size(); ++i) {
+			if (asset->faces[i] == asset->assetId) {
+				continue;
+			}
+			FontAsset* member = asset->GetFace(i);
+			FontFace* face = member ? GetOrCreateFace(Handle<FontAsset>(member)) : nullptr;
+			if (face && std::find(_scratchCandidates.begin(), _scratchCandidates.end(), face) == _scratchCandidates.end()) {
+				_scratchCandidates.push_back(face);
+			}
+		}
+
+		Lean lean = Lean::Upright;
+		bool (*tier)(const FontFace&) = nullptr;
+		auto any = [this](bool (*test)(const FontFace&)) {
+			return std::any_of(_scratchCandidates.begin(), _scratchCandidates.end(), [test](FontFace* face) { return test(*face); });
+		};
+		if (italic) {
+			if (any(canItalic)) {
+				lean = Lean::Italic;
+				tier = canItalic;
+			} else if (any(canOblique)) {
+				lean = Lean::Oblique;
+				tier = canOblique;
+			} else {
+				lean = Lean::Synthetic;
+			}
+		} else if (any(canUpright)) {
+			tier = canUpright;
+		}
+
+		auto above = [&](f32 limit) -> FontFace* {
+			FontFace* best = nullptr;
+			f32 bestLo = INFINITY;
+			for (FontFace* face : _scratchCandidates) {
+				f32 lo, hi;
+				range(*face, lo, hi);
+				if ((!tier || tier(*face)) && lo > wanted && lo <= limit && lo < bestLo) {
+					best = face;
+					bestLo = lo;
+				}
+			}
+			return best;
+		};
+		auto below = [&]() -> FontFace* {
+			FontFace* best = nullptr;
+			f32 bestHi = -INFINITY;
+			for (FontFace* face : _scratchCandidates) {
+				f32 lo, hi;
+				range(*face, lo, hi);
+				if ((!tier || tier(*face)) && hi < wanted && hi > bestHi) {
+					best = face;
+					bestHi = hi;
+				}
+			}
+			return best;
+		};
+		FontFace* chosen = nullptr;
+		for (FontFace* face : _scratchCandidates) {
+			f32 lo, hi;
+			range(*face, lo, hi);
+			if ((!tier || tier(*face)) && lo <= wanted && wanted <= hi) {
+				chosen = face;
+				break;
+			}
+		}
+		if (!chosen && wanted >= 400.0f && wanted <= 500.0f) {
+			chosen = above(500.0f);
+		}
+		if (!chosen && wanted <= 500.0f) {
+			chosen = below();
+		}
+		if (!chosen) {
+			chosen = above(INFINITY);
+		}
+		if (!chosen) {
+			chosen = below();
+		}
+		return finish(chosen ? *chosen : family, lean);
+	}
+
+	bool FreeTypeFontSystem::ApplyInstance(const StyledFace& styled, u16 sizePx) {
+		FontFace& face = *styled.face;
+		if (face.defaultCoords.empty()) {
+			return true;
+		}
+		_scratchCoords.assign(face.defaultCoords.begin(), face.defaultCoords.end());
+		auto set = [this](const FontFace::Axis& axis, f32 value) {
+			if (axis.index >= 0) {
+				_scratchCoords[static_cast<size_t>(axis.index)] = static_cast<FT_Fixed>(std::lround(value * 65536.0f));
+			}
+		};
+		set(face.wght, styled.weight);
+		set(face.ital, styled.ital);
+		set(face.slnt, styled.slnt);
+		set(face.opsz, std::clamp(static_cast<f32>(sizePx), face.opsz.min, face.opsz.max));
+		if (_scratchCoords == face.appliedCoords) {
+			return true;
+		}
+		if (FT_Set_Var_Design_Coordinates(face.face, static_cast<FT_UInt>(_scratchCoords.size()), _scratchCoords.data()) != 0) {
+			return false;
+		}
+		face.appliedCoords.assign(_scratchCoords.begin(), _scratchCoords.end());
+		return true;
+	}
+
+	bool FreeTypeFontSystem::FindInFallbacks(const FontAsset& font, u16 weight, FontStyle style, u32 codepoint, StyledFace& out) {
 		for (size_t i = 0; i < font.fallbacks.size(); ++i) {
 			const Guid& guid = font.fallbacks[i];
 			if (std::find(_scratchVisited.begin(), _scratchVisited.end(), guid) != _scratchVisited.end()) {
@@ -189,35 +396,44 @@ namespace Shalltear::UI {
 			if (!next) {
 				continue;
 			}
-			FontFace* face = GetOrCreateFace(Handle<FontAsset>(next));
-			if (face && GlyphIndexOf(*face, codepoint) != 0) {
-				return face;
+			if (FontFace* face = GetOrCreateFace(Handle<FontAsset>(next))) {
+				const StyledFace styled = ResolveStyle(*face, weight, style);
+				if (GlyphIndexOf(*styled.face, codepoint) != 0) {
+					out = styled;
+					return true;
+				}
 			}
-			if (FontFace* nested = FindInFallbacks(*next, codepoint)) {
-				return nested;
+			if (FindInFallbacks(*next, weight, style, codepoint, out)) {
+				return true;
 			}
 		}
-		return nullptr;
+		return false;
 	}
 
-	FreeTypeFontSystem::FontFace& FreeTypeFontSystem::ResolveOwner(FontFace& primary, u32 codepoint) {
-		if (IsControlCodepoint(codepoint) || GlyphIndexOf(primary, codepoint) != 0) {
-			return primary;
+	FreeTypeFontSystem::StyledFace FreeTypeFontSystem::ResolveOwner(FontFace& family, u16 weight, FontStyle style, u32 codepoint) {
+		const StyledFace styled = ResolveStyle(family, weight, style);
+		if (IsControlCodepoint(codepoint) || GlyphIndexOf(*styled.face, codepoint) != 0) {
+			return styled;
 		}
-		if (const FontAsset* font = primary.asset.Get(); font && !font->fallbacks.empty()) {
+		const u16 drawnWeight = styled.embolden ? weight : static_cast<u16>(std::lround(styled.weight));
+		const bool drawnItalic =
+			(styled.face->ital.index >= 0 ? styled.ital > 0.0f : styled.face->italic) || styled.slnt < 0.0f || styled.oblique;
+		const FontStyle drawnStyle = drawnItalic ? FontStyle::Italic : FontStyle::Normal;
+		if (const FontAsset* font = family.system ? nullptr : family.asset.Get(); font && !font->fallbacks.empty()) {
 			_scratchVisited.clear();
 			_scratchVisited.push_back(font->assetId);
-			if (FontFace* found = FindInFallbacks(*font, codepoint)) {
-				return *found;
+			StyledFace found;
+			if (FindInFallbacks(*font, drawnWeight, drawnStyle, codepoint, found)) {
+				return found;
 			}
 		}
-		if (const SystemFontFile* file = _systemFallback.Find(codepoint, primary.weight, primary.italic)) {
+		if (const SystemFontFile* file = _systemFallback.Find(codepoint, drawnWeight, drawnItalic)) {
 			FontFace* system = GetOrCreateSystemFace(*file);
 			if (system && GlyphIndexOf(*system, codepoint) != 0) {
-				return *system;
+				return ResolveStyle(*system, drawnWeight, drawnStyle);
 			}
 		}
-		return primary;
+		return styled;
 	}
 
 	f32 FreeTypeFontSystem::KerningBetween(FontFace& primary, const GlyphEntry* previous, const GlyphEntry* current) {
@@ -303,33 +519,41 @@ namespace Shalltear::UI {
 		++_generation;
 	}
 
-	FreeTypeFontSystem::GlyphEntry* FreeTypeFontSystem::GetOrCreateGlyph(FontFace& primary, u16 sizePx, u32 codepoint, u16 strokePx) {
-		GlyphKey key{primary.slot, codepoint, sizePx, strokePx};
+	FreeTypeFontSystem::GlyphEntry* FreeTypeFontSystem::GetOrCreateGlyph(FontFace& family, u16 weight, FontStyle style, u16 sizePx,
+																		 u32 codepoint, u16 strokePx) {
+		GlyphKey key{family.slot, codepoint, sizePx, strokePx, weight, style};
 		auto it = _glyphs.find(key);
 		if (it != _glyphs.end()) {
 			return &it->second;
 		}
-		FontFace& owner = ResolveOwner(primary, codepoint);
-		u32 glyphIndex = GlyphIndexOf(owner, codepoint);
+		const StyledFace owner = ResolveOwner(family, weight, style, codepoint);
+		u32 glyphIndex = GlyphIndexOf(*owner.face, codepoint);
 		if (glyphIndex == 0) {
-			glyphIndex = GlyphIndexOf(owner, static_cast<u32>('?'));
+			glyphIndex = GlyphIndexOf(*owner.face, static_cast<u32>('?'));
 		}
 		GlyphEntry entry;
-		entry.faceSlot = owner.slot;
+		entry.faceSlot = owner.face->slot;
 		RasterizeAndPack(owner, sizePx, glyphIndex, strokePx, entry);
 		auto [inserted, ok] = _glyphs.emplace(key, entry);
 		return &inserted->second;
 	}
 
-	bool FreeTypeFontSystem::RasterizeAndPack(FontFace& face, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out) {
+	bool FreeTypeFontSystem::RasterizeAndPack(const StyledFace& styled, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out) {
+		FontFace& face = *styled.face;
 		FT_Face ftFace = face.face;
 		out.glyphIndex = glyphIndex;
-		if (glyphIndex == 0 || !EnsureSize(face, sizePx)) {
+		if (glyphIndex == 0 || !ApplyInstance(styled, sizePx) || !EnsureSize(face, sizePx)) {
 			return false;
 		}
 
 		if (FT_Load_Glyph(ftFace, glyphIndex, FT_LOAD_DEFAULT) != 0) {
 			return false;
+		}
+		if (styled.embolden) {
+			FT_GlyphSlot_Embolden(ftFace->glyph);
+		}
+		if (styled.oblique) {
+			FT_GlyphSlot_Slant(ftFace->glyph, SYNTHETIC_OBLIQUE_SHEAR, 0);
 		}
 		FT_Glyph ftGlyph = nullptr;
 		if (FT_Get_Glyph(ftFace->glyph, &ftGlyph) != 0) {
@@ -350,7 +574,7 @@ namespace Shalltear::UI {
 		out.height = static_cast<i32>(bitmap.rows);
 		out.bearingX = bitmapGlyph->left;
 		out.bearingY = bitmapGlyph->top;
-		out.advance = static_cast<i32>(bitmapGlyph->root.advance.x >> 16);
+		out.advance = static_cast<i32>((bitmapGlyph->root.advance.x + (styled.embolden ? 0x8000 : 0)) >> 16);
 
 		if (out.width > 0 && out.height > 0) {
 			i32 atlasX = 0;
@@ -404,14 +628,17 @@ namespace Shalltear::UI {
 			return false;
 		}
 		u16 sizePx = static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.sizePx))));
-		if (!EnsureSize(*face, sizePx)) {
+		const u16 weight = std::clamp<u16>(query.fontWeight, 1, 1000);
+		const FontStyle style = query.fontStyle;
+		const StyledFace run = ResolveStyle(*face, weight, style);
+		if (!ApplyInstance(run, sizePx) || !EnsureSize(*run.face, sizePx)) {
 			return false;
 		}
 		u16 strokePx = query.outlineWidth > 0.0f
 						   ? static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.outlineWidth))))
 						   : 0;
 
-		FT_Face ftFace = face->face;
+		FT_Face ftFace = run.face->face;
 		f32 ascender = static_cast<f32>(ftFace->size->metrics.ascender) / 64.0f;
 		f32 lineHeight = static_cast<f32>(ftFace->size->metrics.height) / 64.0f;
 		if (lineHeight <= 0.0f) {
@@ -421,7 +648,7 @@ namespace Shalltear::UI {
 
 		const f32 letterSpacing = query.letterSpacing;
 		auto stepBefore = [&](const GlyphEntry* previous, const GlyphEntry* current, bool first) -> f32 {
-			return (first ? 0.0f : letterSpacing) + KerningBetween(*face, previous, current);
+			return (first ? 0.0f : letterSpacing) + KerningBetween(*run.face, previous, current);
 		};
 
 		f32 penY = 0.0f;
@@ -463,7 +690,7 @@ namespace Shalltear::UI {
 				first = false;
 
 				if (emit && strokePx > 0) {
-					GlyphEntry* stroke = GetOrCreateGlyph(*face, sizePx, pending.codepoint, strokePx);
+					GlyphEntry* stroke = GetOrCreateGlyph(*face, weight, style, sizePx, pending.codepoint, strokePx);
 					if (stroke && stroke->inAtlas) {
 						ShapedGlyph glyph;
 						glyph.rect = {Snap(x + stroke->bearingX), Snap(baseline - stroke->bearingY),
@@ -509,7 +736,7 @@ namespace Shalltear::UI {
 		u32 overflowByte = length;
 
 		auto appendEllipsis = [&]() {
-			GlyphEntry* mark = GetOrCreateGlyph(*face, sizePx, ELLIPSIS_CODEPOINT, 0);
+			GlyphEntry* mark = GetOrCreateGlyph(*face, weight, style, sizePx, ELLIPSIS_CODEPOINT, 0);
 			if (!mark) {
 				return;
 			}
@@ -585,7 +812,7 @@ namespace Shalltear::UI {
 			}
 
 			++_textStats.glyphsResolved;
-			GlyphEntry* entry = GetOrCreateGlyph(*face, sizePx, codepoint, 0);
+			GlyphEntry* entry = GetOrCreateGlyph(*face, weight, style, sizePx, codepoint, 0);
 			f32 step = 0.0f;
 			if (!_scratchLine.empty() && _scratchLine.back().entry && entry) {
 				step = stepBefore(_scratchLine.back().entry, entry, false);
@@ -690,12 +917,14 @@ namespace Shalltear::UI {
 			return 0.0f;
 		}
 		u16 px = static_cast<u16>(std::max(1, static_cast<i32>(std::lround(sizePx))));
-		if (!EnsureSize(*face, px)) {
+		const StyledFace styled = ResolveStyle(*face, TextQuery{}.fontWeight, TextQuery{}.fontStyle);
+		if (!ApplyInstance(styled, px) || !EnsureSize(*styled.face, px)) {
 			return 0.0f;
 		}
-		f32 lineHeight = static_cast<f32>(face->face->size->metrics.height) / 64.0f;
+		const FT_Size_Metrics& metrics = styled.face->face->size->metrics;
+		f32 lineHeight = static_cast<f32>(metrics.height) / 64.0f;
 		if (lineHeight <= 0.0f) {
-			lineHeight = static_cast<f32>(face->face->size->metrics.ascender - face->face->size->metrics.descender) / 64.0f;
+			lineHeight = static_cast<f32>(metrics.ascender - metrics.descender) / 64.0f;
 		}
 		return lineHeight;
 	}

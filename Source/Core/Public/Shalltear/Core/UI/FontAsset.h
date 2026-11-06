@@ -21,12 +21,16 @@ namespace Shalltear {
 		// font faces point into these bytes
 		Vector<u8> data{GetMemoryResource(MemTag::Asset)};
 
+		// bold/italic/other weight files, matched by style stored in each file
+		Vector<Guid> faces{GetMemoryResource(MemTag::Asset)};
+
 		// searched in order for a missing glyph, depth first
 		Vector<Guid> fallbacks{GetMemoryResource(MemTag::Asset)};
 
 		u32 version = 0;
 
 		// loaded on 1st call + held while font is loaded
+		FontAsset* GetFace(size_t index) const;
 		FontAsset* GetFallback(size_t index) const;
 
 		bool Import(const Path& sourcePath) override;
@@ -45,7 +49,10 @@ namespace Shalltear {
 			bool holds = false;
 			bool refused = false;
 		};
+		mutable Vector<Held> _heldFaces{GetMemoryResource(MemTag::Asset)};
 		mutable Vector<Held> _held{GetMemoryResource(MemTag::Asset)};
+
+		FontAsset* Hold(const Vector<Guid>& list, Vector<Held>& held, size_t index, std::string_view role) const;
 	};
 
 	class SHALLTEAR_CORE_API FontAssetImporter : public IAssetImporter {
@@ -55,7 +62,7 @@ namespace Shalltear {
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
 		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
 		// bump when cooked record changes shape
-		u32 GetImporterVersion() const override { return 2; }
+		u32 GetImporterVersion() const override { return 3; }
 	};
 
 } // namespace Shalltear

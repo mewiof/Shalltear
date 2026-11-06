@@ -6,6 +6,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstring>
 #include <span>
 
@@ -413,7 +414,7 @@ namespace Shalltear::UI {
 				: name(propertyName), hash(propertyName), setter(propertySetter), reader(propertyReader) {}
 		};
 
-		constexpr size_t PROPERTY_COUNT = 42;
+		constexpr size_t PROPERTY_COUNT = 44;
 
 		Align ParseAlign(std::string_view value, Align fallback) {
 			if (value == "center") {
@@ -556,6 +557,24 @@ namespace Shalltear::UI {
 				 [](const Style& s, Sink& o) { o.PutPx(s.letterSpacing); }},
 				{"text-outline-color", [](Style& s, std::string_view v) { s.textOutlineColor = ParseColor(v); },
 				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor); }},
+				{"font-weight", [](Style& s, std::string_view v) {
+					 if (v == "bold") {
+						 s.fontWeight = 700;
+					 } else if (v == "normal") {
+						 s.fontWeight = 400;
+					 } else {
+						 const f32 weight = ParseFloat(v);
+						 s.fontWeight = weight >= 1.0f && weight <= 1000.0f ? static_cast<u16>(std::lround(weight)) : 400;
+					 } },
+				 [](const Style& s, Sink& o) {
+					 if (s.fontWeight == 400 || s.fontWeight == 700) {
+						 o.Put(s.fontWeight == 700 ? "bold" : "normal");
+					 } else {
+						 o.Put(static_cast<f32>(s.fontWeight));
+					 }
+				 }},
+				{"font-style", [](Style& s, std::string_view v) { s.fontStyle = v == "italic" || v == "oblique" ? FontStyle::Italic : FontStyle::Normal; },
+				 [](const Style& s, Sink& o) { o.Put(s.fontStyle == FontStyle::Italic ? "italic" : "normal"); }},
 
 				{"cursor", [](Style& s, std::string_view v) {
 					 if (v == "hand" || v == "pointer") {

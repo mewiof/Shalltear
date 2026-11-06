@@ -78,83 +78,121 @@ namespace Shalltear {
 		return true;
 	}
 
-	FontAsset* FontAsset::GetFallback(size_t index) const {
-		if (index >= fallbacks.size()) {
+	FontAsset* FontAsset::Hold(const Vector<Guid>& list, Vector<Held>& held, size_t index, std::string_view role) const {
+		if (index >= list.size()) {
 			return nullptr;
 		}
-		if (_held.size() != fallbacks.size()) {
-			_held.resize(fallbacks.size());
+		if (held.size() != list.size()) {
+			held.resize(list.size());
 		}
-		Held& held = _held[index];
-		if (FontAsset* live = held.font.Get()) {
+		Held& entry = held[index];
+		if (FontAsset* live = entry.font.Get()) {
 			return live;
 		}
-		held.holds = false;
-		if (held.refused || !fallbacks[index].IsValid()) {
+		entry.holds = false;
+		if (entry.refused || !list[index].IsValid()) {
 			return nullptr;
 		}
-		Asset* resolved = AssetDatabase::LoadAssetByGuid(fallbacks[index]);
+		Asset* resolved = AssetDatabase::LoadAssetByGuid(list[index]);
 		if (!resolved || resolved->GetAssetTypeId() != FontAsset::GetReflectType()->name) {
 			if (resolved) {
 				AssetDatabase::UnloadAsset(resolved);
 			}
-			held.refused = true;
-			SLT_LOG_WARN("UI", "font '{}' has fallback {} (not a loadable font, skipped)", virtualPath, fallbacks[index].ToString());
+			entry.refused = true;
+			SLT_LOG_WARN("UI", "font '{}' has {} {} (not a loadable font, skipped)", virtualPath, role, list[index].ToString());
 			return nullptr;
 		}
 		auto* loaded = static_cast<FontAsset*>(resolved);
-		held.font = Handle<FontAsset>(loaded);
-		held.holds = true;
+		entry.font = Handle<FontAsset>(loaded);
+		entry.holds = true;
 		return loaded;
 	}
 
+	FontAsset* FontAsset::GetFace(size_t index) const {
+		return Hold(faces, _heldFaces, index, "face");
+	}
+
+	FontAsset* FontAsset::GetFallback(size_t index) const {
+		return Hold(fallbacks, _held, index, "fallback");
+	}
+
 	void FontAsset::OnUnload() {
-		for (Held& held : _held) {
-			FontAsset* font = held.font.Get();
-			if (font && held.holds) {
-				AssetDatabase::UnloadAsset(font);
+		for (Vector<Held>* list : {&_heldFaces, &_held}) {
+			for (Held& held : *list) {
+				FontAsset* font = held.font.Get();
+				if (font && held.holds) {
+					AssetDatabase::UnloadAsset(font);
+				}
 			}
+			list->clear();
 		}
-		_held.clear();
 	}
 
 	void FontAsset::AdoptReimport(Asset& fresh) {
 		FontAsset& imported = static_cast<FontAsset&>(fresh);
-		if (imported.data == data && imported.fallbacks == fallbacks) {
+		if (imported.data == data && imported.faces == faces && imported.fallbacks == fallbacks) {
 			return;
 		}
 		OnUnload();
 		data = std::move(imported.data);
+		faces = std::move(imported.faces);
 		fallbacks = std::move(imported.fallbacks);
 		++version;
 	}
+
+	namespace {
+
+		void CookList(CookWriter& descriptor, const Vector<Guid>& list) {
+			descriptor.Write(static_cast<u32>(list.size()));
+			for (const Guid& guid : list) {
+				descriptor.WriteAssetRef(guid);
+			}
+		}
+
+		bool LoadCookedList(CookReader& descriptor, Vector<Guid>& out) {
+			u32 count = 0;
+			if (!descriptor.Read(count) || count > descriptor.Remaining() / sizeof(Guid)) {
+				return false;
+			}
+			out.clear();
+			for (u32 i = 0; i < count; ++i) {
+				Guid guid;
+				if (!descriptor.Read(guid)) {
+					return false;
+				}
+				out.push_back(guid);
+			}
+			return true;
+		}
+
+		void ReadIdList(const JSONValue& list, std::string_view key, const Path& virtualPath, Vector<Guid>& out) {
+			for (size_t i = 0; list.IsArray() && i < list.Size(); ++i) {
+				const Guid guid = Guid::FromString(list[i].AsString());
+				if (!guid.IsValid()) {
+					SLT_LOG_WARN("UI", "'{}': {} {} isn't an asset id (skipped)", virtualPath.ToString(), key, i);
+					continue;
+				}
+				if (std::find(out.begin(), out.end(), guid) == out.end()) {
+					out.push_back(guid);
+				}
+			}
+		}
+
+	} // anonymous namespace
 
 	bool FontAsset::Cook(CookWriter& descriptor, CookWriter& payload) const {
 		if (data.empty()) {
 			return false;
 		}
-		descriptor.Write(static_cast<u32>(fallbacks.size()));
-		for (const Guid& fallback : fallbacks) {
-			descriptor.WriteAssetRef(fallback);
-		}
+		CookList(descriptor, faces);
+		CookList(descriptor, fallbacks);
 		payload.WriteBytes(data.data(), data.size());
 		return true;
 	}
 
 	bool FontAsset::LoadCooked(CookReader& descriptor, CookReader& payload) {
-		u32 count = 0;
-		if (!descriptor.Read(count) || count > descriptor.Remaining() / sizeof(Guid)) {
-			return false;
-		}
-		fallbacks.clear();
-		for (u32 i = 0; i < count; ++i) {
-			Guid fallback;
-			if (!descriptor.Read(fallback)) {
-				return false;
-			}
-			fallbacks.push_back(fallback);
-		}
-		return payload.ReadInto(data, payload.Remaining()) && !data.empty();
+		return LoadCookedList(descriptor, faces) && LoadCookedList(descriptor, fallbacks) &&
+			   payload.ReadInto(data, payload.Remaining()) && !data.empty();
 	}
 
 	Asset* FontAssetImporter::Import(const Path& sourcePath) {
@@ -171,22 +209,14 @@ namespace Shalltear {
 		if (!asset) {
 			return nullptr;
 		}
-		const JSONValue& list = settings["fallbacks"];
-		for (size_t i = 0; list.IsArray() && i < list.Size(); ++i) {
-			const Guid fallback = Guid::FromString(list[i].AsString());
-			if (!fallback.IsValid()) {
-				SLT_LOG_WARN("UI", "'{}': fallback {} isn't an asset id (skipped)", virtualPath.ToString(), i);
-				continue;
-			}
-			if (std::find(asset->fallbacks.begin(), asset->fallbacks.end(), fallback) == asset->fallbacks.end()) {
-				asset->fallbacks.push_back(fallback);
-			}
-		}
+		ReadIdList(settings["faces"], "face", virtualPath, asset->faces);
+		ReadIdList(settings["fallbacks"], "fallback", virtualPath, asset->fallbacks);
 		return asset;
 	}
 
 	void FontAssetImporter::SerializeSettings(const Path& sourcePath, JSONValue& out) const {
 		(void)sourcePath;
+		out.AddMember("faces", JSONValue::MakeArray());
 		out.AddMember("fallbacks", JSONValue::MakeArray());
 	}
 

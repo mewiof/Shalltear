@@ -108,6 +108,11 @@ namespace Shalltear::UI {
 		Ellipsis
 	};
 
+	enum class FontStyle : u8 {
+		Normal = 0,
+		Italic
+	};
+
 	struct Length {
 		enum class Unit : u8 {
 			Auto = 0,

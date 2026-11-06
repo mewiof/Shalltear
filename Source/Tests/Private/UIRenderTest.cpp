@@ -1701,6 +1701,82 @@ TEST_F(UIRenderFixture, CenteredLinesInkAboutBoxCenter) {
 	}
 }
 
+TEST_F(UIRenderFixture, BoldAndItalicTextReadBack) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{160, 48};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), FixedBox(160.0f, 48.0f));
+	ctx.SetText(label, font, 32.0f, Color::White(), "llll");
+
+	struct Ink {
+		f32 total = 0.0f;
+		f32 lean = 0.0f;
+	};
+	auto draw = [&](u16 weight, UI::FontStyle fontStyle, Ink& out) {
+		UI::Style style = FixedBox(160.0f, 48.0f);
+		style.fontWeight = weight;
+		style.fontStyle = fontStyle;
+		ctx.SetStyle(label, style);
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+		if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels)) {
+			return false;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		auto alpha = [&](i32 x, i32 y) { return HalfToFloat(halves[(static_cast<size_t>(y) * size.x + x) * 4 + 3]); };
+		i32 top = size.y;
+		i32 bottom = -1;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				const f32 a = alpha(x, y);
+				out.total += a;
+				if (a > 0.25f) {
+					top = std::min(top, y);
+					bottom = std::max(bottom, y);
+				}
+			}
+		}
+		const i32 band = std::max(1, (bottom - top + 1) / 4);
+		auto centroid = [&](i32 from, i32 to) {
+			f32 sum = 0.0f;
+			f32 weighted = 0.0f;
+			for (i32 y = from; y < to; ++y) {
+				for (i32 x = 0; x < size.x; ++x) {
+					sum += alpha(x, y);
+					weighted += alpha(x, y) * static_cast<f32>(x);
+				}
+			}
+			return sum > 0.0f ? weighted / sum : 0.0f;
+		};
+		out.lean = centroid(top, top + band) - centroid(bottom + 1 - band, bottom + 1);
+		return bottom >= top;
+	};
+
+	Ink regular, bold, italic;
+	if (!draw(400, UI::FontStyle::Normal, regular)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	ASSERT_TRUE(draw(700, UI::FontStyle::Normal, bold));
+	ASSERT_TRUE(draw(400, UI::FontStyle::Italic, italic));
+
+	EXPECT_GT(bold.total, regular.total * 1.3f);
+	EXPECT_NEAR(regular.lean, 0.0f, 1.0f);
+	EXPECT_GT(italic.lean, 3.0f);
+	EXPECT_NEAR(italic.total, regular.total, regular.total * 0.1f);
+}
+
 TEST_F(UIRenderFixture, CenteredInputInksAboutBoxCenter) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

@@ -51,6 +51,8 @@ namespace Shalltear::StyleVocabulary {
 		{"textOutlineWidth", "text-outline-width: 1.5", [](UI::Style& s) { s.textOutlineWidth = 1.5f; }},
 		{"textOutlineColor", "text-outline-color: #abcdef", [](UI::Style& s) { s.textOutlineColor = Color::FromHex("#abcdef"); }},
 		{"letterSpacing", "letter-spacing: 1.5", [](UI::Style& s) { s.letterSpacing = 1.5f; }},
+		{"fontWeight", "font-weight: 600", [](UI::Style& s) { s.fontWeight = 600; }},
+		{"fontStyle", "font-style: italic", [](UI::Style& s) { s.fontStyle = UI::FontStyle::Italic; }},
 
 		{"pointerEvents", "pointer-events: none", [](UI::Style& s) { s.pointerEvents = false; }},
 		{"cursor", "cursor: pointer", [](UI::Style& s) { s.cursor = SystemCursor::Hand; }},

@@ -66,6 +66,8 @@ namespace Shalltear::UI {
 		f32 shapedWrapWidth = -1.0f;
 		f32 cachedOutlineWidth = 0.0f;
 		f32 cachedLetterSpacing = 0.0f;
+		u16 cachedFontWeight = 400;
+		FontStyle cachedFontStyle = FontStyle::Normal;
 		f32 cachedSizePhysical = 0.0f;
 		TextOverflow cachedOverflow = TextOverflow::Wrap;
 		Align cachedAlign = Align::Start;
@@ -82,6 +84,8 @@ namespace Shalltear::UI {
 		f32 memoSizePhysical = -1.0f;
 		f32 memoOutlineWidth = -1.0f;
 		f32 memoLetterSpacing = 0.0f;
+		u16 memoFontWeight = 400;
+		FontStyle memoFontStyle = FontStyle::Normal;
 		TextOverflow memoOverflow = TextOverflow::Wrap;
 
 		bool dirty = true;
@@ -358,6 +362,8 @@ namespace Shalltear::UI {
 			u32 generation = 0;
 			f32 sizePhysical = -1.0f;
 			f32 letterSpacing = 0.0f;
+			u16 fontWeight = 400;
+			FontStyle fontStyle = FontStyle::Normal;
 			u32 atlasGeneration = 0;
 		};
 		CompletionKey completionKey;

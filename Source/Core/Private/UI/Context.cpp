@@ -891,6 +891,8 @@ namespace Shalltear::UI {
 			text->cachedSizePhysical == physicalSize &&
 			text->cachedOutlineWidth == physicalOutline &&
 			text->cachedLetterSpacing == physicalSpacing &&
+			text->cachedFontWeight == style.fontWeight &&
+			text->cachedFontStyle == style.fontStyle &&
 			text->cachedOverflow == overflow &&
 			text->cachedAlign == align &&
 			text->cachedEditable == editable &&
@@ -908,12 +910,16 @@ namespace Shalltear::UI {
 		query.editable = editable;
 		query.outlineWidth = physicalOutline;
 		query.letterSpacing = physicalSpacing;
+		query.fontWeight = style.fontWeight;
+		query.fontStyle = style.fontStyle;
 		fontSystem->ShapeText(query, text->shaped);
 
 		text->measuredExtent = text->shaped.extent;
 		text->cachedSizePhysical = physicalSize;
 		text->cachedOutlineWidth = physicalOutline;
 		text->cachedLetterSpacing = physicalSpacing;
+		text->cachedFontWeight = style.fontWeight;
+		text->cachedFontStyle = style.fontStyle;
 		text->cachedOverflow = overflow;
 		text->cachedAlign = align;
 		text->cachedEditable = editable;
@@ -940,11 +946,14 @@ namespace Shalltear::UI {
 
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
 		if (text->memoSizePhysical != physicalSize || text->memoOutlineWidth != physicalOutline ||
-			text->memoLetterSpacing != physicalSpacing || text->memoOverflow != overflow) {
+			text->memoLetterSpacing != physicalSpacing || text->memoFontWeight != style.fontWeight ||
+			text->memoFontStyle != style.fontStyle || text->memoOverflow != overflow) {
 			text->sizeCache.clear();
 			text->memoSizePhysical = physicalSize;
 			text->memoOutlineWidth = physicalOutline;
 			text->memoLetterSpacing = physicalSpacing;
+			text->memoFontWeight = style.fontWeight;
+			text->memoFontStyle = style.fontStyle;
 			text->memoOverflow = overflow;
 		}
 
@@ -968,6 +977,8 @@ namespace Shalltear::UI {
 		query.overflow = overflow;
 		query.outlineWidth = physicalOutline;
 		query.letterSpacing = physicalSpacing;
+		query.fontWeight = style.fontWeight;
+		query.fontStyle = style.fontStyle;
 		const Vec2 extent = fontSystem->MeasureText(query);
 		text->dirty = false;
 		text->StoreExtent(wrapWidth, extent);
@@ -1005,10 +1016,14 @@ namespace Shalltear::UI {
 		key.element = elementIndex;
 		key.generation = E(elementIndex).generation;
 		key.sizePhysical = text->sizePx * scale;
-		key.letterSpacing = ComputedS(elementIndex).letterSpacing * scale;
+		const Style& style = ComputedS(elementIndex);
+		key.letterSpacing = style.letterSpacing * scale;
+		key.fontWeight = style.fontWeight;
+		key.fontStyle = style.fontStyle;
 		key.atlasGeneration = fontSystem->GetAtlasGeneration();
 		if (key.element != completionKey.element || key.generation != completionKey.generation ||
 			key.sizePhysical != completionKey.sizePhysical || key.letterSpacing != completionKey.letterSpacing ||
+			key.fontWeight != completionKey.fontWeight || key.fontStyle != completionKey.fontStyle ||
 			key.atlasGeneration != completionKey.atlasGeneration || completionShaped != input->completion) {
 			TextQuery query;
 			query.font = text->font;
@@ -1016,6 +1031,8 @@ namespace Shalltear::UI {
 			query.utf8 = std::string_view(input->completion.data(), input->completion.size());
 			query.overflow = TextOverflow::Clip;
 			query.letterSpacing = key.letterSpacing;
+			query.fontWeight = key.fontWeight;
+			query.fontStyle = key.fontStyle;
 			fontSystem->ShapeText(query, completionRun);
 			completionKey = key;
 			completionShaped = input->completion;

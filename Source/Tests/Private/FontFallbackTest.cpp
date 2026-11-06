@@ -367,7 +367,7 @@ TEST_F(FontFallbackFixture, ApplyAdoptsFontInUse) {
 	const u32 version = code->version;
 
 	const Guid listed[] = {GuidOf("Inter"), GuidOf("Code"), GuidOf("Inter"), Guid{}, GuidOf("Code2")};
-	ASSERT_TRUE(FontInspectorOps::ApplyFallbacks(FontPath("Code"), listed));
+	ASSERT_TRUE(FontInspectorOps::Apply(FontPath("Code"), {}, listed));
 	EXPECT_EQ(AssetDatabase::FindLoadedByGuid(GuidOf("Code")), code);
 	EXPECT_EQ(code->version, version + 1);
 	ASSERT_EQ(code->fallbacks.size(), 2u);

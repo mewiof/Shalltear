@@ -25,6 +25,7 @@ namespace Shalltear::UI {
 		bool ShapeText(const TextQuery& query, ShapedRun& out) override;
 		Vec2 MeasureText(const TextQuery& query) override;
 		f32 GetLineHeight(Handle<FontAsset> font, f32 sizePx) override;
+		bool DescribeFont(Handle<FontAsset> font, FontFaceInfo& out) override;
 
 		TextStats GetTextStats() const override { return _textStats; }
 		void ResetTextStats() override { _textStats = {}; }
@@ -55,8 +56,25 @@ namespace Shalltear::UI {
 			u16 weight = 400;
 			bool italic = false;
 			bool system = false;
+			struct Axis {
+				i32 index = -1;
+				f32 min = 0.0f;
+				f32 max = 0.0f;
+			};
+			Axis wght, ital, slnt, opsz;
+			Vector<FT_Fixed> defaultCoords{GetMemoryResource(MemTag::UI)};
+			Vector<FT_Fixed> appliedCoords{GetMemoryResource(MemTag::UI)};
 			HashMap<u32, u32> charIndices{GetMemoryResource(MemTag::UI)};
 			HashMap<u64, i32> kernings{GetMemoryResource(MemTag::UI)};
+		};
+
+		struct StyledFace {
+			FontFace* face = nullptr;
+			f32 weight = 400.0f;
+			f32 ital = 0.0f;
+			f32 slnt = 0.0f;
+			bool embolden = false;
+			bool oblique = false;
 		};
 
 		struct GlyphKey {
@@ -64,12 +82,15 @@ namespace Shalltear::UI {
 			u32 codepoint = 0;
 			u16 sizePx = 0;
 			u16 strokePx = 0;
+			u16 weight = 400;
+			FontStyle style = FontStyle::Normal;
 			bool operator==(const GlyphKey&) const = default;
 		};
 		struct GlyphKeyHash {
 			size_t operator()(const GlyphKey& key) const {
 				u64 hash = ((static_cast<u64>(key.faceSlot) << 32) | key.codepoint) * 0x9E3779B97F4A7C15ull;
-				hash ^= (static_cast<u64>(key.sizePx) << 16) | key.strokePx;
+				hash ^= (static_cast<u64>(key.weight) << 33) | (static_cast<u64>(key.style) << 32) |
+						(static_cast<u64>(key.sizePx) << 16) | key.strokePx;
 				return static_cast<size_t>(hash * 0x100000001B3ull);
 			}
 		};
@@ -94,12 +115,15 @@ namespace Shalltear::UI {
 		bool IsCurrent(const FontFace& face) const;
 		FontFace* FaceForSlot(u32 slot);
 		bool EnsureSize(FontFace& face, u16 sizePx);
+		void ReadAxes(FontFace& face);
+		StyledFace ResolveStyle(FontFace& family, u16 weight, FontStyle style);
+		bool ApplyInstance(const StyledFace& styled, u16 sizePx);
 		u32 GlyphIndexOf(FontFace& face, u32 codepoint);
-		FontFace& ResolveOwner(FontFace& primary, u32 codepoint);
-		FontFace* FindInFallbacks(const FontAsset& font, u32 codepoint);
+		StyledFace ResolveOwner(FontFace& family, u16 weight, FontStyle style, u32 codepoint);
+		bool FindInFallbacks(const FontAsset& font, u16 weight, FontStyle style, u32 codepoint, StyledFace& out);
 		f32 KerningBetween(FontFace& primary, const GlyphEntry* previous, const GlyphEntry* current);
-		GlyphEntry* GetOrCreateGlyph(FontFace& primary, u16 sizePx, u32 codepoint, u16 strokePx);
-		bool RasterizeAndPack(FontFace& face, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out);
+		GlyphEntry* GetOrCreateGlyph(FontFace& family, u16 weight, FontStyle style, u16 sizePx, u32 codepoint, u16 strokePx);
+		bool RasterizeAndPack(const StyledFace& styled, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out);
 		bool PackAlloc(i32 width, i32 height, i32& outX, i32& outY);
 		void ClearPage();
 	private:
@@ -115,6 +139,8 @@ namespace Shalltear::UI {
 		bool _fontsChanged = false;
 		u32 _metricsGeneration = 0;
 		Vector<Guid> _scratchVisited{GetMemoryResource(MemTag::UI)};
+		Vector<FontFace*> _scratchCandidates{GetMemoryResource(MemTag::UI)};
+		Vector<FT_Fixed> _scratchCoords{GetMemoryResource(MemTag::UI)};
 
 		HashMap<GlyphKey, GlyphEntry, GlyphKeyHash> _glyphs{GetMemoryResource(MemTag::UI)};
 

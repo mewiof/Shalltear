@@ -3,6 +3,7 @@
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/UI/DragDrop.h"
+#include "Shalltear/Core/UI/Font.h"
 #include "Shalltear/Core/UI/FontAsset.h"
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
@@ -24,25 +25,57 @@ namespace Shalltear {
 		using EditorTheme::ColorToken;
 		using EditorTheme::MetricToken;
 
-		struct FallbackDraft {
+		struct FontDraft {
 			Guid asset;
+			Vector<Guid> faces{GetMemoryResource(MemTag::Editor)};
 			Vector<Guid> fallbacks{GetMemoryResource(MemTag::Editor)};
-			Vector<Guid> saved{GetMemoryResource(MemTag::Editor)};
+			Vector<Guid> savedFaces{GetMemoryResource(MemTag::Editor)};
+			Vector<Guid> savedFallbacks{GetMemoryResource(MemTag::Editor)};
 		};
-		FallbackDraft* _draft = nullptr;
+		FontDraft* _draft = nullptr;
+
+		using DraftList = Vector<Guid> FontDraft::*;
 
 		f32 BodyPx() { return EditorTheme::GetMetric(MetricToken::FontBody); }
 
-		FallbackDraft& DraftFor(const Guid& guid, const FontAsset& font) {
+		FontDraft& DraftFor(const Guid& guid, const FontAsset& font) {
 			if (!_draft) {
-				_draft = New<FallbackDraft>(MemTag::Editor);
+				_draft = New<FontDraft>(MemTag::Editor);
 			}
 			if (_draft->asset != guid) {
 				_draft->asset = guid;
+				_draft->faces.assign(font.faces.begin(), font.faces.end());
+				_draft->savedFaces.assign(font.faces.begin(), font.faces.end());
 				_draft->fallbacks.assign(font.fallbacks.begin(), font.fallbacks.end());
-				_draft->saved.assign(font.fallbacks.begin(), font.fallbacks.end());
+				_draft->savedFallbacks.assign(font.fallbacks.begin(), font.fallbacks.end());
 			}
 			return *_draft;
+		}
+
+		str StyleOf(FontAsset& font) {
+			UI::FontFaceInfo info;
+			UI::IFontSystem* fonts = UISystem::GetFontSystem();
+			if (!fonts || !fonts->DescribeFont(Handle<FontAsset>(&font), info)) {
+				return {};
+			}
+			str text = info.weightMin == info.weightMax ? std::format("{}", info.weightMin)
+														: std::format("{}-{}", info.weightMin, info.weightMax);
+			if (info.variableItalic) {
+				text += " Upright/Italic";
+			} else if (info.italic) {
+				text += " Italic";
+			}
+			return text;
+		}
+
+		str StyleOf(const Guid& guid) {
+			Asset* loaded = AssetDatabase::LoadAssetByGuid(guid);
+			if (!loaded) {
+				return {};
+			}
+			str text = loaded->GetAssetTypeId() == FontAsset::GetReflectType()->name ? StyleOf(static_cast<FontAsset&>(*loaded)) : str{};
+			AssetDatabase::UnloadAsset(loaded);
+			return text;
 		}
 
 		ElementHandle AddRow(Context& context, ElementHandle parent) {
@@ -82,9 +115,10 @@ namespace Shalltear {
 			return StringHash{dragged.assetTypeHash} == FontAsset::GetReflectType()->name && dragged.guid != self;
 		}
 
-		void OpenCandidates(Context& context, const Guid& self, std::function<void(const Guid&)> onPick) {
+		void OpenCandidates(Context& context, const Guid& self, DraftList list, std::function<void(const Guid&)> onPick) {
 			Vector<AssetBrowserOps::AssignableAsset> candidates{GetMemoryResource(MemTag::Editor)};
-			FontInspectorOps::CollectCandidates(self, {_draft->fallbacks.data(), _draft->fallbacks.size()}, candidates);
+			const Vector<Guid>& listed = _draft->*list;
+			FontInspectorOps::CollectCandidates(self, {listed.data(), listed.size()}, candidates);
 			Vector<Widgets::MenuItem> items{GetMemoryResource(MemTag::Editor)};
 			for (const AssetBrowserOps::AssignableAsset& candidate : candidates) {
 				Widgets::MenuItem item;
@@ -101,92 +135,123 @@ namespace Shalltear {
 			Widgets::OpenMenu(context, context.GetPointerPosition(), {items.data(), items.size()}, UISystem::GetDefaultFont(), BodyPx());
 		}
 
-		void BuildFallbackRow(Context& context, ElementHandle parent, const Guid& self, size_t index,
-							  const std::function<void()>& rebuild) {
+		void BuildListRow(Context& context, ElementHandle parent, const Guid& self, DraftList list, size_t index,
+						  const std::function<void()>& rebuild) {
 			ElementHandle row = AddRow(context, parent);
-			const str caption = Caption(_draft->fallbacks[index]);
+			const Guid entry = (_draft->*list)[index];
+			const str caption = Caption(entry);
 			Context* contextPtr = &context;
 
 			ObjectField::Desc field;
 			field.caption = caption;
 			field.accepts = [self](const DragPayload& payload) { return TakesFont(payload, self); };
-			field.onDrop = [self, index, rebuild](const DragPayload& payload, Vec2) {
-				if (_draft && index < _draft->fallbacks.size() && TakesFont(payload, self)) {
-					_draft->fallbacks[index] = payload.data.As<AssetDragData>().guid;
+			field.onDrop = [self, list, index, rebuild](const DragPayload& payload, Vec2) {
+				if (_draft && index < (_draft->*list).size() && TakesFont(payload, self)) {
+					(_draft->*list)[index] = payload.data.As<AssetDragData>().guid;
 					rebuild();
 				}
 			};
 			field.pickTooltip = "Select Font";
-			field.onPick = [contextPtr, self, index, rebuild]() {
-				OpenCandidates(*contextPtr, self, [index, rebuild](const Guid& picked) {
-					if (_draft && index < _draft->fallbacks.size()) {
-						_draft->fallbacks[index] = picked;
+			field.onPick = [contextPtr, self, list, index, rebuild]() {
+				OpenCandidates(*contextPtr, self, list, [list, index, rebuild](const Guid& picked) {
+					if (_draft && index < (_draft->*list).size()) {
+						(_draft->*list)[index] = picked;
 						rebuild();
 					}
 				});
 			};
-			field.onClear = [index, rebuild]() {
-				if (_draft && index < _draft->fallbacks.size()) {
-					_draft->fallbacks.erase(_draft->fallbacks.begin() + static_cast<std::ptrdiff_t>(index));
+			field.onClear = [list, index, rebuild]() {
+				if (_draft && index < (_draft->*list).size()) {
+					(_draft->*list).erase((_draft->*list).begin() + static_cast<std::ptrdiff_t>(index));
 					rebuild();
 				}
 			};
-			field.resolveTarget = [fallback = _draft->fallbacks[index]]() -> EditorPingTarget { return {.asset = fallback}; };
+			field.resolveTarget = [entry]() -> EditorPingTarget { return {.asset = entry}; };
 			ObjectField::Build(context, row, field);
 
-			auto move = [index, rebuild](size_t to) {
-				if (_draft && index < _draft->fallbacks.size() && to < _draft->fallbacks.size()) {
-					std::swap(_draft->fallbacks[index], _draft->fallbacks[to]);
+			if (list == &FontDraft::faces) {
+				ElementHandle declared = context.CreateElement();
+				context.AppendChild(row, declared);
+				Style gap;
+				gap.margin = {6.0f, 0.0f, 6.0f, 0.0f};
+				context.SetStyle(declared, gap);
+				context.SetHoverable(declared, false);
+				context.SetText(declared, UISystem::GetDefaultFont(), EditorTheme::GetMetric(MetricToken::FontSmall),
+								EditorTheme::GetColor(ColorToken::WidgetTextDim), StyleOf(entry));
+			}
+
+			auto move = [list, index, rebuild](size_t to) {
+				if (_draft && index < (_draft->*list).size() && to < (_draft->*list).size()) {
+					std::swap((_draft->*list)[index], (_draft->*list)[to]);
 					rebuild();
 				}
 			};
 			if (index > 0) {
 				EditorIcons::IconButton(context, row, EditorIcons::Glyph::MoveUp, "^", "Move Up", [move, index]() { move(index - 1); }, BodyPx());
 			}
-			if (index + 1 < _draft->fallbacks.size()) {
+			if (index + 1 < (_draft->*list).size()) {
 				EditorIcons::IconButton(context, row, EditorIcons::Glyph::MoveDown, "v", "Move Down", [move, index]() { move(index + 1); }, BodyPx());
 			}
+		}
+
+		void BuildList(Context& context, ElementHandle parent, const Guid& self, DraftList list, std::string_view addLabel,
+					   const std::function<void()>& rebuild) {
+			for (size_t index = 0; index < (_draft->*list).size(); ++index) {
+				BuildListRow(context, parent, self, list, index, rebuild);
+			}
+
+			Context* contextPtr = &context;
+			auto append = [list, rebuild](const Guid& picked) {
+				if (_draft) {
+					(_draft->*list).push_back(picked);
+					rebuild();
+				}
+			};
+			ElementHandle addRow = AddRow(context, parent);
+			context.Events(addRow).onDragOver = [self](const DragPayload& payload) { return TakesFont(payload, self); };
+			context.Events(addRow).onDrop = [self, append](const DragPayload& payload, Vec2) {
+				if (TakesFont(payload, self)) {
+					append(payload.data.As<AssetDragData>().guid);
+				}
+			};
+			Widgets::ButtonDesc add;
+			add.label = addLabel;
+			add.font = UISystem::GetDefaultFont();
+			add.fontSizePx = BodyPx();
+			add.onClick = [contextPtr, self, list, append]() { OpenCandidates(*contextPtr, self, list, append); };
+			Widgets::Button(context, addRow, add);
 		}
 
 		void DrawFontInspector(Context& context, ElementHandle parent, const Guid& guid, Asset& asset) {
 			FontAsset& font = static_cast<FontAsset&>(asset);
 			const Path path = AssetDatabase::LookupPath(guid);
 			const std::function<void()> rebuild = PropertyDrawers::GetInspectorRebuilder();
+			const bool engineFont = path.ToString().empty() || path.ToString().starts_with("engine://");
+
+			AddInspectorHeader(context, parent, "Faces", EditorTheme::GetColor(ColorToken::TextStrong));
+			AddLine(context, parent, "Bold/italic/other weight files of this font (for font-weight/font-style)");
+			if (const str declared = StyleOf(font); !declared.empty()) {
+				AddLine(context, parent, std::format("This file: {}", declared));
+			}
+			if (engineFont) {
+				for (const Guid& face : font.faces) {
+					AddLine(context, parent, Caption(face));
+				}
+			} else {
+				DraftFor(guid, font);
+				BuildList(context, parent, guid, &FontDraft::faces, "Add Face", rebuild);
+			}
 
 			AddInspectorHeader(context, parent, "Fallback Fonts", EditorTheme::GetColor(ColorToken::TextStrong));
-			AddLine(context, parent, "Used in order for characters this font lacks (then installed fonts)");
-			if (path.ToString().empty() || path.ToString().starts_with("engine://")) {
+			AddLine(context, parent, "Searched top to bottom for characters this font lacks (installed fonts last)");
+			if (engineFont) {
 				for (const Guid& fallback : font.fallbacks) {
 					AddLine(context, parent, Caption(fallback));
 				}
-				AddLine(context, parent, "Engine font (import a font into the project to list fallbacks)");
+				AddLine(context, parent, "Engine font (import a font into the project to list faces + fallbacks)");
 				return;
 			}
-			FallbackDraft& draft = DraftFor(guid, font);
-			for (size_t index = 0; index < draft.fallbacks.size(); ++index) {
-				BuildFallbackRow(context, parent, guid, index, rebuild);
-			}
-
-			Context* contextPtr = &context;
-			auto append = [rebuild](const Guid& picked) {
-				if (_draft) {
-					_draft->fallbacks.push_back(picked);
-					rebuild();
-				}
-			};
-			ElementHandle addRow = AddRow(context, parent);
-			context.Events(addRow).onDragOver = [guid](const DragPayload& payload) { return TakesFont(payload, guid); };
-			context.Events(addRow).onDrop = [guid, append](const DragPayload& payload, Vec2) {
-				if (TakesFont(payload, guid)) {
-					append(payload.data.As<AssetDragData>().guid);
-				}
-			};
-			Widgets::ButtonDesc add;
-			add.label = "Add Fallback";
-			add.font = UISystem::GetDefaultFont();
-			add.fontSizePx = BodyPx();
-			add.onClick = [contextPtr, guid, append]() { OpenCandidates(*contextPtr, guid, append); };
-			Widgets::Button(context, addRow, add);
+			BuildList(context, parent, guid, &FontDraft::fallbacks, "Add Fallback", rebuild);
 
 			ElementHandle row = AddRow(context, parent);
 			Style end = context.GetStyle(row);
@@ -211,11 +276,12 @@ namespace Shalltear {
 			apply.font = UISystem::GetDefaultFont();
 			apply.fontSizePx = BodyPx();
 			apply.onClick = [path, rebuild]() {
-				if (!_draft || _draft->fallbacks == _draft->saved) {
+				if (!_draft || (_draft->faces == _draft->savedFaces && _draft->fallbacks == _draft->savedFallbacks)) {
 					return;
 				}
+				const Vector<Guid> faces = _draft->faces;
 				const Vector<Guid> fallbacks = _draft->fallbacks;
-				FontInspectorOps::ApplyFallbacks(path, {fallbacks.data(), fallbacks.size()});
+				FontInspectorOps::Apply(path, {faces.data(), faces.size()}, {fallbacks.data(), fallbacks.size()});
 				_draft->asset = Guid{};
 				rebuild();
 			};

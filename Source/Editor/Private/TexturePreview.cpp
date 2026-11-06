@@ -65,7 +65,7 @@ namespace Shalltear {
 					out.pixelsFormat = decoded;
 				}
 				out.size = texture.size;
-				out.sampler = texture.settings.filter == RHI::FilterMode::Nearest
+				out.sampler = texture.settings.filter == TextureFilter::Point
 								  ? UI::SamplerKind::NearestClamp
 								  : UI::SamplerKind::LinearClamp;
 				out.detail = EditorPreviewOps::DescribeTexture(texture.size, texture.format);
@@ -96,7 +96,7 @@ namespace Shalltear {
 				out.pixels = {out.decodedPixels.data(), out.decodedPixels.size()};
 				out.pixelsFormat = RHI::IsSRGB(texture->format) ? RHI::Format::RGBA8SRGB : RHI::Format::RGBA8Unorm;
 				out.size = rect.size;
-				out.sampler = texture->settings.filter == RHI::FilterMode::Nearest ? UI::SamplerKind::NearestClamp : UI::SamplerKind::LinearClamp;
+				out.sampler = texture->settings.filter == TextureFilter::Point ? UI::SamplerKind::NearestClamp : UI::SamplerKind::LinearClamp;
 				out.detail = std::format("{}x{} in {}x{}", rect.size.x, rect.size.y, texture->size.x, texture->size.y);
 				return true;
 			});

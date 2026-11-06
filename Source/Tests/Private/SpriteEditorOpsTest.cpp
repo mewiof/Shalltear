@@ -233,7 +233,7 @@ TEST_F(SpriteApplyFixture, ApplyWritesSpritesKeepingOtherSettings) {
 	TextureAsset* texture = static_cast<TextureAsset*>(loaded);
 	ASSERT_EQ(texture->sprites.size(), 1u);
 	EXPECT_EQ(texture->sprites[0], sprites[0]);
-	EXPECT_EQ(texture->settings.filter, RHI::FilterMode::Nearest);
+	EXPECT_EQ(texture->settings.filter, TextureFilter::Point);
 	EXPECT_EQ(texture->format, RHI::Format::RGBA8SRGB);
 
 	Vector<u8> rgba{GetMemoryResource(MemTag::Debug)};

@@ -560,8 +560,8 @@ TEST_F(BC6HSampleFixture, CodecDecodeMatchesGpu) {
 	RHI::TextureHandle target = _device->CreateTextureResource(targetDesc);
 	RHI::SamplerDesc samplerDesc;
 	samplerDesc.filter = RHI::FilterMode::Nearest;
+	samplerDesc.mipFilter = RHI::FilterMode::Nearest;
 	samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
-	samplerDesc.anisotropy = false;
 	RHI::SamplerHandle sampler = _device->CreateSamplerResource(samplerDesc);
 	const ShaderVariant& code = blit.variants[SHADER_BASE_VARIANT];
 	RHI::GraphicsPipelineDesc pipelineDesc;

@@ -342,6 +342,18 @@ namespace Shalltear::UI {
 
 	namespace {
 
+		SamplerKind ImageSampler(TextureFilter filter) {
+			switch (filter) {
+			case TextureFilter::Point:
+				return SamplerKind::NearestClamp;
+			case TextureFilter::Bilinear:
+				return SamplerKind::BilinearClamp;
+			case TextureFilter::Trilinear:
+				break;
+			}
+			return SamplerKind::LinearClamp;
+		}
+
 		void EmitOutsetShadows(PaintState& state, u32 index, const Rect& bounds, f32 opacity, i32 z,
 							   const Rect& clipRect, const Radii& clipRadii) {
 			const Style& style = state.ctx->ComputedS(index);
@@ -816,8 +828,7 @@ namespace Shalltear::UI {
 			paint.clipRect = clipRect;
 			paint.clipRadii = clipRadii;
 			paint.params.texture = source.texture->texture;
-			paint.params.sampler = source.texture->settings.filter == RHI::FilterMode::Nearest ? SamplerKind::NearestClamp
-																							   : SamplerKind::LinearClamp;
+			paint.params.sampler = ImageSampler(source.texture->settings.filter);
 			paint.params.colorSRGB = ctx.E(index).tint;
 
 			Vec4 radial{};
@@ -906,8 +917,7 @@ namespace Shalltear::UI {
 			params.rect = {dx, dy, extent.x, extent.y};
 			params.uv = {0.0f, 0.0f, 1.0f, 1.0f};
 			params.texture = image->texture;
-			params.sampler = image->settings.filter == RHI::FilterMode::Nearest ? SamplerKind::NearestClamp
-																				: SamplerKind::LinearClamp;
+			params.sampler = ImageSampler(image->settings.filter);
 			params.colorSRGB = ctx.E(index).tint;
 			EmitRect(*state.list, state.ink, params, opacity, z, clipRect, clipRadii);
 		}

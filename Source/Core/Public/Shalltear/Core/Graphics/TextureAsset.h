@@ -31,6 +31,12 @@ namespace Shalltear {
 		HighQuality
 	};
 
+	enum class TextureFilter : u8 {
+		Point = 0,
+		Bilinear,
+		Trilinear
+	};
+
 	struct SpriteBorder {
 		i32 left = 0;
 		i32 top = 0;
@@ -65,8 +71,9 @@ namespace Shalltear {
 		struct Settings {
 			bool sRGB = true;
 			bool generateMips = true;
-			RHI::FilterMode filter = RHI::FilterMode::Linear;
+			TextureFilter filter = TextureFilter::Trilinear;
 			RHI::AddressMode addressMode = RHI::AddressMode::Repeat;
+			u8 anisoLevel = 16;
 			TextureShape shape = TextureShape::Auto;
 			i32 cubeFaceSize = 0;
 			bool convolveIBL = true;
@@ -98,7 +105,6 @@ namespace Shalltear {
 
 		// replaced on reimport, read per frame
 		RHI::TextureHandle texture;
-		RHI::SamplerHandle sampler;
 
 		u32 version = 0;
 
@@ -131,7 +137,11 @@ namespace Shalltear {
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings, AssetImportContext& context) override;
 		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
 		// bump when the cooked record changes shape
-		u32 GetImporterVersion() const override { return 6; }
+		u32 GetImporterVersion() const override { return 7; }
+
+		// field untouched for a missing/unknown key
+		static void ReadSettings(const JSONValue& settings, TextureAsset::Settings& out);
+		static void WriteSettings(const TextureAsset::Settings& settings, JSONValue& out);
 	};
 
 } // namespace Shalltear

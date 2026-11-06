@@ -299,7 +299,7 @@ TEST_F(PreviewRegistryTest, TextureProducerCarriesAssetsMagnificationFilter) {
 	TextureAsset linear;
 	linear.size = {8, 8};
 	linear.pixels.assign(8 * 8 * 4, u8{255});
-	linear.settings.filter = RHI::FilterMode::Linear;
+	linear.settings.filter = TextureFilter::Trilinear;
 	AssetPreviewImage image;
 	ASSERT_TRUE(EditorPreviews::Produce({Guid{}, &linear}, image));
 	EXPECT_EQ(image.sampler, UI::SamplerKind::LinearClamp);
@@ -307,7 +307,7 @@ TEST_F(PreviewRegistryTest, TextureProducerCarriesAssetsMagnificationFilter) {
 	TextureAsset nearest;
 	nearest.size = {8, 8};
 	nearest.pixels.assign(8 * 8 * 4, u8{255});
-	nearest.settings.filter = RHI::FilterMode::Nearest;
+	nearest.settings.filter = TextureFilter::Point;
 	ASSERT_TRUE(EditorPreviews::Produce({Guid{}, &nearest}, image));
 	EXPECT_EQ(image.sampler, UI::SamplerKind::NearestClamp);
 	EXPECT_NE(image.sampler, UI::SamplerKind::NearestWrap);
@@ -1250,10 +1250,10 @@ namespace {
 			AssetDatabase::UnloadAsset(first);
 			Path metaPath = FileSystem::Resolve(AssetDatabase::GetMetaPath(Path("project://Assets/checker.png")));
 			str metaText = FileSystem::ReadTextFile(metaPath, MemTag::Asset);
-			constexpr std::string_view DefaultFilter = "\"filter\": \"linear\"";
+			constexpr std::string_view DefaultFilter = "\"filter\": \"trilinear\"";
 			size_t at = metaText.find(DefaultFilter);
 			ASSERT_NE(at, str::npos) << metaText;
-			metaText.replace(at, DefaultFilter.size(), "\"filter\": \"nearest\"");
+			metaText.replace(at, DefaultFilter.size(), "\"filter\": \"point\"");
 			ASSERT_TRUE(FileSystem::WriteTextFile(metaPath, metaText));
 			AssetDatabase::CollectGarbage();
 		}

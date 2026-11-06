@@ -371,9 +371,10 @@ namespace Shalltear::RHI {
 	struct SamplerDesc {
 		FilterMode filter = FilterMode::Linear;
 		AddressMode addressMode = AddressMode::Repeat;
-		bool anisotropy = true;
 		const char* debugName = nullptr;
 		bool comparison = false;
+		FilterMode mipFilter = FilterMode::Linear;
+		u8 maxAnisotropy = 1;
 	};
 
 	struct DescriptorBindingDesc {

@@ -130,12 +130,6 @@ namespace Shalltear {
 				device->GenerateMips(texture);
 			}
 		}
-
-		RHI::SamplerDesc samplerDesc;
-		samplerDesc.filter = settings.filter;
-		samplerDesc.addressMode = settings.addressMode;
-		samplerDesc.debugName = virtualPath.c_str();
-		sampler = device->CreateSamplerResource(samplerDesc);
 	}
 
 	void TextureAsset::AdoptReimport(Asset& fresh) {
@@ -167,17 +161,11 @@ namespace Shalltear {
 	void TextureAsset::OnUnload() {
 		if (!RenderSystem::IsRenderingAvailable()) {
 			texture = {};
-			sampler = {};
 			return;
 		}
-		RHI::Device* device = RenderSystem::GetDevice();
 		if (texture.IsValid()) {
-			device->DestroyResource(texture);
+			RenderSystem::GetDevice()->DestroyResource(texture);
 			texture = {};
-		}
-		if (sampler.IsValid()) {
-			device->DestroyResource(sampler);
-			sampler = {};
 		}
 	}
 
@@ -190,6 +178,7 @@ namespace Shalltear {
 		descriptor.Write(static_cast<u8>(settings.generateMips ? 1 : 0));
 		descriptor.Write(static_cast<u8>(settings.filter));
 		descriptor.Write(static_cast<u8>(settings.addressMode));
+		descriptor.Write(settings.anisoLevel);
 		descriptor.Write(static_cast<u8>(isCube ? 1 : 0));
 		descriptor.Write(static_cast<u8>(settings.convolveIBL ? 1 : 0));
 		descriptor.Write(storedMipLevels);
@@ -222,6 +211,7 @@ namespace Shalltear {
 		u8 generateMips = 0;
 		u8 filter = 0;
 		u8 addressMode = 0;
+		u8 anisoLevel = 0;
 		descriptor.Read(width);
 		descriptor.Read(height);
 		descriptor.Read(readFormat);
@@ -230,6 +220,7 @@ namespace Shalltear {
 		descriptor.Read(generateMips);
 		descriptor.Read(filter);
 		descriptor.Read(addressMode);
+		descriptor.Read(anisoLevel);
 		u8 cube = 0;
 		u8 convolve = 0;
 		u32 storedMips = 1;
@@ -278,8 +269,9 @@ namespace Shalltear {
 		format = static_cast<RHI::Format>(readFormat);
 		settings.sRGB = sRGB != 0;
 		settings.generateMips = generateMips != 0;
-		settings.filter = static_cast<RHI::FilterMode>(filter);
+		settings.filter = static_cast<TextureFilter>(filter);
 		settings.addressMode = static_cast<RHI::AddressMode>(addressMode);
+		settings.anisoLevel = anisoLevel;
 		settings.convolveIBL = convolve != 0;
 		settings.shape = cube != 0 ? TextureShape::Cube : TextureShape::Texture2D;
 		if (dimension == static_cast<u8>(RHI::TextureDimension::Texture2DArray)) {
@@ -401,40 +393,7 @@ namespace Shalltear {
 
 	Asset* TextureAssetImporter::ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) {
 		TextureAsset* asset = New<TextureAsset>(MemTag::Asset);
-
-		if (settings.IsObject()) {
-			asset->settings.sRGB = settings["sRGB"].AsBool(asset->settings.sRGB);
-			asset->settings.generateMips = settings["generateMips"].AsBool(asset->settings.generateMips);
-			std::string_view filter = settings["filter"].AsString("linear");
-			asset->settings.filter = filter == "nearest" ? RHI::FilterMode::Nearest : RHI::FilterMode::Linear;
-			std::string_view address = settings["addressMode"].AsString("repeat");
-			if (address == "clamp") {
-				asset->settings.addressMode = RHI::AddressMode::ClampToEdge;
-			} else if (address == "mirror") {
-				asset->settings.addressMode = RHI::AddressMode::MirroredRepeat;
-			} else {
-				asset->settings.addressMode = RHI::AddressMode::Repeat;
-			}
-			std::string_view shape = settings["shape"].AsString("auto");
-			if (shape == "cube") {
-				asset->settings.shape = TextureShape::Cube;
-			} else if (shape == "2d") {
-				asset->settings.shape = TextureShape::Texture2D;
-			} else if (shape == "2darray") {
-				asset->settings.shape = TextureShape::Texture2DArray;
-			} else if (shape == "3d") {
-				asset->settings.shape = TextureShape::Texture3D;
-			} else {
-				asset->settings.shape = TextureShape::Auto;
-			}
-			asset->settings.columns = static_cast<u32>(Math::Max(settings["columns"].AsNumber(1.0), 0.0));
-			asset->settings.rows = static_cast<u32>(Math::Max(settings["rows"].AsNumber(1.0), 0.0));
-			asset->settings.cubeFaceSize = static_cast<i32>(settings["cubeFaceSize"].AsNumber(0.0));
-			asset->settings.convolveIBL = settings["convolveIBL"].AsBool(asset->settings.convolveIBL);
-			asset->settings.type = settings["textureType"].AsString("default") == "normalMap" ? TextureType::NormalMap : TextureType::Default;
-			asset->settings.compression = settings["compression"].AsString("highQuality") == "none" ? TextureCompression::None
-																									: TextureCompression::HighQuality;
-		}
+		ReadSettings(settings, asset->settings);
 
 		if (!asset->Import(sourcePath)) {
 			Delete(asset);
@@ -463,17 +422,87 @@ namespace Shalltear {
 
 	void TextureAssetImporter::SerializeSettings(const Path& sourcePath, JSONValue& out) const {
 		(void)sourcePath;
-		out.AddMember("sRGB", JSONValue::MakeBool(true));
-		out.AddMember("generateMips", JSONValue::MakeBool(true));
-		out.AddMember("filter", JSONValue::MakeString("linear"));
-		out.AddMember("addressMode", JSONValue::MakeString("repeat"));
-		out.AddMember("shape", JSONValue::MakeString("auto"));
-		out.AddMember("cubeFaceSize", JSONValue::MakeNumber(0.0));
-		out.AddMember("convolveIBL", JSONValue::MakeBool(true));
-		out.AddMember("columns", JSONValue::MakeNumber(1.0));
-		out.AddMember("rows", JSONValue::MakeNumber(1.0));
-		out.AddMember("textureType", JSONValue::MakeString("default"));
-		out.AddMember("compression", JSONValue::MakeString("highQuality"));
+		WriteSettings(TextureAsset::Settings{}, out);
+	}
+
+	namespace {
+
+		template <typename E>
+		struct SettingName {
+			E value;
+			std::string_view name;
+		};
+
+		constexpr SettingName<TextureFilter> FILTER_NAMES[] = {{TextureFilter::Point, "point"},
+															   {TextureFilter::Bilinear, "bilinear"},
+															   {TextureFilter::Trilinear, "trilinear"},
+															   {TextureFilter::Point, "nearest"},
+															   {TextureFilter::Trilinear, "linear"}};
+		constexpr SettingName<RHI::AddressMode> ADDRESS_NAMES[] = {{RHI::AddressMode::Repeat, "repeat"},
+																   {RHI::AddressMode::ClampToEdge, "clamp"},
+																   {RHI::AddressMode::MirroredRepeat, "mirror"}};
+		constexpr SettingName<TextureShape> SHAPE_NAMES[] = {{TextureShape::Auto, "auto"},
+															 {TextureShape::Texture2D, "2d"},
+															 {TextureShape::Cube, "cube"},
+															 {TextureShape::Texture2DArray, "2darray"},
+															 {TextureShape::Texture3D, "3d"}};
+		constexpr SettingName<TextureType> TYPE_NAMES[] = {{TextureType::Default, "default"}, {TextureType::NormalMap, "normalMap"}};
+		constexpr SettingName<TextureCompression> COMPRESSION_NAMES[] = {{TextureCompression::None, "none"},
+																		 {TextureCompression::HighQuality, "highQuality"}};
+
+		template <typename E, size_t N>
+		void ReadName(const JSONValue& value, const SettingName<E> (&names)[N], E& out) {
+			for (const SettingName<E>& entry : names) {
+				if (value.IsString() && entry.name == value.AsString()) {
+					out = entry.value;
+					return;
+				}
+			}
+		}
+
+		template <typename E, size_t N>
+		JSONValue WriteName(const SettingName<E> (&names)[N], E value) {
+			for (const SettingName<E>& entry : names) {
+				if (entry.value == value) {
+					return JSONValue::MakeString(entry.name);
+				}
+			}
+			return JSONValue::MakeString(names[0].name);
+		}
+
+	} // anonymous namespace
+
+	void TextureAssetImporter::ReadSettings(const JSONValue& settings, TextureAsset::Settings& out) {
+		if (!settings.IsObject()) {
+			return;
+		}
+		out.sRGB = settings["sRGB"].AsBool(out.sRGB);
+		out.generateMips = settings["generateMips"].AsBool(out.generateMips);
+		ReadName(settings["filter"], FILTER_NAMES, out.filter);
+		ReadName(settings["addressMode"], ADDRESS_NAMES, out.addressMode);
+		out.anisoLevel = static_cast<u8>(Math::Clamp(settings["anisoLevel"].AsNumber(out.anisoLevel), 0.0, 16.0));
+		ReadName(settings["shape"], SHAPE_NAMES, out.shape);
+		out.columns = static_cast<u32>(Math::Max(settings["columns"].AsNumber(out.columns), 0.0));
+		out.rows = static_cast<u32>(Math::Max(settings["rows"].AsNumber(out.rows), 0.0));
+		out.cubeFaceSize = static_cast<i32>(settings["cubeFaceSize"].AsNumber(out.cubeFaceSize));
+		out.convolveIBL = settings["convolveIBL"].AsBool(out.convolveIBL);
+		ReadName(settings["textureType"], TYPE_NAMES, out.type);
+		ReadName(settings["compression"], COMPRESSION_NAMES, out.compression);
+	}
+
+	void TextureAssetImporter::WriteSettings(const TextureAsset::Settings& settings, JSONValue& out) {
+		out.AddMember("sRGB", JSONValue::MakeBool(settings.sRGB));
+		out.AddMember("generateMips", JSONValue::MakeBool(settings.generateMips));
+		out.AddMember("filter", WriteName(FILTER_NAMES, settings.filter));
+		out.AddMember("addressMode", WriteName(ADDRESS_NAMES, settings.addressMode));
+		out.AddMember("anisoLevel", JSONValue::MakeNumber(settings.anisoLevel));
+		out.AddMember("shape", WriteName(SHAPE_NAMES, settings.shape));
+		out.AddMember("cubeFaceSize", JSONValue::MakeNumber(settings.cubeFaceSize));
+		out.AddMember("convolveIBL", JSONValue::MakeBool(settings.convolveIBL));
+		out.AddMember("columns", JSONValue::MakeNumber(settings.columns));
+		out.AddMember("rows", JSONValue::MakeNumber(settings.rows));
+		out.AddMember("textureType", WriteName(TYPE_NAMES, settings.type));
+		out.AddMember("compression", WriteName(COMPRESSION_NAMES, settings.compression));
 	}
 
 } // namespace Shalltear

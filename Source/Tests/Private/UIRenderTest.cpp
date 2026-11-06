@@ -368,7 +368,6 @@ namespace {
 		RHI::SamplerDesc samplerDesc;
 		samplerDesc.filter = RHI::FilterMode::Linear;
 		samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
-		samplerDesc.anisotropy = false;
 		samplerDesc.debugName = "UIPixelTestSampler";
 		RHI::SamplerHandle sampler = device.CreateSamplerResource(samplerDesc);
 

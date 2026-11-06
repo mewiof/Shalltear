@@ -264,8 +264,9 @@ TEST_F(AssetCookFixture, TextureAssetRoundTripsPixelsAndSettings) {
 	original.format = RHI::Format::RGBA8SRGB;
 	original.settings.sRGB = false;
 	original.settings.generateMips = false;
-	original.settings.filter = RHI::FilterMode::Nearest;
+	original.settings.filter = TextureFilter::Bilinear;
 	original.settings.addressMode = RHI::AddressMode::MirroredRepeat;
+	original.settings.anisoLevel = 3;
 	for (u32 i = 0; i < 8 * 4 * 4; ++i) {
 		original.pixels.push_back(static_cast<u8>(i * 7));
 	}
@@ -280,6 +281,7 @@ TEST_F(AssetCookFixture, TextureAssetRoundTripsPixelsAndSettings) {
 	EXPECT_EQ(restored.settings.generateMips, original.settings.generateMips);
 	EXPECT_EQ(restored.settings.filter, original.settings.filter);
 	EXPECT_EQ(restored.settings.addressMode, original.settings.addressMode);
+	EXPECT_EQ(restored.settings.anisoLevel, 3);
 	ASSERT_EQ(restored.pixels.size(), original.pixels.size());
 	EXPECT_EQ(std::memcmp(restored.pixels.data(), original.pixels.data(), original.pixels.size()), 0);
 

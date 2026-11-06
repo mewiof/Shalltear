@@ -123,7 +123,6 @@ namespace {
 			RHI::TextureHandle chain = _device->CreateTextureResource(chainDesc);
 			RHI::SamplerDesc samplerDesc;
 			samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
-			samplerDesc.anisotropy = false;
 			RHI::SamplerHandle sampler = _device->CreateSamplerResource(samplerDesc);
 			if (!sourceCube.IsValid() || !chain.IsValid() || !sampler.IsValid()) {
 				return false;

@@ -232,7 +232,7 @@ namespace {
 
 		static void FillVolume(LoadableTexture& texture) {
 			texture.settings.shape = TextureShape::Texture3D;
-			texture.settings.filter = RHI::FilterMode::Nearest;
+			texture.settings.filter = TextureFilter::Point;
 			texture.settings.addressMode = RHI::AddressMode::ClampToEdge;
 			texture.settings.generateMips = false;
 			texture.size = Vec2I(2, 2);

@@ -212,6 +212,7 @@ namespace Shalltear::UI {
 		LinearWrap,
 		NearestClamp,
 		NearestWrap,
+		BilinearClamp,
 		Count
 	};
 

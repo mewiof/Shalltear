@@ -54,6 +54,7 @@
 #include "Graphics/ShadowCascades.h"
 #include "Graphics/ShadowCasterCulling.h"
 #include "Graphics/Skinning.h"
+#include "Graphics/TextureSampling.h"
 #include "Module/EngineStateTable.h"
 #include "Shalltear/Core/Window.h"
 #include "Window/WindowInternal.h"
@@ -665,6 +666,11 @@ namespace Shalltear {
 			bool fallbackRefused[FALLBACK_DIMENSIONS][FALLBACK_KINDS] = {};
 			RHI::SamplerHandle repeatSampler;
 			RHI::SamplerHandle clampSampler;
+			struct CachedSampler {
+				u32 key = 0;
+				RHI::SamplerHandle handle;
+			};
+			Vector<CachedSampler> textureSamplers{GetMemoryResource(MemTag::Graphics)};
 
 			std::mutex hotReloadMutex;
 			Vector<str> hotReloadPaths{GetMemoryResource(MemTag::Graphics)};
@@ -700,6 +706,9 @@ namespace Shalltear {
 			i32 reflectionProbeResolution = 128;
 			i32 shadowAtlasCreatedAt = -1;
 			bool transparentReceiveShadows = true;
+
+			TextureAnisotropy anisotropicFiltering = TextureAnisotropy::PerTexture;
+			i32 maxAnisotropy = 16;
 
 			RHI::TextureHandle shadowAtlas;
 			RHI::TextureHandle punctualShadowAtlas;
@@ -1482,6 +1491,22 @@ namespace Shalltear {
 			return state.fallbackTextures[d][k];
 		}
 
+		RHI::SamplerHandle TextureSampler(RenderState& state, const TextureAsset& texture) {
+			const bool volume = texture.GetDimension() == RHI::TextureDimension::Texture3D;
+			const RHI::SamplerDesc desc =
+				GraphicsInternal::TextureSamplerDesc(texture.settings, volume, state.anisotropicFiltering, state.maxAnisotropy);
+			const u32 key = static_cast<u32>(desc.filter) | static_cast<u32>(desc.mipFilter) << 1 | static_cast<u32>(desc.addressMode) << 2 |
+							static_cast<u32>(desc.maxAnisotropy) << 4;
+			for (const RenderState::CachedSampler& cached : state.textureSamplers) {
+				if (cached.key == key) {
+					return cached.handle;
+				}
+			}
+			const RHI::SamplerHandle handle = state.device->CreateSamplerResource(desc);
+			state.textureSamplers.push_back({key, handle});
+			return handle;
+		}
+
 		void ResolveMaterialTextures(DrawEntry& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
 			RenderState& state = *_state;
 			u32 slotCount = target ? CountMaterialTextureSlots(*target) : 0;
@@ -1499,7 +1524,7 @@ namespace Shalltear {
 				if (texture && texture->texture.IsValid()) {
 					if (texture->GetDimension() == slot.dimension) {
 						out.texture = texture->texture;
-						out.sampler = texture->sampler;
+						out.sampler = TextureSampler(state, *texture);
 					} else {
 						auto mix = [](u64 hash, u64 value) { return (hash ^ value) * 0x100000001B3ull; };
 						const u64 key = mix(mix(mix(mix(0xCBF29CE484222325ull, source->assetId.low), source->assetId.high),
@@ -6925,6 +6950,9 @@ namespace Shalltear {
 			state.renderScale = Math::Clamp(profile.renderScale, 0.25f, 2.0f);
 			state.msaaSamples = ResolveSampleCount(state, profile.msaa);
 			state.tonemap = profile.tonemap > TonemapCurve::AgX ? TonemapCurve::None : profile.tonemap;
+			state.anisotropicFiltering = profile.anisotropicFiltering > TextureAnisotropy::ForcedOn ? TextureAnisotropy::PerTexture
+																									: profile.anisotropicFiltering;
+			state.maxAnisotropy = Math::Clamp(profile.maxAnisotropy, 1, 16);
 		}
 
 		void CopyProfileFields(const GraphicsProfile& from, GraphicsProfile& to) {
@@ -7549,7 +7577,6 @@ namespace Shalltear {
 			RHI::SamplerDesc shadowDesc;
 			shadowDesc.comparison = true;
 			shadowDesc.addressMode = RHI::AddressMode::ClampToEdge;
-			shadowDesc.anisotropy = false;
 			shadowDesc.debugName = "ShadowCompare";
 			state.shadowSampler = state.device->CreateSamplerResource(shadowDesc);
 
@@ -7606,7 +7633,6 @@ namespace Shalltear {
 			RHI::SamplerDesc linearClampDesc;
 			linearClampDesc.filter = RHI::FilterMode::Linear;
 			linearClampDesc.addressMode = RHI::AddressMode::ClampToEdge;
-			linearClampDesc.anisotropy = false;
 			linearClampDesc.debugName = "LinearClampSampler";
 			state.linearClampSampler = state.device->CreateSamplerResource(linearClampDesc);
 
@@ -7718,6 +7744,12 @@ namespace Shalltear {
 					}
 				}
 			}
+			for (const RenderState::CachedSampler& cached : state.textureSamplers) {
+				if (cached.handle.IsValid()) {
+					state.device->DestroyResource(cached.handle);
+				}
+			}
+			state.textureSamplers.clear();
 			if (state.repeatSampler.IsValid()) {
 				state.device->DestroyResource(state.repeatSampler);
 			}
@@ -8669,7 +8701,8 @@ namespace Shalltear {
 			if (texture && texture->texture.IsValid()) {
 				if (texture->GetDimension() == dimension) {
 					outTexture = texture->texture;
-					outSampler = texture->sampler.IsValid() ? texture->sampler : state.repeatSampler;
+					outSampler = TextureSampler(state, *texture);
+					outSampler = outSampler.IsValid() ? outSampler : state.repeatSampler;
 					return;
 				}
 				const u64 key = (StringHash(std::string_view(kernel.virtualPath)).GetValue() ^ (static_cast<u64>(slot.binding) << 32)) * 0x100000001B3ull ^

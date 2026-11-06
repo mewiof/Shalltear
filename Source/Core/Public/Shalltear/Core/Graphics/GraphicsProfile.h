@@ -15,6 +15,12 @@ namespace Shalltear {
 		AgX = 3
 	};
 
+	enum class TextureAnisotropy : u8 {
+		Disabled = 0,
+		PerTexture = 1,
+		ForcedOn = 2
+	};
+
 } // namespace Shalltear
 
 SLT_REFLECT_ENUM(::Shalltear::TonemapCurve)
@@ -22,6 +28,12 @@ SLT_ENUM_VALUE(None)
 SLT_ENUM_VALUE(Neutral)
 SLT_ENUM_VALUE(ACES)
 SLT_ENUM_VALUE(AgX)
+SLT_END_ENUM()
+
+SLT_REFLECT_ENUM(::Shalltear::TextureAnisotropy)
+SLT_ENUM_VALUE(Disabled)
+SLT_ENUM_VALUE(PerTexture)
+SLT_ENUM_VALUE(ForcedOn)
 SLT_END_ENUM()
 
 namespace Shalltear {
@@ -47,6 +59,9 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(shadowAtlasSize, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_REFLECT_FIELD(transparentReceiveShadows, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(reflectionProbeResolution, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+
+		SLT_REFLECT_FIELD(anisotropicFiltering, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+		SLT_REFLECT_FIELD(maxAnisotropy, SLT_RANGE(1, 16), SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_END_REFLECT()
 
 		GraphicsProfile() = default;
@@ -79,6 +94,10 @@ namespace Shalltear {
 		bool transparentReceiveShadows = true;
 
 		i32 reflectionProbeResolution = 128;
+
+		TextureAnisotropy anisotropicFiltering = TextureAnisotropy::PerTexture;
+
+		i32 maxAnisotropy = 16;
 	};
 
 	class SHALLTEAR_CORE_API GraphicsProfileImporter : public IAssetImporter {

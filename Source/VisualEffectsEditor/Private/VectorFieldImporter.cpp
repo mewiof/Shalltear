@@ -76,7 +76,7 @@ namespace Shalltear::VisualEffectsEditor {
 				asset->settings.sRGB = false;
 				asset->settings.generateMips = false;
 				asset->settings.shape = TextureShape::Texture3D;
-				asset->settings.filter = filter == "nearest" ? RHI::FilterMode::Nearest : RHI::FilterMode::Linear;
+				asset->settings.filter = filter == "nearest" ? TextureFilter::Point : TextureFilter::Trilinear;
 				asset->settings.addressMode = wrap == "clamp"	 ? RHI::AddressMode::ClampToEdge
 											  : wrap == "mirror" ? RHI::AddressMode::MirroredRepeat
 																 : RHI::AddressMode::Repeat;

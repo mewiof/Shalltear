@@ -217,7 +217,7 @@ namespace Shalltear::EffectKernelHarness {
 		template <typename Field>
 		void Volume(u32 side, Field&& field, bool linear = true) {
 			settings.shape = TextureShape::Texture3D;
-			settings.filter = linear ? RHI::FilterMode::Linear : RHI::FilterMode::Nearest;
+			settings.filter = linear ? TextureFilter::Trilinear : TextureFilter::Point;
 			settings.addressMode = RHI::AddressMode::ClampToEdge;
 			settings.generateMips = false;
 			settings.sRGB = false;
@@ -243,7 +243,7 @@ namespace Shalltear::EffectKernelHarness {
 
 		void Image(u32 width, u32 height, std::span<const u8> rgba, u32 layers = 0) {
 			settings.shape = layers > 0 ? TextureShape::Texture2DArray : TextureShape::Texture2D;
-			settings.filter = RHI::FilterMode::Nearest;
+			settings.filter = TextureFilter::Point;
 			settings.addressMode = RHI::AddressMode::ClampToEdge;
 			settings.generateMips = false;
 			settings.sRGB = false;

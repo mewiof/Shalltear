@@ -165,7 +165,7 @@ namespace Shalltear {
 			draft.view.box = box;
 			draft.view.imageSize = texture->size;
 			if (texture->texture.IsValid()) {
-				const SamplerKind sampler = texture->settings.filter == RHI::FilterMode::Nearest ? SamplerKind::NearestClamp : SamplerKind::LinearClamp;
+				const SamplerKind sampler = texture->settings.filter == TextureFilter::Point ? SamplerKind::NearestClamp : SamplerKind::LinearClamp;
 				paint.EmitTexturedQuad(draft.view.ToRect(RectI(0, 0, texture->size.x, texture->size.y)), texture->texture, {0.0f, 0.0f, 1.0f, 1.0f},
 									   Color::White(), sampler);
 			}

@@ -516,7 +516,7 @@ TEST(UIIconTest, RecycledSlotDropsIcon) {
 
 namespace {
 
-	void MakeTexture(TextureAsset& out, Vec2I size, RHI::FilterMode filter = RHI::FilterMode::Linear) {
+	void MakeTexture(TextureAsset& out, Vec2I size, TextureFilter filter = TextureFilter::Trilinear) {
 		out.size = size;
 		out.settings.filter = filter;
 		out.texture = RHI::TextureHandle{5u, 1u};
@@ -673,9 +673,10 @@ TEST(UIIconTest, OffGpuPictureMeasures) {
 }
 
 TEST(UIIconTest, AssetOwnsSamplerNotCallSite) {
-	const std::pair<RHI::FilterMode, UI::SamplerKind> cases[] = {
-		{RHI::FilterMode::Nearest, UI::SamplerKind::NearestClamp},
-		{RHI::FilterMode::Linear, UI::SamplerKind::LinearClamp}};
+	const std::pair<TextureFilter, UI::SamplerKind> cases[] = {
+		{TextureFilter::Point, UI::SamplerKind::NearestClamp},
+		{TextureFilter::Bilinear, UI::SamplerKind::BilinearClamp},
+		{TextureFilter::Trilinear, UI::SamplerKind::LinearClamp}};
 	for (const auto& [filter, expected] : cases) {
 		TextureAsset texture;
 		MakeTexture(texture, {32, 32}, filter);

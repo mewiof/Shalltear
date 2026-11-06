@@ -433,14 +433,14 @@ namespace Shalltear::RHI {
 		VkSamplerCreateInfo samplerInfo{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
 		samplerInfo.magFilter = filter;
 		samplerInfo.minFilter = filter;
-		samplerInfo.mipmapMode = desc.filter == FilterMode::Linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		samplerInfo.mipmapMode = desc.mipFilter == FilterMode::Linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
 		samplerInfo.addressModeU = address;
 		samplerInfo.addressModeV = address;
 		samplerInfo.addressModeW = address;
 		samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
-		if (desc.anisotropy && impl->maxAnisotropy > 1.0f) {
+		if (desc.maxAnisotropy > 1 && impl->maxAnisotropy > 1.0f) {
 			samplerInfo.anisotropyEnable = VK_TRUE;
-			samplerInfo.maxAnisotropy = std::min(16.0f, impl->maxAnisotropy);
+			samplerInfo.maxAnisotropy = std::min(static_cast<f32>(desc.maxAnisotropy), impl->maxAnisotropy);
 		}
 		if (desc.comparison) {
 			samplerInfo.compareEnable = VK_TRUE;

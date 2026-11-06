@@ -313,7 +313,6 @@ namespace Shalltear::UI {
 
 		if (!_samplersCreated) {
 			RHI::SamplerDesc samplerDesc;
-			samplerDesc.anisotropy = false;
 			samplerDesc.filter = RHI::FilterMode::Linear;
 			samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
 			samplerDesc.debugName = "UILinearClamp";
@@ -321,8 +320,11 @@ namespace Shalltear::UI {
 			samplerDesc.addressMode = RHI::AddressMode::Repeat;
 			samplerDesc.debugName = "UILinearWrap";
 			_samplers[static_cast<size_t>(SamplerKind::LinearWrap)] = device.CreateSamplerResource(samplerDesc);
-			samplerDesc.filter = RHI::FilterMode::Nearest;
+			samplerDesc.mipFilter = RHI::FilterMode::Nearest;
 			samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
+			samplerDesc.debugName = "UIBilinearClamp";
+			_samplers[static_cast<size_t>(SamplerKind::BilinearClamp)] = device.CreateSamplerResource(samplerDesc);
+			samplerDesc.filter = RHI::FilterMode::Nearest;
 			samplerDesc.debugName = "UINearestClamp";
 			_samplers[static_cast<size_t>(SamplerKind::NearestClamp)] = device.CreateSamplerResource(samplerDesc);
 			samplerDesc.addressMode = RHI::AddressMode::Repeat;

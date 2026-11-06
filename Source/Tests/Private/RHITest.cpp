@@ -1122,7 +1122,6 @@ TEST_F(RHIFixture, DepthPassFeedsComparison) {
 	RHI::SamplerDesc samplerDesc;
 	samplerDesc.filter = RHI::FilterMode::Linear;
 	samplerDesc.addressMode = RHI::AddressMode::ClampToEdge;
-	samplerDesc.anisotropy = false;
 	samplerDesc.comparison = true;
 	samplerDesc.debugName = "ShadowCompare";
 	RHI::SamplerHandle comparison = _device->CreateSamplerResource(samplerDesc);

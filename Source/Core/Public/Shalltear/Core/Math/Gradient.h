@@ -3,6 +3,7 @@
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
 #include "Shalltear/Core/Math/Color.h"
+#include "Shalltear/Core/Math/MathReflect.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Reflection/Reflect.h"
 #include "Shalltear/Core/Types.h"

@@ -7,6 +7,8 @@
 #include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/FontAsset.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
+
 #include <algorithm>
 #include <deque>
 
@@ -45,7 +47,7 @@ namespace Shalltear::FontInspectorOps {
 		if (!AssetDatabase::WriteImporterSettings(fontPath, rebuilt)) {
 			return false;
 		}
-		if (!AssetDatabase::ReimportAsset(fontPath)) {
+		if (!EditorAssetOps::Reimport(fontPath)) {
 			SLT_LOG_WARN("Editor", "'{}': fallbacks saved, the font couldn't be re-imported. Close what uses it and re-import",
 						 fontPath.ToString());
 			return false;

@@ -14,6 +14,7 @@
 #include "Shalltear/Core/Scene/SceneObject.h"
 #include "Shalltear/Core/Scene/SceneSystem.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
 #include "Shalltear/Editor/EditorCommands.h"
 #include "Shalltear/Editor/EditorSceneOps.h"
@@ -188,7 +189,7 @@ namespace Shalltear {
 				SLT_LOG_ERROR("Editor", "Reflection probe not baked: '{}' isn't an asset", bake.path.ToString());
 				return;
 			}
-			if (known && !AssetDatabase::ReimportAsset(bake.path)) {
+			if (known && !EditorAssetOps::Reimport(bake.path)) {
 				SLT_LOG_ERROR("Editor", "Reflection probe baked into '{}' (the cube couldn't be re-imported)", bake.path.ToString());
 				return;
 			}

@@ -6,6 +6,8 @@
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
+
 namespace Shalltear::TextureInspectorOps {
 
 	TextureAsset::Settings ReadImportSettings(const Path& texturePath) {
@@ -34,7 +36,7 @@ namespace Shalltear::TextureInspectorOps {
 		if (!AssetDatabase::WriteImporterSettings(texturePath, merged)) {
 			return false;
 		}
-		if (!AssetDatabase::ReimportAsset(texturePath)) {
+		if (!EditorAssetOps::Reimport(texturePath)) {
 			SLT_LOG_WARN("Editor", "'{}': settings saved, the texture couldn't be re-imported. Close what uses it and re-import", texturePath.ToString());
 			return false;
 		}

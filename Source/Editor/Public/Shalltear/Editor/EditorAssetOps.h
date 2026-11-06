@@ -29,6 +29,9 @@ namespace Shalltear {
 		using ReloadConflict = std::function<void(const Path& path, std::function<void()> reload)>;
 		static u32 ReloadChanged(std::span<const Path> changed, const ReloadConflict& onConflict);
 		static bool RevertToFile(Handle<Asset> asset);
+
+		// editor code should reimport here, not via AssetDatabase
+		static bool Reimport(const Path& path);
 	};
 
 } // namespace Shalltear

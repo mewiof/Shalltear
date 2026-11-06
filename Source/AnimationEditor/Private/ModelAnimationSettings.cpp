@@ -5,6 +5,8 @@
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
+
 #include <deque>
 
 namespace Shalltear {
@@ -176,7 +178,7 @@ namespace Shalltear {
 			if (!AssetDatabase::WriteImporterSettings(modelVirtualPath, rebuilt)) {
 				return false;
 			}
-			if (!AssetDatabase::ReimportAsset(modelVirtualPath)) {
+			if (!EditorAssetOps::Reimport(modelVirtualPath)) {
 				SLT_LOG_WARN("Animation", "'{}': settings saved, the model couldn't be re-imported. Close what uses it and re-import",
 							 modelVirtualPath.ToString());
 				return false;

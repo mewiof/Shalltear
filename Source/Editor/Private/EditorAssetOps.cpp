@@ -7,6 +7,8 @@
 #include "Shalltear/Core/Object.h"
 #include "Shalltear/Core/Reflection/TypeRegistry.h"
 
+#include "Shalltear/Editor/EditorPreviews.h"
+
 #include <algorithm>
 
 namespace Shalltear {
@@ -160,7 +162,7 @@ namespace Shalltear {
 			}
 			const u64 id = loaded->GetInstanceId();
 			if (!_state || !_state->dirty.contains(id)) {
-				reimported += AssetDatabase::ReimportAsset(path) ? 1u : 0u;
+				reimported += Reimport(path) ? 1u : 0u;
 				continue;
 			}
 			auto wrote = _state->written.find(id);
@@ -182,13 +184,19 @@ namespace Shalltear {
 			return false;
 		}
 		const Path path(live->virtualPath);
-		if (!AssetDatabase::ReimportAsset(path)) {
+		if (!Reimport(path)) {
 			return false;
 		}
 		if (_state && _state->dirty.contains(asset.GetInstanceId())) {
 			ReleaseAndForget(asset.GetInstanceId());
 		}
 		return true;
+	}
+
+	bool EditorAssetOps::Reimport(const Path& path) {
+		const bool reimported = AssetDatabase::ReimportAsset(path);
+		EditorPreviewStore::Invalidate(AssetDatabase::LookupGuid(path));
+		return reimported;
 	}
 
 } // namespace Shalltear

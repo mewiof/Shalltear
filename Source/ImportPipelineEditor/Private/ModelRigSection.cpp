@@ -8,6 +8,7 @@
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PropertyDrawers.h"
 
@@ -123,7 +124,7 @@ namespace Shalltear::ImportPipelineEditor {
 			if (!AssetDatabase::WriteImporterSettings(modelPath, rebuilt)) {
 				return false;
 			}
-			if (!AssetDatabase::ReimportAsset(modelPath)) {
+			if (!EditorAssetOps::Reimport(modelPath)) {
 				SLT_LOG_WARN("ImportPipeline", "'{}': exposed-bone list saved, the model couldn't be re-imported. Close what uses it and re-import",
 							 modelPath.ToString());
 				return false;

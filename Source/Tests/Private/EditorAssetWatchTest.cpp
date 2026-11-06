@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "Checkout.h"
+
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/UI/StyleSheetAsset.h"
 
@@ -9,7 +11,11 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iterator>
+#include <string>
+#include <vector>
 
 using namespace Shalltear;
 
@@ -278,3 +284,30 @@ namespace {
 	}
 
 } // namespace
+
+TEST(EditorReimportTest, OnlyEditorAssetOpsReimports) {
+	const std::filesystem::path source = Checkout::Find("Source");
+	ASSERT_FALSE(source.empty());
+	u32 scanned = 0;
+	std::vector<std::string> callers;
+	std::error_code ec;
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(source, ec)) {
+		const std::string extension = entry.path().extension().string();
+		if (!entry.is_regular_file() || (extension != ".cpp" && extension != ".h")) {
+			continue;
+		}
+		const std::filesystem::path relative = entry.path().lexically_relative(source);
+		const std::string top = relative.begin()->string();
+		if (top == "Core" || top == "Tests") {
+			continue;
+		}
+		++scanned;
+		std::ifstream file(entry.path(), std::ios::binary);
+		const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+		if (text.find("AssetDatabase::ReimportAsset(") != std::string::npos) {
+			callers.push_back(relative.generic_string());
+		}
+	}
+	EXPECT_GT(scanned, 500u);
+	EXPECT_EQ(callers, std::vector<std::string>{"Editor/Private/EditorAssetOps.cpp"});
+}

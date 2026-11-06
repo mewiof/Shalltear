@@ -8,6 +8,8 @@
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
+
 #include <algorithm>
 #include <cmath>
 #include <deque>
@@ -272,7 +274,7 @@ namespace Shalltear::SpriteEditorOps {
 		if (!AssetDatabase::WriteImporterSettings(texturePath, rebuilt)) {
 			return false;
 		}
-		if (!AssetDatabase::ReimportAsset(texturePath)) {
+		if (!EditorAssetOps::Reimport(texturePath)) {
 			SLT_LOG_WARN("Editor", "'{}': sprites saved, the texture couldn't be re-imported. Close what uses it and re-import",
 						 texturePath.ToString());
 			return false;

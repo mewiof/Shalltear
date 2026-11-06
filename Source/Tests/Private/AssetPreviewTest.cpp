@@ -14,6 +14,7 @@
 #include "Shalltear/Core/UI/Widgets.h"
 #include "Shalltear/Core/Window.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
 #include "Shalltear/Editor/EditorEvents.h"
 #include "Shalltear/Editor/EditorPanel.h"
@@ -23,6 +24,7 @@
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/EditorViewportOps.h"
 #include "Shalltear/Editor/PanelManager.h"
+#include "Shalltear/Editor/TextureInspectorOps.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
 #include <algorithm>
@@ -2253,6 +2255,51 @@ TEST_F(PreviewStoreTest, ProductStaleAfterSourceChange) {
 	EditorPreviewStore::Drain();
 	ASSERT_TRUE(EditorPreviewStore::Request(page, entry));
 	EXPECT_EQ(entry.detail, "produce 2");
+}
+
+TEST_F(PreviewStoreTest, EditorReimportStalesPicture) {
+	FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Assets/page.txt")), "p");
+	AssetDatabase::ScanProjectDirectory();
+	const Guid guid = AssetDatabase::LookupGuid(Path("project://Assets/page.txt"));
+	ASSERT_TRUE(guid.IsValid());
+	auto produced = std::make_shared<int>(0);
+	EditorPreviews::RegisterProducer(StringHash("TextAsset"), [produced](const AssetPreviewRequest&, AssetPreviewImage& out) {
+		static constexpr u8 PIXELS[4] = {255, 255, 255, 255};
+		out.size = {1, 1};
+		out.pixelsFormat = RHI::Format::RGBA8Unorm;
+		out.pixels = PIXELS;
+		out.detail = std::format("produce {}", ++*produced);
+		return true;
+	});
+	ASSERT_TRUE(Settle(guid));
+	AssetPreviewEntry entry;
+	ASSERT_TRUE(EditorPreviewStore::Request(guid, entry));
+	ASSERT_EQ(entry.detail, "produce 1");
+
+	ASSERT_TRUE(EditorAssetOps::Reimport(Path("project://Assets/page.txt")));
+	EXPECT_TRUE(EditorPreviewStore::Request(guid, entry));
+	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
+	EditorPreviewStore::Drain();
+	ASSERT_TRUE(EditorPreviewStore::Request(guid, entry));
+	EXPECT_EQ(entry.detail, "produce 2");
+}
+
+TEST_F(PreviewStoreTest, ImportSettingsApplyStalesPicture) {
+	Vector<Guid> textures{GetMemoryResource(MemTag::Editor)};
+	if (!StageTextures(1, textures)) {
+		GTEST_SKIP() << "checker.png fixture not found";
+	}
+	ASSERT_TRUE(Settle(textures[0]));
+	AssetPreviewEntry entry;
+	ASSERT_TRUE(EditorPreviewStore::Request(textures[0], entry));
+	ASSERT_EQ(EditorPreviewStore::GetPendingCount(), 0u);
+
+	const Path path("project://Assets/checker0.png");
+	TextureAsset::Settings settings = TextureInspectorOps::ReadImportSettings(path);
+	settings.type = TextureType::NormalMap;
+	ASSERT_TRUE(TextureInspectorOps::ApplyImportSettings(path, settings));
+	EXPECT_TRUE(EditorPreviewStore::Request(textures[0], entry));
+	EXPECT_EQ(EditorPreviewStore::GetPendingCount(), 1u);
 }
 
 TEST_F(PreviewStoreTest, AnInvalidatedDeclineIsAskedAgain) {

@@ -14,6 +14,7 @@
 #include "Shalltear/Core/UI/UISystem.h"
 #include "Shalltear/Core/UI/Widgets.h"
 
+#include "Shalltear/Editor/EditorAssetOps.h"
 #include "Shalltear/Editor/EditorPreviews.h"
 #include "Shalltear/Editor/EditorTheme.h"
 #include "Shalltear/Editor/PropertyDrawers.h"
@@ -78,7 +79,7 @@ namespace Shalltear::AudioEditor {
 			if (!AssetDatabase::WriteImporterSettings(clipPath, merged)) {
 				return false;
 			}
-			if (!AssetDatabase::ReimportAsset(clipPath)) {
+			if (!EditorAssetOps::Reimport(clipPath)) {
 				SLT_LOG_WARN("Audio", "'{}': settings saved, the clip couldn't be re-imported. Close what uses it and re-import",
 							 clipPath.ToString());
 				return false;

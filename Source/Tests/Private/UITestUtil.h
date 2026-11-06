@@ -20,7 +20,10 @@ namespace UITest {
 			out.outlineGlyphs.clear();
 			out.caretStops.clear();
 			out.extent = {};
-			out.lineHeight = LINE_HEIGHT;
+			const f32 pitch = query.lineHeight > 0.0f ? std::max(1.0f, std::round(query.lineHeight)) : LINE_HEIGHT;
+			const f32 halfLeading = std::floor((pitch - LINE_HEIGHT) * 0.5f);
+			out.lineHeight = pitch;
+			out.halfLeading = halfLeading;
 			out.multiline = false;
 			out.truncated = false;
 			out.atlas = RHI::TextureHandle{7, 1};
@@ -59,7 +62,7 @@ namespace UITest {
 					}
 					spans.back().hard = penX;
 					penX = 0.0f;
-					penY += LINE_HEIGHT;
+					penY += pitch;
 					out.multiline = true;
 					firstOnLine = true;
 					spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.caretStops.size()), 0.0f});
@@ -76,7 +79,7 @@ namespace UITest {
 				}
 				if (wrap && penX + step + ADVANCE > query.wrapWidth && !firstOnLine) {
 					penX = 0.0f;
-					penY += LINE_HEIGHT;
+					penY += pitch;
 					out.multiline = true;
 					firstOnLine = true;
 					step = 0.0f;
@@ -85,7 +88,7 @@ namespace UITest {
 				}
 				penX += step;
 				UI::ShapedGlyph glyph;
-				glyph.rect = {penX + 1.0f, penY + 2.0f, ADVANCE - 2.0f, GLYPH_H};
+				glyph.rect = {penX + 1.0f, penY + halfLeading + 2.0f, ADVANCE - 2.0f, GLYPH_H};
 				glyph.uv = {0.0f, 0.0f, 0.5f, 0.5f};
 				out.glyphs.push_back(glyph);
 				penX += ADVANCE;
@@ -102,7 +105,7 @@ namespace UITest {
 			if (truncated) {
 				penX += firstOnLine ? 0.0f : query.letterSpacing;
 				UI::ShapedGlyph mark;
-				mark.rect = {penX + 1.0f, penY + 2.0f, ADVANCE - 2.0f, GLYPH_H};
+				mark.rect = {penX + 1.0f, penY + halfLeading + 2.0f, ADVANCE - 2.0f, GLYPH_H};
 				mark.uv = {0.0f, 0.0f, 0.5f, 0.5f};
 				out.glyphs.push_back(mark);
 				penX += ADVANCE;
@@ -126,7 +129,7 @@ namespace UITest {
 				}
 			}
 
-			out.extent = {maxWidth, penY + LINE_HEIGHT};
+			out.extent = {maxWidth, penY + pitch};
 			out.truncated = truncated;
 			if (truncated) {
 				out.caretStops.clear();

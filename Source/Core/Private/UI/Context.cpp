@@ -871,16 +871,29 @@ namespace Shalltear::UI {
 		return align == Align::Center || align == Align::End ? align : Align::Start;
 	}
 
+	TextMetrics ContextImpl::TextMetricsFor(u32 elementIndex, const TextComponent& text) {
+		const Style& style = ComputedS(elementIndex);
+		const f32 scale = desc.contentScale > 0.0f ? desc.contentScale : 1.0f;
+		TextMetrics metrics;
+		metrics.sizePhysical = text.sizePx * scale;
+		metrics.outlineWidth = style.textOutlineWidth * scale;
+		metrics.letterSpacing = style.letterSpacing * scale;
+		if (style.lineHeight.unit == Length::Unit::Percent) {
+			metrics.lineHeight = style.lineHeight.value * metrics.sizePhysical;
+		} else if (style.lineHeight.unit == Length::Unit::Pixel) {
+			metrics.lineHeight = style.lineHeight.value * scale;
+		}
+		metrics.fontWeight = style.fontWeight;
+		metrics.fontStyle = style.fontStyle;
+		return metrics;
+	}
+
 	void ContextImpl::EnsureShaped(u32 elementIndex) {
 		TextComponent* text = GetText(elementIndex);
 		if (!text || !fontSystem) {
 			return;
 		}
-		const Style& style = ComputedS(elementIndex);
-		f32 scale = desc.contentScale > 0.0f ? desc.contentScale : 1.0f;
-		f32 physicalSize = text->sizePx * scale;
-		f32 physicalOutline = style.textOutlineWidth * scale;
-		f32 physicalSpacing = style.letterSpacing * scale;
+		const TextMetrics metrics = TextMetricsFor(elementIndex, *text);
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
 		const Align align = EffectiveTextAlign(elementIndex);
 		const bool editable = elements[elementIndex].textInputIndex != INVALID_UI_INDEX;
@@ -888,11 +901,7 @@ namespace Shalltear::UI {
 		const u32 atlasGeneration = fontSystem->GetAtlasGeneration();
 		if (!text->dirty &&
 			text->shapedWrapWidth == text->wrapWidth &&
-			text->cachedSizePhysical == physicalSize &&
-			text->cachedOutlineWidth == physicalOutline &&
-			text->cachedLetterSpacing == physicalSpacing &&
-			text->cachedFontWeight == style.fontWeight &&
-			text->cachedFontStyle == style.fontStyle &&
+			text->cachedMetrics == metrics &&
 			text->cachedOverflow == overflow &&
 			text->cachedAlign == align &&
 			text->cachedEditable == editable &&
@@ -902,24 +911,16 @@ namespace Shalltear::UI {
 
 		TextQuery query;
 		query.font = text->font;
-		query.sizePx = physicalSize;
 		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
 		query.wrapWidth = text->wrapWidth;
 		query.overflow = overflow;
 		query.align = align;
 		query.editable = editable;
-		query.outlineWidth = physicalOutline;
-		query.letterSpacing = physicalSpacing;
-		query.fontWeight = style.fontWeight;
-		query.fontStyle = style.fontStyle;
+		metrics.ApplyTo(query);
 		fontSystem->ShapeText(query, text->shaped);
 
 		text->measuredExtent = text->shaped.extent;
-		text->cachedSizePhysical = physicalSize;
-		text->cachedOutlineWidth = physicalOutline;
-		text->cachedLetterSpacing = physicalSpacing;
-		text->cachedFontWeight = style.fontWeight;
-		text->cachedFontStyle = style.fontStyle;
+		text->cachedMetrics = metrics;
 		text->cachedOverflow = overflow;
 		text->cachedAlign = align;
 		text->cachedEditable = editable;
@@ -938,22 +939,11 @@ namespace Shalltear::UI {
 			return {};
 		}
 
-		const Style& style = ComputedS(elementIndex);
-		f32 scale = desc.contentScale > 0.0f ? desc.contentScale : 1.0f;
-		f32 physicalSize = text->sizePx * scale;
-		f32 physicalOutline = style.textOutlineWidth * scale;
-		f32 physicalSpacing = style.letterSpacing * scale;
-
+		const TextMetrics metrics = TextMetricsFor(elementIndex, *text);
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
-		if (text->memoSizePhysical != physicalSize || text->memoOutlineWidth != physicalOutline ||
-			text->memoLetterSpacing != physicalSpacing || text->memoFontWeight != style.fontWeight ||
-			text->memoFontStyle != style.fontStyle || text->memoOverflow != overflow) {
+		if (text->memoMetrics != metrics || text->memoOverflow != overflow) {
 			text->sizeCache.clear();
-			text->memoSizePhysical = physicalSize;
-			text->memoOutlineWidth = physicalOutline;
-			text->memoLetterSpacing = physicalSpacing;
-			text->memoFontWeight = style.fontWeight;
-			text->memoFontStyle = style.fontStyle;
+			text->memoMetrics = metrics;
 			text->memoOverflow = overflow;
 		}
 
@@ -971,14 +961,10 @@ namespace Shalltear::UI {
 
 		TextQuery query;
 		query.font = text->font;
-		query.sizePx = physicalSize;
 		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
 		query.wrapWidth = wrapWidth;
 		query.overflow = overflow;
-		query.outlineWidth = physicalOutline;
-		query.letterSpacing = physicalSpacing;
-		query.fontWeight = style.fontWeight;
-		query.fontStyle = style.fontStyle;
+		metrics.ApplyTo(query);
 		const Vec2 extent = fontSystem->MeasureText(query);
 		text->dirty = false;
 		text->StoreExtent(wrapWidth, extent);
@@ -1011,28 +997,18 @@ namespace Shalltear::UI {
 		if (!input || !text || input->completion.empty() || !fontSystem) {
 			return nullptr;
 		}
-		const f32 scale = desc.contentScale > 0.0f ? desc.contentScale : 1.0f;
 		CompletionKey key;
 		key.element = elementIndex;
 		key.generation = E(elementIndex).generation;
-		key.sizePhysical = text->sizePx * scale;
-		const Style& style = ComputedS(elementIndex);
-		key.letterSpacing = style.letterSpacing * scale;
-		key.fontWeight = style.fontWeight;
-		key.fontStyle = style.fontStyle;
+		key.metrics = TextMetricsFor(elementIndex, *text);
+		key.metrics.outlineWidth = 0.0f;
 		key.atlasGeneration = fontSystem->GetAtlasGeneration();
-		if (key.element != completionKey.element || key.generation != completionKey.generation ||
-			key.sizePhysical != completionKey.sizePhysical || key.letterSpacing != completionKey.letterSpacing ||
-			key.fontWeight != completionKey.fontWeight || key.fontStyle != completionKey.fontStyle ||
-			key.atlasGeneration != completionKey.atlasGeneration || completionShaped != input->completion) {
+		if (key != completionKey || completionShaped != input->completion) {
 			TextQuery query;
 			query.font = text->font;
-			query.sizePx = key.sizePhysical;
 			query.utf8 = std::string_view(input->completion.data(), input->completion.size());
 			query.overflow = TextOverflow::Clip;
-			query.letterSpacing = key.letterSpacing;
-			query.fontWeight = key.fontWeight;
-			query.fontStyle = key.fontStyle;
+			key.metrics.ApplyTo(query);
 			fontSystem->ShapeText(query, completionRun);
 			completionKey = key;
 			completionShaped = input->completion;

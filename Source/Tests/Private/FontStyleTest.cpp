@@ -442,6 +442,30 @@ TEST_F(FontInkFixture, OutlineFollowsRunInstance) {
 	AssetDatabase::UnloadAsset(font);
 }
 
+TEST_F(FontInkFixture, LineHeightMovesGlyphsByHalfLeading) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	UI::ShapedRun normal;
+	ASSERT_TRUE(fonts->ShapeText(Query(inter, 400, NORMAL, 20.0f, "H\nH"), normal));
+	ASSERT_EQ(normal.glyphs.size(), 2u);
+	EXPECT_EQ(normal.glyphs[1].rect.y - normal.glyphs[0].rect.y, normal.lineHeight);
+
+	for (f32 requested : {normal.lineHeight + 11.0f, normal.lineHeight - 7.0f, 40.0f, 22.6f}) {
+		UI::TextQuery query = Query(inter, 400, NORMAL, 20.0f, "H\nH");
+		query.lineHeight = requested;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		ASSERT_EQ(run.glyphs.size(), 2u) << requested;
+		EXPECT_EQ(run.lineHeight, std::round(requested)) << requested;
+		EXPECT_EQ(run.halfLeading, std::floor((run.lineHeight - normal.lineHeight) * 0.5f)) << requested;
+		EXPECT_EQ(run.glyphs[0].rect.y, normal.glyphs[0].rect.y + run.halfLeading) << requested;
+		EXPECT_EQ(run.glyphs[1].rect.y - run.glyphs[0].rect.y, run.lineHeight) << requested;
+		EXPECT_EQ(run.glyphs[0].rect.x, normal.glyphs[0].rect.x) << requested;
+	}
+	AssetDatabase::UnloadAsset(inter);
+}
+
 TEST_F(FontInkFixture, FallbackGlyphShearedWithRun) {
 	SetLists("Regular", {}, {"Inter"});
 	FontAsset* inter = Load("Inter");

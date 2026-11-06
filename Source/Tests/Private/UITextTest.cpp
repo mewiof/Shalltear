@@ -367,6 +367,74 @@ TEST_F(UIFontFixture, LetterSpacingIsPartOfWrapDecision) {
 	EXPECT_LE(spaced.extent.x, box + 0.01f);
 }
 
+TEST_F(UIFontFixture, LineHeightSetsLinePitch) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	UI::ShapedRun normal;
+	ASSERT_TRUE(fonts->ShapeText(Query("H\nH\nH"), normal));
+	ASSERT_LT(normal.extent.y, 120.0f);
+
+	UI::TextQuery query = Query("H\nH\nH");
+	query.lineHeight = 40.0f;
+	UI::ShapedRun loose;
+	ASSERT_TRUE(fonts->ShapeText(query, loose));
+	EXPECT_EQ(loose.LineCount(), 3u);
+	EXPECT_EQ(loose.lineHeight, 40.0f);
+	EXPECT_EQ(loose.extent.y, 120.0f);
+	EXPECT_EQ(loose.extent.x, normal.extent.x);
+	EXPECT_EQ(fonts->MeasureText(query).y, 120.0f);
+}
+
+TEST_F(UIFontFixture, LineHeightSplitsLeadingAroundFontLine) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	UI::ShapedRun normal;
+	ASSERT_TRUE(fonts->ShapeText(Query("H"), normal));
+	ASSERT_GT(normal.lineHeight, 10.0f);
+	EXPECT_EQ(normal.lineHeight, fonts->GetLineHeight(Handle<FontAsset>(_font), 16.0f));
+	EXPECT_EQ(normal.halfLeading, 0.0f);
+
+	for (f32 extra : {0.0f, 10.0f, 11.0f, -6.0f, -7.0f}) {
+		UI::TextQuery query = Query("H");
+		query.lineHeight = normal.lineHeight + extra;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		EXPECT_EQ(run.lineHeight, normal.lineHeight + extra) << extra;
+		EXPECT_EQ(run.halfLeading, std::floor(extra * 0.5f)) << extra;
+		EXPECT_EQ(run.extent.x, normal.extent.x) << extra;
+		EXPECT_EQ(run.extent.y, normal.lineHeight + extra) << extra;
+	}
+}
+
+TEST_F(UIFontFixture, FractionalLineHeightRoundsToWholePx) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	for (auto [requested, pitch] : {std::pair{22.6f, 23.0f}, std::pair{22.4f, 22.0f}, std::pair{0.3f, 1.0f}}) {
+		UI::TextQuery query = Query("H\nH\nH\nH");
+		query.lineHeight = requested;
+		UI::ShapedRun run;
+		ASSERT_TRUE(fonts->ShapeText(query, run));
+		EXPECT_EQ(run.lineHeight, pitch) << requested;
+		EXPECT_EQ(run.halfLeading, std::floor((pitch - fonts->GetLineHeight(Handle<FontAsset>(_font), 16.0f)) * 0.5f)) << requested;
+		EXPECT_EQ(run.extent.y, 4.0f * pitch) << requested;
+	}
+}
+
+TEST_F(UIFontFixture, LineHeightAppliesToSoftWrappedLines) {
+	UI::IFontSystem* fonts = UISystem::GetFontSystem();
+	constexpr char TEXT[] = "several words that will wrap";
+	const f32 box = fonts->MeasureText(Query(TEXT)).x * 0.4f;
+	UI::ShapedRun normal;
+	ASSERT_TRUE(fonts->ShapeText(Query(TEXT, box), normal));
+	const u32 lines = normal.LineCount();
+	ASSERT_GE(lines, 3u);
+
+	UI::TextQuery query = Query(TEXT, box);
+	query.lineHeight = 31.0f;
+	UI::ShapedRun loose;
+	ASSERT_TRUE(fonts->ShapeText(query, loose));
+	EXPECT_EQ(loose.LineCount(), lines);
+	EXPECT_EQ(loose.extent.y, 31.0f * static_cast<f32>(lines));
+	EXPECT_EQ(loose.extent.x, normal.extent.x);
+}
+
 TEST_F(UIFontFixture, MissingFontFailsCleanly) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
 	UI::TextQuery query;
@@ -644,11 +712,15 @@ TEST_F(UIFontFixture, MeasureMatchesShape) {
 	const str prefix = "the quick brown fox jumps over the lazy dog";
 	for (UI::TextOverflow overflow : {UI::TextOverflow::Clip, UI::TextOverflow::Wrap, UI::TextOverflow::Ellipsis}) {
 		for (f32 width : {0.0f, 120.0f, 4000.0f}) {
-			UI::ShapedRun run;
-			ASSERT_TRUE(fonts->ShapeText(Query(prefix, overflow, width), run));
-			const Vec2 measured = fonts->MeasureText(Query(prefix, overflow, width));
-			EXPECT_FLOAT_EQ(measured.x, run.extent.x) << "overflow " << static_cast<int>(overflow) << " at " << width;
-			EXPECT_FLOAT_EQ(measured.y, run.extent.y) << "overflow " << static_cast<int>(overflow) << " at " << width;
+			for (f32 lineHeight : {0.0f, 27.0f}) {
+				UI::TextQuery query = Query(prefix, overflow, width);
+				query.lineHeight = lineHeight;
+				UI::ShapedRun run;
+				ASSERT_TRUE(fonts->ShapeText(query, run));
+				const Vec2 measured = fonts->MeasureText(query);
+				EXPECT_FLOAT_EQ(measured.x, run.extent.x) << "overflow " << static_cast<int>(overflow) << " at " << width << " " << lineHeight;
+				EXPECT_FLOAT_EQ(measured.y, run.extent.y) << "overflow " << static_cast<int>(overflow) << " at " << width << " " << lineHeight;
+			}
 		}
 	}
 }

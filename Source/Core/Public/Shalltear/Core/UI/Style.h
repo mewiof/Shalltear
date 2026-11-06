@@ -56,6 +56,8 @@ namespace Shalltear::UI {
 		f32 textOutlineWidth = 0.0f;
 		Color textOutlineColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
 		f32 letterSpacing = 0.0f;
+		// Percent = fraction of font size (not of parent)
+		Length lineHeight = Length::Auto();
 		u16 fontWeight = 400;
 
 		bool pointerEvents = true;

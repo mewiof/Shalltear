@@ -620,6 +620,7 @@ namespace Shalltear::UI {
 		out.caretStops.clear();
 		out.extent = {};
 		out.lineHeight = 0.0f;
+		out.halfLeading = 0.0f;
 		out.multiline = false;
 		out.atlas = _atlas;
 
@@ -640,11 +641,14 @@ namespace Shalltear::UI {
 
 		FT_Face ftFace = run.face->face;
 		f32 ascender = static_cast<f32>(ftFace->size->metrics.ascender) / 64.0f;
-		f32 lineHeight = static_cast<f32>(ftFace->size->metrics.height) / 64.0f;
-		if (lineHeight <= 0.0f) {
-			lineHeight = ascender - static_cast<f32>(ftFace->size->metrics.descender) / 64.0f;
+		f32 fontLineHeight = static_cast<f32>(ftFace->size->metrics.height) / 64.0f;
+		if (fontLineHeight <= 0.0f) {
+			fontLineHeight = ascender - static_cast<f32>(ftFace->size->metrics.descender) / 64.0f;
 		}
+		const f32 lineHeight = query.lineHeight > 0.0f ? std::max(1.0f, std::round(query.lineHeight)) : fontLineHeight;
+		const f32 halfLeading = std::floor((lineHeight - fontLineHeight) * 0.5f);
 		out.lineHeight = lineHeight;
+		out.halfLeading = halfLeading;
 
 		const f32 letterSpacing = query.letterSpacing;
 		auto stepBefore = [&](const GlyphEntry* previous, const GlyphEntry* current, bool first) -> f32 {
@@ -671,7 +675,7 @@ namespace Shalltear::UI {
 		u32 lineStartByte = 0;
 
 		auto flushLine = [&](bool startNewLine, bool softWrap) {
-			f32 baseline = penY + ascender;
+			f32 baseline = penY + halfLeading + ascender;
 			f32 x = 0.0f;
 			f32 inked = 0.0f;
 			const GlyphEntry* previous = nullptr;

@@ -1777,6 +1777,65 @@ TEST_F(UIRenderFixture, BoldAndItalicTextReadBack) {
 	EXPECT_NEAR(italic.total, regular.total, regular.total * 0.1f);
 }
 
+TEST_F(UIRenderFixture, LineHeightTextReadBack) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{64, 128};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), FixedBox(64.0f, 128.0f));
+	ctx.SetText(label, font, 20.0f, Color::White(), "H\nH");
+
+	auto inkStarts = [&](UI::Length lineHeight, Vector<i32>& starts) {
+		UI::Style style = FixedBox(64.0f, 128.0f);
+		style.lineHeight = lineHeight;
+		ctx.SetStyle(label, style);
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+		if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels)) {
+			return false;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		bool previous = false;
+		for (i32 y = 0; y < size.y; ++y) {
+			bool inked = false;
+			for (i32 x = 0; x < size.x; ++x) {
+				inked = inked || HalfToFloat(halves[(static_cast<size_t>(y) * size.x + x) * 4 + 3]) > 0.25f;
+			}
+			if (inked && !previous) {
+				starts.push_back(y);
+			}
+			previous = inked;
+		}
+		return true;
+	};
+
+	Vector<i32> normal{GetMemoryResource(MemTag::Debug)};
+	Vector<i32> loose{GetMemoryResource(MemTag::Debug)};
+	if (!inkStarts(UI::Length::Auto(), normal)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	ASSERT_TRUE(inkStarts(UI::Length::Pixel(50.0f), loose));
+	ASSERT_EQ(normal.size(), 2u);
+	ASSERT_EQ(loose.size(), 2u);
+
+	const i32 fontLine = static_cast<i32>(UISystem::GetFontSystem()->GetLineHeight(font, 20.0f));
+	ASSERT_LT(fontLine, 40);
+	EXPECT_EQ(normal[1] - normal[0], fontLine);
+	EXPECT_EQ(loose[1] - loose[0], 50);
+	EXPECT_EQ(loose[0] - normal[0], (50 - fontLine) / 2);
+}
+
 TEST_F(UIRenderFixture, CenteredInputInksAboutBoxCenter) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

@@ -36,6 +36,18 @@ namespace Shalltear::UI {
 			return Length::Pixel(ParseFloat(value));
 		}
 
+		Length ParseLineHeight(std::string_view value) {
+			Length length = Length::Auto();
+			if (value.ends_with('%')) {
+				length = Length::Percent(ParseFloat(value.substr(0, value.size() - 1)) / 100.0f);
+			} else if (value.ends_with("px")) {
+				length = Length::Pixel(ParseFloat(value.substr(0, value.size() - 2)));
+			} else if (value != "normal") {
+				length = Length::Percent(ParseFloat(value));
+			}
+			return length.value > 0.0f ? length : Length::Auto();
+		}
+
 		Color ParseColor(std::string_view value) {
 			Color color = Color(0.0f, 0.0f, 0.0f, 0.0f);
 			if (value == "transparent" || value == "none") {
@@ -414,7 +426,7 @@ namespace Shalltear::UI {
 				: name(propertyName), hash(propertyName), setter(propertySetter), reader(propertyReader) {}
 		};
 
-		constexpr size_t PROPERTY_COUNT = 44;
+		constexpr size_t PROPERTY_COUNT = 45;
 
 		Align ParseAlign(std::string_view value, Align fallback) {
 			if (value == "center") {
@@ -555,6 +567,16 @@ namespace Shalltear::UI {
 				 [](const Style& s, Sink& o) { o.PutPx(s.textOutlineWidth); }},
 				{"letter-spacing", [](Style& s, std::string_view v) { s.letterSpacing = ParseFloat(v); },
 				 [](const Style& s, Sink& o) { o.PutPx(s.letterSpacing); }},
+				{"line-height", [](Style& s, std::string_view v) { s.lineHeight = ParseLineHeight(v); },
+				 [](const Style& s, Sink& o) {
+					 if (s.lineHeight.unit == Length::Unit::Percent) {
+						 o.Put(s.lineHeight.value);
+					 } else if (s.lineHeight.unit == Length::Unit::Pixel) {
+						 o.PutPx(s.lineHeight.value);
+					 } else {
+						 o.Put("normal");
+					 }
+				 }},
 				{"text-outline-color", [](Style& s, std::string_view v) { s.textOutlineColor = ParseColor(v); },
 				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor); }},
 				{"font-weight", [](Style& s, std::string_view v) {

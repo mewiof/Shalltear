@@ -1654,3 +1654,98 @@ TEST(UIInputTest, CompletionTakenByTabAtEnd) {
 	Press(ctx, Key::Tab);
 	EXPECT_EQ(ctx.GetTextString(input), "multiply");
 }
+
+namespace {
+
+	UI::ElementHandle MakeLooseInput(UI::Context& ctx, std::string_view text, bool multiline) {
+		UI::Style root;
+		root.alignItems = UI::Align::Start;
+		ctx.SetStyle(ctx.GetRoot(), root);
+		UI::ElementHandle input = ctx.CreateElement();
+		ctx.AppendChild(ctx.GetRoot(), input);
+		UI::Style style;
+		style.width = UI::Length::Pixel(200.0f);
+		style.lineHeight = UI::Length::Pixel(40.0f);
+		ctx.SetStyle(input, style);
+		ctx.SetText(input, Handle<FontAsset>{}, 14.0f, Color::White(), text);
+		ctx.SetTextInput(input, true);
+		ctx.SetTextInputMultiline(input, multiline);
+		ctx.Update();
+		Click(ctx, 5, 5);
+		Press(ctx, Key::End, KeyMod::Ctrl);
+		return input;
+	}
+
+	struct PaintedText {
+		Vector<UI::Rect> glyphs{GetMemoryResource(MemTag::UI)};
+		Vector<UI::Rect> carets{GetMemoryResource(MemTag::UI)};
+		Vector<UI::Rect> bands{GetMemoryResource(MemTag::UI)};
+	};
+
+	PaintedText PaintText(UI::Context& ctx) {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		PaintedText out;
+		for (const UI::UIQuad& quad : list.quads) {
+			if ((quad.flags & UI::QUAD_FLAG_GLYPH) != 0u) {
+				out.glyphs.push_back(quad.rect);
+			} else if (quad.rect.w > 0.0f && quad.rect.w <= 1.5f) {
+				out.carets.push_back(quad.rect);
+			} else if (quad.color0.a > 0.1f && quad.color0.a < 0.9f) {
+				out.bands.push_back(quad.rect);
+			}
+		}
+		return out;
+	}
+
+} // anonymous namespace
+
+TEST(UIInputTest, LineHeightCaretCoversFontBand) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	UI::ElementHandle input = MakeLooseInput(ctx, "abc", false);
+	ASSERT_EQ(ctx.GetFocused(), input);
+	const UI::Rect content = ctx.GetLayout(input).content;
+	EXPECT_NEAR(content.h, 40.0f, 0.01f);
+
+	const PaintedText caret = PaintText(ctx);
+	ASSERT_EQ(caret.carets.size(), 1u);
+	EXPECT_NEAR(caret.carets[0].y, content.y + 12.0f, 0.01f);
+	EXPECT_NEAR(caret.carets[0].h, MockFontSystem::LINE_HEIGHT, 0.01f);
+	ASSERT_EQ(caret.glyphs.size(), 3u);
+	EXPECT_NEAR(caret.glyphs[0].y, content.y + 14.0f, 0.01f);
+
+	Press(ctx, Key::A, KeyMod::Ctrl);
+	const PaintedText selected = PaintText(ctx);
+	EXPECT_TRUE(selected.carets.empty());
+	ASSERT_EQ(selected.bands.size(), 1u);
+	EXPECT_NEAR(selected.bands[0].y, content.y, 0.01f);
+	EXPECT_NEAR(selected.bands[0].h, 40.0f, 0.01f);
+}
+
+TEST(UIInputTest, LineHeightClickLandsOnLine) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	UI::ElementHandle input = MakeLooseInput(ctx, "ab\ncd\nef", true);
+	const UI::Rect content = ctx.GetLayout(input).content;
+	EXPECT_NEAR(content.h, 120.0f, 0.01f);
+
+	Click(ctx, static_cast<i32>(content.x) + 2, static_cast<i32>(content.y) + 45);
+	Type(ctx, U"X");
+	EXPECT_EQ(ctx.GetTextString(input), "ab\nXcd\nef");
+}
+
+TEST(UIInputTest, LineHeightCompletionSharesLine) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	UI::ElementHandle input = MakeLooseInput(ctx, "mul", false);
+	ctx.SetTextInputCompletion(input, "tiply", Color::White());
+
+	const PaintedText painted = PaintText(ctx);
+	ASSERT_EQ(painted.glyphs.size(), 8u);
+	const f32 top = ctx.GetLayout(input).content.y + 14.0f;
+	for (const UI::Rect& glyph : painted.glyphs) {
+		EXPECT_NEAR(glyph.y, top, 0.01f);
+	}
+}

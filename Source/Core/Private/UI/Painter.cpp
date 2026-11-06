@@ -522,8 +522,8 @@ namespace Shalltear::UI {
 					const f64 sinceMove = Time::GetRealtimeSinceStartup() - ctx.caretBlinkStart;
 					if (input->cursor == input->anchor && std::fmod(sinceMove, 1.0) < 0.5) {
 						EmitParams caret;
-						caret.rect = {Snap(dx + caretX), dy + static_cast<f32>(at.line) * lineHeight, std::max(1.0f, Snap(state.scale)),
-									  band};
+						caret.rect = {Snap(dx + caretX), dy + static_cast<f32>(at.line) * lineHeight + run.halfLeading,
+									  std::max(1.0f, Snap(state.scale)), band - 2.0f * run.halfLeading};
 						caret.colorSRGB = text->color;
 						caret.snap = false;
 						EmitRect(*state.list, state.ink, caret, opacity, z, clipRect, clipRadii);

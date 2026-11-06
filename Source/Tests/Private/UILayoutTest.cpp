@@ -909,6 +909,97 @@ TEST(UILayoutTest, LetterSpacingScalesWithContentScale) {
 	EXPECT_NEAR(ctx.GetLayout(label).borderBox.w, 50.0f + 4.0f * 6.0f, 0.01f);
 }
 
+TEST(UILayoutTest, LineHeightSizesTextBox) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(400, 300), &fonts);
+	UI::Style columnStyle;
+	columnStyle.flexDirection = UI::FlexDirection::Column;
+	columnStyle.alignItems = UI::Align::Start;
+	ctx.SetStyle(ctx.GetRoot(), columnStyle);
+
+	UI::ElementHandle label = ctx.CreateElement();
+	ctx.AppendChild(ctx.GetRoot(), label);
+	ctx.SetText(label, Handle<FontAsset>{}, 14.0f, Color::White(), "a\nb");
+	ctx.Update();
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 32.0f, 0.01f);
+
+	UI::Style loose;
+	loose.lineHeight = UI::Length::Pixel(24.0f);
+	ctx.SetStyle(label, loose);
+	ctx.Update();
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 48.0f, 0.01f);
+
+	loose.lineHeight = UI::Length::Percent(2.0f);
+	ctx.SetStyle(label, loose);
+	ctx.Update();
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 56.0f, 0.01f);
+
+	ctx.SetStyle(label, UI::Style{});
+	ctx.Update();
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 32.0f, 0.01f);
+}
+
+TEST(UILayoutTest, LineHeightScalesWithContentScale) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(400, 300, 2.0f), &fonts);
+	UI::Style columnStyle;
+	columnStyle.flexDirection = UI::FlexDirection::Column;
+	columnStyle.alignItems = UI::Align::Start;
+	ctx.SetStyle(ctx.GetRoot(), columnStyle);
+
+	UI::ElementHandle px = ctx.CreateElement();
+	ctx.AppendChild(ctx.GetRoot(), px);
+	UI::Style pixels;
+	pixels.lineHeight = UI::Length::Pixel(24.0f);
+	ctx.SetStyle(px, pixels);
+	ctx.SetText(px, Handle<FontAsset>{}, 14.0f, Color::White(), "a\nb");
+
+	UI::ElementHandle factor = ctx.CreateElement();
+	ctx.AppendChild(ctx.GetRoot(), factor);
+	UI::Style relative;
+	relative.lineHeight = UI::Length::Percent(1.5f);
+	ctx.SetStyle(factor, relative);
+	ctx.SetText(factor, Handle<FontAsset>{}, 14.0f, Color::White(), "a\nb");
+	ctx.Update();
+
+	EXPECT_NEAR(ctx.GetLayout(px).borderBox.h, 2.0f * 48.0f, 0.01f);
+	EXPECT_NEAR(ctx.GetLayout(factor).borderBox.h, 2.0f * 42.0f, 0.01f);
+}
+
+TEST(UILayoutTest, LineHeightFromSheetReachesText) {
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(400, 300), &fonts);
+	ctx.LoadStyleSheet(".loose { line-height: 30px; }");
+	UI::Style columnStyle;
+	columnStyle.flexDirection = UI::FlexDirection::Column;
+	columnStyle.alignItems = UI::Align::Start;
+	ctx.SetStyle(ctx.GetRoot(), columnStyle);
+
+	UI::ElementHandle label = ctx.CreateElement();
+	ctx.AppendChild(ctx.GetRoot(), label);
+	ctx.SetText(label, Handle<FontAsset>{}, 14.0f, Color::White(), "a\nb\nc");
+
+	auto drawn = [&]() {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		const UI::Context::ShapedTextView view = ctx.GetShapedText(label);
+		EXPECT_NE(view.run, nullptr);
+		EXPECT_EQ(view.run ? view.run->extent.y : -1.0f, ctx.GetLayout(label).content.h);
+		return view.run ? Vec2{view.run->lineHeight, view.run->halfLeading} : Vec2{-1.0f, -1.0f};
+	};
+	EXPECT_EQ(drawn(), (Vec2{16.0f, 0.0f}));
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 48.0f, 0.01f);
+
+	ctx.AddClass(label, StringHash("loose"));
+	EXPECT_EQ(drawn(), (Vec2{30.0f, 7.0f}));
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 90.0f, 0.01f);
+
+	ctx.RemoveClass(label, StringHash("loose"));
+	EXPECT_EQ(drawn(), (Vec2{16.0f, 0.0f}));
+	EXPECT_NEAR(ctx.GetLayout(label).borderBox.h, 48.0f, 0.01f);
+}
+
 TEST(UILayoutTest, IncrementalRelayoutTracksChanges) {
 	UI::Context ctx(Desc(), nullptr);
 	UI::ElementHandle root = ctx.GetRoot();

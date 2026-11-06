@@ -55,6 +55,26 @@ namespace Shalltear::UI {
 		return {x0, y0, x1 - x0, y1 - y0};
 	}
 
+	struct TextMetrics {
+		f32 sizePhysical = -1.0f;
+		f32 outlineWidth = 0.0f;
+		f32 letterSpacing = 0.0f;
+		f32 lineHeight = 0.0f;
+		u16 fontWeight = 400;
+		FontStyle fontStyle = FontStyle::Normal;
+
+		void ApplyTo(TextQuery& query) const {
+			query.sizePx = sizePhysical;
+			query.outlineWidth = outlineWidth;
+			query.letterSpacing = letterSpacing;
+			query.lineHeight = lineHeight;
+			query.fontWeight = fontWeight;
+			query.fontStyle = fontStyle;
+		}
+
+		bool operator==(const TextMetrics&) const = default;
+	};
+
 	struct TextComponent {
 		Handle<FontAsset> font;
 		f32 sizePx = 16.0f;
@@ -64,11 +84,7 @@ namespace Shalltear::UI {
 		ShapedRun shaped;
 		f32 wrapWidth = 0.0f;
 		f32 shapedWrapWidth = -1.0f;
-		f32 cachedOutlineWidth = 0.0f;
-		f32 cachedLetterSpacing = 0.0f;
-		u16 cachedFontWeight = 400;
-		FontStyle cachedFontStyle = FontStyle::Normal;
-		f32 cachedSizePhysical = 0.0f;
+		TextMetrics cachedMetrics;
 		TextOverflow cachedOverflow = TextOverflow::Wrap;
 		Align cachedAlign = Align::Start;
 		bool cachedEditable = false;
@@ -81,11 +97,7 @@ namespace Shalltear::UI {
 		};
 		static constexpr size_t MAX_SIZE_ENTRIES = 4;
 		Vector<SizeEntry> sizeCache{GetMemoryResource(MemTag::UI)};
-		f32 memoSizePhysical = -1.0f;
-		f32 memoOutlineWidth = -1.0f;
-		f32 memoLetterSpacing = 0.0f;
-		u16 memoFontWeight = 400;
-		FontStyle memoFontStyle = FontStyle::Normal;
+		TextMetrics memoMetrics;
 		TextOverflow memoOverflow = TextOverflow::Wrap;
 
 		bool dirty = true;
@@ -352,6 +364,7 @@ namespace Shalltear::UI {
 		TextInputState* GetTextInput(u32 elementIndex);
 		TextOverflow EffectiveTextOverflow(u32 elementIndex) const;
 		Align EffectiveTextAlign(u32 elementIndex) const;
+		TextMetrics TextMetricsFor(u32 elementIndex, const TextComponent& text);
 		void EnsureShaped(u32 elementIndex);
 		Vec2 MeasureTextExtent(u32 elementIndex, f32 wrapWidth, bool commit = true);
 		void OnTextEdited(u32 elementIndex);
@@ -360,11 +373,10 @@ namespace Shalltear::UI {
 		struct CompletionKey {
 			u32 element = INVALID_UI_INDEX;
 			u32 generation = 0;
-			f32 sizePhysical = -1.0f;
-			f32 letterSpacing = 0.0f;
-			u16 fontWeight = 400;
-			FontStyle fontStyle = FontStyle::Normal;
+			TextMetrics metrics;
 			u32 atlasGeneration = 0;
+
+			bool operator==(const CompletionKey&) const = default;
 		};
 		CompletionKey completionKey;
 		String completionShaped{GetMemoryResource(MemTag::UI)};

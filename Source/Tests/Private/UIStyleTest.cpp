@@ -447,7 +447,31 @@ TEST(UIStyleTest, FontWeightKeywordsAndNumbers) {
 	EXPECT_EQ(UI::ReadStyleProperty(written, StringHash("font-style"), buffer, sizeof(buffer)), "italic");
 }
 
-static_assert(sizeof(UI::Style) == 552, "Style changed shape. See UIStyleVocabulary.h");
+TEST(UIStyleTest, LineHeightNumbersPercentsAndPixels) {
+	auto parse = [](std::string_view value) {
+		UI::Style style;
+		style.lineHeight = UI::Length::Pixel(99.0f);
+		EXPECT_TRUE(UI::ApplyStyleDeclaration(style, StringHash("line-height"), value, nullptr)) << value;
+		return style.lineHeight;
+	};
+	EXPECT_EQ(parse("normal"), UI::Length::Auto());
+	EXPECT_EQ(parse("1.5"), UI::Length::Percent(1.5f));
+	EXPECT_EQ(parse("150%"), UI::Length::Percent(1.5f));
+	EXPECT_EQ(parse("24px"), UI::Length::Pixel(24.0f));
+	EXPECT_EQ(parse("0"), UI::Length::Auto());
+	EXPECT_EQ(parse("-2"), UI::Length::Auto());
+	EXPECT_EQ(parse("-10px"), UI::Length::Auto());
+	EXPECT_EQ(parse("tall"), UI::Length::Auto());
+
+	char buffer[UI::MAX_STYLE_VALUE_TEXT];
+	for (std::string_view value : {"normal", "1.5", "24px"}) {
+		UI::Style style;
+		style.lineHeight = parse(value);
+		EXPECT_EQ(UI::ReadStyleProperty(style, StringHash("line-height"), buffer, sizeof(buffer)), value);
+	}
+}
+
+static_assert(sizeof(UI::Style) == 560, "Style changed shape. See UIStyleVocabulary.h");
 
 TEST(UIStyleTest, EveryStyleFieldHasAStylesheetSpelling) {
 	for (const StyleVocabulary::Entry& entry : StyleVocabulary::All) {

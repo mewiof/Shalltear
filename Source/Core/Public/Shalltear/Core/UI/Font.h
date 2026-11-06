@@ -37,6 +37,8 @@ namespace Shalltear::UI {
 
 		Vec2 extent{};
 		f32 lineHeight = 0.0f;
+		// space above font's line box in each line (negative if tighter)
+		f32 halfLeading = 0.0f;
 		bool multiline = false;
 		bool truncated = false;
 		RHI::TextureHandle atlas;
@@ -60,6 +62,7 @@ namespace Shalltear::UI {
 		bool editable = false;
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
+		f32 lineHeight = 0.0f;
 		u16 fontWeight = 400;
 		FontStyle fontStyle = FontStyle::Normal;
 	};

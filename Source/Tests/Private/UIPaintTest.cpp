@@ -517,6 +517,39 @@ TEST(UIPaintTest, TexturedQuadCarriesEncodingCallerAskedFor) {
 	EXPECT_EQ(list.quads[2].flags & UI::QUAD_FLAG_PREMULTIPLIED, 0u);
 }
 
+TEST(UIPaintTest, SnapOffKeepsFractionalRects) {
+	UI::Context ctx(Desc(), nullptr);
+	UI::ElementHandle first = MakeChild(ctx, ctx.GetRoot(), FixedBox(100.0f, 100.0f));
+	UI::ElementHandle second = MakeChild(ctx, ctx.GetRoot(), FixedBox(100.0f, 100.0f));
+	const RHI::TextureHandle page{9, 1};
+	const UI::Rect fractional{10.25f, 4.5f, 20.5f, 8.75f};
+	ctx.Events(first).customDraw = [page, fractional](UI::Context&, UI::ElementHandle, UI::PaintScope& scope) {
+		scope.SetSnapToPixels(false);
+		scope.EmitQuad(fractional, Color::White());
+		scope.EmitTexturedQuad(fractional, page, {0.0f, 0.0f, 1.0f, 1.0f}, Color::White());
+		scope.EmitRing(fractional, UI::Edges::All(2.0f), Color::White());
+		scope.SetSnapToPixels(true);
+		scope.EmitQuad(fractional, Color::White());
+	};
+	ctx.Events(second).customDraw = [fractional](UI::Context&, UI::ElementHandle, UI::PaintScope& scope) {
+		scope.EmitQuad(fractional, Color::White());
+	};
+	ctx.Update();
+
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+	ASSERT_EQ(list.quads.size(), 5u);
+	for (size_t i = 0; i < 3; ++i) {
+		EXPECT_EQ(list.quads[i].rect, fractional) << i;
+		EXPECT_NE(list.quads[i].flags & UI::QUAD_FLAG_SUBPIXEL, 0u) << i;
+	}
+	EXPECT_EQ(list.quads[2].uv, (UI::Rect{12.25f, 6.5f, 16.5f, 4.75f}));
+	for (size_t i = 3; i < 5; ++i) {
+		EXPECT_EQ(list.quads[i].rect, (UI::Rect{10.0f, 5.0f, 21.0f, 8.0f})) << i;
+		EXPECT_EQ(list.quads[i].flags & UI::QUAD_FLAG_SUBPIXEL, 0u) << i;
+	}
+}
+
 TEST(UIPaintTest, ContentOverInsetRing) {
 	MockFontSystem fonts;
 	UI::Context ctx(Desc(), &fonts);

@@ -170,6 +170,7 @@ namespace Shalltear::UI {
 			bool glyph = false;
 			bool premultiplied = false;
 			bool snap = true;
+			bool subPixel = false;
 			const Rect* visualRect = nullptr;
 			const Rect* innerRect = nullptr;
 			Radii innerRadii{};
@@ -228,6 +229,9 @@ namespace Shalltear::UI {
 			if (params.glyph) {
 				quad.flags |= QUAD_FLAG_GLYPH;
 			}
+			if (params.subPixel && params.rotation == 0.0f) {
+				quad.flags |= QUAD_FLAG_SUBPIXEL;
+			}
 			if (params.premultiplied) {
 				quad.flags |= QUAD_FLAG_PREMULTIPLIED;
 			}
@@ -260,7 +264,7 @@ namespace Shalltear::UI {
 
 		void EmitRingQuad(RenderList& list, Rect& ink, const Rect& bounds, const Radii& radii, const Edges& widthPx,
 						  const Radii& innerRadii, Color colorSRGB, f32 opacity, i32 z,
-						  const Rect& clipRect, const Radii& clipRadii) {
+						  const Rect& clipRect, const Radii& clipRadii, bool subPixel = false) {
 			if (widthPx == Edges{} || bounds.w <= 0.0f || bounds.h <= 0.0f) {
 				return;
 			}
@@ -269,6 +273,7 @@ namespace Shalltear::UI {
 			EmitParams params;
 			params.rect = bounds;
 			params.snap = false;
+			params.subPixel = subPixel;
 			params.colorSRGB = colorSRGB;
 			params.radii = radii;
 			params.innerRect = &inner;
@@ -298,6 +303,8 @@ namespace Shalltear::UI {
 	void PaintScope::EmitQuad(const Rect& rect, Color colorSRGB, const Radii& radii, f32 softness) {
 		EmitParams params;
 		params.rect = rect;
+		params.snap = _snap;
+		params.subPixel = !_snap;
 		params.colorSRGB = colorSRGB;
 		params.radii = radii;
 		params.softness = softness;
@@ -308,6 +315,8 @@ namespace Shalltear::UI {
 									  SamplerKind sampler, const Radii& radii, TexelEncoding encoding) {
 		EmitParams params;
 		params.rect = rect;
+		params.snap = _snap;
+		params.subPixel = !_snap;
 		params.colorSRGB = tintSRGB;
 		params.texture = texture;
 		params.uv = uv;
@@ -340,8 +349,12 @@ namespace Shalltear::UI {
 	}
 
 	void PaintScope::EmitRing(const Rect& rect, const Edges& widthsPx, Color colorSRGB, const Radii& radii) {
-		EmitRingQuad(*_list, *_ink, SnapRect(rect), radii, widthsPx, DeflateRadii(radii, widthsPx),
-					 colorSRGB, _opacity, _z, _clipRect, _clipRadii);
+		EmitRingQuad(*_list, *_ink, _snap ? SnapRect(rect) : rect, radii, widthsPx, DeflateRadii(radii, widthsPx),
+					 colorSRGB, _opacity, _z, _clipRect, _clipRadii, !_snap);
+	}
+
+	void PaintScope::SetSnapToPixels(bool snap) {
+		_snap = snap;
 	}
 
 	namespace {

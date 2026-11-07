@@ -29,6 +29,9 @@ struct UIQuad {
 #define UI_FLAG_RING 32u
 #define UI_FLAG_ROTATED 64u
 #define UI_FLAG_RADIAL_FILL 128u
+#define UI_FLAG_SUBPIXEL 256u
+
+#define UI_SUBPIXEL_MARGIN_PX 1.0
 
 #define UI_TEXTURE_DECODES 1u
 
@@ -81,6 +84,9 @@ VSOutput VSMain(uint vertexId : SV_VertexID) {
 	}
 	if (cornerIndex == 3u) {
 		corner = float2(0.0, 0.0);
+	}
+	if ((quad.flags & UI_FLAG_SUBPIXEL) != 0u) {
+		corner += (corner * 2.0 - 1.0) * (UI_SUBPIXEL_MARGIN_PX / max(quad.rect.zw, 1e-4));
 	}
 
 	float2 cosSin = float2(1.0, 0.0);
@@ -206,6 +212,23 @@ float RadialFillCoverage(float2 p, float4 wedge) {
 	return saturate(px + 0.5);
 }
 
+float BoxOverlap(float2 p, float4 box, float4 clip) {
+	float2 lo = max(max(p - 0.5, box.xy), clip.xy);
+	float2 hi = min(min(p + 0.5, box.xy + box.zw), clip.xy + clip.zw);
+	float2 span = saturate(hi - lo);
+	return span.x * span.y;
+}
+
+float2 ClampToUVRect(float2 uv, float4 uvRect) {
+	float width;
+	float height;
+	sltUITexture.GetDimensions(width, height);
+	float2 lo = min(uvRect.xy, uvRect.xy + uvRect.zw);
+	float2 hi = max(uvRect.xy, uvRect.xy + uvRect.zw);
+	float2 inset = min(0.5 / float2(width, height), (hi - lo) * 0.5);
+	return clamp(uv, lo + inset, hi - inset);
+}
+
 float DitherNoise(float2 p) {
 	return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453123);
 }
@@ -252,26 +275,51 @@ float4 PSMain(VSOutput input) : SV_Target {
 								   -d.x * input.cosSin.y + d.y * input.cosSin.x);
 	}
 
+	const bool subPixel = (input.flags & UI_FLAG_SUBPIXEL) != 0u;
+	const bool ring = (input.flags & UI_FLAG_RING) != 0u && input.innerBox.z > 0.0 && input.innerBox.w > 0.0;
+	const bool square = subPixel && input.softness <= 0.0 && all(input.radii == 0.0) && all(input.clipRadii == 0.0) &&
+						(!ring || all(input.innerRadii == 0.0));
+	float2 uv = input.uv;
+	if (subPixel && (input.flags & UI_FLAG_RING) == 0u) {
+		uv = ClampToUVRect(uv, input.innerBox);
+	}
+
 	float4 color = input.color;
-	float4 texel = sltUITexture.Sample(sltUISampler, input.uv);
+	float4 texel = sltUITexture.Sample(sltUISampler, uv);
 	if ((gPush.textureFlags & UI_TEXTURE_DECODES) != 0u) {
 		texel.rgb = ShalltearLinearToSrgb(texel.rgb);
 	}
 
 	if ((input.flags & UI_FLAG_GLYPH) != 0u) {
-		color.a *= texel.r * clipMask;
+		float edge = clipMask;
+		if (square) {
+			edge = BoxOverlap(contextPos, input.sdfBox, input.clipRect);
+		} else if (subPixel) {
+			float support;
+			float dist = RoundedBoxSDF(shapePos, input.sdfBox, input.radii, false, input.cosSin, support);
+			edge = ClippedCoverage(dist, support, clipDist, clipSupport, clipMask, input.softness);
+		}
+		color.a *= texel.r * edge;
 	} else {
 		if ((input.flags & UI_FLAG_PREMULTIPLIED) != 0u && texel.a > 0.0) {
 			texel.rgb /= texel.a;
 		}
 		color *= texel;
-		float support;
-		float dist = RoundedBoxSDF(shapePos, input.sdfBox, input.radii, rotated, input.cosSin, support);
-		float coverage = ClippedCoverage(dist, support, clipDist, clipSupport, clipMask, input.softness);
-		if ((input.flags & UI_FLAG_RING) != 0u && input.innerBox.z > 0.0 && input.innerBox.w > 0.0) {
-			float innerSupport;
-			float innerDist = RoundedBoxSDF(shapePos, input.innerBox, input.innerRadii, rotated, input.cosSin, innerSupport);
-			coverage = max(coverage - ClippedCoverage(innerDist, innerSupport, clipDist, clipSupport, clipMask, input.softness), 0.0);
+		float coverage;
+		if (square) {
+			coverage = BoxOverlap(contextPos, input.sdfBox, input.clipRect);
+			if (ring) {
+				coverage = max(coverage - BoxOverlap(contextPos, input.innerBox, input.clipRect), 0.0);
+			}
+		} else {
+			float support;
+			float dist = RoundedBoxSDF(shapePos, input.sdfBox, input.radii, rotated, input.cosSin, support);
+			coverage = ClippedCoverage(dist, support, clipDist, clipSupport, clipMask, input.softness);
+			if (ring) {
+				float innerSupport;
+				float innerDist = RoundedBoxSDF(shapePos, input.innerBox, input.innerRadii, rotated, input.cosSin, innerSupport);
+				coverage = max(coverage - ClippedCoverage(innerDist, innerSupport, clipDist, clipSupport, clipMask, input.softness), 0.0);
+			}
 		}
 		if ((input.flags & UI_FLAG_RADIAL_FILL) != 0u) {
 			coverage *= RadialFillCoverage(contextPos, input.innerRadii);

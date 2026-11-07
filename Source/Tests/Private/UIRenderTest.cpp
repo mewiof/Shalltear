@@ -2321,6 +2321,179 @@ TEST_F(UIRenderFixture, TurnedChildCutByParentClip) {
 	EXPECT_GT(coverage(32, 0), 0.999f);
 }
 
+namespace {
+
+	f64 Overlap(i32 pixel, f64 lo, f64 hi) {
+		return std::clamp(std::min(pixel + 1.0, hi) - std::max(static_cast<f64>(pixel), lo), 0.0, 1.0);
+	}
+
+	f64 RectCoverage(i32 x, i32 y, const UI::Rect& rect) {
+		return Overlap(x, rect.x, rect.x + rect.w) * Overlap(y, rect.y, rect.y + rect.h);
+	}
+
+	void ExpectCoverage(const Vector<u8>& texels, i32 channel, const std::function<f64(i32, i32)>& expected) {
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		for (i32 y = 0; y < 64; ++y) {
+			for (i32 x = 0; x < 64; ++x) {
+				ASSERT_NEAR(HalfToFloat(halves[(static_cast<size_t>(y) * 64 + x) * 4 + channel]), expected(x, y), 0.005) << x << ", " << y;
+			}
+		}
+	}
+
+	f64 Total(const Vector<u8>& texels, i32 channel) {
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		f64 total = 0.0;
+		for (size_t texel = 0; texel < 64 * 64; ++texel) {
+			total += HalfToFloat(halves[texel * 4 + channel]);
+		}
+		return total;
+	}
+
+	bool RenderCustomDraw(Vector<u8>& texels, const std::function<void(UI::PaintScope&)>& draw) {
+		UI::Context ctx(TurnedDesc(), nullptr);
+		UI::ElementHandle host = MakeChild(ctx, ctx.GetRoot(), FixedBox(64.0f, 64.0f));
+		ctx.Events(host).customDraw = [&draw](UI::Context&, UI::ElementHandle, UI::PaintScope& scope) { draw(scope); };
+		return RenderContextOffscreen(ctx, {64, 64}, texels);
+	}
+
+} // anonymous namespace
+
+TEST_F(UIRenderFixture, SubPixelQuadMovesInEighths) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	for (i32 step = 0; step < 8; ++step) {
+		const f32 shift = static_cast<f32>(step) * 0.125f;
+		const UI::Rect rect{20.0f + shift, 30.0f + shift * 0.5f, 9.5f, 6.25f};
+		for (const bool snap : {false, true}) {
+			Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+			const bool drawn = RenderCustomDraw(texels, [&](UI::PaintScope& scope) {
+				scope.SetSnapToPixels(snap);
+				scope.EmitQuad(rect, Color::White());
+			});
+			if (!drawn) {
+				GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+			}
+			SCOPED_TRACE(testing::Message() << step << snap);
+			const UI::Rect placed = snap ? UI::SnapRectToPixels(rect) : rect;
+			ExpectCoverage(texels, 0, [&](i32 x, i32 y) { return RectCoverage(x, y, placed); });
+		}
+	}
+}
+
+TEST_F(UIRenderFixture, SubPixelQuadCutByFractionalClip) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UI::UIQuad quad;
+	quad.rect = {12.375f, 14.625f, 10.5f, 7.25f};
+	quad.uv = {0.0f, 0.0f, 1.0f, 1.0f};
+	quad.color0 = Color::White();
+	quad.color1 = quad.color0;
+	quad.clipRect = {16.25f, 15.5f, 30.0f, 30.0f};
+	quad.flags = UI::QUAD_FLAG_SUBPIXEL;
+
+	UI::RenderList list;
+	list.quads.push_back(quad);
+	UI::UICommand command;
+	command.kind = UI::UICommandKind::Quads;
+	command.firstQuad = 0;
+	command.quadCount = 1;
+	list.commands.push_back(command);
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, {64, 64}, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const UI::Rect shown = UI::RectIntersect(quad.rect, quad.clipRect);
+	ExpectCoverage(texels, 0, [&](i32 x, i32 y) { return RectCoverage(x, y, shown); });
+}
+
+TEST_F(UIRenderFixture, SubPixelSpriteStaysInsideUVRect) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	RHI::Device* device = RenderSystem::GetDevice();
+	ASSERT_NE(device, nullptr);
+
+	const u8 strip[16] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255};
+	RHI::TextureDesc sheetDesc;
+	sheetDesc.size = {4, 1};
+	sheetDesc.format = RHI::Format::RGBA8Unorm;
+	sheetDesc.usage = RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferDst;
+	sheetDesc.debugName = "SubPixelSpriteSheet";
+	RHI::TextureHandle sheet = device->CreateTextureResource(sheetDesc);
+	ASSERT_TRUE(sheet.IsValid());
+	device->UploadTexture(sheet, strip);
+
+	const UI::Rect sprite{0.25f, 0.0f, 0.5f, 1.0f};
+	const UI::Rect oneToOne{20.375f, 10.5f, 2.0f, 3.0f};
+	const UI::Rect stretched{30.625f, 20.25f, 7.0f, 3.0f};
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	const bool drawn = RenderCustomDraw(texels, [&](UI::PaintScope& scope) {
+		scope.SetSnapToPixels(false);
+		scope.EmitTexturedQuad(oneToOne, sheet, sprite, Color::White());
+		scope.EmitTexturedQuad(stretched, sheet, sprite, Color::White());
+	});
+	device->DestroyResource(sheet);
+	if (!drawn) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	EXPECT_LT(Total(texels, 0), 0.001);
+	ExpectCoverage(texels, 1, [&](i32 x, i32 y) { return RectCoverage(x, y, oneToOne) + RectCoverage(x, y, stretched); });
+}
+
+TEST_F(UIRenderFixture, SubPixelCoverageQuadCoversArea) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	const UI::Rect rect{20.375f, 20.625f, 10.5f, 7.25f};
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	const bool drawn = RenderCustomDraw(texels, [&](UI::PaintScope& scope) {
+		scope.SetSnapToPixels(false);
+		scope.EmitTexturedQuad(rect, {}, {0.0f, 0.0f, 1.0f, 1.0f}, Color::White(), UI::SamplerKind::LinearClamp, {},
+							   UI::TexelEncoding::Coverage);
+	});
+	if (!drawn) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	ExpectCoverage(texels, 0, [&](i32 x, i32 y) { return RectCoverage(x, y, rect); });
+}
+
+TEST_F(UIRenderFixture, SubPixelRoundedCoverageQuadCoversArea) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	const UI::Rect rect{20.375f, 20.625f, 12.0f, 10.0f};
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	const bool drawn = RenderCustomDraw(texels, [&](UI::PaintScope& scope) {
+		scope.SetSnapToPixels(false);
+		scope.EmitTexturedQuad(rect, {}, {0.0f, 0.0f, 1.0f, 1.0f}, Color::White(), UI::SamplerKind::LinearClamp,
+							   UI::Radii::All(3.0f), UI::TexelEncoding::Coverage);
+	});
+	if (!drawn) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	EXPECT_NEAR(Total(texels, 0), rect.w * rect.h - (4.0 - 3.14159265) * 9.0, 0.5);
+}
+
+TEST_F(UIRenderFixture, SubPixelRingCoversArea) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	const UI::Rect rect{20.375f, 20.625f, 12.0f, 10.0f};
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	const bool drawn = RenderCustomDraw(texels, [&](UI::PaintScope& scope) {
+		scope.SetSnapToPixels(false);
+		scope.EmitRing(rect, UI::Edges::All(2.0f), Color::White());
+	});
+	if (!drawn) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const UI::Rect hole{rect.x + 2.0f, rect.y + 2.0f, rect.w - 4.0f, rect.h - 4.0f};
+	ExpectCoverage(texels, 0, [&](i32 x, i32 y) { return RectCoverage(x, y, rect) - RectCoverage(x, y, hole); });
+}
+
 TEST_F(UIRenderLogFixture, DestroyedTextureFallsBack) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

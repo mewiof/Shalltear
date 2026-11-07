@@ -4,6 +4,8 @@ from pathlib import Path
 try:
 	from fontTools.fontBuilder import FontBuilder
 	from fontTools.pens.ttGlyphPen import TTGlyphPen
+	from fontTools.ttLib import newTable
+	from fontTools.ttLib.tables._k_e_r_n import KernTable_format_0
 	from fontTools.ttLib.tables.TupleVariation import TupleVariation
 except ImportError:
 	sys.exit("fontTools is required: python -m pip install fonttools")
@@ -31,7 +33,19 @@ def empty():
 	return TTGlyphPen(None).glyph()
 
 
-def build(name, weight, italic, advance, axes=None, deltas=None):
+def kern_table(pairs):
+	table = newTable("kern")
+	table.version = 0
+	subtable = KernTable_format_0()
+	subtable.version = 0
+	subtable.coverage = 1
+	subtable.format = 0
+	subtable.kernTable = dict(pairs)
+	table.kernTables = [subtable]
+	return table
+
+
+def build(name, weight, italic, advance, axes=None, deltas=None, kerning=None):
 	fb = FontBuilder(UPEM, isTTF=True)
 	fb.setupGlyphOrder(GLYPHS)
 	fb.setupCharacterMap(CMAP)
@@ -63,6 +77,8 @@ def build(name, weight, italic, advance, axes=None, deltas=None):
 			variations[glyph] = [TupleVariation(region, [(0, 0)] * 4 + [(0, 0), (dx, 0), (0, 0), (0, 0)])
 								 for region, dx in tuples]
 		fb.setupGvar(variations)
+	if kerning:
+		fb.font["kern"] = kern_table(kerning)
 	fb.save(str(OUT / (name + ".ttf")))
 
 
@@ -81,7 +97,8 @@ def main():
 		  deltas={"I": [({"slnt": (-1.0, -1.0, 0.0)}, 200)]})
 	build("OpticalSizeAxis", 400, False, 220, axes=[("opsz", 10, 10, 100, "Optical Size")],
 		  deltas={"I": [({"opsz": (0.0, 1.0, 1.0)}, 180)]})
-	print(f"wrote 10 fonts to {OUT}")
+	build("Kerned", 400, False, 400, kerning={("I", "I"): -100})
+	print(f"wrote 11 fonts to {OUT}")
 
 
 if __name__ == "__main__":

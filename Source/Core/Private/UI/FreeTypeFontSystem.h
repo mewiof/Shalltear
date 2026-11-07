@@ -121,7 +121,7 @@ namespace Shalltear::UI {
 		u32 GlyphIndexOf(FontFace& face, u32 codepoint);
 		StyledFace ResolveOwner(FontFace& family, u16 weight, FontStyle style, u32 codepoint);
 		bool FindInFallbacks(const FontAsset& font, u16 weight, FontStyle style, u32 codepoint, StyledFace& out);
-		f32 KerningBetween(FontFace& primary, const GlyphEntry* previous, const GlyphEntry* current);
+		f32 KerningBetween(FontFace& primary, u16 sizePx, const GlyphEntry* previous, const GlyphEntry* current);
 		GlyphEntry* GetOrCreateGlyph(FontFace& family, u16 weight, FontStyle style, u16 sizePx, u32 codepoint, u16 strokePx);
 		bool RasterizeAndPack(const StyledFace& styled, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out);
 		bool PackAlloc(i32 width, i32 height, i32& outX, i32& outY);

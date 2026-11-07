@@ -44,7 +44,7 @@ namespace {
 	}
 
 	constexpr const char* FIXTURES[] = {"Light", "Regular", "Medium", "Bold", "Italic", "BoldItalic",
-										"WeightAxis", "ItalicAxis", "SlantAxis", "OpticalSizeAxis"};
+										"WeightAxis", "ItalicAxis", "SlantAxis", "OpticalSizeAxis", "Kerned"};
 
 	class FontStyleFixture : public ::testing::Test {
 	protected:
@@ -292,6 +292,16 @@ TEST_F(FontStyleFixture, OpticalSizeFollowsPixelSize) {
 	EXPECT_EQ(Width(font, 400, NORMAL, 100.0f), 40.0f);
 	EXPECT_EQ(Width(font, 400, NORMAL, 200.0f), 80.0f);
 	EXPECT_EQ(Width(font, 400, NORMAL, 50.0f), 15.0f);
+	AssetDatabase::UnloadAsset(font);
+}
+
+TEST_F(FontStyleFixture, KerningFollowsSize) {
+	FontAsset* font = Load("Kerned");
+	ASSERT_NE(font, nullptr);
+	EXPECT_EQ(Width(font, 400, NORMAL, 100.0f, "II"), 70.0f);
+	EXPECT_EQ(Width(font, 400, NORMAL, 20.0f, "II"), 14.0f);
+	EXPECT_EQ(Width(font, 400, NORMAL, 100.0f, "II"), 70.0f);
+	EXPECT_EQ(Width(font, 400, NORMAL, 20.0f, "I"), 8.0f);
 	AssetDatabase::UnloadAsset(font);
 }
 

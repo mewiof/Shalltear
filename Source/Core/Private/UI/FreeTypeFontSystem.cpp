@@ -436,7 +436,7 @@ namespace Shalltear::UI {
 		return styled;
 	}
 
-	f32 FreeTypeFontSystem::KerningBetween(FontFace& primary, const GlyphEntry* previous, const GlyphEntry* current) {
+	f32 FreeTypeFontSystem::KerningBetween(FontFace& primary, u16 sizePx, const GlyphEntry* previous, const GlyphEntry* current) {
 		if (!previous || !current || previous->faceSlot != current->faceSlot || previous->glyphIndex == 0 ||
 			current->glyphIndex == 0) {
 			return 0.0f;
@@ -445,9 +445,14 @@ namespace Shalltear::UI {
 		if (!face || !FT_HAS_KERNING(face->face)) {
 			return 0.0f;
 		}
-		const u64 pairKey = (static_cast<u64>(previous->glyphIndex) << 32) | current->glyphIndex;
+		// TTF/OTF glyph indices are 16 bit
+		const u64 pairKey = (static_cast<u64>(sizePx) << 32) | (static_cast<u64>(previous->glyphIndex & 0xFFFFu) << 16) |
+							(current->glyphIndex & 0xFFFFu);
 		auto it = face->kernings.find(pairKey);
 		if (it == face->kernings.end()) {
+			if (!EnsureSize(*face, sizePx)) {
+				return 0.0f;
+			}
 			FT_Vector kerning{};
 			FT_Get_Kerning(face->face, previous->glyphIndex, current->glyphIndex, FT_KERNING_DEFAULT, &kerning);
 			it = face->kernings.emplace(pairKey, static_cast<i32>(kerning.x)).first;
@@ -652,7 +657,7 @@ namespace Shalltear::UI {
 
 		const f32 letterSpacing = query.letterSpacing;
 		auto stepBefore = [&](const GlyphEntry* previous, const GlyphEntry* current, bool first) -> f32 {
-			return (first ? 0.0f : letterSpacing) + KerningBetween(*run.face, previous, current);
+			return (first ? 0.0f : letterSpacing) + KerningBetween(*run.face, sizePx, previous, current);
 		};
 
 		f32 penY = 0.0f;

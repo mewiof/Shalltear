@@ -23,6 +23,19 @@ namespace Shalltear::UI {
 
 	inline constexpr Rect UnknownInk = {0.0f, 0.0f, -1.0f, -1.0f};
 
+	inline constexpr f32 INITIAL_FONT_SIZE = 16.0f;
+	inline constexpr Color INITIAL_TEXT_COLOR = Color::White();
+	inline constexpr Color INITIAL_OUTLINE_COLOR = Color::Black();
+	inline constexpr u16 INITIAL_FONT_WEIGHT = 400;
+
+	// hex (#rgb to #rrggbbaa) or a CSS basic color name
+	bool ParseStyleColor(std::string_view value, Color& out);
+
+	// name out of name/"name"/url("name")
+	std::string_view FontNameOf(std::string_view value);
+
+	bool ResolveFontName(std::string_view value, const StyleVars* vars, Handle<FontAsset>& out);
+
 	[[nodiscard]] inline bool IsKnownInk(const Rect& ink) {
 		return ink.w >= 0.0f;
 	}
@@ -56,6 +69,7 @@ namespace Shalltear::UI {
 	}
 
 	struct TextMetrics {
+		Handle<FontAsset> font;
 		f32 sizePhysical = -1.0f;
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
@@ -64,6 +78,7 @@ namespace Shalltear::UI {
 		FontStyle fontStyle = FontStyle::Normal;
 
 		void ApplyTo(TextQuery& query) const {
+			query.font = font;
 			query.sizePx = sizePhysical;
 			query.outlineWidth = outlineWidth;
 			query.letterSpacing = letterSpacing;
@@ -76,9 +91,11 @@ namespace Shalltear::UI {
 	};
 
 	struct TextComponent {
+		// SetText's look, below declared style and above inherited style
 		Handle<FontAsset> font;
 		f32 sizePx = 16.0f;
 		Color color = Color::White();
+		bool hinted = false;
 		String utf8{GetMemoryResource(MemTag::UI)};
 
 		ShapedRun shaped;
@@ -216,6 +233,24 @@ namespace Shalltear::UI {
 		}
 	};
 
+	inline constexpr u16 INHERIT_FONT = 1 << 0;
+	inline constexpr u16 INHERIT_FONT_SIZE = 1 << 1;
+	inline constexpr u16 INHERIT_COLOR = 1 << 2;
+	inline constexpr u16 INHERIT_FONT_STYLE = 1 << 3;
+	inline constexpr u16 INHERIT_OUTLINE_WIDTH = 1 << 4;
+	inline constexpr u16 INHERIT_OUTLINE_COLOR = 1 << 5;
+	inline constexpr u16 INHERIT_LETTER_SPACING = 1 << 6;
+	inline constexpr u16 INHERIT_LINE_HEIGHT = 1 << 7;
+	inline constexpr u16 INHERIT_FONT_WEIGHT = 1 << 8;
+
+	struct TextCascade {
+		u16 declared = 0;
+		Length fontSize{};
+	};
+
+	inline constexpr u8 TEXT_CHANGED = 1 << 0;
+	inline constexpr u8 TEXT_METRICS_CHANGED = 1 << 1;
+
 	struct FlexItem {
 		u32 index = INVALID_UI_INDEX;
 		f32 mainMargin = 0.0f;
@@ -245,6 +280,7 @@ namespace Shalltear::UI {
 		Vector<LayoutData> layouts{GetMemoryResource(MemTag::UI)};
 		Vector<MeasureCache> measureCaches{GetMemoryResource(MemTag::UI)};
 		Vector<Rect> subtreeInk{GetMemoryResource(MemTag::UI)};
+		Vector<TextCascade> cascades{GetMemoryResource(MemTag::UI)};
 		Vector<u32> freeList{GetMemoryResource(MemTag::UI)};
 		u32 root = 0;
 
@@ -355,16 +391,27 @@ namespace Shalltear::UI {
 		void RecalcPointerState(u32 index);
 		void RecalcAllStyles();
 		void DrainStyle(u32 index);
-		void ComposeStyle(u32 index);
+		u8 ComposeStyle(u32 index);
+
+		Vector<ElementHandle> inheritPending{GetMemoryResource(MemTag::UI)};
+		Vector<u32> inheritScratch{GetMemoryResource(MemTag::UI)};
+		bool flushingInherit = false;
+		void QueueInherit(u32 index);
+		// never call during a layout pass (layout gets marked dirty)
+		void FlushInherit();
+		void FillInherited(u32 index);
+		u8 ResolveInherited(u32 index);
+		void PropagateInherited(u32 index);
 		u8 CurrentPseudo(const Element& element) const;
 
+		TextComponent& AcquireText(u32 elementIndex);
 		TextComponent* GetText(u32 elementIndex);
 		const TextComponent* GetText(u32 elementIndex) const;
 		Vec2 TextOriginPx(u32 elementIndex) const;
 		TextInputState* GetTextInput(u32 elementIndex);
 		TextOverflow EffectiveTextOverflow(u32 elementIndex) const;
 		Align EffectiveTextAlign(u32 elementIndex) const;
-		TextMetrics TextMetricsFor(u32 elementIndex, const TextComponent& text);
+		TextMetrics TextMetricsFor(u32 elementIndex);
 		void EnsureShaped(u32 elementIndex);
 		Vec2 MeasureTextExtent(u32 elementIndex, f32 wrapWidth, bool commit = true);
 		void OnTextEdited(u32 elementIndex);
@@ -435,12 +482,13 @@ namespace Shalltear::UI {
 		const Element& E(u32 index) const { return elements[index]; }
 		// only access to a computed style (composition is deferred)
 		Style& ComputedS(u32 index) {
-			DrainStyle(index);
+			if (HasAnyFlag(elements[index].flags, ElementFlags::DirtyStyle | ElementFlags::DirtyInherit) || !inheritPending.empty()) {
+				DrainStyle(index);
+			}
 			return computedStyles[index];
 		}
 		const Style& ComputedS(u32 index) const {
-			const_cast<ContextImpl*>(this)->DrainStyle(index);
-			return computedStyles[index];
+			return const_cast<ContextImpl*>(this)->ComputedS(index);
 		}
 		LayoutData& L(u32 index) { return layouts[index]; }
 		const LayoutData& L(u32 index) const { return layouts[index]; }

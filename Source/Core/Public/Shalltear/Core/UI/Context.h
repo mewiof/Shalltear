@@ -184,6 +184,8 @@ namespace Shalltear::UI {
 
 		void SetStyleVar(StringHash name, std::string_view value);
 		void SetStyleVars(std::span<const StyleVarDesc> descs);
+		// name used by font-family values
+		void SetStyleFont(std::string_view name, Handle<FontAsset> font);
 		[[nodiscard]] const StyleVars& GetStyleVars() const;
 		[[nodiscard]] Color GetStyleVarColor(StringHash name, Color fallback) const;
 		[[nodiscard]] f32 GetStyleVarFloat(StringHash name, f32 fallback) const;
@@ -199,8 +201,9 @@ namespace Shalltear::UI {
 		void SetId(ElementHandle handle, StringHash id);
 		void SetTypeTag(ElementHandle handle, StringHash tag);
 
-		// SRGB color
+		// SRGB color. font/size/color used over inherited style (not declared style)
 		void SetText(ElementHandle handle, Handle<FontAsset> font, f32 sizePx, Color color, std::string_view utf8);
+		// no prior SetText = font/size/color from style
 		void SetTextString(ElementHandle handle, std::string_view utf8);
 		str GetTextString(ElementHandle handle) const;
 		void ClearText(ElementHandle handle);

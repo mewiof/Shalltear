@@ -186,7 +186,7 @@ TEST(UIStyleSheetTest, SyntaxKnowsVocabulary) {
 		EXPECT_TRUE(listsProperty(name));
 	}
 
-	EXPECT_FALSE(listsProperty("font-family"));
+	EXPECT_FALSE(listsProperty("text-shadow"));
 	EXPECT_FALSE(listsProperty("ackground"));
 }
 

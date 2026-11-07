@@ -18,10 +18,10 @@ namespace Shalltear::UI::Widgets {
 	namespace {
 
 		constexpr const char* WIDGET_SKIN = R"css(
-.slt-button { padding: 4 12 4 12; flex-shrink: 0; background-color: var(--slt-control); border-radius: var(--slt-radius); cursor: hand; justify-content: center; align-items: center; box-shadow: inset 0 0 0 1 var(--slt-edge-light), 0 2 0 var(--slt-edge-dark); }
+.slt-button { padding: 4 12 4 12; flex-shrink: 0; color: var(--slt-text); background-color: var(--slt-control); border-radius: var(--slt-radius); cursor: hand; justify-content: center; align-items: center; box-shadow: inset 0 0 0 1 var(--slt-edge-light), 0 2 0 var(--slt-edge-dark); }
 .slt-button:hover { background-color: var(--slt-control-hover); }
 .slt-button:active { background-color: var(--slt-control-active); }
-.slt-button.slt-button-default { background-color: var(--slt-button-default); }
+.slt-button.slt-button-default { color: var(--slt-button-default-text); background-color: var(--slt-button-default); }
 .slt-button.slt-button-default:hover { background-color: var(--slt-button-default-hover); }
 .slt-button.slt-button-default:active { background-color: var(--slt-button-default-active); }
 .slt-checkbox { width: 16; height: 16; flex-shrink: 0; background-color: var(--slt-well); border-radius: var(--slt-radius-sm); cursor: hand; justify-content: center; align-items: center; box-shadow: inset 0 0 0 1 var(--slt-edge-light-strong); }
@@ -313,8 +313,14 @@ namespace Shalltear::UI::Widgets {
 			ctx.AddClass(button, StringHash("slt-button-default"));
 			ctx.SetPopupDefaultButton(desc.defaultForPopup, button);
 		}
-		MakeLabel(ctx, button, desc.font, desc.fontSizePx,
-				  isDefault ? DefaultButtonText(ctx) : TextNormal(ctx), desc.label);
+		if (desc.font.IsValid()) {
+			MakeLabel(ctx, button, desc.font, desc.fontSizePx, isDefault ? DefaultButtonText(ctx) : TextNormal(ctx), desc.label);
+		} else {
+			ElementHandle label = ctx.CreateElement();
+			ctx.SetTextString(label, desc.label);
+			ctx.SetHoverable(label, false);
+			ctx.AppendChild(button, label);
+		}
 		if (desc.onClick) {
 			ctx.Events(button).onClick = desc.onClick;
 		}

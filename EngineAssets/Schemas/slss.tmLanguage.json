@@ -74,7 +74,7 @@
 		"declaration": {
 			"patterns": [
 				{
-					"match": "\\b(min-width|min-height|max-width|max-height|width|height|display|position|flex-direction|flex-grow|flex-shrink|overflow|align-items|align-self|justify-content|left|top|right|bottom|padding|margin-left|margin-top|margin-right|margin-bottom|margin|background-color|background|opacity|z-index|border-radius|border-width|border-color|box-shadow|filter|text-align-vertical|text-align|text-overflow|text-outline-width|text-outline-color|letter-spacing|line-height|font-weight|font-style|cursor|pointer-events)\\s*(:)",
+					"match": "\\b(min-width|min-height|max-width|max-height|width|height|display|position|flex-direction|flex-grow|flex-shrink|overflow|align-items|align-self|justify-content|left|top|right|bottom|padding|margin-left|margin-top|margin-right|margin-bottom|margin|background-color|background|opacity|z-index|border-radius|border-width|border-color|box-shadow|filter|text-align-vertical|text-align|text-overflow|text-outline-width|text-outline-color|letter-spacing|line-height|font-weight|font-style|font-size|font-family|color|cursor|pointer-events)\\s*(:)",
 					"captures": {
 						"1": { "name": "support.type.property-name.slss" },
 						"2": { "name": "punctuation.separator.key-value.slss" }

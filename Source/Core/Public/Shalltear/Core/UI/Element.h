@@ -31,6 +31,9 @@ namespace Shalltear::UI {
 		HasImage = 1 << 11,
 
 		InheritsPointerState = 1 << 12,
+
+		DirtyInherit = 1 << 13,
+		InheritQueued = 1 << 14,
 	};
 	SLT_ENUM_CLASS_FLAGS(ElementFlags)
 

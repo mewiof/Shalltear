@@ -145,7 +145,7 @@ namespace Shalltear {
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
 
 		// bump when cooked record changes shape
-		u32 GetImporterVersion() const override { return 2; }
+		u32 GetImporterVersion() const override { return 3; }
 
 		bool CanCreateAsset() const override { return true; }
 		std::string_view GetCreateMenuLabel() const override { return "UI/UI Document"; }

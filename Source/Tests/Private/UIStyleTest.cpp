@@ -109,14 +109,14 @@ TEST(UIStyleTest, LetterSpacingParsesIncludingNegativeTracking) {
 
 	UI::ElementHandle wide = ctx.CreateElement();
 	ctx.AddClass(wide, "wide"_hash);
-	EXPECT_NEAR(ctx.GetComputedStyle(wide).letterSpacing, 1.5f, 0.001f);
+	EXPECT_NEAR(ctx.GetComputedStyle(wide).letterSpacing.value_or(-1.0f), 1.5f, 0.001f);
 
 	UI::ElementHandle tight = ctx.CreateElement();
 	ctx.AddClass(tight, "tight"_hash);
-	EXPECT_NEAR(ctx.GetComputedStyle(tight).letterSpacing, -0.5f, 0.001f);
+	EXPECT_NEAR(ctx.GetComputedStyle(tight).letterSpacing.value_or(-1.0f), -0.5f, 0.001f);
 
 	UI::ElementHandle untouched = ctx.CreateElement();
-	EXPECT_NEAR(ctx.GetComputedStyle(untouched).letterSpacing, 0.0f, 0.001f);
+	EXPECT_NEAR(ctx.GetComputedStyle(untouched).letterSpacing.value_or(-1.0f), 0.0f, 0.001f);
 }
 
 TEST(UIStyleTest, TextOverflowParsesAll3) {
@@ -151,13 +151,13 @@ TEST(UIStyleTest, UniversalSelectorLosesToAll) {
 	)css");
 
 	UI::ElementHandle bare = ctx.CreateElement();
-	EXPECT_NEAR(ctx.GetComputedStyle(bare).textOutlineWidth, 1.0f, 0.001f);
+	EXPECT_NEAR(ctx.GetComputedStyle(bare).textOutlineWidth.value_or(-1.0f), 1.0f, 0.001f);
 	EXPECT_NEAR(ctx.GetComputedStyle(bare).opacity, 0.5f, 0.001f);
 
 	UI::ElementHandle tagged = ctx.CreateElement();
 	ctx.SetTypeTag(tagged, "label"_hash);
 	EXPECT_NEAR(ctx.GetComputedStyle(tagged).opacity, 0.25f, 0.001f);
-	EXPECT_NEAR(ctx.GetComputedStyle(tagged).textOutlineWidth, 1.0f, 0.001f);
+	EXPECT_NEAR(ctx.GetComputedStyle(tagged).textOutlineWidth.value_or(-1.0f), 1.0f, 0.001f);
 
 	UI::ElementHandle classed = ctx.CreateElement();
 	ctx.AddClass(classed, "loud"_hash);
@@ -471,7 +471,7 @@ TEST(UIStyleTest, LineHeightNumbersPercentsAndPixels) {
 	}
 }
 
-static_assert(sizeof(UI::Style) == 560, "Style changed shape. See UIStyleVocabulary.h");
+static_assert(sizeof(UI::Style) == 576, "Style changed shape. See UIStyleVocabulary.h");
 
 TEST(UIStyleTest, EveryStyleFieldHasAStylesheetSpelling) {
 	for (const StyleVocabulary::Entry& entry : StyleVocabulary::All) {
@@ -676,7 +676,7 @@ TEST(UIStyleTest, SweepPropertiesEnumerated) {
 	}
 	EXPECT_EQ(names.size(), std::size(StyleVocabulary::All) + 5);
 
-	EXPECT_FALSE(lists("font-family"));
+	EXPECT_FALSE(lists("text-shadow"));
 	EXPECT_FALSE(lists("background-image"));
 }
 

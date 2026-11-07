@@ -553,6 +553,13 @@ namespace Shalltear {
 					source = property.sheet.empty() ? std::string_view("sheet") : property.sheet;
 					sourceColor = TextDim();
 					break;
+				case UIDebugOps::ValueSource::Inherited:
+					source = "inherited";
+					break;
+				case UIDebugOps::ValueSource::Text:
+					source = "SetText";
+					sourceColor = TextDim();
+					break;
 				default:
 					source = "default";
 					break;

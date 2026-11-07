@@ -1,6 +1,7 @@
 #include "UI/UIInternal.h"
 
 #include "Shalltear/Core/Math/Color.h"
+#include "Shalltear/Core/UI/FontAsset.h"
 
 #include <algorithm>
 #include <array>
@@ -48,16 +49,90 @@ namespace Shalltear::UI {
 			return length.value > 0.0f ? length : Length::Auto();
 		}
 
+		struct NamedColor {
+			std::string_view name;
+			u32 rgb;
+		};
+
+		constexpr NamedColor NAMED_COLORS[] = {
+			{"black", 0x000000},
+			{"silver", 0xc0c0c0},
+			{"gray", 0x808080},
+			{"grey", 0x808080},
+			{"white", 0xffffff},
+			{"maroon", 0x800000},
+			{"red", 0xff0000},
+			{"purple", 0x800080},
+			{"fuchsia", 0xff00ff},
+			{"magenta", 0xff00ff},
+			{"green", 0x008000},
+			{"lime", 0x00ff00},
+			{"olive", 0x808000},
+			{"yellow", 0xffff00},
+			{"navy", 0x000080},
+			{"blue", 0x0000ff},
+			{"teal", 0x008080},
+			{"aqua", 0x00ffff},
+			{"cyan", 0x00ffff},
+			{"orange", 0xffa500},
+		};
+
+		bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
+			if (a.size() != b.size()) {
+				return false;
+			}
+			for (size_t i = 0; i < a.size(); ++i) {
+				if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		Color ParseColor(std::string_view value) {
 			Color color = Color(0.0f, 0.0f, 0.0f, 0.0f);
 			if (value == "transparent" || value == "none") {
 				return color;
 			}
-			if (!Color::TryParseHex(value, color)) {
+			if (!ParseStyleColor(value, color)) {
 				SLT_LOG_WARN("UI", "stylesheet: unparseable color '{}'", str(value));
 				return Color::Magenta();
 			}
 			return color;
+		}
+
+		template <typename T>
+		bool ApplyKeyword(StyleValue<T>& field, std::string_view value, const T& initial) {
+			if (value == "inherit" || value == "unset") {
+				field.reset();
+				return true;
+			}
+			if (value == "initial") {
+				field = initial;
+				return true;
+			}
+			return false;
+		}
+
+		bool ParseFontSize(std::string_view value, Length& out) {
+			f32 scale = 0.0f;
+			if (value.ends_with('%')) {
+				scale = ParseFloat(value.substr(0, value.size() - 1)) / 100.0f;
+			} else if (value.ends_with("em")) {
+				scale = ParseFloat(value.substr(0, value.size() - 2));
+			} else {
+				const f32 px = ParseFloat(value.ends_with("px") ? value.substr(0, value.size() - 2) : value);
+				if (!(px > 0.0f)) {
+					return false;
+				}
+				out = Length::Pixel(px);
+				return true;
+			}
+			if (!(scale > 0.0f)) {
+				return false;
+			}
+			out = Length::Percent(scale);
+			return true;
 		}
 
 		std::string_view Trim(std::string_view text) {
@@ -414,19 +489,23 @@ namespace Shalltear::UI {
 		}
 
 		using PropertySetter = void (*)(Style&, std::string_view);
+		using ResolvingSetter = void (*)(Style&, std::string_view, const StyleVars*);
 		using PropertyReader = void (*)(const Style&, Sink&);
 
 		struct PropertyBinding {
 			std::string_view name;
 			StringHash hash;
-			PropertySetter setter;
+			PropertySetter setter = nullptr;
+			ResolvingSetter resolving = nullptr;
 			PropertyReader reader;
 
 			constexpr PropertyBinding(std::string_view propertyName, PropertySetter propertySetter, PropertyReader propertyReader)
 				: name(propertyName), hash(propertyName), setter(propertySetter), reader(propertyReader) {}
+			constexpr PropertyBinding(std::string_view propertyName, ResolvingSetter propertySetter, PropertyReader propertyReader)
+				: name(propertyName), hash(propertyName), resolving(propertySetter), reader(propertyReader) {}
 		};
 
-		constexpr size_t PROPERTY_COUNT = 45;
+		constexpr size_t PROPERTY_COUNT = 48;
 
 		Align ParseAlign(std::string_view value, Align fallback) {
 			if (value == "center") {
@@ -563,23 +642,39 @@ namespace Shalltear::UI {
 				 [](const Style& s, Sink& o) {
 					 o.Put(s.textOverflow == TextOverflow::Ellipsis ? "ellipsis" : (s.textOverflow == TextOverflow::Clip ? "clip" : "wrap"));
 				 }},
-				{"text-outline-width", [](Style& s, std::string_view v) { s.textOutlineWidth = ParseFloat(v); },
-				 [](const Style& s, Sink& o) { o.PutPx(s.textOutlineWidth); }},
-				{"letter-spacing", [](Style& s, std::string_view v) { s.letterSpacing = ParseFloat(v); },
-				 [](const Style& s, Sink& o) { o.PutPx(s.letterSpacing); }},
-				{"line-height", [](Style& s, std::string_view v) { s.lineHeight = ParseLineHeight(v); },
+				{"text-outline-width", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.textOutlineWidth, v, 0.0f)) {
+						 s.textOutlineWidth = ParseFloat(v);
+					 } },
+				 [](const Style& s, Sink& o) { o.PutPx(s.textOutlineWidth.value_or(0.0f)); }},
+				{"letter-spacing", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.letterSpacing, v, 0.0f)) {
+						 s.letterSpacing = ParseFloat(v);
+					 } },
+				 [](const Style& s, Sink& o) { o.PutPx(s.letterSpacing.value_or(0.0f)); }},
+				{"line-height", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.lineHeight, v, Length::Auto())) {
+						 s.lineHeight = ParseLineHeight(v);
+					 } },
 				 [](const Style& s, Sink& o) {
-					 if (s.lineHeight.unit == Length::Unit::Percent) {
-						 o.Put(s.lineHeight.value);
-					 } else if (s.lineHeight.unit == Length::Unit::Pixel) {
-						 o.PutPx(s.lineHeight.value);
+					 const Length lineHeight = s.lineHeight.value_or(Length::Auto());
+					 if (lineHeight.unit == Length::Unit::Percent) {
+						 o.Put(lineHeight.value);
+					 } else if (lineHeight.unit == Length::Unit::Pixel) {
+						 o.PutPx(lineHeight.value);
 					 } else {
 						 o.Put("normal");
 					 }
 				 }},
-				{"text-outline-color", [](Style& s, std::string_view v) { s.textOutlineColor = ParseColor(v); },
-				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor); }},
+				{"text-outline-color", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.textOutlineColor, v, INITIAL_OUTLINE_COLOR)) {
+						 s.textOutlineColor = ParseColor(v);
+					 } },
+				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR)); }},
 				{"font-weight", [](Style& s, std::string_view v) {
+					 if (ApplyKeyword(s.fontWeight, v, INITIAL_FONT_WEIGHT)) {
+						 return;
+					 }
 					 if (v == "bold") {
 						 s.fontWeight = 700;
 					 } else if (v == "normal") {
@@ -589,14 +684,62 @@ namespace Shalltear::UI {
 						 s.fontWeight = weight >= 1.0f && weight <= 1000.0f ? static_cast<u16>(std::lround(weight)) : 400;
 					 } },
 				 [](const Style& s, Sink& o) {
-					 if (s.fontWeight == 400 || s.fontWeight == 700) {
-						 o.Put(s.fontWeight == 700 ? "bold" : "normal");
+					 const u16 weight = s.fontWeight.value_or(INITIAL_FONT_WEIGHT);
+					 if (weight == 400 || weight == 700) {
+						 o.Put(weight == 700 ? "bold" : "normal");
 					 } else {
-						 o.Put(static_cast<f32>(s.fontWeight));
+						 o.Put(static_cast<f32>(weight));
 					 }
 				 }},
-				{"font-style", [](Style& s, std::string_view v) { s.fontStyle = v == "italic" || v == "oblique" ? FontStyle::Italic : FontStyle::Normal; },
-				 [](const Style& s, Sink& o) { o.Put(s.fontStyle == FontStyle::Italic ? "italic" : "normal"); }},
+				{"font-style", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.fontStyle, v, FontStyle::Normal)) {
+						 s.fontStyle = v == "italic" || v == "oblique" ? FontStyle::Italic : FontStyle::Normal;
+					 } },
+				 [](const Style& s, Sink& o) { o.Put(s.fontStyle.value_or(FontStyle::Normal) == FontStyle::Italic ? "italic" : "normal"); }},
+				{"color", [](Style& s, std::string_view v) {
+					 if (!ApplyKeyword(s.color, v, INITIAL_TEXT_COLOR)) {
+						 s.color = ParseColor(v);
+					 } },
+				 [](const Style& s, Sink& o) { o.Put(s.color.value_or(INITIAL_TEXT_COLOR)); }},
+				{"font-size", [](Style& s, std::string_view v) {
+					 Length size;
+					 if (ApplyKeyword(s.fontSize, v, Length::Pixel(INITIAL_FONT_SIZE))) {
+						 return;
+					 }
+					 if (ParseFontSize(v, size)) {
+						 s.fontSize = size;
+					 } else {
+						 SLT_LOG_WARN("UI", "stylesheet: font-size '{}' isn't a positive px/em/% size", str(v));
+					 } },
+				 [](const Style& s, Sink& o) {
+					 const Length size = s.fontSize.value_or(Length::Pixel(INITIAL_FONT_SIZE));
+					 if (size.unit == Length::Unit::Percent) {
+						 o.Put(size.value * 100.0f);
+						 o.Put("%");
+					 } else {
+						 o.PutPx(size.value);
+					 }
+				 }},
+				{"font-family", [](Style& s, std::string_view v, const StyleVars* vars) {
+					 if (ApplyKeyword(s.font, v, Handle<FontAsset>{})) {
+						 return;
+					 }
+					 Handle<FontAsset> font;
+					 if (v == "none") {
+						 s.font = font;
+					 } else if (ResolveFontName(v, vars, font)) {
+						 s.font = font;
+					 } },
+				 [](const Style& s, Sink& o) {
+					 const FontAsset* font = s.font.value_or(Handle<FontAsset>{}).Get();
+					 if (font && !font->virtualPath.empty()) {
+						 o.Put("url(\"");
+						 o.Put(std::string_view(font->virtualPath));
+						 o.Put("\")");
+					 } else {
+						 o.Put("none");
+					 }
+				 }},
 
 				{"cursor", [](Style& s, std::string_view v) {
 					 if (v == "hand" || v == "pointer") {
@@ -648,7 +791,11 @@ namespace Shalltear::UI {
 				if (hasVar && vars) {
 					value = vars->Expand(value, expansion, sizeof(expansion));
 				}
-				binding.setter(style, value);
+				if (binding.resolving) {
+					binding.resolving(style, value, vars);
+				} else {
+					binding.setter(style, value);
+				}
 				return true;
 			}
 			return false;
@@ -772,6 +919,65 @@ namespace Shalltear::UI {
 		}
 
 	} // anonymous namespace
+
+	bool ParseStyleColor(std::string_view value, Color& out) {
+		for (const NamedColor& named : NAMED_COLORS) {
+			if (EqualsIgnoreCase(value, named.name)) {
+				out = Color(static_cast<f32>((named.rgb >> 16) & 0xFF) / 255.0f, static_cast<f32>((named.rgb >> 8) & 0xFF) / 255.0f,
+							static_cast<f32>(named.rgb & 0xFF) / 255.0f, 1.0f);
+				return true;
+			}
+		}
+		return Color::TryParseHex(value, out);
+	}
+
+	std::string_view FontNameOf(std::string_view value) {
+		std::string_view name = Trim(value);
+		if (name.starts_with("url(") && name.ends_with(')')) {
+			name = Trim(name.substr(4, name.size() - 5));
+		}
+		if (name.size() >= 2 && (name.front() == '"' || name.front() == '\'') && name.back() == name.front()) {
+			name = name.substr(1, name.size() - 2);
+		}
+		return name;
+	}
+
+	bool ResolveFontName(std::string_view value, const StyleVars* vars, Handle<FontAsset>& out) {
+		const std::string_view name = FontNameOf(value);
+		if (vars && !name.empty() && vars->FindFont(name, out)) {
+			return true;
+		}
+		static u64 warned[32] = {};
+		static u32 next = 0;
+		const u64 key = StringHash(name).GetValue();
+		if (std::find(std::begin(warned), std::end(warned), key) == std::end(warned)) {
+			warned[next++ % std::size(warned)] = key;
+			SLT_LOG_WARN("UI", "font '{}' isn't registered. Load a sheet/document using it (or call SetStyleFont)", str(name));
+		}
+		return false;
+	}
+
+	void StyleVars::SetFont(std::string_view name, Handle<FontAsset> font) {
+		const StringHash key(name);
+		for (FontEntry& entry : _fonts) {
+			if (entry.name == key) {
+				entry.font = font;
+				return;
+			}
+		}
+		_fonts.push_back({key, font});
+	}
+
+	bool StyleVars::FindFont(std::string_view name, Handle<FontAsset>& out) const {
+		const StringHash key(name);
+		for (const FontEntry& entry : _fonts) {
+			if (entry.name == key) {
+				out = entry.font;
+				return true;
+			}
+		}
+		return false;
+	}
 
 	void StyleVars::Set(StringHash name, std::string_view value) {
 		for (Entry& entry : _entries) {
@@ -937,6 +1143,12 @@ namespace Shalltear::UI {
 
 	std::span<const std::string_view> GetStylePropertyNames() {
 		return GetPropertyNames();
+	}
+
+	bool IsInheritedStyleProperty(StringHash name) {
+		static constexpr StringHash INHERITED[] = {"font-family", "font-size", "color", "font-style", "text-outline-width",
+												   "text-outline-color", "letter-spacing", "line-height", "font-weight"};
+		return std::find(std::begin(INHERITED), std::end(INHERITED), name) != std::end(INHERITED);
 	}
 
 	std::string_view ReadStyleProperty(const Style& style, StringHash name, char* buffer, size_t capacity) {

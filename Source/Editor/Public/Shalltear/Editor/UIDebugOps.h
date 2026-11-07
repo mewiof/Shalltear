@@ -267,6 +267,8 @@ namespace Shalltear {
 			Default = 0,
 			Sheet,
 			Inline,
+			Inherited,
+			Text,
 		};
 
 		struct PropertyRow {

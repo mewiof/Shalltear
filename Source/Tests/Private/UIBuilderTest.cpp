@@ -1035,7 +1035,7 @@ TEST_F(UIBuilderOpsTest, UnsetRevertsToSheetStyle) {
 	};
 
 	const UI::Style set = computed(WITH);
-	EXPECT_FLOAT_EQ(set.letterSpacing, 3.0f);
+	EXPECT_FLOAT_EQ(set.letterSpacing.value_or(-1.0f), 3.0f);
 
 	UIDocumentAsset document;
 	str error;

@@ -641,6 +641,41 @@ namespace {
 		EXPECT_TRUE(spacing->sheet.empty());
 	}
 
+	TEST_F(UIDebuggerTest, SourceColumnNamesTextOrigins) {
+		MockFontSystem fonts;
+		UI::ContextDesc desc;
+		desc.sizePx = {400, 300};
+		UI::Context context(desc, &fonts);
+		UIDebugOps::NameDictionary names;
+		LoadProbeSheet(context, names, "probe", ".loud { color: #ff0000; font-size: 20px; } .leaf { font-weight: bold; }");
+		UI::ElementHandle parent = Child(context, context.GetRoot());
+		context.AddClass(parent, StringHash("loud"));
+		UI::ElementHandle label = Child(context, parent);
+		context.AddClass(label, StringHash("leaf"));
+		context.SetText(label, {}, 12.0f, Color(0.0f, 0.0f, 1.0f, 1.0f), "x");
+		names.Rebuild(context);
+		Vector<UIDebugOps::PropertyRow> rows{GetMemoryResource(MemTag::Editor)};
+		UIDebugOps::BuildProperties(context, label, names, rows);
+
+		auto source = [&rows](std::string_view name) {
+			for (const UIDebugOps::PropertyRow& row : rows) {
+				if (row.name == name) {
+					return row.source;
+				}
+			}
+			return UIDebugOps::ValueSource::Default;
+		};
+		EXPECT_EQ(source("color"), UIDebugOps::ValueSource::Text);
+		EXPECT_EQ(source("font-size"), UIDebugOps::ValueSource::Text);
+		EXPECT_EQ(source("font-weight"), UIDebugOps::ValueSource::Sheet);
+
+		UI::ElementHandle child = Child(context, parent);
+		UIDebugOps::BuildProperties(context, child, names, rows);
+		EXPECT_EQ(source("color"), UIDebugOps::ValueSource::Inherited);
+		EXPECT_EQ(source("font-size"), UIDebugOps::ValueSource::Inherited);
+		EXPECT_EQ(source("font-weight"), UIDebugOps::ValueSource::Default);
+	}
+
 	TEST_F(UIDebuggerTest, LayoutBandsAreGaps) {
 		MockFontSystem fonts;
 		UI::ContextDesc desc;

@@ -54,6 +54,9 @@ namespace Shalltear::StyleVocabulary {
 		{"lineHeight", "line-height: 1.25", [](UI::Style& s) { s.lineHeight = UI::Length::Percent(1.25f); }},
 		{"fontWeight", "font-weight: 600", [](UI::Style& s) { s.fontWeight = 600; }},
 		{"fontStyle", "font-style: italic", [](UI::Style& s) { s.fontStyle = UI::FontStyle::Italic; }},
+		{"color", "color: #102030", [](UI::Style& s) { s.color = Color::FromHex("#102030"); }},
+		{"fontSize", "font-size: 20px", [](UI::Style& s) { s.fontSize = UI::Length::Pixel(20.0f); }},
+		{"font", "font-family: none", [](UI::Style& s) { s.font = Handle<FontAsset>{}; }},
 
 		{"pointerEvents", "pointer-events: none", [](UI::Style& s) { s.pointerEvents = false; }},
 		{"cursor", "cursor: pointer", [](UI::Style& s) { s.cursor = SystemCursor::Hand; }},

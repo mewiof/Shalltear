@@ -524,7 +524,7 @@ namespace Shalltear::UI {
 						EmitParams caret;
 						caret.rect = {Snap(dx + caretX), dy + static_cast<f32>(at.line) * lineHeight + run.halfLeading,
 									  std::max(1.0f, Snap(state.scale)), band - 2.0f * run.halfLeading};
-						caret.colorSRGB = text->color;
+						caret.colorSRGB = style.color.value_or(INITIAL_TEXT_COLOR);
 						caret.snap = false;
 						EmitRect(*state.list, state.ink, caret, opacity, z, clipRect, clipRadii);
 					}
@@ -549,9 +549,9 @@ namespace Shalltear::UI {
 			};
 
 			if (!run.outlineGlyphs.empty()) {
-				emitGlyphs(run.outlineGlyphs, style.textOutlineColor);
+				emitGlyphs(run.outlineGlyphs, style.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR));
 			}
-			emitGlyphs(run.glyphs, text->color);
+			emitGlyphs(run.glyphs, style.color.value_or(INITIAL_TEXT_COLOR));
 
 			if (isInput && index == ctx.focused) {
 				const TextInputState* input = ctx.GetTextInput(index);
@@ -1236,6 +1236,7 @@ namespace Shalltear::UI {
 	namespace Paint {
 
 		void BuildRenderList(ContextImpl& ctx, RenderList& out) {
+			ctx.FlushInherit();
 			out.Clear();
 			PaintState state;
 			state.ctx = &ctx;

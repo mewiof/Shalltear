@@ -2,12 +2,24 @@
 
 #include "Shalltear/Core/Asset/Asset.h"
 #include "Shalltear/Core/Asset/AssetImporter.h"
+#include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Handle.h"
+#include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/StringHash.h"
 
 #include <string_view>
 
 namespace Shalltear {
+
+	class FontAsset;
+
+	struct StyleSheetFont {
+		// as written in font-family
+		str src;
+
+		Handle<FontAsset> font;
+	};
 
 	class SHALLTEAR_CORE_API StyleSheetAsset : public Asset {
 	public:
@@ -22,6 +34,9 @@ namespace Shalltear {
 
 		str source;
 
+		// 1 per font path, font held while sheet is loaded
+		Vector<StyleSheetFont> fonts{GetMemoryResource(MemTag::Asset)};
+
 		u32 version = 0;
 
 		bool CanAdoptReimport() const override { return true; }
@@ -32,12 +47,20 @@ namespace Shalltear {
 		StringHash GetAssetTypeId() const override { return StyleSheetAsset::GetReflectType()->name; }
 
 		bool Parse(std::string_view text, str& error);
+
+		bool Cook(CookWriter& descriptor, CookWriter& payload) const override;
+		bool LoadCooked(CookReader& descriptor, CookReader& payload) override;
+	protected:
+		void OnUnload() override;
 	};
 
 	class SHALLTEAR_CORE_API StyleSheetImporter : public IAssetImporter {
 	public:
 		StringHash GetAssetType() const override { return StringHash("StyleSheetAsset"); }
 		Asset* Import(const Path& sourcePath) override;
+
+		// bump after changing cooked format
+		u32 GetImporterVersion() const override { return 2; }
 
 		bool CanCreateAsset() const override { return true; }
 		std::string_view GetCreateMenuLabel() const override { return "UI/Style Sheet"; }

@@ -41,6 +41,7 @@ namespace Shalltear::UI {
 			layouts[index] = LayoutData{};
 			measureCaches[index] = MeasureCache{};
 			subtreeInk[index] = UnknownInk;
+			cascades[index] = TextCascade{};
 		} else {
 			index = static_cast<u32>(elements.size());
 			elements.emplace_back();
@@ -49,6 +50,7 @@ namespace Shalltear::UI {
 			layouts.emplace_back();
 			measureCaches.emplace_back();
 			subtreeInk.push_back(UnknownInk);
+			cascades.emplace_back();
 		}
 		RecalcStyle(index);
 		BumpTreeRevision();
@@ -620,6 +622,9 @@ namespace Shalltear::UI {
 
 	void ContextImpl::RecalcStyle(u32 index) {
 		elements[index].flags |= ElementFlags::DirtyStyle;
+		if (elements[index].firstChild != INVALID_UI_INDEX) {
+			QueueInherit(index);
+		}
 		MarkLayoutDirtyUpwards(index);
 	}
 
@@ -636,12 +641,174 @@ namespace Shalltear::UI {
 		if (index >= elements.size()) {
 			return;
 		}
+		if (!inheritPending.empty() && !flushingInherit) {
+			FlushInherit();
+		}
+		u8 changed = 0;
 		if (HasFlag(elements[index].flags, ElementFlags::DirtyStyle)) {
-			ComposeStyle(index);
+			changed = ComposeStyle(index);
+		} else if (HasFlag(elements[index].flags, ElementFlags::DirtyInherit)) {
+			if (elements[index].parent != INVALID_UI_INDEX) {
+				DrainStyle(elements[index].parent);
+			}
+			if (!HasFlag(elements[index].flags, ElementFlags::DirtyInherit)) {
+				return;
+			}
+			changed = ResolveInherited(index);
+			if ((changed & TEXT_METRICS_CHANGED) && elements[index].textIndex != INVALID_UI_INDEX) {
+				MarkLayoutDirtyUpwards(index);
+			}
+		} else {
+			return;
+		}
+		if ((changed & TEXT_CHANGED) && elements[index].firstChild != INVALID_UI_INDEX) {
+			PropagateInherited(index);
 		}
 	}
 
-	void ContextImpl::ComposeStyle(u32 index) {
+	namespace {
+
+		struct InheritedText {
+			StyleValue<Handle<FontAsset>> font;
+			StyleValue<Length> fontSize;
+			StyleValue<Color> color;
+			StyleValue<FontStyle> fontStyle;
+			StyleValue<f32> textOutlineWidth;
+			StyleValue<Color> textOutlineColor;
+			StyleValue<f32> letterSpacing;
+			StyleValue<Length> lineHeight;
+			StyleValue<u16> fontWeight;
+		};
+
+		InheritedText CaptureInherited(const Style& style) {
+			return {style.font, style.fontSize, style.color, style.fontStyle, style.textOutlineWidth, style.textOutlineColor,
+					style.letterSpacing, style.lineHeight, style.fontWeight};
+		}
+
+		u8 DiffInherited(const InheritedText& before, const Style& after) {
+			const bool metrics = !(before.font == after.font) || !(before.fontSize == after.fontSize) || !(before.fontStyle == after.fontStyle) ||
+								 !(before.textOutlineWidth == after.textOutlineWidth) || !(before.letterSpacing == after.letterSpacing) ||
+								 !(before.lineHeight == after.lineHeight) || !(before.fontWeight == after.fontWeight);
+			if (metrics) {
+				return TEXT_CHANGED | TEXT_METRICS_CHANGED;
+			}
+			return !(before.color == after.color) || !(before.textOutlineColor == after.textOutlineColor) ? TEXT_CHANGED : u8{0};
+		}
+
+		u16 DeclaredText(const Style& style) {
+			u16 declared = 0;
+			declared |= style.font ? INHERIT_FONT : u16{0};
+			declared |= style.fontSize ? INHERIT_FONT_SIZE : u16{0};
+			declared |= style.color ? INHERIT_COLOR : u16{0};
+			declared |= style.fontStyle ? INHERIT_FONT_STYLE : u16{0};
+			declared |= style.textOutlineWidth ? INHERIT_OUTLINE_WIDTH : u16{0};
+			declared |= style.textOutlineColor ? INHERIT_OUTLINE_COLOR : u16{0};
+			declared |= style.letterSpacing ? INHERIT_LETTER_SPACING : u16{0};
+			declared |= style.lineHeight ? INHERIT_LINE_HEIGHT : u16{0};
+			declared |= style.fontWeight ? INHERIT_FONT_WEIGHT : u16{0};
+			return declared;
+		}
+
+		template <typename T>
+		void Inherit(StyleValue<T>& field, u16 declared, u16 bit, const StyleValue<T>* parent, const T& initial) {
+			if (!(declared & bit)) {
+				field = parent && *parent ? **parent : initial;
+			}
+		}
+
+	} // anonymous namespace
+
+	void ContextImpl::FillInherited(u32 index) {
+		Style& out = computedStyles[index];
+		const TextCascade& cascade = cascades[index];
+		const u16 declared = cascade.declared;
+		const u32 parentIndex = elements[index].parent;
+		const Style* parent = parentIndex != INVALID_UI_INDEX ? &computedStyles[parentIndex] : nullptr;
+		const TextComponent* text = GetText(index);
+		const TextComponent* hint = text && text->hinted ? text : nullptr;
+
+		if (!(declared & INHERIT_FONT)) {
+			out.font = hint ? hint->font : (parent ? parent->font.value_or(Handle<FontAsset>{}) : Handle<FontAsset>{});
+		}
+		const f32 parentSize = parent ? parent->fontSize.value_or(Length::Pixel(INITIAL_FONT_SIZE)).value : INITIAL_FONT_SIZE;
+		if (declared & INHERIT_FONT_SIZE) {
+			out.fontSize = cascade.fontSize.unit == Length::Unit::Percent ? Length::Pixel(parentSize * cascade.fontSize.value) : cascade.fontSize;
+		} else {
+			out.fontSize = Length::Pixel(hint ? hint->sizePx : parentSize);
+		}
+		if (!(declared & INHERIT_COLOR)) {
+			out.color = hint ? hint->color : (parent ? parent->color.value_or(INITIAL_TEXT_COLOR) : INITIAL_TEXT_COLOR);
+		}
+		Inherit(out.fontStyle, declared, INHERIT_FONT_STYLE, parent ? &parent->fontStyle : nullptr, FontStyle::Normal);
+		Inherit(out.textOutlineWidth, declared, INHERIT_OUTLINE_WIDTH, parent ? &parent->textOutlineWidth : nullptr, 0.0f);
+		Inherit(out.textOutlineColor, declared, INHERIT_OUTLINE_COLOR, parent ? &parent->textOutlineColor : nullptr, INITIAL_OUTLINE_COLOR);
+		Inherit(out.letterSpacing, declared, INHERIT_LETTER_SPACING, parent ? &parent->letterSpacing : nullptr, 0.0f);
+		Inherit(out.lineHeight, declared, INHERIT_LINE_HEIGHT, parent ? &parent->lineHeight : nullptr, Length::Auto());
+		Inherit(out.fontWeight, declared, INHERIT_FONT_WEIGHT, parent ? &parent->fontWeight : nullptr, INITIAL_FONT_WEIGHT);
+	}
+
+	u8 ContextImpl::ResolveInherited(u32 index) {
+		const InheritedText before = CaptureInherited(computedStyles[index]);
+		FillInherited(index);
+		elements[index].flags &= ~ElementFlags::DirtyInherit;
+		return DiffInherited(before, computedStyles[index]);
+	}
+
+	void ContextImpl::QueueInherit(u32 index) {
+		Element& element = elements[index];
+		if (HasFlag(element.flags, ElementFlags::InheritQueued)) {
+			return;
+		}
+		element.flags |= ElementFlags::InheritQueued;
+		inheritPending.push_back(HandleFor(index));
+	}
+
+	void ContextImpl::FlushInherit() {
+		if (inheritPending.empty() || flushingInherit) {
+			return;
+		}
+		SLT_PROFILE_ZONE("UI.Inherit");
+		flushingInherit = true;
+		for (size_t i = 0; i < inheritPending.size(); ++i) {
+			const u32 index = ResolveIndex(inheritPending[i]);
+			if (index == INVALID_UI_INDEX) {
+				continue;
+			}
+			elements[index].flags &= ~ElementFlags::InheritQueued;
+			DrainStyle(index);
+		}
+		inheritPending.clear();
+		flushingInherit = false;
+	}
+
+	void ContextImpl::PropagateInherited(u32 index) {
+		const size_t base = inheritScratch.size();
+		auto pushChildren = [this](u32 parent) {
+			for (u32 child = elements[parent].firstChild; child != INVALID_UI_INDEX; child = elements[child].nextSibling) {
+				inheritScratch.push_back(child);
+			}
+		};
+		pushChildren(index);
+		while (inheritScratch.size() > base) {
+			const u32 child = inheritScratch.back();
+			inheritScratch.pop_back();
+			if (HasFlag(elements[child].flags, ElementFlags::DirtyStyle)) {
+				continue;
+			}
+			const u8 changed = ResolveInherited(child);
+			if ((changed & TEXT_METRICS_CHANGED) && elements[child].textIndex != INVALID_UI_INDEX) {
+				MarkLayoutDirtyUpwards(child);
+			}
+			if (changed & TEXT_CHANGED) {
+				pushChildren(child);
+			}
+		}
+	}
+
+	u8 ContextImpl::ComposeStyle(u32 index) {
+		if (elements[index].parent != INVALID_UI_INDEX) {
+			DrainStyle(elements[index].parent);
+		}
 		Element& element = elements[index];
 
 		++styleStats.recalcs;
@@ -675,8 +842,13 @@ namespace Shalltear::UI {
 			StyleSheet::ApplyRule(composed, rule, &styleVars);
 		}
 
+		cascades[index].declared = DeclaredText(composed);
+		cascades[index].fontSize = composed.fontSize.value_or(Length::Auto());
+		const InheritedText before = CaptureInherited(computedStyles[index]);
 		computedStyles[index] = composed;
-		element.flags &= ~ElementFlags::DirtyStyle;
+		FillInherited(index);
+		element.flags &= ~(ElementFlags::DirtyStyle | ElementFlags::DirtyInherit);
+		return DiffInherited(before, computedStyles[index]);
 	}
 
 	void ContextImpl::RecalcAllStyles() {
@@ -686,6 +858,24 @@ namespace Shalltear::UI {
 				RecalcStyle(i);
 			}
 		}
+	}
+
+	TextComponent& ContextImpl::AcquireText(u32 elementIndex) {
+		Element& element = elements[elementIndex];
+		if (element.textIndex == INVALID_UI_INDEX) {
+			u32 slot;
+			if (!textFreeList.empty()) {
+				slot = textFreeList.back();
+				textFreeList.pop_back();
+				texts[slot] = TextComponent{};
+			} else {
+				slot = static_cast<u32>(texts.size());
+				texts.emplace_back();
+			}
+			texts[slot].inUse = true;
+			element.textIndex = slot;
+		}
+		return texts[element.textIndex];
 	}
 
 	TextComponent* ContextImpl::GetText(u32 elementIndex) {
@@ -871,20 +1061,22 @@ namespace Shalltear::UI {
 		return align == Align::Center || align == Align::End ? align : Align::Start;
 	}
 
-	TextMetrics ContextImpl::TextMetricsFor(u32 elementIndex, const TextComponent& text) {
+	TextMetrics ContextImpl::TextMetricsFor(u32 elementIndex) {
 		const Style& style = ComputedS(elementIndex);
 		const f32 scale = desc.contentScale > 0.0f ? desc.contentScale : 1.0f;
 		TextMetrics metrics;
-		metrics.sizePhysical = text.sizePx * scale;
-		metrics.outlineWidth = style.textOutlineWidth * scale;
-		metrics.letterSpacing = style.letterSpacing * scale;
-		if (style.lineHeight.unit == Length::Unit::Percent) {
-			metrics.lineHeight = style.lineHeight.value * metrics.sizePhysical;
-		} else if (style.lineHeight.unit == Length::Unit::Pixel) {
-			metrics.lineHeight = style.lineHeight.value * scale;
+		metrics.font = style.font.value_or(Handle<FontAsset>{});
+		metrics.sizePhysical = style.fontSize.value_or(Length::Pixel(INITIAL_FONT_SIZE)).value * scale;
+		metrics.outlineWidth = style.textOutlineWidth.value_or(0.0f) * scale;
+		metrics.letterSpacing = style.letterSpacing.value_or(0.0f) * scale;
+		const Length lineHeight = style.lineHeight.value_or(Length::Auto());
+		if (lineHeight.unit == Length::Unit::Percent) {
+			metrics.lineHeight = lineHeight.value * metrics.sizePhysical;
+		} else if (lineHeight.unit == Length::Unit::Pixel) {
+			metrics.lineHeight = lineHeight.value * scale;
 		}
-		metrics.fontWeight = style.fontWeight;
-		metrics.fontStyle = style.fontStyle;
+		metrics.fontWeight = style.fontWeight.value_or(INITIAL_FONT_WEIGHT);
+		metrics.fontStyle = style.fontStyle.value_or(FontStyle::Normal);
 		return metrics;
 	}
 
@@ -893,7 +1085,7 @@ namespace Shalltear::UI {
 		if (!text || !fontSystem) {
 			return;
 		}
-		const TextMetrics metrics = TextMetricsFor(elementIndex, *text);
+		const TextMetrics metrics = TextMetricsFor(elementIndex);
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
 		const Align align = EffectiveTextAlign(elementIndex);
 		const bool editable = elements[elementIndex].textInputIndex != INVALID_UI_INDEX;
@@ -910,7 +1102,6 @@ namespace Shalltear::UI {
 		}
 
 		TextQuery query;
-		query.font = text->font;
 		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
 		query.wrapWidth = text->wrapWidth;
 		query.overflow = overflow;
@@ -939,7 +1130,7 @@ namespace Shalltear::UI {
 			return {};
 		}
 
-		const TextMetrics metrics = TextMetricsFor(elementIndex, *text);
+		const TextMetrics metrics = TextMetricsFor(elementIndex);
 		TextOverflow overflow = EffectiveTextOverflow(elementIndex);
 		if (text->memoMetrics != metrics || text->memoOverflow != overflow) {
 			text->sizeCache.clear();
@@ -960,7 +1151,6 @@ namespace Shalltear::UI {
 		}
 
 		TextQuery query;
-		query.font = text->font;
 		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
 		query.wrapWidth = wrapWidth;
 		query.overflow = overflow;
@@ -1000,12 +1190,11 @@ namespace Shalltear::UI {
 		CompletionKey key;
 		key.element = elementIndex;
 		key.generation = E(elementIndex).generation;
-		key.metrics = TextMetricsFor(elementIndex, *text);
+		key.metrics = TextMetricsFor(elementIndex);
 		key.metrics.outlineWidth = 0.0f;
 		key.atlasGeneration = fontSystem->GetAtlasGeneration();
 		if (key != completionKey || completionShaped != input->completion) {
 			TextQuery query;
-			query.font = text->font;
 			query.utf8 = std::string_view(input->completion.data(), input->completion.size());
 			query.overflow = TextOverflow::Clip;
 			key.metrics.ApplyTo(query);
@@ -1105,6 +1294,10 @@ namespace Shalltear::UI {
 		parentElement.lastChild = childIndex;
 		_impl->BumpTreeRevision();
 		_impl->MarkLayoutDirtyUpwards(parentIndex);
+		if (!HasFlag(childElement.flags, ElementFlags::DirtyStyle)) {
+			childElement.flags |= ElementFlags::DirtyInherit;
+			_impl->QueueInherit(childIndex);
+		}
 		if (HasFlag(childElement.flags, ElementFlags::InheritsPointerState)) {
 			_impl->RecalcPointerState(childIndex);
 		}
@@ -1247,6 +1440,15 @@ namespace Shalltear::UI {
 		_impl->RecalcAllStyles();
 	}
 
+	void Context::SetStyleFont(std::string_view name, Handle<FontAsset> font) {
+		Handle<FontAsset> current;
+		if (_impl->styleVars.FindFont(name, current) && current == font) {
+			return;
+		}
+		_impl->styleVars.SetFont(name, font);
+		_impl->RecalcAllStyles();
+	}
+
 	const StyleVars& Context::GetStyleVars() const {
 		return _impl->styleVars;
 	}
@@ -1360,31 +1562,27 @@ namespace Shalltear::UI {
 			return;
 		}
 		Element& element = _impl->E(index);
-		if (element.textIndex == INVALID_UI_INDEX) {
-			u32 slot;
-			if (!_impl->textFreeList.empty()) {
-				slot = _impl->textFreeList.back();
-				_impl->textFreeList.pop_back();
-				_impl->texts[slot] = TextComponent{};
-			} else {
-				slot = static_cast<u32>(_impl->texts.size());
-				_impl->texts.emplace_back();
-			}
-			_impl->texts[slot].inUse = true;
-			element.textIndex = slot;
-		}
-		TextComponent& text = _impl->texts[element.textIndex];
-		std::string_view current(text.utf8.data(), text.utf8.size());
-		bool changed = text.font != font || text.sizePx != sizePx || text.color != color || current != utf8;
-		if (!changed) {
+		TextComponent& text = _impl->AcquireText(index);
+		const bool stringMoved = std::string_view(text.utf8.data(), text.utf8.size()) != utf8;
+		const bool metricsMoved = !text.hinted || text.font != font || text.sizePx != sizePx;
+		if (!stringMoved && !metricsMoved && text.color == color) {
 			return;
 		}
-		text.font = font;
-		text.sizePx = sizePx;
-		text.color = color;
-		text.utf8.assign(utf8.begin(), utf8.end());
-		text.ResetCaches();
-		_impl->MarkLayoutDirtyUpwards(index);
+		if (metricsMoved || text.color != color) {
+			text.font = font;
+			text.sizePx = sizePx;
+			text.color = color;
+			text.hinted = true;
+			element.flags |= ElementFlags::DirtyInherit;
+			_impl->QueueInherit(index);
+		}
+		if (stringMoved) {
+			text.utf8.assign(utf8.begin(), utf8.end());
+		}
+		if (stringMoved || metricsMoved) {
+			text.ResetCaches();
+			_impl->MarkLayoutDirtyUpwards(index);
+		}
 	}
 
 	void Context::SetTextString(ElementHandle handle, std::string_view utf8) {
@@ -1394,7 +1592,8 @@ namespace Shalltear::UI {
 		}
 		TextComponent* text = _impl->GetText(index);
 		if (!text) {
-			SLT_LOG_WARN("UI", "SetTextString: element has no text component (SetText first)");
+			_impl->AcquireText(index).utf8.assign(utf8.begin(), utf8.end());
+			_impl->MarkLayoutDirtyUpwards(index);
 			return;
 		}
 		if (std::string_view(text->utf8.data(), text->utf8.size()) == utf8) {
@@ -1427,6 +1626,10 @@ namespace Shalltear::UI {
 		Element& element = _impl->E(index);
 		if (element.textIndex == INVALID_UI_INDEX) {
 			return;
+		}
+		if (_impl->texts[element.textIndex].hinted) {
+			element.flags |= ElementFlags::DirtyInherit;
+			_impl->QueueInherit(index);
 		}
 		_impl->texts[element.textIndex] = TextComponent{};
 		_impl->textFreeList.push_back(element.textIndex);
@@ -1905,6 +2108,7 @@ namespace Shalltear::UI {
 
 	void Context::SettleLayout() {
 		SLT_PROFILE_ZONE("UI.Settle");
+		_impl->FlushInherit();
 		if (_impl->fontSystem && _impl->fontSystem->GetMetricsGeneration() != _impl->metricsGeneration) {
 			_impl->metricsGeneration = _impl->fontSystem->GetMetricsGeneration();
 			_impl->RemeasureAll();

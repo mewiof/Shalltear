@@ -998,6 +998,9 @@ namespace Shalltear::UIDebugOps {
 		const UI::Style& inlineStyle = context.GetStyle(element);
 		const UI::Style& computed = context.GetComputedStyle(element);
 		const UI::Style defaults{};
+		const UI::Element* pod = context.GetElement(element);
+		const UI::Style* parentComputed =
+			pod->parent != UI::INVALID_UI_INDEX ? &context.GetComputedStyle(context.MakeHandle(pod->parent)) : nullptr;
 
 		Vector<Match> matches{GetMemoryResource(MemTag::Editor)};
 		BuildMatches(context, element, names, matches);
@@ -1017,6 +1020,7 @@ namespace Shalltear::UIDebugOps {
 		char computedText[UI::MAX_STYLE_VALUE_TEXT];
 		char inlineText[UI::MAX_STYLE_VALUE_TEXT];
 		char defaultText[UI::MAX_STYLE_VALUE_TEXT];
+		char parentText[UI::MAX_STYLE_VALUE_TEXT];
 		for (std::string_view name : UI::GetStylePropertyNames()) {
 			StringHash hash{name};
 			PropertyRow row;
@@ -1026,7 +1030,17 @@ namespace Shalltear::UIDebugOps {
 			std::string_view defaultValue = UI::ReadStyleProperty(defaults, hash, defaultText, sizeof(defaultText));
 			row.value = str(computedValue);
 
-			if (computedValue != inlineValue) {
+			bool declaredBySheet = false;
+			for (const Contribution& contribution : contributions) {
+				for (const UI::StyleDeclarationSource& declaration : contribution.declarations) {
+					declaredBySheet |= declaration.name == name;
+				}
+			}
+			if (computedValue != inlineValue && !declaredBySheet && UI::IsInheritedStyleProperty(hash)) {
+				const bool fromParent =
+					parentComputed && UI::ReadStyleProperty(*parentComputed, hash, parentText, sizeof(parentText)) == computedValue;
+				row.source = fromParent ? ValueSource::Inherited : ValueSource::Text;
+			} else if (computedValue != inlineValue) {
 				row.source = ValueSource::Sheet;
 			} else if (inlineValue != defaultValue) {
 				row.source = ValueSource::Inline;

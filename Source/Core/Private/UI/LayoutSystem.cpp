@@ -701,6 +701,7 @@ namespace Shalltear::UI {
 
 		void UpdateLayout(ContextImpl& ctx) {
 			SLT_PROFILE_ZONE("UI.Layout");
+			ctx.FlushInherit();
 			Vec2 viewport = {static_cast<f32>(ctx.desc.sizePx.x), static_cast<f32>(ctx.desc.sizePx.y)};
 			++ctx.layoutStats.passes;
 			Measure(ctx, ctx.root, Constraint{viewport, true, true, true, true}, MeasureMode::Realize);

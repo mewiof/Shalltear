@@ -9,6 +9,8 @@
 #include "Shalltear/Core/Window.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/FontAsset.h"
+#include "Shalltear/Core/UI/StyleSheetAsset.h"
+#include "Shalltear/Core/UI/UIDocument.h"
 #include "Shalltear/Core/UI/UISystem.h"
 
 #include "Shalltear/Editor/FontInspectorOps.h"
@@ -20,6 +22,7 @@
 #include <deque>
 #include <filesystem>
 #include <format>
+#include <fstream>
 
 using namespace Shalltear;
 using namespace UITest;
@@ -150,6 +153,37 @@ namespace {
 		static u32 RefsOf(std::string_view name) {
 			const Asset* loaded = AssetDatabase::FindLoadedByGuid(GuidOf(name));
 			return loaded ? loaded->GetRefCount() : 0u;
+		}
+
+		template <typename T>
+		T* LoadText(std::string_view file, std::string_view text) {
+			std::ofstream(_root / "Assets" / std::string(file), std::ios::binary) << text;
+			const Path path(std::format("project://Assets/{}", file));
+			EXPECT_TRUE(AssetDatabase::EnsureAssetIdentity(path).IsValid());
+			Asset* loaded = AssetDatabase::LoadAsset(path);
+			if (!loaded || loaded->GetAssetTypeId() != T::GetReflectType()->name) {
+				if (loaded) {
+					AssetDatabase::UnloadAsset(loaded);
+				}
+				return nullptr;
+			}
+			return static_cast<T*>(loaded);
+		}
+
+		static f32 TitleWidth(const UIDocumentAsset& document) {
+			UI::ContextDesc desc;
+			desc.sizePx = {400, 300};
+			desc.contentScale = 1.0f;
+			UI::Context ctx(desc, UISystem::GetFontSystem());
+			Vector<UIInstantiateMapping> mapping{GetMemoryResource(MemTag::Debug)};
+			document.Instantiate(ctx, ctx.GetRoot(), UIInstantiateDesc{}, mapping);
+			ctx.Update();
+			for (const UIInstantiateMapping& entry : mapping) {
+				if (entry.node && entry.node->id == "title") {
+					return ctx.GetLayout(entry.element).content.w;
+				}
+			}
+			return -1.0f;
 		}
 	};
 
@@ -576,6 +610,110 @@ TEST_F(FontStyleFixture, StyleSheetWeightReachesText) {
 	EXPECT_EQ(drawn(), 45.0f);
 	ctx.RemoveClass(label, "lean"_hash);
 	EXPECT_EQ(drawn(), 40.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, DocumentFontFamilyReachesText) {
+	UIDocumentAsset* document = LoadText<UIDocumentAsset>(
+		"Title.slxml", R"xml(<ui version="1"><panel style="font-size: 100px; font-family: url('project://Assets/Bold.ttf')"><panel id="title">I</panel></panel></ui>)xml");
+	ASSERT_NE(document, nullptr);
+	ASSERT_EQ(document->assets.size(), 1u);
+	EXPECT_EQ(document->assets[0].src, "project://Assets/Bold.ttf");
+	EXPECT_EQ(document->assets[0].asset.Get(), AssetDatabase::FindLoadedByGuid(GuidOf("Bold")));
+	EXPECT_EQ(RefsOf("Bold"), 1u);
+	EXPECT_EQ(TitleWidth(*document), 70.0f);
+	AssetDatabase::UnloadAsset(document);
+	AssetDatabase::CollectGarbage();
+	EXPECT_EQ(RefsOf("Bold"), 0u);
+}
+
+TEST_F(FontStyleFixture, SheetFontFamilyReachesText) {
+	StyleSheetAsset* sheet = LoadText<StyleSheetAsset>("Look.slss", ".title { font-size: 100px; font-family: \"project://Assets/Bold.ttf\"; }\n");
+	ASSERT_NE(sheet, nullptr);
+	ASSERT_EQ(sheet->fonts.size(), 1u);
+	EXPECT_EQ(sheet->fonts[0].src, "project://Assets/Bold.ttf");
+	EXPECT_EQ(RefsOf("Bold"), 1u);
+
+	UIDocumentAsset* document = LoadText<UIDocumentAsset>(
+		"Page.slxml", R"(<ui version="1"><sheet src="project://Assets/Look.slss"/><panel><panel id="title" class="title">I</panel></panel></ui>)");
+	ASSERT_NE(document, nullptr);
+	EXPECT_EQ(TitleWidth(*document), 70.0f);
+	AssetDatabase::UnloadAsset(document);
+	AssetDatabase::UnloadAsset(sheet);
+	AssetDatabase::CollectGarbage();
+	EXPECT_EQ(RefsOf("Bold"), 0u);
+}
+
+TEST_F(FontStyleFixture, SheetFontsCookByGuid) {
+	StyleSheetAsset* sheet = LoadText<StyleSheetAsset>("Cooked.slss", ".a { font-family: url(project://Assets/Bold.ttf); } .b { font-family: url(project://Assets/Italic.ttf); } .c { font-family: url(project://Assets/Bold.ttf); }\n");
+	ASSERT_NE(sheet, nullptr);
+	ASSERT_EQ(sheet->fonts.size(), 2u);
+
+	PakStringPool strings;
+	Vector<u8> descriptorBytes{GetMemoryResource(MemTag::Debug)};
+	Vector<u8> payloadBytes{GetMemoryResource(MemTag::Debug)};
+	CookWriter descriptor(descriptorBytes, strings);
+	CookWriter payload(payloadBytes, strings);
+	ASSERT_TRUE(sheet->Cook(descriptor, payload));
+	ASSERT_EQ(descriptor.GetReferences().size(), 2u);
+	EXPECT_EQ(descriptor.GetReferences()[0], GuidOf("Bold"));
+	EXPECT_EQ(descriptor.GetReferences()[1], GuidOf("Italic"));
+	EXPECT_TRUE(payloadBytes.empty());
+
+	StyleSheetAsset* cooked = New<StyleSheetAsset>(MemTag::Asset);
+	CookReader descriptorReader(descriptorBytes.data(), descriptorBytes.size());
+	CookReader payloadReader(payloadBytes.data(), payloadBytes.size());
+	ASSERT_TRUE(cooked->LoadCooked(descriptorReader, payloadReader));
+	EXPECT_EQ(cooked->source, sheet->source);
+	ASSERT_EQ(cooked->fonts.size(), 2u);
+	EXPECT_EQ(cooked->fonts[1].src, "project://Assets/Italic.ttf");
+	EXPECT_EQ(cooked->fonts[1].font.Get(), AssetDatabase::FindLoadedByGuid(GuidOf("Italic")));
+	EXPECT_EQ(RefsOf("Italic"), 2u);
+	cooked->NotifyUnloaded();
+	Delete(cooked);
+	EXPECT_EQ(RefsOf("Italic"), 1u);
+	AssetDatabase::UnloadAsset(sheet);
+}
+
+TEST_F(FontStyleFixture, MissingSheetFontSkipped) {
+	StyleSheetAsset* sheet = LoadText<StyleSheetAsset>("Broken.slss", ".x { font-family: url('project://Assets/Nope.ttf'); } .y { opacity: 0.5; }\n");
+	ASSERT_NE(sheet, nullptr);
+	EXPECT_TRUE(sheet->fonts.empty());
+	EXPECT_NE(sheet->source.find(".y"), str::npos);
+	AssetDatabase::UnloadAsset(sheet);
+}
+
+TEST_F(FontStyleFixture, StyleFontOutlivedByName) {
+	FontAsset* bold = Load("Bold");
+	ASSERT_NE(bold, nullptr);
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::ContextDesc desc;
+	desc.sizePx = {400, 200};
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	ctx.SetStyleFont("bold", Handle<FontAsset>(bold));
+	ctx.LoadStyleSheet(".t { font-family: bold; font-size: 100px; }");
+	UI::ElementHandle line = MakeChild(ctx, ctx.GetRoot(), FixedBox(400.0f, 150.0f));
+	UI::ElementHandle label = MakeChild(ctx, line, UI::Style{});
+	ctx.AddClass(label, "t"_hash);
+	ctx.SetTextString(label, "I");
+	ctx.Update();
+	EXPECT_EQ(ctx.GetLayout(label).content.w, 70.0f);
+
+	AssetDatabase::UnloadAsset(bold);
+	AssetDatabase::CollectGarbage();
+	EXPECT_EQ(AssetDatabase::FindLoadedByGuid(GuidOf("Bold")), nullptr);
+	EXPECT_EQ(ctx.GetComputedStyle(label).font.value_or(Handle<FontAsset>{}).Get(), nullptr);
+	UISystem::Update();
+	ctx.Update();
+	UI::RenderList list;
+	ctx.BuildRenderList(list);
+
+	ctx.SetStyleFont("bold", Handle<FontAsset>(regular));
+	ctx.Update();
+	EXPECT_EQ(ctx.GetLayout(label).content.w, 40.0f);
+	ctx.BuildRenderList(list);
 	AssetDatabase::UnloadAsset(regular);
 }
 

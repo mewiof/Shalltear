@@ -1,6 +1,7 @@
 #include "Shalltear/Core/UI/UIDocument.h"
 
 #include "Serialization/XML.h"
+#include "UI/UIInternal.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
@@ -10,6 +11,7 @@
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/UI/Context.h"
+#include "Shalltear/Core/UI/FontAsset.h"
 #include "Shalltear/Core/UI/Style.h"
 #include "Shalltear/Core/UI/StyleSheetAsset.h"
 #include "Shalltear/Core/UI/WidgetRegistry.h"
@@ -610,8 +612,31 @@ namespace Shalltear {
 			std::string_view tag;
 		};
 
+		constexpr std::string_view FontAssetTypes[] = {"FontAsset"};
+		constexpr UI::WidgetAttribute FontUse = {"font-family", UI::WidgetAttributeType::Asset, {}, FontAssetTypes, {}};
+
+		bool IsFontReference(std::string_view name) {
+			return name.find("://") != std::string_view::npos;
+		}
+
+		template <typename Fn>
+		void ForEachStyleFont(std::string_view fragment, std::string_view tag, const Fn& fn) {
+			if (fragment.find("font-family") == std::string_view::npos) {
+				return;
+			}
+			Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Asset)};
+			UI::StyleSheet::SplitDeclarations(fragment, declarations);
+			for (const UI::StyleDeclarationSource& declaration : declarations) {
+				const std::string_view name = UI::FontNameOf(declaration.value);
+				if (declaration.name == FontUse.name && IsFontReference(name)) {
+					fn(AssetUse{name, &FontUse, tag});
+				}
+			}
+		}
+
 		template <typename Fn>
 		void ForEachAssetAttribute(const UIDocumentAsset& document, const UIDocumentNode& node, const Fn& fn) {
+			ForEachStyleFont(node.style, node.tag, fn);
 			if (node.templateName.empty()) {
 				const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(node.tag);
 				for (const UIDocumentAttribute& attribute : node.attributes) {
@@ -853,11 +878,23 @@ namespace Shalltear {
 			UI::StyleSheet::ApplyRule(style, sheet.GetRules()[0], &vars);
 		}
 
+		void RegisterFonts(const UIDocumentAsset& document, UI::Context& context) {
+			for (const UIDocumentAssetRef& ref : document.assets) {
+				Asset* asset = ref.asset.Get();
+				if (asset && asset->GetAssetTypeId() == FontAsset::GetReflectType()->name) {
+					context.SetStyleFont(ref.src, Handle<FontAsset>(static_cast<FontAsset*>(asset)));
+				}
+			}
+		}
+
 		void LoadSheets(const UIDocumentAsset& document, UI::Context& context) {
 			for (const UIDocumentSheet& declared : document.sheets) {
 				const StyleSheetAsset* sheet = declared.sheet.Get();
 				if (!sheet) {
 					continue;
+				}
+				for (const StyleSheetFont& entry : sheet->fonts) {
+					context.SetStyleFont(entry.src, entry.font);
 				}
 				std::string_view key = sheet->virtualPath.empty() ? std::string_view(declared.src) : std::string_view(sheet->virtualPath);
 				context.LoadStyleSheetOnce(StringHash(key), sheet->source);
@@ -945,6 +982,7 @@ namespace Shalltear {
 				return {};
 			}
 
+			RegisterFonts(*inner, context);
 			LoadSheets(*inner, context);
 
 			OverrideScope overrides{&node.overrides, scope.overrides};
@@ -1056,7 +1094,7 @@ namespace Shalltear {
 				}
 			}
 			if (!text.empty()) {
-				context.SetText(element, desc.font, desc.fontSizePx, desc.textColor, text);
+				context.SetTextString(element, text);
 			}
 
 			InstantiateScope childScope{scope.document, scope.overrides, nullptr, scope.expanding, scope.depth, scope.mapping};
@@ -1071,11 +1109,26 @@ namespace Shalltear {
 			if (document.root.tag.empty()) {
 				return {};
 			}
+			RegisterFonts(document, context);
 			LoadSheets(document, context);
 
 			DocumentChain expanding{&document, nullptr};
 			InstantiateScope scope{&document, nullptr, nullptr, &expanding, 0, mapping};
-			return InstantiateNode(document.root, context, parent, desc, scope);
+			const UI::ElementHandle root = InstantiateNode(document.root, context, parent, desc, scope);
+			if (context.IsAlive(root)) {
+				UI::Style style = context.GetStyle(root);
+				if (!style.font) {
+					style.font = desc.font;
+				}
+				if (!style.fontSize) {
+					style.fontSize = UI::Length::Pixel(desc.fontSizePx);
+				}
+				if (!style.color) {
+					style.color = desc.textColor;
+				}
+				context.SetStyle(root, style);
+			}
+			return root;
 		}
 
 	} // anonymous namespace

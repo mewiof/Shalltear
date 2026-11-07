@@ -34,6 +34,8 @@ namespace Shalltear::UI {
 
 		DirtyInherit = 1 << 13,
 		InheritQueued = 1 << 14,
+
+		RichText = 1 << 15,
 	};
 	SLT_ENUM_CLASS_FLAGS(ElementFlags)
 

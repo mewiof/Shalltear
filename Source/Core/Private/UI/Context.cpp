@@ -60,10 +60,7 @@ namespace Shalltear::UI {
 	void ContextImpl::Free(u32 index) {
 		BumpTreeRevision();
 		Element& element = elements[index];
-		if (element.textIndex != INVALID_UI_INDEX) {
-			texts[element.textIndex] = TextComponent{};
-			textFreeList.push_back(element.textIndex);
-		}
+		ReleaseText(index);
 		if (element.textInputIndex != INVALID_UI_INDEX) {
 			textInputs[element.textInputIndex] = TextInputState{};
 			textInputFreeList.push_back(element.textInputIndex);
@@ -503,9 +500,10 @@ namespace Shalltear::UI {
 			}
 			if (element.textIndex != INVALID_UI_INDEX) {
 				EnsureShaped(index);
-				const TextComponent& text = texts[element.textIndex];
+				TextComponent& text = texts[element.textIndex];
 				if (text.shaped.truncated && !text.utf8.empty()) {
-					return String(text.utf8, GetMemoryResource(MemTag::UI));
+					const RichView shown = TextFor(index, text, TextMetricsFor(index));
+					return String(shown.utf8, GetMemoryResource(MemTag::UI));
 				}
 			}
 			for (u32 child = element.firstChild; child != INVALID_UI_INDEX && depth < TOOLTIP_SEARCH_LIMIT;
@@ -878,6 +876,66 @@ namespace Shalltear::UI {
 		return texts[element.textIndex];
 	}
 
+	void ContextImpl::ReleaseText(u32 elementIndex) {
+		Element& element = elements[elementIndex];
+		if (element.textIndex == INVALID_UI_INDEX) {
+			return;
+		}
+		TextComponent& text = texts[element.textIndex];
+		if (text.richSlot != INVALID_UI_INDEX) {
+			richFreeList.push_back(text.richSlot);
+		}
+		text = TextComponent{};
+		textFreeList.push_back(element.textIndex);
+		element.textIndex = INVALID_UI_INDEX;
+	}
+
+	std::string_view ContextImpl::ShownText(u32 elementIndex, const TextComponent& text) const {
+		const Element& element = elements[elementIndex];
+		const std::string_view source(text.utf8.data(), text.utf8.size());
+		if (!HasFlag(element.flags, ElementFlags::RichText) || element.textInputIndex != INVALID_UI_INDEX ||
+			source.find('<') == std::string_view::npos || text.richSlot == INVALID_UI_INDEX) {
+			return source;
+		}
+		const String& display = richSlots[text.richSlot].text.display;
+		return {display.data(), display.size()};
+	}
+
+	RichView ContextImpl::TextFor(u32 elementIndex, TextComponent& text, const TextMetrics& metrics) {
+		const Element& element = elements[elementIndex];
+		const std::string_view source(text.utf8.data(), text.utf8.size());
+		if (!HasFlag(element.flags, ElementFlags::RichText) || element.textInputIndex != INVALID_UI_INDEX ||
+			source.find('<') == std::string_view::npos) {
+			return {source, {}};
+		}
+		if (text.richSlot == INVALID_UI_INDEX) {
+			if (!richFreeList.empty()) {
+				text.richSlot = richFreeList.back();
+				richFreeList.pop_back();
+			} else {
+				text.richSlot = static_cast<u32>(richSlots.size());
+				richSlots.emplace_back();
+			}
+			text.richStale = true;
+		}
+		RichSlot& slot = richSlots[text.richSlot];
+		if (text.richStale) {
+			ParseRichText(source, styleVars, slot.text);
+			slot.styled = IsStyled(slot.text);
+			slot.resolved = false;
+			text.richStale = false;
+		}
+		if (!slot.styled) {
+			return {std::string_view(slot.text.display.data(), slot.text.display.size()), {}};
+		}
+		if (!slot.resolved || slot.runsFor != metrics) {
+			ResolveRichRuns(slot.text, metrics, desc.contentScale > 0.0f ? desc.contentScale : 1.0f, slot.runs);
+			slot.runsFor = metrics;
+			slot.resolved = true;
+		}
+		return {std::string_view(slot.text.display.data(), slot.text.display.size()), slot.runs};
+	}
+
 	TextComponent* ContextImpl::GetText(u32 elementIndex) {
 		u32 slot = elements[elementIndex].textIndex;
 		return slot != INVALID_UI_INDEX ? &texts[slot] : nullptr;
@@ -1072,6 +1130,7 @@ namespace Shalltear::UI {
 		const Length lineHeight = style.lineHeight.value_or(Length::Auto());
 		if (lineHeight.unit == Length::Unit::Percent) {
 			metrics.lineHeight = lineHeight.value * metrics.sizePhysical;
+			metrics.lineHeightFactor = lineHeight.value;
 		} else if (lineHeight.unit == Length::Unit::Pixel) {
 			metrics.lineHeight = lineHeight.value * scale;
 		}
@@ -1101,8 +1160,10 @@ namespace Shalltear::UI {
 			return;
 		}
 
+		const RichView shown = TextFor(elementIndex, *text, metrics);
 		TextQuery query;
-		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
+		query.utf8 = shown.utf8;
+		query.runs = shown.runs;
 		query.wrapWidth = text->wrapWidth;
 		query.overflow = overflow;
 		query.align = align;
@@ -1150,8 +1211,10 @@ namespace Shalltear::UI {
 			}
 		}
 
+		const RichView shown = TextFor(elementIndex, *text, metrics);
 		TextQuery query;
-		query.utf8 = std::string_view(text->utf8.data(), text->utf8.size());
+		query.utf8 = shown.utf8;
+		query.runs = shown.runs;
 		query.wrapWidth = wrapWidth;
 		query.overflow = overflow;
 		metrics.ApplyTo(query);
@@ -1446,6 +1509,11 @@ namespace Shalltear::UI {
 			return;
 		}
 		_impl->styleVars.SetFont(name, font);
+		for (TextComponent& text : _impl->texts) {
+			if (text.richSlot != INVALID_UI_INDEX) {
+				text.ResetCaches();
+			}
+		}
 		_impl->RecalcAllStyles();
 	}
 
@@ -1609,6 +1677,26 @@ namespace Shalltear::UI {
 		_impl->MarkContentDirty(index);
 	}
 
+	void Context::SetRichText(ElementHandle handle, bool enabled) {
+		const u32 index = _impl->ResolveIndex(handle);
+		if (index == INVALID_UI_INDEX) {
+			return;
+		}
+		Element& element = _impl->E(index);
+		if (HasFlag(element.flags, ElementFlags::RichText) == enabled) {
+			return;
+		}
+		if (enabled) {
+			element.flags |= ElementFlags::RichText;
+		} else {
+			element.flags &= ~ElementFlags::RichText;
+		}
+		if (TextComponent* text = _impl->GetText(index)) {
+			text->ResetCaches();
+			_impl->MarkLayoutDirtyUpwards(index);
+		}
+	}
+
 	str Context::GetTextString(ElementHandle handle) const {
 		u32 index = _impl->ResolveIndex(handle);
 		if (index == INVALID_UI_INDEX) {
@@ -1631,9 +1719,7 @@ namespace Shalltear::UI {
 			element.flags |= ElementFlags::DirtyInherit;
 			_impl->QueueInherit(index);
 		}
-		_impl->texts[element.textIndex] = TextComponent{};
-		_impl->textFreeList.push_back(element.textIndex);
-		element.textIndex = INVALID_UI_INDEX;
+		_impl->ReleaseText(index);
 		_impl->MarkLayoutDirtyUpwards(index);
 	}
 
@@ -1882,6 +1968,7 @@ namespace Shalltear::UI {
 		ShapedTextView view;
 		view.run = &text->shaped;
 		view.originPx = _impl->TextOriginPx(index);
+		view.text = _impl->ShownText(index, *text);
 		return view;
 	}
 

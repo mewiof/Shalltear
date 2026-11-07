@@ -33,6 +33,61 @@ namespace Shalltear::UI {
 
 		constexpr u32 ELLIPSIS_CODEPOINT = 0x2026;
 
+		constexpr f32 SCRIPT_SCALE = 0.65f;
+		constexpr f32 SUB_OFFSET = 0.15f;
+		constexpr f32 SUPER_OFFSET = 0.35f;
+		constexpr f32 SMALL_CAPS_SCALE = 0.8f;
+
+		// Latin-1, Latin Extended-A, Greek, Cyrillic
+		u32 UpperOf(u32 c) {
+			if ((c >= 'a' && c <= 'z') || (c >= 0xE0 && c <= 0xFE && c != 0xF7) || (c >= 0x3B1 && c <= 0x3C9 && c != 0x3C2) ||
+				(c >= 0x430 && c <= 0x44F)) {
+				return c - 32;
+			}
+			if (c == 0xFF) {
+				return 0x178;
+			}
+			if (c == 0x3C2) {
+				return 0x3A3;
+			}
+			if (c >= 0x450 && c <= 0x45F) {
+				return c - 80;
+			}
+			if (c == 0x131) {
+				return 'I';
+			}
+			if ((c >= 0x139 && c <= 0x148) || (c >= 0x179 && c <= 0x17E)) {
+				return c % 2 == 0 ? c - 1 : c;
+			}
+			if (c >= 0x100 && c <= 0x177 && c != 0x138 && c != 0x149 && c % 2 == 1) {
+				return c - 1;
+			}
+			return c;
+		}
+
+		u32 LowerOf(u32 c) {
+			if ((c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7) || (c >= 0x391 && c <= 0x3A9 && c != 0x3A2) ||
+				(c >= 0x410 && c <= 0x42F)) {
+				return c + 32;
+			}
+			if (c == 0x178) {
+				return 0xFF;
+			}
+			if (c >= 0x400 && c <= 0x40F) {
+				return c + 80;
+			}
+			if (c == 0x130) {
+				return 'i';
+			}
+			if ((c >= 0x139 && c <= 0x148) || (c >= 0x179 && c <= 0x17E)) {
+				return c % 2 == 1 ? c + 1 : c;
+			}
+			if (c >= 0x100 && c <= 0x177 && c != 0x138 && c % 2 == 0) {
+				return c + 1;
+			}
+			return c;
+		}
+
 	} // anonymous namespace
 
 	FreeTypeFontSystem::FreeTypeFontSystem(const CreateInfo& createInfo)
@@ -615,7 +670,82 @@ namespace Shalltear::UI {
 		return Shape(query, out, true);
 	}
 
-	bool FreeTypeFontSystem::Shape(const TextQuery& query, ShapedRun& out, bool emit) {
+	bool FreeTypeFontSystem::PrepareRun(const TextQuery& query, const TextRun* desc, RunState& out) {
+		FontFace* family = GetOrCreateFace(desc ? desc->font : query.font);
+		if (!family && desc) {
+			family = GetOrCreateFace(query.font);
+		}
+		if (!family) {
+			return false;
+		}
+		f32 size = desc ? desc->sizePx : query.sizePx;
+		f32 shift = desc ? desc->baselineShift : 0.0f;
+		const TextScript script = desc ? desc->script : TextScript::Baseline;
+		if (script != TextScript::Baseline) {
+			const auto* os2 = static_cast<const TT_OS2*>(FT_Get_Sfnt_Table(family->face, FT_SFNT_OS2));
+			const f32 upem = static_cast<f32>(family->face->units_per_EM);
+			const bool sub = script == TextScript::Sub;
+			const FT_Short scriptSize = os2 ? (sub ? os2->ySubscriptYSize : os2->ySuperscriptYSize) : 0;
+			const FT_Short scriptOffset = os2 ? (sub ? os2->ySubscriptYOffset : os2->ySuperscriptYOffset) : 0;
+			const bool declared = upem > 0.0f && scriptSize > 0;
+			shift += (sub ? -1.0f : 1.0f) * size * (declared ? static_cast<f32>(scriptOffset) / upem : (sub ? SUB_OFFSET : SUPER_OFFSET));
+			size *= declared ? static_cast<f32>(scriptSize) / upem : SCRIPT_SCALE;
+		}
+		out.family = family;
+		out.sizePx = static_cast<u16>(std::max(1, static_cast<i32>(std::lround(size))));
+		out.smallSizePx = static_cast<u16>(std::max(1, static_cast<i32>(std::lround(size * SMALL_CAPS_SCALE))));
+		out.weight = std::clamp<u16>(desc ? desc->fontWeight : query.fontWeight, 1, 1000);
+		out.style = desc ? desc->fontStyle : query.fontStyle;
+		const StyledFace styled = ResolveStyle(*family, out.weight, out.style);
+		if (!ApplyInstance(styled, out.sizePx) || !EnsureSize(*styled.face, out.sizePx)) {
+			return false;
+		}
+		out.styled = styled.face;
+
+		const FT_Face ftFace = styled.face->face;
+		out.ascender = static_cast<f32>(ftFace->size->metrics.ascender) / 64.0f;
+		out.descender = static_cast<f32>(ftFace->size->metrics.descender) / 64.0f;
+		f32 fontLineHeight = static_cast<f32>(ftFace->size->metrics.height) / 64.0f;
+		if (fontLineHeight <= 0.0f) {
+			fontLineHeight = out.ascender - out.descender;
+		}
+		const f32 requested = desc ? (desc->lineHeightScale > 0.0f ? fontLineHeight * desc->lineHeightScale : desc->lineHeight) : query.lineHeight;
+		out.lineHeight = requested > 0.0f ? std::max(1.0f, std::round(requested)) : fontLineHeight;
+		out.halfLeading = std::floor((out.lineHeight - fontLineHeight) * 0.5f);
+		out.letterSpacing = desc ? desc->letterSpacing : query.letterSpacing;
+		out.baselineShift = shift;
+		out.advance = desc ? desc->advance : 0.0f;
+		out.paint = desc ? desc->paint : u16{0};
+		out.textCase = desc ? desc->textCase : TextCase::Normal;
+		out.decoration = desc ? desc->decoration : TextDecoration::None;
+		out.noBreak = desc && desc->noBreak;
+
+		if (out.decoration != TextDecoration::None) {
+			const FT_Fixed scale = ftFace->size->metrics.y_scale;
+			const f32 em = static_cast<f32>(out.sizePx);
+			const auto* os2 = static_cast<const TT_OS2*>(FT_Get_Sfnt_Table(ftFace, FT_SFNT_OS2));
+			if (ftFace->underline_thickness > 0) {
+				out.underlineOffset = -static_cast<f32>(FT_MulFix(ftFace->underline_position, scale)) / 64.0f;
+				out.underlineThickness = static_cast<f32>(FT_MulFix(ftFace->underline_thickness, scale)) / 64.0f;
+			} else {
+				out.underlineOffset = em * 0.1f;
+				out.underlineThickness = em / 14.0f;
+			}
+			out.underlineThickness = std::max(1.0f, std::round(out.underlineThickness));
+			if (os2 && os2->yStrikeoutSize > 0) {
+				// yStrikeoutPosition is stroke top, offsets here are centers
+				out.strikeOffset = static_cast<f32>(FT_MulFix(os2->yStrikeoutPosition * 2 - os2->yStrikeoutSize, scale)) / 128.0f;
+				out.strikeThickness = std::max(1.0f, std::round(static_cast<f32>(FT_MulFix(os2->yStrikeoutSize, scale)) / 64.0f));
+			} else {
+				out.strikeOffset = em * 0.3f;
+				out.strikeThickness = out.underlineThickness;
+			}
+		}
+		return true;
+	}
+
+	template <bool Styled>
+	bool FreeTypeFontSystem::ShapeRuns(const TextQuery& query, ShapedRun& out, bool emit) {
 		++_textStats.walks;
 		if (emit) {
 			++_textStats.runsBuilt;
@@ -623,41 +753,58 @@ namespace Shalltear::UI {
 		out.glyphs.clear();
 		out.outlineGlyphs.clear();
 		out.caretStops.clear();
+		out.spans.clear();
+		out.decorations.clear();
 		out.extent = {};
 		out.lineHeight = 0.0f;
 		out.halfLeading = 0.0f;
 		out.multiline = false;
 		out.atlas = _atlas;
 
-		FontFace* face = GetOrCreateFace(query.font);
-		if (!face) {
-			return false;
+		const u32 runCount = Styled ? static_cast<u32>(query.runs.size()) : 1u;
+		_scratchRuns.resize(runCount);
+		for (u32 r = 0; r < runCount; ++r) {
+			if (!PrepareRun(query, Styled ? &query.runs[r] : nullptr, _scratchRuns[r])) {
+				return false;
+			}
 		}
-		u16 sizePx = static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.sizePx))));
-		const u16 weight = std::clamp<u16>(query.fontWeight, 1, 1000);
-		const FontStyle style = query.fontStyle;
-		const StyledFace run = ResolveStyle(*face, weight, style);
-		if (!ApplyInstance(run, sizePx) || !EnsureSize(*run.face, sizePx)) {
-			return false;
-		}
-		u16 strokePx = query.outlineWidth > 0.0f
-						   ? static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.outlineWidth))))
-						   : 0;
+		const RunState& first = _scratchRuns[0];
+		auto runOf = [&](u16 run) -> const RunState& {
+			if constexpr (Styled) {
+				return _scratchRuns[run];
+			} else {
+				return first;
+			}
+		};
+		const u16 strokePx = query.outlineWidth > 0.0f
+								 ? static_cast<u16>(std::max(1, static_cast<i32>(std::lround(query.outlineWidth))))
+								 : 0;
+		out.lineHeight = first.lineHeight;
+		out.halfLeading = first.halfLeading;
 
-		FT_Face ftFace = run.face->face;
-		f32 ascender = static_cast<f32>(ftFace->size->metrics.ascender) / 64.0f;
-		f32 fontLineHeight = static_cast<f32>(ftFace->size->metrics.height) / 64.0f;
-		if (fontLineHeight <= 0.0f) {
-			fontLineHeight = ascender - static_cast<f32>(ftFace->size->metrics.descender) / 64.0f;
-		}
-		const f32 lineHeight = query.lineHeight > 0.0f ? std::max(1.0f, std::round(query.lineHeight)) : fontLineHeight;
-		const f32 halfLeading = std::floor((lineHeight - fontLineHeight) * 0.5f);
-		out.lineHeight = lineHeight;
-		out.halfLeading = halfLeading;
-
-		const f32 letterSpacing = query.letterSpacing;
-		auto stepBefore = [&](const GlyphEntry* previous, const GlyphEntry* current, bool first) -> f32 {
-			return (first ? 0.0f : letterSpacing) + KerningBetween(*run.face, sizePx, previous, current);
+		auto stepBefore = [&](const Pending* previous, const Pending& current, bool firstOnLine) -> f32 {
+			if (!previous) {
+				return 0.0f;
+			}
+			const RunState& before = runOf(previous->run);
+			const RunState& run = runOf(current.run);
+			const f32 spacing = firstOnLine ? 0.0f : before.letterSpacing;
+			if constexpr (Styled) {
+				if (previous->sizePx != current.sizePx || before.advance > 0.0f || run.advance > 0.0f ||
+					(previous->run != current.run && (before.styled != run.styled || before.weight != run.weight || before.style != run.style))) {
+					return spacing;
+				}
+			}
+			return spacing + KerningBetween(*run.styled, current.sizePx, previous->entry, current.entry);
+		};
+		auto advanceOf = [&](const Pending& pending) -> f32 {
+			if constexpr (Styled) {
+				const f32 forced = _scratchRuns[pending.run].advance;
+				if (forced > 0.0f) {
+					return forced;
+				}
+			}
+			return static_cast<f32>(pending.entry->advance);
 		};
 
 		f32 penY = 0.0f;
@@ -668,6 +815,7 @@ namespace Shalltear::UI {
 		const f32 share = query.align == Align::Center ? 0.5f : (query.align == Align::End ? 1.0f : 0.0f);
 		const bool align = emit && share > 0.0f;
 		bool truncated = false;
+		u16 currentRun = 0;
 
 		_scratchLine.clear();
 		_scratchSpans.clear();
@@ -678,31 +826,108 @@ namespace Shalltear::UI {
 			}
 		};
 		u32 lineStartByte = 0;
+		f32 lastAdvanceY = first.lineHeight;
 
 		auto flushLine = [&](bool startNewLine, bool softWrap) {
-			f32 baseline = penY + halfLeading + ascender;
+			u16 lineRun = currentRun;
+			bool single = true;
+			f32 top = 0.0f;
+			f32 bottom = 0.0f;
+			if constexpr (Styled) {
+				bool any = false;
+				for (const Pending& pending : _scratchLine) {
+					const RunState& run = _scratchRuns[pending.run];
+					const f32 runTop = run.halfLeading + run.ascender;
+					const f32 runBottom = run.lineHeight - runTop;
+					if (!any) {
+						lineRun = pending.run;
+						top = runTop;
+						bottom = runBottom;
+						any = true;
+					} else if (pending.run != lineRun) {
+						single = false;
+						top = std::max(top, runTop);
+						bottom = std::max(bottom, runBottom);
+					}
+				}
+			}
+			const RunState& lead = runOf(lineRun);
+			const f32 baseline = single ? penY + lead.halfLeading + lead.ascender : penY + top;
+			const f32 advanceY = single ? lead.lineHeight : top + bottom;
+
 			f32 x = 0.0f;
 			f32 inked = 0.0f;
-			const GlyphEntry* previous = nullptr;
-			bool first = true;
+			const Pending* previous = nullptr;
+			bool firstOnLine = true;
 			if (align) {
 				_scratchSpans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()),
-										 static_cast<u32>(out.caretStops.size()), 0.0f});
+										 static_cast<u32>(out.caretStops.size()), static_cast<u32>(out.decorations.size()), 0.0f});
 			}
 			pushCaretStop(lineStartByte, 0.0f);
+
+			u32 segmentRun = INVALID_UI_INDEX;
+			f32 segmentStart = 0.0f;
+			f32 segmentEnd = 0.0f;
+			constexpr TextDecoration KINDS[] = {TextDecoration::Mark, TextDecoration::Underline, TextDecoration::Strikethrough};
+			u32 joined[std::size(KINDS)] = {INVALID_UI_INDEX, INVALID_UI_INDEX, INVALID_UI_INDEX};
+			auto closeSegment = [&](bool adjacent) {
+				if (!emit || segmentRun == INVALID_UI_INDEX) {
+					return;
+				}
+				const RunState& run = _scratchRuns[segmentRun];
+				const f32 runBaseline = baseline - run.baselineShift;
+				const f32 width = segmentEnd - segmentStart;
+				for (size_t k = 0; k < std::size(KINDS); ++k) {
+					const TextDecoration kind = KINDS[k];
+					if (!HasFlag(run.decoration, kind)) {
+						joined[k] = INVALID_UI_INDEX;
+						continue;
+					}
+					if (width > 0.0f) {
+						Rect rect{segmentStart, 0.0f, width, 0.0f};
+						if (kind == TextDecoration::Mark) {
+							rect.y = runBaseline - run.ascender;
+							rect.h = run.ascender - run.descender;
+						} else if (kind == TextDecoration::Underline) {
+							rect.y = Snap(runBaseline + run.underlineOffset - run.underlineThickness * 0.5f);
+							rect.h = run.underlineThickness;
+						} else {
+							rect.y = Snap(runBaseline - run.strikeOffset - run.strikeThickness * 0.5f);
+							rect.h = run.strikeThickness;
+						}
+						ShapedDecoration* prior = joined[k] != INVALID_UI_INDEX ? &out.decorations[joined[k]] : nullptr;
+						if (prior && prior->paint == run.paint && prior->rect.y == rect.y && prior->rect.h == rect.h) {
+							prior->rect.w = segmentEnd - prior->rect.x;
+						} else {
+							joined[k] = static_cast<u32>(out.decorations.size());
+							out.decorations.push_back({rect, run.paint, kind});
+						}
+					}
+					if (!adjacent) {
+						joined[k] = INVALID_UI_INDEX;
+					}
+				}
+			};
+
 			for (const Pending& pending : _scratchLine) {
 				GlyphEntry* entry = pending.entry;
 				if (!entry) {
 					continue;
 				}
-				x += stepBefore(previous, entry, first);
-				first = false;
+				const RunState& run = runOf(pending.run);
+				x += stepBefore(previous, pending, firstOnLine);
+				firstOnLine = false;
 
+				if (Styled && emit && (out.spans.empty() || out.spans.back().paint != run.paint)) {
+					out.spans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()), run.paint});
+				}
+				const f32 left = Styled && run.advance > 0.0f ? x + (run.advance - static_cast<f32>(entry->advance)) * 0.5f : x;
+				const f32 glyphBaseline = Styled && run.baselineShift != 0.0f ? baseline - run.baselineShift : baseline;
 				if (emit && strokePx > 0) {
-					GlyphEntry* stroke = GetOrCreateGlyph(*face, weight, style, sizePx, pending.codepoint, strokePx);
+					GlyphEntry* stroke = GetOrCreateGlyph(*run.family, run.weight, run.style, pending.sizePx, pending.drawn, strokePx);
 					if (stroke && stroke->inAtlas) {
 						ShapedGlyph glyph;
-						glyph.rect = {Snap(x + stroke->bearingX), Snap(baseline - stroke->bearingY),
+						glyph.rect = {Snap(left + stroke->bearingX), Snap(glyphBaseline - stroke->bearingY),
 									  static_cast<f32>(stroke->width), static_cast<f32>(stroke->height)};
 						glyph.uv = stroke->uv;
 						out.outlineGlyphs.push_back(glyph);
@@ -710,18 +935,31 @@ namespace Shalltear::UI {
 				}
 				if (emit && entry->inAtlas) {
 					ShapedGlyph glyph;
-					glyph.rect = {Snap(x + entry->bearingX), Snap(baseline - entry->bearingY),
+					glyph.rect = {Snap(left + entry->bearingX), Snap(glyphBaseline - entry->bearingY),
 								  static_cast<f32>(entry->width), static_cast<f32>(entry->height)};
 					glyph.uv = entry->uv;
 					out.glyphs.push_back(glyph);
 				}
+				if (Styled && run.decoration != TextDecoration::None && pending.run != segmentRun) {
+					closeSegment(true);
+					segmentRun = pending.run;
+					segmentStart = x;
+					segmentEnd = x;
+				} else if (Styled && run.decoration == TextDecoration::None && segmentRun != INVALID_UI_INDEX) {
+					closeSegment(false);
+					segmentRun = INVALID_UI_INDEX;
+				}
 
-				x += static_cast<f32>(entry->advance);
+				x += advanceOf(pending);
 				if (!IsSpaceCodepoint(pending.codepoint)) {
 					inked = x;
+					segmentEnd = x;
 				}
 				pushCaretStop(pending.byteEnd, x);
-				previous = entry;
+				previous = &pending;
+			}
+			if constexpr (Styled) {
+				closeSegment(false);
 			}
 			if (align) {
 				_scratchSpans.back().width = query.editable && !softWrap ? x : inked;
@@ -730,8 +968,9 @@ namespace Shalltear::UI {
 			_scratchLine.clear();
 			++lineCount;
 			if (startNewLine) {
-				penY += lineHeight;
+				penY += advanceY;
 			}
+			lastAdvanceY = advanceY;
 			return x;
 		};
 
@@ -745,35 +984,40 @@ namespace Shalltear::UI {
 		u32 overflowByte = length;
 
 		auto appendEllipsis = [&]() {
-			GlyphEntry* mark = GetOrCreateGlyph(*face, weight, style, sizePx, ELLIPSIS_CODEPOINT, 0);
-			if (!mark) {
+			const u16 markRun = _scratchLine.empty() ? currentRun : _scratchLine.back().run;
+			const RunState& run = runOf(markRun);
+			GlyphEntry* glyph = GetOrCreateGlyph(*run.family, run.weight, run.style, run.sizePx, ELLIPSIS_CODEPOINT, 0);
+			if (!glyph) {
 				return;
 			}
-			const f32 markAdvance = static_cast<f32>(mark->advance);
+			Pending mark{ELLIPSIS_CODEPOINT, overflowByte, glyph, overflowByte, ELLIPSIS_CODEPOINT, markRun, run.sizePx};
+			const f32 markAdvance = static_cast<f32>(glyph->advance);
 			f32 x = 0.0f;
-			const GlyphEntry* previous = nullptr;
-			bool first = true;
+			const Pending* previous = nullptr;
+			bool firstOnLine = true;
 			size_t keep = 0;
 			u32 cutByte = overflowByte;
 			for (size_t n = 0; n < _scratchLine.size(); ++n) {
-				GlyphEntry* entry = _scratchLine[n].entry;
-				if (!entry) {
+				const Pending& pending = _scratchLine[n];
+				if (!pending.entry) {
 					keep = n + 1;
 					continue;
 				}
-				f32 pen = x + stepBefore(previous, entry, first);
-				f32 withMark = pen + static_cast<f32>(entry->advance) + stepBefore(entry, mark, false) + markAdvance;
+				const f32 pen = x + stepBefore(previous, pending, firstOnLine);
+				const f32 withMark = pen + advanceOf(pending) + stepBefore(&pending, mark, false) + markAdvance;
 				if (withMark > budget) {
-					cutByte = _scratchLine[n].byteOffset;
+					cutByte = pending.byteOffset;
 					break;
 				}
-				x = pen + static_cast<f32>(entry->advance);
-				previous = entry;
-				first = false;
+				x = pen + advanceOf(pending);
+				previous = &pending;
+				firstOnLine = false;
 				keep = n + 1;
 			}
 			_scratchLine.resize(keep);
-			_scratchLine.push_back({ELLIPSIS_CODEPOINT, cutByte, mark, cutByte});
+			mark.byteOffset = cutByte;
+			mark.byteEnd = cutByte;
+			_scratchLine.push_back(mark);
 			truncated = true;
 		};
 
@@ -806,6 +1050,10 @@ namespace Shalltear::UI {
 				}
 				codepoint = (codepoint << 6) | (cc & 0x3F);
 			}
+			while (Styled && currentRun + 1u < runCount && byteOffset >= query.runs[currentRun].end) {
+				++currentRun;
+			}
+			const RunState& run = runOf(currentRun);
 
 			if (codepoint == '\n') {
 				if (ellipsize) {
@@ -821,12 +1069,25 @@ namespace Shalltear::UI {
 			}
 
 			++_textStats.glyphsResolved;
-			GlyphEntry* entry = GetOrCreateGlyph(*face, weight, style, sizePx, codepoint, 0);
-			f32 step = 0.0f;
-			if (!_scratchLine.empty() && _scratchLine.back().entry && entry) {
-				step = stepBefore(_scratchLine.back().entry, entry, false);
+			u32 drawn = codepoint;
+			u16 glyphSize = run.sizePx;
+			if (Styled && run.textCase != TextCase::Normal) {
+				if (run.textCase == TextCase::Upper) {
+					drawn = UpperOf(codepoint);
+				} else if (run.textCase == TextCase::Lower) {
+					drawn = LowerOf(codepoint);
+				} else if (UpperOf(codepoint) != codepoint) {
+					drawn = UpperOf(codepoint);
+					glyphSize = run.smallSizePx;
+				}
 			}
-			f32 advance = entry ? static_cast<f32>(entry->advance) : 0.0f;
+			const Pending current{static_cast<u32>(codepoint), byteOffset, GetOrCreateGlyph(*run.family, run.weight, run.style, glyphSize, drawn, 0),
+								  i, drawn, currentRun, glyphSize};
+			f32 step = 0.0f;
+			if (!_scratchLine.empty() && _scratchLine.back().entry && current.entry) {
+				step = stepBefore(&_scratchLine.back(), current, false);
+			}
+			f32 advance = current.entry ? advanceOf(current) : 0.0f;
 			f32 nextAdvance = lineAdvance + step + advance;
 
 			if (wrap && nextAdvance > query.wrapWidth && !_scratchLine.empty()) {
@@ -843,20 +1104,20 @@ namespace Shalltear::UI {
 				lineStartByte = _scratchLine.empty() ? byteOffset : _scratchLine.front().byteOffset;
 
 				lineAdvance = 0.0f;
-				const GlyphEntry* previous = nullptr;
+				const Pending* previous = nullptr;
 				bool firstOnLine = true;
 				for (const Pending& pending : _scratchLine) {
 					if (!pending.entry) {
 						continue;
 					}
-					lineAdvance += stepBefore(previous, pending.entry, firstOnLine);
-					lineAdvance += static_cast<f32>(pending.entry->advance);
+					lineAdvance += stepBefore(previous, pending, firstOnLine);
+					lineAdvance += advanceOf(pending);
 					firstOnLine = false;
-					previous = pending.entry;
+					previous = &pending;
 				}
 				step = 0.0f;
-				if (!_scratchLine.empty() && _scratchLine.back().entry && entry) {
-					step = stepBefore(_scratchLine.back().entry, entry, false);
+				if (!_scratchLine.empty() && _scratchLine.back().entry && current.entry) {
+					step = stepBefore(&_scratchLine.back(), current, false);
 				}
 				nextAdvance = lineAdvance + step + advance;
 			}
@@ -866,9 +1127,9 @@ namespace Shalltear::UI {
 				pendingOverflow = true;
 				break;
 			}
-			_scratchLine.push_back({static_cast<u32>(codepoint), byteOffset, entry, i});
+			_scratchLine.push_back(current);
 			lineAdvance = nextAdvance;
-			if (IsBreakCodepoint(codepoint)) {
+			if (IsBreakCodepoint(codepoint) && !(Styled && run.noBreak)) {
 				lastBreakCount = static_cast<u32>(_scratchLine.size());
 			}
 		}
@@ -880,15 +1141,15 @@ namespace Shalltear::UI {
 		const bool endsInNewline = !ellipsize && length > 0 && text[length - 1] == '\n';
 		if (!_scratchLine.empty() || lineCount == 0 || endsInNewline) {
 			flushLine(false, false);
-			penY += lineHeight;
+			penY += lastAdvanceY;
 		}
 
-		out.extent = {maxLineWidth, std::max(penY, lineHeight)};
+		out.extent = {maxLineWidth, std::max(penY, first.lineHeight)};
 		out.truncated = truncated;
 
 		if (align) {
 			_scratchSpans.push_back({static_cast<u32>(out.glyphs.size()), static_cast<u32>(out.outlineGlyphs.size()),
-									 static_cast<u32>(out.caretStops.size()), maxLineWidth});
+									 static_cast<u32>(out.caretStops.size()), static_cast<u32>(out.decorations.size()), maxLineWidth});
 			for (size_t n = 0; n + 1 < _scratchSpans.size(); ++n) {
 				const LineSpan& line = _scratchSpans[n];
 				const LineSpan& next = _scratchSpans[n + 1];
@@ -902,6 +1163,9 @@ namespace Shalltear::UI {
 				for (u32 k = line.caretStops; k < next.caretStops; ++k) {
 					out.caretStops[k].x += shift;
 				}
+				for (u32 k = line.decorations; k < next.decorations; ++k) {
+					out.decorations[k].rect.x += shift;
+				}
 			}
 		}
 
@@ -911,6 +1175,10 @@ namespace Shalltear::UI {
 		}
 
 		return true;
+	}
+
+	bool FreeTypeFontSystem::Shape(const TextQuery& query, ShapedRun& out, bool emit) {
+		return query.runs.empty() ? ShapeRuns<false>(query, out, emit) : ShapeRuns<true>(query, out, emit);
 	}
 
 	Vec2 FreeTypeFontSystem::MeasureText(const TextQuery& query) {

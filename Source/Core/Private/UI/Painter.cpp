@@ -476,7 +476,7 @@ namespace Shalltear::UI {
 			}
 			ctx.EnsureShaped(index);
 			const ShapedRun& run = text->shaped;
-			if (run.glyphs.empty() && run.outlineGlyphs.empty() &&
+			if (run.glyphs.empty() && run.outlineGlyphs.empty() && run.decorations.empty() &&
 				(index != ctx.focused || ctx.E(index).textInputIndex == INVALID_UI_INDEX)) {
 				return;
 			}
@@ -531,12 +531,45 @@ namespace Shalltear::UI {
 				}
 			}
 
-			auto emitGlyphs = [&](const Vector<ShapedGlyph>& glyphs, Color colorSRGB) {
+			const Color textColor = style.color.value_or(INITIAL_TEXT_COLOR);
+			const Vector<RichPaint>* paints =
+				!run.spans.empty() && text->richSlot != INVALID_UI_INDEX ? &ctx.richSlots[text->richSlot].text.paints : nullptr;
+			auto paintOf = [paints](u16 paint) -> const RichPaint* {
+				return paints && paint < paints->size() ? &(*paints)[paint] : nullptr;
+			};
+
+			auto emitDecorations = [&](bool behind) {
+				for (const ShapedDecoration& decoration : run.decorations) {
+					const bool mark = decoration.kind == TextDecoration::Mark;
+					if (mark != behind) {
+						continue;
+					}
+					const RichPaint* paint = paintOf(decoration.paint);
+					EmitParams params;
+					params.rect = {decoration.rect.x + dx, decoration.rect.y + dy, decoration.rect.w, decoration.rect.h};
+					params.colorSRGB = (mark ? (paint ? paint->mark : Color{}) : (paint ? PaintColor(*paint, textColor) : textColor)) * element.tint;
+					EmitRect(*state.list, state.ink, params, opacity, z, clipRect, clipRadii);
+				}
+			};
+
+			auto emitGlyphs = [&](const Vector<ShapedGlyph>& glyphs, Color colorSRGB, bool outline) {
 				if (glyphs.empty()) {
 					return;
 				}
 				Color color = colorSRGB * element.tint;
-				for (const ShapedGlyph& glyph : glyphs) {
+				size_t span = 0;
+				for (size_t g = 0; g < glyphs.size(); ++g) {
+					const ShapedGlyph& glyph = glyphs[g];
+					for (; paints && span < run.spans.size() && (outline ? run.spans[span].outlineGlyph : run.spans[span].glyph) <= g; ++span) {
+						const RichPaint* paint = paintOf(run.spans[span].paint);
+						Color painted = colorSRGB;
+						if (paint && outline && paint->hasAlpha) {
+							painted.a *= paint->alpha;
+						} else if (paint && !outline) {
+							painted = PaintColor(*paint, colorSRGB);
+						}
+						color = painted * element.tint;
+					}
 					EmitParams params;
 					params.rect = {glyph.rect.x + dx, glyph.rect.y + dy, glyph.rect.w, glyph.rect.h};
 					params.snap = false;
@@ -548,10 +581,12 @@ namespace Shalltear::UI {
 				}
 			};
 
+			emitDecorations(true);
 			if (!run.outlineGlyphs.empty()) {
-				emitGlyphs(run.outlineGlyphs, style.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR));
+				emitGlyphs(run.outlineGlyphs, style.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR), true);
 			}
-			emitGlyphs(run.glyphs, style.color.value_or(INITIAL_TEXT_COLOR));
+			emitGlyphs(run.glyphs, textColor, false);
+			emitDecorations(false);
 
 			if (isInput && index == ctx.focused) {
 				const TextInputState* input = ctx.GetTextInput(index);

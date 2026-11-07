@@ -184,7 +184,7 @@ namespace Shalltear::UI {
 
 		void SetStyleVar(StringHash name, std::string_view value);
 		void SetStyleVars(std::span<const StyleVarDesc> descs);
-		// name used by font-family values
+		// name used by font-family values and <font> tags
 		void SetStyleFont(std::string_view name, Handle<FontAsset> font);
 		[[nodiscard]] const StyleVars& GetStyleVars() const;
 		[[nodiscard]] Color GetStyleVarColor(StringHash name, Color fallback) const;
@@ -205,6 +205,8 @@ namespace Shalltear::UI {
 		void SetText(ElementHandle handle, Handle<FontAsset> font, f32 sizePx, Color color, std::string_view utf8);
 		// no prior SetText = font/size/color from style
 		void SetTextString(ElementHandle handle, std::string_view utf8);
+		// tags like <b>/<color=#f00> parsed (never in a text input)
+		void SetRichText(ElementHandle handle, bool enabled);
 		str GetTextString(ElementHandle handle) const;
 		void ClearText(ElementHandle handle);
 
@@ -216,6 +218,8 @@ namespace Shalltear::UI {
 		struct ShapedTextView {
 			const ShapedRun* run = nullptr;
 			Vec2 originPx{};
+			// tags removed (indexed by CaretStop::byteOffset), valid until next text change
+			std::string_view text;
 		};
 		[[nodiscard]] ShapedTextView GetShapedText(ElementHandle handle) const;
 

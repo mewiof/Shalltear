@@ -775,7 +775,7 @@ namespace Shalltear::UIDebugOps {
 
 		if (HasFlag(kinds, TextBoxKinds::Words)) {
 			if (run.caretStops.size() > 1) {
-				const str text = context.GetTextString(element);
+				const std::string_view text = view.text;
 				auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; };
 				size_t start = 0;
 				while (start < text.size()) {

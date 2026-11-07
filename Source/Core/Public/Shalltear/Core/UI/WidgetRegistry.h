@@ -47,6 +47,7 @@ namespace Shalltear {
 		struct SHALLTEAR_CORE_API WidgetArgs {
 			const UIInstantiateDesc& desc;
 			std::span<const WidgetAttributeValue> attributes;
+			bool richText = false;
 
 			std::string_view Get(std::string_view name, std::string_view fallback = {}) const;
 			bool GetBool(std::string_view name, bool fallback = false) const;

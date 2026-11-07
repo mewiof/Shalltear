@@ -1836,6 +1836,109 @@ TEST_F(UIRenderFixture, LineHeightTextReadBack) {
 	EXPECT_EQ(loose[0] - normal[0], (50 - fontLine) / 2);
 }
 
+TEST_F(UIRenderFixture, RichTextReadBack) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{200, 48};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::ElementHandle label = MakeChild(ctx, ctx.GetRoot(), FixedBox(200.0f, 48.0f));
+	ctx.SetText(label, font, 32.0f, Color::White(), "llll");
+	ctx.SetRichText(label, true);
+
+	struct Texel {
+		f32 r, g, b, a;
+	};
+	std::vector<Texel> texels;
+	auto draw = [&](std::string_view text) {
+		ctx.SetTextString(label, text);
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		Vector<u8> bytes{GetMemoryResource(MemTag::Debug)};
+		if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, bytes)) {
+			return false;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(bytes.data());
+		texels.clear();
+		for (size_t i = 0; i < static_cast<size_t>(size.x) * size.y; ++i) {
+			texels.push_back({HalfToFloat(halves[i * 4]), HalfToFloat(halves[i * 4 + 1]), HalfToFloat(halves[i * 4 + 2]), HalfToFloat(halves[i * 4 + 3])});
+		}
+		return true;
+	};
+	auto at = [&](i32 x, i32 y) -> const Texel& { return texels[static_cast<size_t>(y) * size.x + x]; };
+
+	if (!draw("llll")) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	i32 plainBottom = -1;
+	i32 left = size.x;
+	i32 right = -1;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			if (at(x, y).a > 0.5f) {
+				plainBottom = std::max(plainBottom, y);
+				left = std::min(left, x);
+				right = std::max(right, x);
+			}
+		}
+	}
+	ASSERT_GT(right, left);
+
+	ASSERT_TRUE(draw("<color=#f00>llll</color><color=#0f0>llll</color>"));
+	i32 lastRed = -1;
+	i32 firstGreen = size.x;
+	u32 red = 0;
+	u32 green = 0;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			const Texel& texel = at(x, y);
+			if (texel.a > 0.9f && texel.r > 0.8f && texel.g < 0.2f) {
+				++red;
+				lastRed = std::max(lastRed, x);
+			} else if (texel.a > 0.9f && texel.g > 0.8f && texel.r < 0.2f) {
+				++green;
+				firstGreen = std::min(firstGreen, x);
+			}
+		}
+	}
+	EXPECT_GT(red, 20u);
+	EXPECT_GT(green, 20u);
+	EXPECT_LT(lastRed, firstGreen);
+
+	ASSERT_TRUE(draw("<u>llll</u>"));
+	i32 widest = 0;
+	for (i32 y = plainBottom + 1; y < size.y; ++y) {
+		i32 inked = 0;
+		for (i32 x = 0; x < size.x; ++x) {
+			inked += at(x, y).a > 0.5f ? 1 : 0;
+		}
+		widest = std::max(widest, inked);
+	}
+	EXPECT_GE(widest, (right - left + 1) * 4 / 5);
+
+	ASSERT_TRUE(draw("<mark=#00f>llll</mark>"));
+	u32 white = 0;
+	u32 blue = 0;
+	for (const Texel& texel : texels) {
+		if (texel.r > 0.8f && texel.g > 0.8f && texel.b > 0.8f) {
+			++white;
+		} else if (texel.b > 0.8f && texel.r < 0.2f && texel.g < 0.2f) {
+			++blue;
+		}
+	}
+	EXPECT_GT(white, 20u);
+	EXPECT_GT(blue, 100u);
+}
+
 TEST_F(UIRenderFixture, CenteredInputInksAboutBoxCenter) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

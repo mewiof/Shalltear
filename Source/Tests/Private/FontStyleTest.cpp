@@ -23,6 +23,8 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <span>
+#include <vector>
 
 using namespace Shalltear;
 using namespace UITest;
@@ -184,6 +186,43 @@ namespace {
 				}
 			}
 			return -1.0f;
+		}
+
+		static UI::TextRun RunOf(FontAsset* font, u32 begin, u32 end, f32 sizePx = 100.0f) {
+			UI::TextRun run;
+			run.begin = begin;
+			run.end = end;
+			run.font = Handle<FontAsset>(font);
+			run.sizePx = sizePx;
+			return run;
+		}
+
+		static UI::ShapedRun ShapeRuns(UI::TextQuery query, std::span<const UI::TextRun> runs) {
+			query.runs = runs;
+			UI::ShapedRun shaped;
+			EXPECT_TRUE(UISystem::GetFontSystem()->ShapeText(query, shaped));
+			const Vec2 measured = UISystem::GetFontSystem()->MeasureText(query);
+			EXPECT_EQ(measured.x, shaped.extent.x);
+			EXPECT_EQ(measured.y, shaped.extent.y);
+			return shaped;
+		}
+
+		static std::vector<f32> CaretXs(const UI::ShapedRun& run) {
+			std::vector<f32> xs;
+			for (const UI::CaretStop& stop : run.caretStops) {
+				xs.push_back(stop.x);
+			}
+			return xs;
+		}
+
+		static str Decorations(const UI::ShapedRun& run) {
+			str out;
+			for (const UI::ShapedDecoration& decoration : run.decorations) {
+				const char kind = decoration.kind == UI::TextDecoration::Mark ? 'M' : (decoration.kind == UI::TextDecoration::Underline ? 'U' : 'S');
+				out += std::format("{}{} {} {} {} {}", out.empty() ? "" : "|", kind, decoration.rect.x, decoration.rect.y, decoration.rect.w,
+								   decoration.rect.h);
+			}
+			return out;
 		}
 	};
 
@@ -830,5 +869,325 @@ TEST_F(FontFacesInspectorFixture, AddedFaceShowsDeclaredStyle) {
 	EXPECT_EQ(regular->faces[0], GuidOf("BoldItalic"));
 	EXPECT_EQ(regular->faces[1], GuidOf("WeightAxis"));
 	EXPECT_TRUE(regular->fallbacks.empty());
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichRunsPickFaces) {
+	SetFaces("Regular", {"Bold"});
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 1), RunOf(regular, 1, 2), RunOf(regular, 2, 3)};
+	runs[1].fontWeight = 700;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "III"), runs);
+	EXPECT_EQ(shaped.extent.x, 150.0f);
+	EXPECT_EQ(shaped.extent.y, 100.0f);
+	EXPECT_EQ(CaretXs(shaped), (std::vector<f32>{0.0f, 40.0f, 110.0f, 150.0f}));
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichSizesShareLineBox) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 1), RunOf(regular, 1, 2, 50.0f)};
+	UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "II"), runs);
+	EXPECT_EQ(shaped.extent.x, 60.0f);
+	EXPECT_EQ(shaped.extent.y, 100.0f);
+
+	runs[1].lineHeight = 200.0f;
+	EXPECT_EQ(ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "II"), runs).extent.y, 200.0f);
+	runs[1].lineHeight = 0.0f;
+	runs[1].lineHeightScale = 4.0f;
+	EXPECT_EQ(ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "II"), runs).extent.y, 200.0f);
+
+	UI::TextRun lines[] = {RunOf(regular, 0, 2), RunOf(regular, 2, 3, 50.0f)};
+	shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "I\nI"), lines);
+	EXPECT_EQ(shaped.extent.x, 40.0f);
+	EXPECT_EQ(shaped.extent.y, 150.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichShiftsKeepLineBox) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 1), RunOf(regular, 1, 2), RunOf(regular, 2, 3), RunOf(regular, 3, 4)};
+	runs[1].script = UI::TextScript::Sub;
+	runs[2].script = UI::TextScript::Super;
+	runs[3].baselineShift = 30.0f;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "IIII"), runs);
+	EXPECT_EQ(shaped.extent.x, 40.0f + 26.0f + 26.0f + 40.0f);
+	EXPECT_EQ(shaped.extent.y, 100.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichScriptsReadFontTables) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	UI::TextRun runs[] = {RunOf(inter, 0, 1), RunOf(inter, 1, 2), RunOf(inter, 2, 3)};
+	runs[1].script = UI::TextScript::Sub;
+	runs[2].script = UI::TextScript::Super;
+	const f32 small = Width(inter, 400, NORMAL, 60.0f, "H");
+	EXPECT_LT(small, Width(inter, 400, NORMAL, 65.0f, "H"));
+	EXPECT_EQ(ShapeRuns(Query(inter, 400, NORMAL, 100.0f, "HHH"), runs).extent.x, Width(inter, 400, NORMAL, 100.0f, "H") + small * 2.0f);
+	AssetDatabase::UnloadAsset(inter);
+}
+
+TEST_F(FontStyleFixture, RichDecorationsFromFallbackMetrics) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 4, 140.0f)};
+	runs[0].decoration = UI::TextDecoration::Mark | UI::TextDecoration::Underline | UI::TextDecoration::Strikethrough;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 140.0f, "I I "), runs);
+	EXPECT_EQ(shaped.extent.x, 182.0f);
+	EXPECT_EQ(Decorations(shaped), "M 0 0 147 140|U 0 121 147 10|S 0 65 147 10");
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichDecorationsJoinAcrossRuns) {
+	SetFaces("Regular", {"Bold"});
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	constexpr UI::TextDecoration U = UI::TextDecoration::Underline;
+	constexpr UI::TextDecoration S = UI::TextDecoration::Strikethrough;
+	constexpr UI::TextDecoration NONE = UI::TextDecoration::None;
+	auto decorate = [&](std::string_view text, std::initializer_list<UI::TextDecoration> kinds, u16 middlePaint = 0) {
+		std::vector<UI::TextRun> runs;
+		for (UI::TextDecoration kind : kinds) {
+			const u32 begin = static_cast<u32>(runs.size());
+			runs.push_back(RunOf(regular, begin, begin + 1, 140.0f));
+			runs.back().decoration = kind;
+		}
+		runs[1].fontWeight = 700;
+		runs[1].paint = middlePaint;
+		return Decorations(ShapeRuns(Query(regular, 400, NORMAL, 140.0f, text), runs));
+	};
+	EXPECT_EQ(decorate("III", {U, U, U}), "U 0 121 210 10");
+	EXPECT_EQ(decorate("III", {U, U, U}, 1), "U 0 121 56 10|U 56 121 98 10|U 154 121 56 10");
+	EXPECT_EQ(decorate("III", {U, NONE, U}), "U 0 121 56 10|U 154 121 56 10");
+	EXPECT_EQ(decorate("III", {U | S, U, U | S}), "U 0 121 210 10|S 0 65 56 10|S 154 65 56 10");
+	EXPECT_EQ(decorate("I I", {U, U, U}), "U 0 121 147 10");
+	EXPECT_EQ(decorate("I I", {U, NONE, U}), "U 0 121 56 10|U 91 121 56 10");
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichDecorationsFollowAlignment) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 4, 140.0f)};
+	runs[0].decoration = UI::TextDecoration::Underline;
+	UI::TextQuery query = Query(regular, 400, NORMAL, 140.0f, "II\nI");
+	query.align = UI::Align::Center;
+	EXPECT_EQ(Decorations(ShapeRuns(query, runs)), "U 0 121 112 10|U 28 261 56 10");
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichDecorationsReadFontTables) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	UI::TextRun runs[] = {RunOf(inter, 0, 1)};
+	runs[0].decoration = UI::TextDecoration::Underline | UI::TextDecoration::Strikethrough;
+	const UI::ShapedRun shaped = ShapeRuns(Query(inter, 400, NORMAL, 100.0f, "H"), runs);
+	ASSERT_EQ(shaped.decorations.size(), 2u);
+	const UI::Rect underline = shaped.decorations[0].rect;
+	const UI::Rect strike = shaped.decorations[1].rect;
+	EXPECT_EQ(underline.h, 7.0f);
+	EXPECT_EQ(strike.h, 7.0f);
+	const f32 upem = 2048.0f;
+	const f32 centers = (317.0f + 70.0f + 663.0f - 70.0f) / upem * 100.0f;
+	EXPECT_NEAR(underline.y - strike.y, centers, 1.0f);
+	EXPECT_EQ(underline.w, Width(inter, 400, NORMAL, 100.0f, "H"));
+	AssetDatabase::UnloadAsset(inter);
+}
+
+TEST_F(FontStyleFixture, RichKerningFollowsFace) {
+	FontAsset* kerned = Load("Kerned");
+	ASSERT_NE(kerned, nullptr);
+	auto width = [&](auto&& edit) {
+		UI::TextRun runs[] = {RunOf(kerned, 0, 1), RunOf(kerned, 1, 2)};
+		edit(runs[0], runs[1]);
+		return ShapeRuns(Query(kerned, 400, NORMAL, 100.0f, "II"), runs).extent.x;
+	};
+	EXPECT_EQ(width([](UI::TextRun&, UI::TextRun&) {}), 70.0f);
+	EXPECT_EQ(width([](UI::TextRun&, UI::TextRun& b) { b.paint = 3; }), 70.0f);
+	EXPECT_EQ(width([](UI::TextRun& a, UI::TextRun&) { a.letterSpacing = 5.0f; }), 75.0f);
+	EXPECT_EQ(width([](UI::TextRun&, UI::TextRun& b) { b.fontWeight = 700; }), 84.0f);
+	EXPECT_EQ(width([](UI::TextRun&, UI::TextRun& b) { b.sizePx = 50.0f; }), 60.0f);
+	EXPECT_EQ(width([](UI::TextRun&, UI::TextRun& b) { b.advance = 50.0f; }), 90.0f);
+
+	UI::TextRun cells[] = {RunOf(kerned, 0, 2)};
+	cells[0].advance = 50.0f;
+	EXPECT_EQ(ShapeRuns(Query(kerned, 400, NORMAL, 100.0f, "II"), cells).extent.x, 100.0f);
+	AssetDatabase::UnloadAsset(kerned);
+}
+
+TEST_F(FontStyleFixture, RichSpacingFollowsEarlierRun) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 1), RunOf(regular, 1, 2)};
+	runs[0].letterSpacing = 10.0f;
+	EXPECT_EQ(ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "II"), runs).extent.x, 90.0f);
+	runs[0].letterSpacing = 0.0f;
+	runs[1].letterSpacing = 10.0f;
+	EXPECT_EQ(ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "II"), runs).extent.x, 80.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichCellsSetAdvance) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 3)};
+	runs[0].advance = 50.0f;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "I?I"), runs);
+	EXPECT_EQ(CaretXs(shaped), (std::vector<f32>{0.0f, 50.0f, 100.0f, 150.0f}));
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichNoBreakMovesBreak) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextQuery query = Query(regular, 400, NORMAL, 100.0f, "I I I");
+	query.wrapWidth = 150.0f;
+	query.overflow = UI::TextOverflow::Wrap;
+	UI::TextRun plain[] = {RunOf(regular, 0, 5)};
+	UI::ShapedRun shaped = ShapeRuns(query, plain);
+	EXPECT_EQ(shaped.extent.x, 130.0f);
+	EXPECT_EQ(shaped.extent.y, 200.0f);
+
+	UI::TextRun held[] = {RunOf(regular, 0, 2), RunOf(regular, 2, 5)};
+	held[1].noBreak = true;
+	shaped = ShapeRuns(query, held);
+	EXPECT_EQ(shaped.extent.x, 105.0f);
+	EXPECT_EQ(shaped.extent.y, 200.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontStyleFixture, RichCaseTransforms) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	auto width = [&](std::string_view text, UI::TextCase textCase) {
+		UI::TextRun runs[] = {RunOf(inter, 0, static_cast<u32>(text.size()), 40.0f)};
+		runs[0].textCase = textCase;
+		const UI::ShapedRun shaped = ShapeRuns(Query(inter, 400, NORMAL, 40.0f, text), runs);
+		EXPECT_EQ(shaped.caretStops.back().byteOffset, text.size());
+		return shaped.extent.x;
+	};
+	EXPECT_EQ(width("Wavy \xC3\xA9t\xC3\xA9", UI::TextCase::Upper), Width(inter, 400, NORMAL, 40.0f, "WAVY \xC3\x89T\xC3\x89"));
+	EXPECT_EQ(width("WAVY \xC3\x89T\xC3\x89", UI::TextCase::Lower), Width(inter, 400, NORMAL, 40.0f, "wavy \xC3\xA9t\xC3\xA9"));
+	EXPECT_EQ(width("Wavy", UI::TextCase::SmallCaps), Width(inter, 400, NORMAL, 40.0f, "W") + Width(inter, 400, NORMAL, 32.0f, "AVY"));
+	EXPECT_EQ(width("WAVY", UI::TextCase::SmallCaps), Width(inter, 400, NORMAL, 40.0f, "WAVY"));
+	AssetDatabase::UnloadAsset(inter);
+}
+
+TEST_F(FontStyleFixture, RichSingleRunMatchesPlain) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	for (UI::TextOverflow overflow : {UI::TextOverflow::Wrap, UI::TextOverflow::Ellipsis}) {
+		for (UI::Align align : {UI::Align::Start, UI::Align::Center}) {
+			UI::TextQuery query = Query(inter, 400, NORMAL, 20.0f, "Wavy AVATAR, To-day/Yes\nkeep\n\ntyping Tj");
+			query.wrapWidth = 120.0f;
+			query.overflow = overflow;
+			query.align = align;
+			query.letterSpacing = 0.5f;
+			query.lineHeight = 30.0f;
+			UI::ShapedRun plain;
+			ASSERT_TRUE(UISystem::GetFontSystem()->ShapeText(query, plain));
+
+			UI::TextRun runs[] = {RunOf(inter, 0, static_cast<u32>(query.utf8.size()), 20.0f)};
+			runs[0].letterSpacing = 0.5f;
+			runs[0].lineHeight = 30.0f;
+			const UI::ShapedRun styled = ShapeRuns(query, runs);
+			EXPECT_EQ(styled.extent.x, plain.extent.x);
+			EXPECT_EQ(styled.extent.y, plain.extent.y);
+			EXPECT_EQ(styled.lineHeight, plain.lineHeight);
+			EXPECT_EQ(styled.halfLeading, plain.halfLeading);
+			EXPECT_EQ(styled.multiline, plain.multiline);
+			EXPECT_EQ(styled.truncated, plain.truncated);
+			ASSERT_EQ(styled.caretStops.size(), plain.caretStops.size());
+			for (size_t i = 0; i < plain.caretStops.size(); ++i) {
+				EXPECT_EQ(styled.caretStops[i].byteOffset, plain.caretStops[i].byteOffset) << i;
+				EXPECT_EQ(styled.caretStops[i].x, plain.caretStops[i].x) << i;
+				EXPECT_EQ(styled.caretStops[i].line, plain.caretStops[i].line) << i;
+			}
+		}
+	}
+	AssetDatabase::UnloadAsset(inter);
+}
+
+TEST_F(FontStyleFixture, RichFontTagCooksByGuid) {
+	UIDocumentAsset* document = LoadText<UIDocumentAsset>(
+		"Rich.slxml",
+		R"xml(<ui version="1"><panel style="font-size: 100px; font-family: url('project://Assets/Regular.ttf')"><panel id="title">I&lt;font="project://Assets/Bold.ttf"&gt;I&lt;/font&gt;</panel><panel enable-rich-text="false" style="width: 10px">&lt;font="project://Assets/Italic.ttf"&gt;</panel></panel></ui>)xml");
+	ASSERT_NE(document, nullptr);
+	ASSERT_EQ(document->assets.size(), 2u);
+	EXPECT_EQ(document->assets[1].src, "project://Assets/Bold.ttf");
+	EXPECT_EQ(RefsOf("Italic"), 0u);
+	EXPECT_EQ(TitleWidth(*document), 110.0f);
+
+	PakStringPool strings;
+	Vector<u8> descriptorBytes{GetMemoryResource(MemTag::Debug)};
+	Vector<u8> payloadBytes{GetMemoryResource(MemTag::Debug)};
+	CookWriter descriptor(descriptorBytes, strings);
+	CookWriter payload(payloadBytes, strings);
+	ASSERT_TRUE(document->Cook(descriptor, payload));
+	ASSERT_EQ(descriptor.GetReferences().size(), 2u);
+	EXPECT_EQ(descriptor.GetReferences()[1], GuidOf("Bold"));
+
+	UIDocumentAsset* cooked = New<UIDocumentAsset>(MemTag::Asset);
+	CookReader descriptorReader(descriptorBytes.data(), descriptorBytes.size());
+	CookReader payloadReader(payloadBytes.data(), payloadBytes.size());
+	ASSERT_TRUE(cooked->LoadCooked(descriptorReader, payloadReader));
+	EXPECT_EQ(TitleWidth(*cooked), 110.0f);
+	cooked->NotifyUnloaded();
+	Delete(cooked);
+	AssetDatabase::UnloadAsset(document);
+	AssetDatabase::CollectGarbage();
+	EXPECT_EQ(RefsOf("Bold"), 0u);
+}
+
+TEST_F(FontStyleFixture, RichMissingFontRefusesDocument) {
+	EXPECT_EQ(LoadText<UIDocumentAsset>("Typo.slxml", R"(<ui version="1"><panel>&lt;font="project://Assets/Nope.ttf"&gt;x</panel></ui>)"), nullptr);
+}
+
+TEST_F(FontInkFixture, RichGlyphsShareBaseline) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 1, 50.0f), RunOf(regular, 1, 2), RunOf(regular, 2, 3), RunOf(regular, 3, 4), RunOf(regular, 4, 5)};
+	runs[2].script = UI::TextScript::Sub;
+	runs[3].script = UI::TextScript::Super;
+	runs[4].baselineShift = 30.0f;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "IIIII"), runs);
+	ASSERT_EQ(shaped.glyphs.size(), 5u);
+	std::vector<f32> bottoms;
+	for (const UI::ShapedGlyph& glyph : shaped.glyphs) {
+		bottoms.push_back(glyph.rect.y + glyph.rect.h);
+	}
+	EXPECT_EQ(bottoms, (std::vector<f32>{80.0f, 80.0f, 95.0f, 45.0f, 50.0f}));
+	EXPECT_EQ(shaped.extent.y, 100.0f);
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontInkFixture, RichScriptsShiftByFontTables) {
+	FontAsset* inter = Load("Inter");
+	ASSERT_NE(inter, nullptr);
+	UI::TextRun runs[] = {RunOf(inter, 0, 1), RunOf(inter, 1, 2), RunOf(inter, 2, 3)};
+	runs[1].script = UI::TextScript::Sub;
+	runs[2].script = UI::TextScript::Super;
+	const UI::ShapedRun shaped = ShapeRuns(Query(inter, 400, NORMAL, 100.0f, "HHH"), runs);
+	ASSERT_EQ(shaped.glyphs.size(), 3u);
+	auto bottom = [&](size_t g) { return shaped.glyphs[g].rect.y + shaped.glyphs[g].rect.h; };
+	EXPECT_NEAR(bottom(1) - bottom(0), 154.0f / 2048.0f * 100.0f, 0.5f);
+	EXPECT_NEAR(bottom(0) - bottom(2), 717.0f / 2048.0f * 100.0f, 0.5f);
+	AssetDatabase::UnloadAsset(inter);
+}
+
+TEST_F(FontInkFixture, RichCellsCenterGlyphs) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	UI::TextRun runs[] = {RunOf(regular, 0, 3)};
+	runs[0].advance = 50.0f;
+	const UI::ShapedRun shaped = ShapeRuns(Query(regular, 400, NORMAL, 100.0f, "I?I"), runs);
+	ASSERT_EQ(shaped.glyphs.size(), 3u);
+	EXPECT_EQ(shaped.glyphs[0].rect.x, 10.0f);
+	EXPECT_EQ(shaped.glyphs[1].rect.x, 65.0f);
+	EXPECT_EQ(shaped.glyphs[2].rect.x, 110.0f);
 	AssetDatabase::UnloadAsset(regular);
 }

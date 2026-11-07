@@ -12,6 +12,8 @@
 #include "UIBuilderChrome.h"
 #include "UIBuilderCommands.h"
 
+#include <algorithm>
+
 namespace Shalltear {
 
 	namespace {
@@ -69,10 +71,24 @@ namespace Shalltear {
 				return UIDocumentOps::SetId(document, index, value, error);
 			});
 		});
-		if (node.children.empty() && node.templateName.empty() && !UI::WidgetRegistry::Find(node.tag)) {
+		const bool textField = node.children.empty() && node.templateName.empty() && !UI::WidgetRegistry::Find(node.tag);
+		if (textField) {
 			FieldRow(context, parent, "text", node.text, font, [this, index](std::string_view value) {
 				EditDocument("Set Text", EditShape::Fields, [&](UIDocumentAsset& document, str& error) {
 					return UIDocumentOps::SetText(document, index, value, error);
+				});
+			});
+		}
+		const bool textAttribute = std::any_of(node.attributes.begin(), node.attributes.end(),
+											   [](const UIDocumentAttribute& attribute) { return attribute.name == "text"; });
+		if (node.templateName.empty() && (textField || textAttribute)) {
+			FieldRow(context, parent, "enable-rich-text", node.richText ? "true" : "false", font, [this, index](std::string_view value) {
+				EditDocument("Set Rich Text", EditShape::Fields, [&](UIDocumentAsset& document, str& error) {
+					if (value != "true" && value != "false") {
+						error = "enable-rich-text wants true/false";
+						return false;
+					}
+					return UIDocumentOps::SetRichText(document, index, value == "true", error);
 				});
 			});
 		}

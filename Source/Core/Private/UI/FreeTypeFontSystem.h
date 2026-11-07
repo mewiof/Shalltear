@@ -126,6 +126,31 @@ namespace Shalltear::UI {
 		bool RasterizeAndPack(const StyledFace& styled, u16 sizePx, u32 glyphIndex, u16 strokePx, GlyphEntry& out);
 		bool PackAlloc(i32 width, i32 height, i32& outX, i32& outY);
 		void ClearPage();
+
+		struct RunState {
+			FontFace* family = nullptr;
+			FontFace* styled = nullptr;
+			u16 sizePx = 0;
+			u16 smallSizePx = 0;
+			u16 weight = 400;
+			FontStyle style = FontStyle::Normal;
+			f32 ascender = 0.0f;
+			f32 descender = 0.0f;
+			f32 lineHeight = 0.0f;
+			f32 halfLeading = 0.0f;
+			f32 letterSpacing = 0.0f;
+			f32 baselineShift = 0.0f;
+			f32 advance = 0.0f;
+			f32 underlineOffset = 0.0f;
+			f32 underlineThickness = 0.0f;
+			f32 strikeOffset = 0.0f;
+			f32 strikeThickness = 0.0f;
+			u16 paint = 0;
+			TextCase textCase = TextCase::Normal;
+			TextDecoration decoration = TextDecoration::None;
+			bool noBreak = false;
+		};
+		bool PrepareRun(const TextQuery& query, const TextRun* desc, RunState& out);
 	private:
 		CreateInfo _config;
 		FT_Library _library = nullptr;
@@ -160,12 +185,17 @@ namespace Shalltear::UI {
 			u32 byteOffset = 0;
 			GlyphEntry* entry = nullptr;
 			u32 byteEnd = 0;
+			u32 drawn = 0;
+			u16 run = 0;
+			u16 sizePx = 0;
 		};
 		Vector<Pending> _scratchLine{GetMemoryResource(MemTag::UI)};
+		Vector<RunState> _scratchRuns{GetMemoryResource(MemTag::UI)};
 		struct LineSpan {
 			u32 glyphs = 0;
 			u32 outlineGlyphs = 0;
 			u32 caretStops = 0;
+			u32 decorations = 0;
 			f32 width = 0.0f;
 		};
 		Vector<LineSpan> _scratchSpans{GetMemoryResource(MemTag::UI)};
@@ -173,6 +203,8 @@ namespace Shalltear::UI {
 		TextStats _textStats;
 
 		bool Shape(const TextQuery& query, ShapedRun& out, bool emit);
+		template <bool Styled>
+		bool ShapeRuns(const TextQuery& query, ShapedRun& out, bool emit);
 		Vector<u8> _scratchPixels{GetMemoryResource(MemTag::UI)};
 	};
 

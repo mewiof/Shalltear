@@ -28,6 +28,7 @@ namespace Shalltear::UI::Widgets {
 		std::string_view label;
 		Handle<FontAsset> font;
 		f32 fontSizePx = 13.0f;
+		bool richText = false;
 		std::function<void()> onClick;
 		ElementHandle defaultForPopup;
 	};

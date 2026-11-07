@@ -34,6 +34,7 @@
 			<xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
 		</xs:sequence>
 		<xs:attributeGroup ref="elementIdentity"/>
+		<xs:attribute name="enable-rich-text" type="widgetBool"/>
 		<xs:anyAttribute processContents="lax"/>
 	</xs:complexType>
 
@@ -80,6 +81,7 @@
 	<xs:element name="button">
 		<xs:complexType>
 			<xs:attribute name="text" type="xs:string"/>
+			<xs:attribute name="enable-rich-text" type="widgetBool"/>
 			<xs:attributeGroup ref="elementIdentity"/>
 		</xs:complexType>
 	</xs:element>

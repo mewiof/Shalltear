@@ -1617,6 +1617,27 @@ TEST_F(UIBuilderOpsTest, EmptyInlineTakesFirstDeclaration) {
 	EXPECT_EQ(written, "width: 3px;");
 }
 
+TEST_F(UIBuilderOpsTest, RichTextWrittenOnlyWhenOff) {
+	Parsed parsed(R"(<ui version="1">
+	<panel id="root"><panel id="label">a&lt;b&gt;b&lt;/b&gt;</panel></panel>
+</ui>)");
+	ASSERT_TRUE(parsed.ok) << parsed.error;
+	const u32 root = IndexOfId(parsed.document, "label");
+	str error;
+	ASSERT_TRUE(UIDocumentOps::SetRichText(parsed.document, root, false, error)) << error;
+	ASSERT_TRUE(UIDocumentOps::Duplicate(parsed.document, root, error)) << error;
+	ASSERT_EQ(parsed.document.root.children.size(), 2u);
+	EXPECT_FALSE(parsed.document.root.children[1].richText);
+	ASSERT_TRUE(UIDocumentOps::Remove(parsed.document, IndexOfId(parsed.document, "label") + 1, error)) << error;
+	str written = parsed.document.Write();
+	EXPECT_NE(written.find("enable-rich-text=\"false\""), str::npos) << written;
+
+	ASSERT_TRUE(UIDocumentOps::SetRichText(parsed.document, root, true, error)) << error;
+	written = parsed.document.Write();
+	EXPECT_EQ(written.find("enable-rich-text"), str::npos) << written;
+	EXPECT_FALSE(UIDocumentOps::SetRichText(parsed.document, 99, false, error));
+}
+
 TEST_F(UIBuilderOpsTest, InlineStyleWritesNoNewline) {
 	Parsed parsed(R"(<ui version="1">
 	<panel id="root" style="width: 1px"/>
@@ -2048,6 +2069,45 @@ TEST_F(UIBuilderPanelFixture, DroppingALibraryTagCreatesThatWidget) {
 	UIDocumentAsset probe;
 	str error;
 	EXPECT_TRUE(probe.Parse(document->Write(), error)) << error;
+	AssetDatabase::UnloadAsset(asset);
+}
+
+TEST_F(UIBuilderPanelFixture, RichTextFieldOnTextNodesOnly) {
+	WriteDocument("project://Assets/Screen.slxml", R"(<panel id="root"><panel id="label">a&lt;b&gt;b&lt;/b&gt;</panel></panel>)");
+
+	Handle<EditorPanel> panel = OpenBuilder();
+	ASSERT_TRUE(panel.IsValid());
+	UI::Context& context = PanelContext();
+	UI::ElementHandle root = BuildPanelInto(context, *panel.Get());
+	ASSERT_TRUE(UIBuilderOps::OpenDocumentInBuilder("project://Assets/Screen.slxml"));
+	Frame(*panel.Get());
+
+	Asset* asset = AssetDatabase::LoadAsset(Path("project://Assets/Screen.slxml"));
+	ASSERT_NE(asset, nullptr);
+	UIDocumentAsset* document = static_cast<UIDocumentAsset*>(asset);
+	ASSERT_EQ(document->root.children.size(), 1u);
+
+	ClickAt(context, CenterOf(context, RowLabelled(context, root, "#root")));
+	EXPECT_FALSE(FirstDescendantWithText(context, PaneNamed(context, root, "Inspector"), "enable-rich-text").IsValid());
+
+	ClickAt(context, CenterOf(context, RowLabelled(context, root, "#label")));
+	auto richField = [&]() {
+		UI::ElementHandle label = FirstDescendantWithText(context, PaneNamed(context, root, "Inspector"), "enable-rich-text");
+		return FirstByClass(context, ParentOf(context, label), StringHash("slt-textfield"));
+	};
+	UI::ElementHandle field = richField();
+	ASSERT_TRUE(context.IsAlive(field));
+	TypeInto(context, field, "no");
+	EXPECT_TRUE(document->root.children[0].richText);
+	EXPECT_EQ(document->root.children[0].id, "label");
+
+	field = richField();
+	ASSERT_TRUE(context.IsAlive(field));
+	TypeInto(context, field, "false");
+	EXPECT_FALSE(document->root.children[0].richText);
+	EXPECT_EQ(UndoSystem::GetUndoLabel(), "Set Rich Text");
+	UndoSystem::Undo();
+	EXPECT_TRUE(document->root.children[0].richText);
 	AssetDatabase::UnloadAsset(asset);
 }
 

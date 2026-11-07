@@ -32,6 +32,7 @@ namespace Shalltear {
 		constexpr std::string_view AttrName = "name";
 		constexpr std::string_view AttrTemplate = "template";
 		constexpr std::string_view AttrElementId = "element-id";
+		constexpr std::string_view AttrRichText = "enable-rich-text";
 
 		constexpr std::string_view TagRoot = "ui";
 		constexpr std::string_view TagSheet = "sheet";
@@ -224,7 +225,7 @@ namespace Shalltear {
 					out.elementId = str(attribute.value);
 					continue;
 				}
-				if (attribute.name == AttrId || attribute.name == AttrClass || attribute.name == AttrStyle) {
+				if (attribute.name == AttrId || attribute.name == AttrClass || attribute.name == AttrStyle || attribute.name == AttrRichText) {
 					error = Refuse(in, str("'") + str(attribute.name) + str("' can't be overridden. Vary an instance's appearance with a selector"));
 					return false;
 				}
@@ -302,6 +303,16 @@ namespace Shalltear {
 					out.classCount = static_cast<u8>(seen);
 				} else if (isInstance && attribute.name == AttrTemplate) {
 					out.templateName = str(attribute.value);
+				} else if (!isInstance && attribute.name == AttrRichText) {
+					if (widget && !DeclaredAttribute(widget, "text")) {
+						error = Refuse(in, str("attribute '") + str(AttrRichText) + str("' needs text (<") + str(in.name) + str("> has none)"));
+						return false;
+					}
+					if (attribute.value != "true" && attribute.value != "false") {
+						error = Refuse(in, str("attribute '") + str(AttrRichText) + str("' wants true/false, not '") + str(attribute.value) + str("'"));
+						return false;
+					}
+					out.richText = attribute.value == "true";
 				} else {
 					const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
 					if (!declared) {
@@ -402,6 +413,9 @@ namespace Shalltear {
 			}
 			if (!in.style.empty()) {
 				out.attributes.push_back({AttrStyle, in.style});
+			}
+			if (!in.richText) {
+				out.attributes.push_back({AttrRichText, "false"});
 			}
 			for (const UIDocumentAttribute& attribute : in.attributes) {
 				out.attributes.push_back({attribute.name, attribute.value});
@@ -635,8 +649,30 @@ namespace Shalltear {
 		}
 
 		template <typename Fn>
+		void ForEachRichFont(std::string_view text, std::string_view tag, const Fn& fn) {
+			if (text.find('<') == std::string_view::npos) {
+				return;
+			}
+			Vector<std::string_view> names{GetMemoryResource(MemTag::Asset)};
+			UI::CollectRichFonts(text, names);
+			for (std::string_view name : names) {
+				if (IsFontReference(name)) {
+					fn(AssetUse{name, &FontUse, tag});
+				}
+			}
+		}
+
+		template <typename Fn>
 		void ForEachAssetAttribute(const UIDocumentAsset& document, const UIDocumentNode& node, const Fn& fn) {
 			ForEachStyleFont(node.style, node.tag, fn);
+			if (node.richText) {
+				ForEachRichFont(node.text, node.tag, fn);
+				for (const UIDocumentAttribute& attribute : node.attributes) {
+					if (attribute.name == "text") {
+						ForEachRichFont(attribute.value, node.tag, fn);
+					}
+				}
+			}
 			if (node.templateName.empty()) {
 				const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(node.tag);
 				for (const UIDocumentAttribute& attribute : node.attributes) {
@@ -652,6 +688,14 @@ namespace Shalltear {
 							return;
 						}
 						const UI::WidgetDesc* widget = UI::WidgetRegistry::Find(target.tag);
+						if (target.richText) {
+							ForEachRichFont(block.text, target.tag, fn);
+							for (const UIDocumentAttribute& attribute : block.attributes) {
+								if (attribute.name == "text") {
+									ForEachRichFont(attribute.value, target.tag, fn);
+								}
+							}
+						}
 						for (const UIDocumentAttribute& attribute : block.attributes) {
 							const UI::WidgetAttribute* declared = DeclaredAttribute(widget, attribute.name);
 							if (declared && declared->type == UI::WidgetAttributeType::Asset) {
@@ -1039,7 +1083,7 @@ namespace Shalltear {
 						value.asset = FindReferencedAsset(scope, value.value);
 					}
 				}
-				UI::WidgetResult built = widget->factory(context, parent, UI::WidgetArgs{desc, values});
+				UI::WidgetResult built = widget->factory(context, parent, UI::WidgetArgs{desc, values, node.richText});
 				if (!context.IsAlive(built.element)) {
 					SLT_LOG_WARN("UI", "UIDocument: the factory for <{}> returned no element (subtree dropped)", node.tag);
 					return {};
@@ -1094,6 +1138,7 @@ namespace Shalltear {
 				}
 			}
 			if (!text.empty()) {
+				context.SetRichText(element, node.richText);
 				context.SetTextString(element, text);
 			}
 

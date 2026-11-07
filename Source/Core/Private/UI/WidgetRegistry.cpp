@@ -51,6 +51,7 @@ namespace Shalltear::UI {
 		WidgetResult MakeButton(Context& context, ElementHandle parent, const WidgetArgs& args) {
 			Widgets::ButtonDesc desc;
 			desc.label = args.Get("text");
+			desc.richText = args.richText;
 			return {Widgets::Button(context, parent, desc), {}};
 		}
 

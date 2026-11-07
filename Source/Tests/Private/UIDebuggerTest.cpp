@@ -3477,6 +3477,32 @@ namespace {
 		EXPECT_FLOAT_EQ(boxes[1].box.w, 30.0f);
 	}
 
+	TEST_F(UIDebuggerTest, RichWordSpansFollowShownText) {
+		MockFontSystem fonts;
+		UI::ContextDesc desc;
+		desc.sizePx = {400, 300};
+		UI::Context context(desc, &fonts);
+
+		UI::ElementHandle label = Child(context, context.GetRoot());
+		context.SetText(label, {}, 16.0f, Color::White(), "<b>ab</b> cde");
+		context.SetRichText(label, true);
+		Frame(context);
+
+		Vector<UIDebugOps::TextBox> boxes{GetMemoryResource(MemTag::Editor)};
+		UIDebugOps::BuildTextBoxes(context, label, UIDebugOps::TextBoxKinds::Words, boxes);
+		const UI::Context::ShapedTextView view = context.GetShapedText(label);
+		ASSERT_NE(view.run, nullptr);
+		EXPECT_EQ(view.text, "ab cde");
+		ASSERT_EQ(boxes.size(), 2u);
+		EXPECT_FLOAT_EQ(boxes[0].box.x + boxes[0].box.w, view.run->CaretXForByte(2) + view.originPx.x);
+		EXPECT_FLOAT_EQ(boxes[1].box.x, view.run->CaretXForByte(3) + view.originPx.x);
+		EXPECT_FLOAT_EQ(boxes[1].box.x + boxes[1].box.w, view.run->CaretXForByte(6) + view.originPx.x);
+
+		context.SetRichText(label, false);
+		Frame(context);
+		EXPECT_EQ(context.GetShapedText(label).text, "<b>ab</b> cde");
+	}
+
 	TEST_F(UIDebuggerTest, LineBandsStackByHeight) {
 		MockFontSystem fonts;
 		UI::ContextDesc desc;

@@ -338,6 +338,7 @@ namespace Shalltear::UIDocumentOps {
 		copy.classCount = node.classCount;
 		copy.style = node.style;
 		copy.text = node.text;
+		copy.richText = node.richText;
 		copy.templateName = node.templateName;
 		CopyAttributes(node.attributes, copy.attributes);
 		CopyOverrides(node.overrides, copy.overrides);
@@ -740,6 +741,10 @@ namespace Shalltear::UIDocumentOps {
 
 	bool SetText(UIDocumentAsset& document, u32 node, std::string_view text, str& error) {
 		return SetField(document, node, error, [text](UIDocumentNode& target) { target.text = str(text); });
+	}
+
+	bool SetRichText(UIDocumentAsset& document, u32 node, bool enabled, str& error) {
+		return SetField(document, node, error, [enabled](UIDocumentNode& target) { target.richText = enabled; });
 	}
 
 	bool SetStyle(UIDocumentAsset& document, u32 node, std::string_view style, str& error) {

@@ -313,14 +313,16 @@ namespace Shalltear::UI::Widgets {
 			ctx.AddClass(button, StringHash("slt-button-default"));
 			ctx.SetPopupDefaultButton(desc.defaultForPopup, button);
 		}
+		ElementHandle label;
 		if (desc.font.IsValid()) {
-			MakeLabel(ctx, button, desc.font, desc.fontSizePx, isDefault ? DefaultButtonText(ctx) : TextNormal(ctx), desc.label);
+			label = MakeLabel(ctx, button, desc.font, desc.fontSizePx, isDefault ? DefaultButtonText(ctx) : TextNormal(ctx), desc.label);
 		} else {
-			ElementHandle label = ctx.CreateElement();
+			label = ctx.CreateElement();
 			ctx.SetTextString(label, desc.label);
 			ctx.SetHoverable(label, false);
 			ctx.AppendChild(button, label);
 		}
+		ctx.SetRichText(label, desc.richText);
 		if (desc.onClick) {
 			ctx.Events(button).onClick = desc.onClick;
 		}

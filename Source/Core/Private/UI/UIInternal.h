@@ -15,6 +15,8 @@
 #include "Shalltear/Core/UI/VectorIcon.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
 
+#include "UI/RichText.h"
+
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -74,6 +76,7 @@ namespace Shalltear::UI {
 		f32 outlineWidth = 0.0f;
 		f32 letterSpacing = 0.0f;
 		f32 lineHeight = 0.0f;
+		f32 lineHeightFactor = 0.0f;
 		u16 fontWeight = 400;
 		FontStyle fontStyle = FontStyle::Normal;
 
@@ -105,6 +108,7 @@ namespace Shalltear::UI {
 		TextOverflow cachedOverflow = TextOverflow::Wrap;
 		Align cachedAlign = Align::Start;
 		bool cachedEditable = false;
+		bool richStale = true;
 		u32 shapedGeneration = 0;
 		Vec2 measuredExtent{};
 
@@ -119,6 +123,7 @@ namespace Shalltear::UI {
 
 		bool dirty = true;
 		bool inUse = false;
+		u32 richSlot = INVALID_UI_INDEX;
 
 		void StoreExtent(f32 width, Vec2 extent) {
 			for (SizeEntry& entry : sizeCache) {
@@ -137,6 +142,7 @@ namespace Shalltear::UI {
 			sizeCache.clear();
 			shapedWrapWidth = -1.0f;
 			dirty = true;
+			richStale = true;
 		}
 	};
 
@@ -248,6 +254,19 @@ namespace Shalltear::UI {
 		Length fontSize{};
 	};
 
+	struct RichSlot {
+		RichText text;
+		Vector<TextRun> runs{GetMemoryResource(MemTag::UI)};
+		TextMetrics runsFor;
+		bool styled = false;
+		bool resolved = false;
+	};
+
+	struct RichView {
+		std::string_view utf8;
+		std::span<const TextRun> runs;
+	};
+
 	inline constexpr u8 TEXT_CHANGED = 1 << 0;
 	inline constexpr u8 TEXT_METRICS_CHANGED = 1 << 1;
 
@@ -289,6 +308,8 @@ namespace Shalltear::UI {
 
 		Vector<TextComponent> texts{GetMemoryResource(MemTag::UI)};
 		Vector<u32> textFreeList{GetMemoryResource(MemTag::UI)};
+		Vector<RichSlot> richSlots{GetMemoryResource(MemTag::UI)};
+		Vector<u32> richFreeList{GetMemoryResource(MemTag::UI)};
 		Vector<TextInputState> textInputs{GetMemoryResource(MemTag::UI)};
 		Vector<u32> textInputFreeList{GetMemoryResource(MemTag::UI)};
 		HashMap<u32, ElementEvents> events{GetMemoryResource(MemTag::UI)};
@@ -405,6 +426,9 @@ namespace Shalltear::UI {
 		u8 CurrentPseudo(const Element& element) const;
 
 		TextComponent& AcquireText(u32 elementIndex);
+		void ReleaseText(u32 elementIndex);
+		RichView TextFor(u32 elementIndex, TextComponent& text, const TextMetrics& metrics);
+		std::string_view ShownText(u32 elementIndex, const TextComponent& text) const;
 		TextComponent* GetText(u32 elementIndex);
 		const TextComponent* GetText(u32 elementIndex) const;
 		Vec2 TextOriginPx(u32 elementIndex) const;

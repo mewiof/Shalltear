@@ -182,17 +182,17 @@ float4 PSMain(VSOutput input) : SV_Target {
 		color += bloom * gPost.bloomTintAndIntensity.rgb * gPost.bloomTintAndIntensity.w;
 	}
 
-	if (gPost.gradeAddress != 0) {
-		// after bloom, before curve
-		color = ShalltearPostGradeColor(color, vk::RawBufferLoad<ShalltearPostGrade>(gPost.gradeAddress, 16));
-	}
-
 	if (gPost.extentAndStep.w > 0.5) {
 		float2 d = abs(input.uv - gPost.vignetteCenterSmoothnessRounded.xy) * gPost.vignetteColorAndIntensity.w;
 		float aspect = gPost.extentAndStep.y > 0.0 ? gPost.extentAndStep.x / gPost.extentAndStep.y : 1.0;
 		d.x *= lerp(1.0, aspect, gPost.vignetteCenterSmoothnessRounded.w);
 		float factor = pow(saturate(1.0 - dot(d, d)), gPost.vignetteCenterSmoothnessRounded.z);
-		color = lerp(gPost.vignetteColorAndIntensity.rgb, color, factor);
+		color *= lerp(gPost.vignetteColorAndIntensity.rgb, 1.0, factor);
+	}
+
+	if (gPost.gradeAddress != 0) {
+		// after bloom, before curve
+		color = ShalltearPostGradeColor(color, vk::RawBufferLoad<ShalltearPostGrade>(gPost.gradeAddress, 16));
 	}
 
 	return float4(color, 1.0);

@@ -22,6 +22,8 @@
 #include "PostProcessGrade.h"
 #endif
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -229,6 +231,17 @@ namespace {
 				const f32 expected = LinearToByte(ByteToLinear(before[channel]) * factors[channel]);
 				EXPECT_NEAR(static_cast<f32>(after[channel]), expected, 2.0f) << channel << ' ' << static_cast<i32>(before[channel]);
 			}
+		}
+
+		static f32 VignetteFactor(Vec2I size, Vec2I texel, f32 intensity, f32 smoothness) {
+			const f32 dx = std::abs((static_cast<f32>(texel.x) + 0.5f) / static_cast<f32>(size.x) - 0.5f) * intensity * 3.0f;
+			const f32 dy = std::abs((static_cast<f32>(texel.y) + 0.5f) / static_cast<f32>(size.y) - 0.5f) * intensity * 3.0f;
+			return std::pow(std::clamp(1.0f - dx * dx - dy * dy, 0.0f, 1.0f), smoothness * 5.0f);
+		}
+
+		static std::array<Vec2I, 5> VignetteProbes(Vec2I size) {
+			return {Vec2I(0, 0), Vec2I(0, size.y / 2), Vec2I(size.x / 8, size.y / 2), Vec2I(size.x / 4, size.y / 4),
+					Vec2I(size.x / 2, size.y / 2)};
 		}
 	};
 
@@ -476,6 +489,133 @@ TEST_F(PostProcessRenderFixture, TheVignetteDarkensOutwardFromItsCentre) {
 
 	EXPECT_NEAR(static_cast<f32>(centre[0]), static_cast<f32>(centreBefore[0]), 2.0f);
 	EXPECT_LT(corner[0], centre[0] - 10);
+}
+
+TEST_F(PostProcessRenderFixture, VignetteFalloffFollowsSmoothness) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+
+	PostProcessProfile* profile = MakeProfile("Falloff.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->vignette = true;
+	profile->vignetteIntensity = 0.4f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	u8 cornerRed[2] = {};
+	const f32 smoothnesses[2] = {0.05f, 1.0f};
+	for (i32 pass = 0; pass < 2; ++pass) {
+		profile->vignetteSmoothness = smoothnesses[pass];
+		Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		ASSERT_TRUE(Render(rows, pixels, size));
+		ASSERT_EQ(size, referenceSize);
+		for (const Vec2I& probe : VignetteProbes(size)) {
+			const f32 factor = VignetteFactor(size, probe, 0.4f, smoothnesses[pass]);
+			SCOPED_TRACE(::testing::Message() << "smoothness " << smoothnesses[pass] << " at " << probe.x << ',' << probe.y);
+			ExpectScaled(Texel(reference, referenceSize, probe.x, probe.y), Texel(pixels, size, probe.x, probe.y),
+						 Vec3(factor, factor, factor));
+		}
+		cornerRed[pass] = Texel(pixels, size, 0, 0)[0];
+	}
+	EXPECT_GT(cornerRed[0], cornerRed[1] + 100);
+}
+
+TEST_F(PostProcessRenderFixture, VignetteColorMultipliesFrame) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+	const Color black(0.0f, 0.0f, 0.0f);
+	Vector<u8> dark{GetMemoryResource(MemTag::Graphics)};
+	Vec2I darkSize{};
+	ASSERT_TRUE(Render({}, dark, darkSize, black));
+
+	PostProcessProfile* profile = MakeProfile("Tinted.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->vignette = true;
+	profile->vignetteIntensity = 0.5f;
+	profile->vignetteSmoothness = 0.2f;
+	profile->vignetteColor = Color(1.0f, 0.25f, 0.0f);
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+	for (const Vec2I& probe : VignetteProbes(size)) {
+		const f32 factor = VignetteFactor(size, probe, 0.5f, 0.2f);
+		SCOPED_TRACE(::testing::Message() << "at " << probe.x << ',' << probe.y);
+		ExpectScaled(Texel(reference, referenceSize, probe.x, probe.y), Texel(pixels, size, probe.x, probe.y),
+					 Vec3(1.0f, 0.25f + 0.75f * factor, factor));
+	}
+	EXPECT_EQ(Texel(pixels, size, 0, 0)[0], Texel(reference, referenceSize, 0, 0)[0]);
+	EXPECT_LT(Texel(pixels, size, 0, 0)[1] + 40, Texel(reference, referenceSize, 0, 0)[1]);
+
+	Vector<u8> darkTinted{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(Render(rows, darkTinted, size, black));
+	EXPECT_EQ(Texel(dark, darkSize, 0, 0)[0], 0);
+	EXPECT_EQ(darkTinted, dark);
+}
+
+TEST_F(PostProcessRenderFixture, VignetteRunsBeforeGrade) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+
+	PostProcessProfile* profile = MakeProfile("VignetteGraded.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->vignette = true;
+	profile->vignetteIntensity = 0.4f;
+	profile->vignetteSmoothness = 0.2f;
+	profile->colorGrading = true;
+	profile->contrast = 50.0f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const std::array<Vec2I, 5> probes = VignetteProbes(size);
+	for (const Vec2I& probe : {probes[0], probes[2], probes[3], probes[4]}) {
+		const f32 factor = VignetteFactor(size, probe, 0.4f, 0.2f);
+		const u8* before = Texel(reference, referenceSize, probe.x, probe.y);
+		const u8* after = Texel(pixels, size, probe.x, probe.y);
+		for (i32 channel = 0; channel < 3; ++channel) {
+			const f32 graded = std::max((ByteToLinear(before[channel]) * factor - 0.18f) * 1.5f + 0.18f, 0.0f);
+			EXPECT_NEAR(static_cast<f32>(after[channel]), LinearToByte(graded), 2.0f)
+				<< probe.x << ',' << probe.y << " channel " << channel;
+		}
+	}
+	EXPECT_EQ(Texel(pixels, size, 0, 0)[2], 0);
+	EXPECT_GT(Texel(reference, referenceSize, 0, 0)[2], 40);
 }
 
 TEST_F(PostProcessRenderFixture, BloomSpreadsLocally) {

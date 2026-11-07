@@ -285,7 +285,7 @@ namespace Shalltear {
 		push.vignetteColorAndIntensity[3] = Math::Clamp(resolved.vignetteIntensity, 0.0f, 1.0f) * 3.0f;
 		push.vignetteCenterSmoothnessRounded[0] = resolved.vignetteCenter.x;
 		push.vignetteCenterSmoothnessRounded[1] = resolved.vignetteCenter.y;
-		push.vignetteCenterSmoothnessRounded[2] = 1.0f / Math::Clamp(resolved.vignetteSmoothness, 0.01f, 1.0f);
+		push.vignetteCenterSmoothnessRounded[2] = Math::Clamp(resolved.vignetteSmoothness, 0.01f, 1.0f) * 5.0f;
 		push.vignetteCenterSmoothnessRounded[3] = resolved.vignetteRounded ? 1.0f : 0.0f;
 
 		const Vec2I extent = context.GetExtent();

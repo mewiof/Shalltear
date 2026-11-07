@@ -134,6 +134,10 @@ namespace Shalltear::UI {
 		f32 opacity = 1.0f;
 		i32 zIndex = 0;
 
+		// deg clockwise (+y down) about transformOrigin, layout untouched
+		f32 rotate = 0.0f;
+		TransformOrigin transformOrigin{};
+
 		// unset = parent's value (never unset in a computed style)
 		StyleValue<Handle<FontAsset>> font;
 		// Percent = fraction of parent's font size. Computed = Pixel

@@ -471,7 +471,7 @@ TEST(UIStyleTest, LineHeightNumbersPercentsAndPixels) {
 	}
 }
 
-static_assert(sizeof(UI::Style) == 576, "Style changed shape. See UIStyleVocabulary.h");
+static_assert(sizeof(UI::Style) == 600, "Style changed shape. See UIStyleVocabulary.h");
 
 TEST(UIStyleTest, EveryStyleFieldHasAStylesheetSpelling) {
 	for (const StyleVocabulary::Entry& entry : StyleVocabulary::All) {

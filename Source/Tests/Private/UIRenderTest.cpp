@@ -2192,6 +2192,135 @@ TEST_F(UIRenderFixture, TurnedStrokeClipped) {
 	EXPECT_GT(coverage(30, 30), 0.5f);
 }
 
+namespace {
+
+	UI::Style TurnedBox(f32 left, f32 top, f32 width, f32 height, f32 rotate, Color color) {
+		UI::Style style;
+		style.position = UI::Position::Absolute;
+		style.left = UI::Length::Pixel(left);
+		style.top = UI::Length::Pixel(top);
+		style.width = UI::Length::Pixel(width);
+		style.height = UI::Length::Pixel(height);
+		style.rotate = rotate;
+		if (color.a > 0.0f) {
+			style.background = UI::Brush::SolidColor(color);
+		}
+		return style;
+	}
+
+	bool RenderContextOffscreen(UI::Context& ctx, Vec2I size, Vector<u8>& texels) {
+		ctx.Update();
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		return RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels);
+	}
+
+	UI::ContextDesc TurnedDesc() {
+		UI::ContextDesc desc;
+		desc.sizePx = {64, 64};
+		desc.contentScale = 1.0f;
+		return desc;
+	}
+
+} // anonymous namespace
+
+TEST_F(UIRenderFixture, TurnedRightAngleLandsOnPixels) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UI::Context ctx(TurnedDesc(), nullptr);
+	UI::ElementHandle bar = MakeChild(ctx, ctx.GetRoot(), TurnedBox(12.0f, 28.0f, 40.0f, 8.0f, 90.0f, Color::Clear()));
+	MakeChild(ctx, bar, TurnedBox(0.0f, 0.0f, 20.0f, 8.0f, 0.0f, Color(1.0f, 0.0f, 0.0f, 1.0f)));
+	MakeChild(ctx, bar, TurnedBox(20.0f, 0.0f, 20.0f, 8.0f, 0.0f, Color(0.0f, 0.0f, 1.0f, 1.0f)));
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderContextOffscreen(ctx, {64, 64}, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const u16* halves = reinterpret_cast<const u16*>(texels.data());
+	auto channel = [&](i32 x, i32 y, i32 c) { return HalfToFloat(halves[(static_cast<size_t>(y) * 64 + x) * 4 + c]); };
+
+	i32 red = 0;
+	i32 blue = 0;
+	for (i32 y = 0; y < 64; ++y) {
+		for (i32 x = 0; x < 64; ++x) {
+			const bool column = x >= 28 && x <= 35;
+			const f32 wantRed = column && y >= 12 && y <= 31 ? 1.0f : 0.0f;
+			const f32 wantBlue = column && y >= 32 && y <= 51 ? 1.0f : 0.0f;
+			ASSERT_NEAR(channel(x, y, 0), wantRed, 0.5f / 255.0f) << x << ", " << y;
+			ASSERT_NEAR(channel(x, y, 2), wantBlue, 0.5f / 255.0f) << x << ", " << y;
+			red += wantRed > 0.0f ? 1 : 0;
+			blue += wantBlue > 0.0f ? 1 : 0;
+		}
+	}
+	EXPECT_EQ(red, 160);
+	EXPECT_EQ(blue, 160);
+}
+
+TEST_F(UIRenderFixture, TurnedEighthCoversItsArea) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UI::Context ctx(TurnedDesc(), nullptr);
+	MakeChild(ctx, ctx.GetRoot(), TurnedBox(17.0f, 27.0f, 30.0f, 10.0f, 45.0f, Color::White()));
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderContextOffscreen(ctx, {64, 64}, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const u16* halves = reinterpret_cast<const u16*>(texels.data());
+	auto coverage = [&](i32 x, i32 y) { return HalfToFloat(halves[(static_cast<size_t>(y) * 64 + x) * 4]); };
+
+	f32 area = 0.0f;
+	i32 partials = 0;
+	for (i32 y = 0; y < 64; ++y) {
+		for (i32 x = 0; x < 64; ++x) {
+			const f32 c = coverage(x, y);
+			area += c;
+			partials += c > 0.05f && c < 0.95f ? 1 : 0;
+			if (std::abs(x + 0.5f - 32.0f) > 15.5f || std::abs(y + 0.5f - 32.0f) > 15.5f) {
+				ASSERT_LE(c, 0.001f) << x << ", " << y;
+			}
+		}
+	}
+	EXPECT_NEAR(area, 300.0f, 6.0f);
+	EXPECT_GE(partials, 40);
+	EXPECT_GT(coverage(32, 32), 0.999f);
+	EXPECT_LE(coverage(40, 25), 0.001f);
+	EXPECT_GT(coverage(38, 37), 0.999f);
+}
+
+TEST_F(UIRenderFixture, TurnedChildCutByParentClip) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UI::Context ctx(TurnedDesc(), nullptr);
+	UI::Style frame = TurnedBox(0.0f, 0.0f, 64.0f, 32.0f, 0.0f, Color::Clear());
+	frame.overflow = UI::Overflow::Hidden;
+	UI::ElementHandle clipper = MakeChild(ctx, ctx.GetRoot(), frame);
+	MakeChild(ctx, clipper, TurnedBox(12.0f, 12.0f, 40.0f, 8.0f, 90.0f, Color::White()));
+
+	Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+	if (!RenderContextOffscreen(ctx, {64, 64}, texels)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const u16* halves = reinterpret_cast<const u16*>(texels.data());
+	auto coverage = [&](i32 x, i32 y) { return HalfToFloat(halves[(static_cast<size_t>(y) * 64 + x) * 4]); };
+
+	i32 inked = 0;
+	for (i32 y = 0; y < 64; ++y) {
+		for (i32 x = 0; x < 64; ++x) {
+			if (y >= 32) {
+				ASSERT_LE(coverage(x, y), 0.001f) << x << ", " << y;
+			} else if (coverage(x, y) > 0.999f) {
+				++inked;
+			}
+		}
+	}
+	EXPECT_EQ(inked, 8 * 32);
+	EXPECT_GT(coverage(32, 0), 0.999f);
+}
+
 TEST_F(UIRenderLogFixture, DestroyedTextureFallsBack) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

@@ -855,6 +855,84 @@ TEST_F(UISurfaceFixture, DropShadowMatchesCaster) {
 	device->DestroyResource(picture);
 }
 
+namespace {
+
+	void SetRotate(UI::Context& context, UI::ElementHandle element, f32 rotate) {
+		UI::Style style = context.GetStyle(element);
+		style.rotate = rotate;
+		context.SetStyle(element, style);
+	}
+
+} // anonymous namespace
+
+TEST_F(UISurfaceFixture, TurnedElementThroughRealRenderer) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UISurfaceId surface = UISystem::CreateSurface({64, 64});
+	ASSERT_NE(surface, INVALID_UI_SURFACE);
+	UI::Context* context = UISystem::GetSurfaceContext(surface);
+	ASSERT_NE(context, nullptr);
+	SetBackground(*context, context->GetRoot(), UI::Brush::SolidColor(Color::Black()));
+
+	UI::ElementHandle bar = PlacedBox(*context, context->GetRoot(), 12.0f, 28.0f, 40.0f, 8.0f);
+	SetRotate(*context, bar, 90.0f);
+	UI::ElementHandle first = PlacedBox(*context, bar, 0.0f, 0.0f, 20.0f, 8.0f);
+	SetBackground(*context, first, UI::Brush::SolidColor(Color(1.0f, 0.0f, 0.0f, 1.0f)));
+	UI::ElementHandle second = PlacedBox(*context, bar, 20.0f, 0.0f, 20.0f, 8.0f);
+	SetBackground(*context, second, UI::Brush::SolidColor(Color(0.0f, 0.0f, 1.0f, 1.0f)));
+
+	UISystem::Update();
+	RenderSystem::RenderAll();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
+	Vec2I size{};
+	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
+	EXPECT_EQ(TexelAt(pixels, size, 28, 12), (RGBA{255, 0, 0, 255}));
+	EXPECT_EQ(TexelAt(pixels, size, 35, 31), (RGBA{255, 0, 0, 255}));
+	EXPECT_EQ(TexelAt(pixels, size, 28, 32), (RGBA{0, 0, 255, 255}));
+	EXPECT_EQ(TexelAt(pixels, size, 35, 51), (RGBA{0, 0, 255, 255}));
+	EXPECT_EQ(TexelAt(pixels, size, 27, 20), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 36, 44), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 32, 11), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 32, 52), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 16, 32), BLACK);
+
+	UISystem::DestroySurface(surface);
+}
+
+TEST_F(UISurfaceFixture, ShadowFollowsTurnedChild) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	UISurfaceId surface = UISystem::CreateSurface({64, 64});
+	ASSERT_NE(surface, INVALID_UI_SURFACE);
+	UI::Context* context = UISystem::GetSurfaceContext(surface);
+	ASSERT_NE(context, nullptr);
+	SetBackground(*context, context->GetRoot(), UI::Brush::SolidColor(Color::White()));
+
+	UI::ElementHandle caster = PlacedBox(*context, context->GetRoot(), 0.0f, 0.0f, 64.0f, 64.0f);
+	SetDropShadow(*context, caster, UI::DropShadow{12.0f, 0.0f, 0.0f, Color::Black()});
+	UI::ElementHandle bar = PlacedBox(*context, caster, 12.0f, 28.0f, 40.0f, 8.0f);
+	SetBackground(*context, bar, UI::Brush::SolidColor(Color(0.0f, 0.0f, 1.0f, 1.0f)));
+	SetRotate(*context, bar, 90.0f);
+
+	UISystem::Update();
+	RenderSystem::RenderAll();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
+	Vec2I size{};
+	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
+	EXPECT_EQ(TexelAt(pixels, size, 32, 20), (RGBA{0, 0, 255, 255}));
+	EXPECT_EQ(TexelAt(pixels, size, 40, 12), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 47, 51), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 48, 20), WHITE);
+	EXPECT_EQ(TexelAt(pixels, size, 56, 31), WHITE);
+	EXPECT_EQ(TexelAt(pixels, size, 24, 31), WHITE);
+
+	UISystem::DestroySurface(surface);
+}
+
 TEST_F(UISurfaceFixture, DropShadowMatchesBoxShadow) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

@@ -44,6 +44,8 @@ namespace Shalltear::StyleVocabulary {
 		{"dropShadow", "filter: drop-shadow(1px 2px 3px #00000080)", [](UI::Style& s) { s.dropShadow = UI::DropShadow{1.0f, 2.0f, 3.0f, Color::FromHex("#00000080")}; }},
 		{"opacity", "opacity: 0.5", [](UI::Style& s) { s.opacity = 0.5f; }},
 		{"zIndex", "z-index: 3", [](UI::Style& s) { s.zIndex = 3; }},
+		{"rotate", "rotate: 90deg", [](UI::Style& s) { s.rotate = 90.0f; }},
+		{"transformOrigin", "transform-origin: 20px 75%", [](UI::Style& s) { s.transformOrigin = {UI::Length::Pixel(20.0f), UI::Length::Percent(0.75f)}; }},
 
 		{"textAlign", "text-align: center", [](UI::Style& s) { s.textAlign = UI::Align::Center; }},
 		{"textAlignVertical", "text-align-vertical: center", [](UI::Style& s) { s.textAlignVertical = UI::Align::Center; }},

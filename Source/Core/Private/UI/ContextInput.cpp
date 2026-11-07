@@ -83,13 +83,94 @@ namespace Shalltear::UI {
 			return true;
 		}
 
+		constexpr f32 TURN_EPSILON_DEG = 1e-3f;
+		constexpr f32 DEG_TO_RAD = 0.01745329252f;
+
+		f32 OriginOffset(const Length& origin, f32 size, f32 scale) {
+			switch (origin.unit) {
+			case Length::Unit::Pixel:
+				return origin.value * scale;
+			case Length::Unit::Percent:
+				return origin.value * size;
+			default:
+				return size * 0.5f;
+			}
+		}
+
 	} // anonymous namespace
+
+	ElementTurn ContextImpl::TurnOf(u32 index) const {
+		ElementTurn turn;
+		const Style& style = ComputedS(index);
+		f32 degrees = std::fmod(style.rotate, 360.0f);
+		if (degrees < 0.0f) {
+			degrees += 360.0f;
+		}
+		if (!std::isfinite(degrees) || degrees < TURN_EPSILON_DEG || degrees > 360.0f - TURN_EPSILON_DEG) {
+			return turn;
+		}
+		const f32 scale = std::max(0.0f, desc.contentScale);
+		const Rect box = SnapRect(L(index).borderBox);
+		turn.pivot = {box.x + OriginOffset(style.transformOrigin.x, box.w, scale),
+					  box.y + OriginOffset(style.transformOrigin.y, box.h, scale)};
+		turn.turned = true;
+
+		const f32 quarters = std::round(degrees / 90.0f);
+		if (std::abs(degrees - quarters * 90.0f) >= TURN_EPSILON_DEG) {
+			turn.rads = degrees * DEG_TO_RAD;
+			turn.cos = std::cos(turn.rads);
+			turn.sin = std::sin(turn.rads);
+			return turn;
+		}
+		// snap pivot at 90/180/270 deg for crisp px
+		const i32 quarter = static_cast<i32>(quarters) & 3;
+		constexpr f32 COS[4] = {1.0f, 0.0f, -1.0f, 0.0f};
+		constexpr f32 SIN[4] = {0.0f, 1.0f, 0.0f, -1.0f};
+		turn.cos = COS[quarter];
+		turn.sin = SIN[quarter];
+		turn.rads = static_cast<f32>(quarter) * 90.0f * DEG_TO_RAD;
+		if (quarter == 2) {
+			turn.pivot = {std::round(turn.pivot.x * 2.0f) * 0.5f, std::round(turn.pivot.y * 2.0f) * 0.5f};
+		} else {
+			const f32 sum = std::round(turn.pivot.x + turn.pivot.y);
+			const f32 difference = std::round(turn.pivot.y - turn.pivot.x);
+			turn.pivot = {(sum - difference) * 0.5f, (sum + difference) * 0.5f};
+		}
+		return turn;
+	}
+
+	Vec2 ContextImpl::ToLayoutSpace(u32 index, Vec2 point) const {
+		Vector<u32> turned{GetMemoryResource(MemTag::UI)};
+		for (u32 at = index; at != INVALID_UI_INDEX; at = E(at).parent) {
+			if (ComputedS(at).rotate != 0.0f) {
+				turned.push_back(at);
+			}
+		}
+		for (size_t i = turned.size(); i-- > 0;) {
+			const ElementTurn turn = TurnOf(turned[i]);
+			if (turn.turned) {
+				point = UnturnPoint(turn, point);
+			}
+		}
+		return point;
+	}
 
 	u32 ContextImpl::HitTestRecursive(u32 index, Vec2 point, HitTestMode mode, const Rect* clip) const {
 		const Element& element = E(index);
 		const Style& style = ComputedS(index);
 		if (!HasFlag(element.flags, ElementFlags::Visible) || style.display == Display::None) {
 			return INVALID_UI_INDEX;
+		}
+
+		if (style.rotate != 0.0f) {
+			const ElementTurn turn = TurnOf(index);
+			if (turn.turned) {
+				if (clip && !clip->Contains(point)) {
+					return INVALID_UI_INDEX;
+				}
+				point = UnturnPoint(turn, point);
+				clip = nullptr;
+			}
 		}
 
 		const Rect& bounds = L(index).borderBox;
@@ -257,6 +338,7 @@ namespace Shalltear::UI {
 			return 0;
 		}
 		EnsureShaped(elementIndex);
+		mouse = ToLayoutSpace(elementIndex, mouse);
 		const Vec2 origin = TextOriginPx(elementIndex);
 		const ShapedRun& run = text->shaped;
 		const f32 lineHeight = run.lineHeight > 0.0f ? run.lineHeight : 1.0f;
@@ -468,11 +550,13 @@ namespace Shalltear::UI {
 				if (pressed != INVALID_UI_INDEX) {
 					auto eventsIt = events.find(pressed);
 					if (eventsIt != events.end() && eventsIt->second.onPressDrag) {
-						eventsIt->second.onPressDrag(lastMousePos);
+						eventsIt->second.onPressDrag(ToLayoutSpace(pressed, lastMousePos));
 					}
 				}
 				if (pressedMiddle != INVALID_UI_INDEX) {
-					const Vec2 delta{lastMousePos.x - middleDragLast.x, lastMousePos.y - middleDragLast.y};
+					const Vec2 now = ToLayoutSpace(pressedMiddle, lastMousePos);
+					const Vec2 before = ToLayoutSpace(pressedMiddle, middleDragLast);
+					const Vec2 delta{now.x - before.x, now.y - before.y};
 					middleDragLast = lastMousePos;
 					auto eventsIt = events.find(pressedMiddle);
 					if (eventsIt != events.end() && eventsIt->second.onMiddleDrag) {

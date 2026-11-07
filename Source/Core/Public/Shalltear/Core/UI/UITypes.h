@@ -162,6 +162,14 @@ namespace Shalltear::UI {
 		bool operator==(const Radii&) const = default;
 	};
 
+	// Percent = fraction of border box size
+	struct TransformOrigin {
+		Length x = Length::Percent(0.5f);
+		Length y = Length::Percent(0.5f);
+
+		bool operator==(const TransformOrigin&) const = default;
+	};
+
 	[[nodiscard]] inline constexpr Rect DeflateRect(const Rect& r, const Edges& e) {
 		f32 w = r.w - e.left - e.right;
 		f32 h = r.h - e.top - e.bottom;

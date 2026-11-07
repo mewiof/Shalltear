@@ -2155,6 +2155,11 @@ namespace Shalltear::UI {
 		return _impl->lastMousePos;
 	}
 
+	Vec2 Context::GetPointerPosition(ElementHandle element) const {
+		const u32 index = _impl->ResolveIndex(element);
+		return index == INVALID_UI_INDEX ? _impl->lastMousePos : _impl->ToLayoutSpace(index, _impl->lastMousePos);
+	}
+
 	bool Context::WantsMouse() const {
 		return (_impl->hovered != INVALID_UI_INDEX && _impl->hovered != _impl->root) ||
 			   _impl->pressed != INVALID_UI_INDEX;
@@ -2291,7 +2296,7 @@ namespace Shalltear::UI {
 		}
 		auto eventsIt = _impl->events.find(index);
 		if (eventsIt != _impl->events.end() && eventsIt->second.onDrop) {
-			eventsIt->second.onDrop(payload, point);
+			eventsIt->second.onDrop(payload, _impl->ToLayoutSpace(index, point));
 			return true;
 		}
 		return false;

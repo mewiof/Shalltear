@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <functional>
 
 namespace Shalltear::UI {
 
@@ -202,26 +203,36 @@ namespace Shalltear::UI {
 			return {};
 		}
 
-		auto open = [&](RHI::TextureHandle target) {
-			cmd.TransitionTexture(target, RHI::ResourceState::RenderTarget);
+		struct CoverageTarget {
+			RHI::TextureHandle texture;
+			Vec2I size{};
+			RHI::PipelineHandle pipeline;
+		};
+		const CoverageTarget maskTarget{mask, size, pipeline};
+		const CoverageTarget blurTarget{blurred, size, pipeline};
+
+		RHI::TextureHandle boundTexture{0xFFFFFFFEu, 0};
+		SamplerKind boundSampler = SamplerKind::Count;
+		u32 boundFlags = 0;
+		auto open = [&](const CoverageTarget& target, bool clear) {
+			cmd.TransitionTexture(target.texture, RHI::ResourceState::RenderTarget);
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = target;
-			attachment.load = RHI::LoadOp::Clear;
+			attachment.texture = target.texture;
+			attachment.load = clear ? RHI::LoadOp::Clear : RHI::LoadOp::Load;
 			attachment.clearColor = Color::Clear();
 			RHI::RenderPassDesc pass;
 			pass.colorAttachments = {&attachment, 1};
 			cmd.BeginRenderPass(pass);
-			cmd.SetPipeline(pipeline);
-			cmd.SetViewportScissor(RectI{0, 0, size.x, size.y});
+			cmd.SetPipeline(target.pipeline);
+			cmd.SetViewportScissor(RectI{0, 0, target.size.x, target.size.y});
+			boundTexture = RHI::TextureHandle{0xFFFFFFFEu, 0};
+			boundSampler = SamplerKind::Count;
 		};
-		RHI::TextureHandle boundTexture{0xFFFFFFFEu, 0};
-		SamplerKind boundSampler = SamplerKind::Count;
-		u32 boundFlags = 0;
-		auto bind = [&](RHI::TextureHandle texture, SamplerKind sampler) {
+		auto bind = [&](const CoverageTarget& target, RHI::TextureHandle texture, SamplerKind sampler) {
 			if (texture == boundTexture && sampler == boundSampler) {
 				return;
 			}
-			RHI::TransientSet set = device.CreateTransientSet(pipeline, 1)
+			RHI::TransientSet set = device.CreateTransientSet(target.pipeline, 1)
 										.WriteTexture(1, texture)
 										.WriteSampler(2, _samplers[static_cast<size_t>(sampler)])
 										.Commit();
@@ -230,10 +241,10 @@ namespace Shalltear::UI {
 			boundSampler = sampler;
 			boundFlags = TextureFlagsFor(device.GetTextureFormat(texture));
 		};
-		auto draw = [&](u64 address, Vec2 origin, u32 passMode, u32 quadCount) {
+		auto draw = [&](const CoverageTarget& target, u64 address, Vec2 origin, u32 passMode, u32 quadCount) {
 			UIPushConstants push;
-			push.viewportSize[0] = static_cast<f32>(size.x);
-			push.viewportSize[1] = static_cast<f32>(size.y);
+			push.viewportSize[0] = static_cast<f32>(target.size.x);
+			push.viewportSize[1] = static_cast<f32>(target.size.y);
 			push.originPx[0] = origin.x;
 			push.originPx[1] = origin.y;
 			push.quadAddress = address;
@@ -243,28 +254,45 @@ namespace Shalltear::UI {
 			cmd.Draw(quadCount * 6);
 			++_lastDrawCalls;
 		};
+		auto quadAddress = [&](u32 firstQuad) { return quadsAddress + static_cast<u64>(firstQuad) * sizeof(UIQuad); };
 
-		open(mask);
-		for (size_t i = 0; i < list.commands.size(); ++i) {
-			if (list.commands[i].kind != UICommandKind::PushShadow) {
-				continue;
-			}
-			const UIShadowCaster& caster = list.shadowCasters[list.commands[i].shadowCaster];
-			if (caster.slot.size.x <= 0 || caster.slot.size.y <= 0) {
-				continue;
-			}
-			cmd.SetScissor(caster.slot);
-			const Vec2 origin{caster.source.x - static_cast<f32>(caster.slot.position.x + caster.marginPx),
-							  caster.source.y - static_cast<f32>(caster.slot.position.y + caster.marginPx)};
-			u32 depth = 1;
-			for (size_t j = i + 1; j < list.commands.size() && depth > 0; ++j) {
+		const RHI::PipelineHandle layerPipeline = GetOrCreatePipeline(RHI::Format::RGBA16Float);
+		std::function<void(size_t, size_t, const CoverageTarget&, const RectI&, Vec2)> cover;
+		cover = [&](size_t begin, size_t end, const CoverageTarget& target, const RectI& scissor, Vec2 origin) {
+			for (size_t j = begin; j < end; ++j) {
 				const UICommand& command = list.commands[j];
-				if (command.kind == UICommandKind::PushShadow) {
-					++depth;
-					continue;
-				}
-				if (command.kind == UICommandKind::PopShadow) {
-					--depth;
+				if (command.kind == UICommandKind::PushLayer) {
+					size_t pop = j + 1;
+					for (u32 depth = 1; pop < end; ++pop) {
+						depth += list.commands[pop].kind == UICommandKind::PushLayer ? 1u : 0u;
+						depth -= list.commands[pop].kind == UICommandKind::PopLayer ? 1u : 0u;
+						if (depth == 0) {
+							break;
+						}
+					}
+					const size_t composite = pop + 1;
+					const bool turned = composite < end && list.commands[composite].kind == UICommandKind::Quads &&
+										list.commands[composite].texture == LayerCompositeTexture && list.commands[composite].quadCount > 0 &&
+										(list.quads[list.commands[composite].firstQuad].flags & QUAD_FLAG_ROTATED) != 0;
+					if (!turned) {
+						continue;
+					}
+					const RectI bounds = ToPixelRect(command.layerBounds);
+					const Vec2I layerSize{std::max(1, bounds.size.x), std::max(1, bounds.size.y)};
+					const CoverageTarget scratch{AcquireTarget(layerSize, RHI::Format::RGBA16Float, "UIShadowLayer"), layerSize, layerPipeline};
+					if (scratch.texture.IsValid() && scratch.pipeline.IsValid()) {
+						cmd.EndRenderPass();
+						open(scratch, true);
+						cover(j + 1, pop, scratch, RectI{0, 0, layerSize.x, layerSize.y},
+							  {static_cast<f32>(bounds.position.x), static_cast<f32>(bounds.position.y)});
+						cmd.EndRenderPass();
+						cmd.TransitionTexture(scratch.texture, RHI::ResourceState::ShaderResource);
+						open(target, false);
+						cmd.SetScissor(scissor);
+						bind(target, scratch.texture, list.commands[composite].sampler);
+						draw(target, quadAddress(list.commands[composite].firstQuad), origin, UI_PASS_COVERAGE, 1);
+					}
+					j = composite;
 					continue;
 				}
 				if (command.kind != UICommandKind::Quads || command.quadCount == 0 ||
@@ -275,22 +303,44 @@ namespace Shalltear::UI {
 				if (!texture.IsValid() || !device.IsAlive(texture)) {
 					texture = _whiteTexture;
 				}
-				bind(texture, command.sampler);
-				draw(quadsAddress + static_cast<u64>(command.firstQuad) * sizeof(UIQuad), origin, UI_PASS_COVERAGE,
-					 command.quadCount);
+				bind(target, texture, command.sampler);
+				draw(target, quadAddress(command.firstQuad), origin, UI_PASS_COVERAGE, command.quadCount);
 			}
+		};
+
+		open(maskTarget, true);
+		for (size_t i = 0; i < list.commands.size(); ++i) {
+			if (list.commands[i].kind != UICommandKind::PushShadow) {
+				continue;
+			}
+			const UIShadowCaster& caster = list.shadowCasters[list.commands[i].shadowCaster];
+			if (caster.slot.size.x <= 0 || caster.slot.size.y <= 0) {
+				continue;
+			}
+			size_t scopeEnd = i + 1;
+			for (u32 depth = 1; scopeEnd < list.commands.size(); ++scopeEnd) {
+				depth += list.commands[scopeEnd].kind == UICommandKind::PushShadow ? 1u : 0u;
+				depth -= list.commands[scopeEnd].kind == UICommandKind::PopShadow ? 1u : 0u;
+				if (depth == 0) {
+					break;
+				}
+			}
+			cmd.SetScissor(caster.slot);
+			const Vec2 origin{caster.source.x - static_cast<f32>(caster.slot.position.x + caster.marginPx),
+							  caster.source.y - static_cast<f32>(caster.slot.position.y + caster.marginPx)};
+			cover(i + 1, scopeEnd, maskTarget, caster.slot, origin);
 		}
 		cmd.EndRenderPass();
 
 		cmd.TransitionTexture(mask, RHI::ResourceState::ShaderResource);
-		open(blurred);
-		bind(mask, SamplerKind::NearestClamp);
-		draw(blurQuadsAddress, {0.0f, 0.0f}, UI_PASS_BLUR_X, blurQuadCount);
+		open(blurTarget, true);
+		bind(blurTarget, mask, SamplerKind::NearestClamp);
+		draw(blurTarget, blurQuadsAddress, {0.0f, 0.0f}, UI_PASS_BLUR_X, blurQuadCount);
 		cmd.EndRenderPass();
 		cmd.TransitionTexture(blurred, RHI::ResourceState::ShaderResource);
-		open(mask);
-		bind(blurred, SamplerKind::NearestClamp);
-		draw(blurQuadsAddress, {0.0f, 0.0f}, UI_PASS_BLUR_Y, blurQuadCount);
+		open(maskTarget, true);
+		bind(maskTarget, blurred, SamplerKind::NearestClamp);
+		draw(maskTarget, blurQuadsAddress, {0.0f, 0.0f}, UI_PASS_BLUR_Y, blurQuadCount);
 		cmd.EndRenderPass();
 		cmd.TransitionTexture(mask, RHI::ResourceState::ShaderResource);
 		return mask;

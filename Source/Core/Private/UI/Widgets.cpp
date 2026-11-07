@@ -116,7 +116,7 @@ namespace Shalltear::UI::Widgets {
 			if (element && HasFlag(element->flags, ElementFlags::Pressed)) {
 				return context.GetStyleVarColor("--slt-scroll-thumb-active"_hash, Color(0.64f, 0.64f, 0.7f));
 			}
-			Vec2 pointer = context.GetPointerPosition();
+			Vec2 pointer = context.GetPointerPosition(track);
 			if (element && HasFlag(element->flags, ElementFlags::Hovered) && pointer.y >= thumb.y &&
 				pointer.y <= thumb.y + thumb.h) {
 				return context.GetStyleVarColor("--slt-scroll-thumb-hover"_hash, Color(0.54f, 0.54f, 0.6f));
@@ -490,11 +490,11 @@ namespace Shalltear::UI::Widgets {
 				onChange(value);
 			}
 		};
-		ctx.Events(rail).onMouseDown = [context, apply, onDragBegin = desc.onDragBegin]() {
+		ctx.Events(rail).onMouseDown = [context, rail, apply, onDragBegin = desc.onDragBegin]() {
 			if (onDragBegin) {
 				onDragBegin();
 			}
-			apply(context->GetPointerPosition());
+			apply(context->GetPointerPosition(rail));
 		};
 		ctx.Events(rail).onPressDrag = [apply](Vec2 mouse) {
 			apply(mouse);
@@ -627,9 +627,9 @@ namespace Shalltear::UI::Widgets {
 				u32 claim = 0;
 			};
 			auto scrub = std::make_shared<ScrubState>();
-			ctx.Events(parts.labelElement).onMouseDown = [context, field, scrub]() {
+			ctx.Events(parts.labelElement).onMouseDown = [context, field, scrub, label = parts.labelElement]() {
 				scrub->pressValue = ReadNumber(*context, field);
-				scrub->pressX = context->GetPointerPosition().x;
+				scrub->pressX = context->GetPointerPosition(label).x;
 				scrub->active = false;
 			};
 			ctx.Events(parts.labelElement).onPressDrag =
@@ -857,14 +857,14 @@ namespace Shalltear::UI::Widgets {
 			auto place = [context, strip, apply](f32 x) {
 				apply(FractionAcross(context->GetLayout(strip).content, x));
 			};
-			ctx.Events(strip).onMouseDown = [context, state, place, onEditBegin]() {
+			ctx.Events(strip).onMouseDown = [context, strip, state, place, onEditBegin]() {
 				if (!state->editing) {
 					state->editing = true;
 					if (onEditBegin) {
 						onEditBegin();
 					}
 				}
-				place(context->GetPointerPosition().x);
+				place(context->GetPointerPosition(strip).x);
 			};
 			ctx.Events(strip).onPressDrag = [place](Vec2 mouse) { place(mouse.x); };
 			ctx.Events(strip).onPressEnd = [state, onEditEnd]() {
@@ -927,7 +927,7 @@ namespace Shalltear::UI::Widgets {
 					onEditBegin();
 				}
 			}
-			Vec2 pointer = context->GetPointerPosition();
+			Vec2 pointer = context->GetPointerPosition(state->square);
 			placeSv(pointer.x, pointer.y);
 		};
 		ctx.Events(state->square).onPressDrag = [placeSv](Vec2 mouse) { placeSv(mouse.x, mouse.y); };
@@ -1479,7 +1479,7 @@ namespace Shalltear::UI::Widgets {
 			context->SetScrollOffset(viewport, {view->scrollOffset.x, t * view->maxScroll.y});
 		};
 		ctx.Events(parts.track).onMouseDown = [context, track, thumbRect, grab, scrollToThumbTop]() {
-			f32 mouseY = context->GetPointerPosition().y;
+			f32 mouseY = context->GetPointerPosition(track).y;
 			Rect thumb = thumbRect(context->GetLayout(track).content);
 			if (thumb.h > 0.0f && mouseY >= thumb.y && mouseY <= thumb.y + thumb.h) {
 				*grab = mouseY - thumb.y;
@@ -1619,7 +1619,7 @@ namespace Shalltear::UI::Widgets {
 		std::function<void(f32)> report = desc.onPositionChanged;
 
 		ctx.Events(parts.splitter).onMouseDown = [context, handles, axis, sizing, drag]() {
-			drag->startMouseMain = MainOf(context->GetPointerPosition(), axis);
+			drag->startMouseMain = MainOf(context->GetPointerPosition(handles.splitter), axis);
 			const Rect& firstBox = context->GetLayout(handles.first).borderBox;
 			const Rect& secondBox = context->GetLayout(handles.second).borderBox;
 			drag->startMain = MainOf(sizing == SplitSizing::SecondFixed ? secondBox : firstBox, axis);

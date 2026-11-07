@@ -395,6 +395,67 @@ TEST(WidgetsTest, SliderJumpsAndDrags) {
 	EXPECT_EQ(ends, 1);
 }
 
+TEST(WidgetsTest, SliderFollowsTurnedPanel) {
+	Rig rig;
+	UI::Style panelStyle;
+	panelStyle.position = UI::Position::Absolute;
+	panelStyle.left = UI::Length::Pixel(50.0f);
+	panelStyle.top = UI::Length::Pixel(80.0f);
+	panelStyle.width = UI::Length::Pixel(200.0f);
+	panelStyle.height = UI::Length::Pixel(20.0f);
+	panelStyle.rotate = 90.0f;
+	UI::ElementHandle panel = MakeChild(rig.ctx, rig.ctx.GetRoot(), panelStyle);
+
+	f32 value = 0.0f;
+	UI::Widgets::SliderDesc desc;
+	desc.maxValue = 100.0f;
+	desc.onChange = [&](f32 v) { value = v; };
+	auto parts = UI::Widgets::Slider(rig.ctx, panel, desc);
+	rig.ctx.Update();
+
+	const UI::Rect& track = rig.ctx.GetLayout(parts.track).content;
+	ASSERT_GT(track.w, 0.0f);
+	const UI::Rect box = rig.ctx.GetLayout(panel).borderBox;
+	const Vec2 pivot{box.x + box.w * 0.5f, box.y + box.h * 0.5f};
+	auto onScreen = [&](f32 fraction) {
+		const Vec2 local{track.x + track.w * fraction, track.y + track.h * 0.5f};
+		return Vec2I{static_cast<i32>(pivot.x - (local.y - pivot.y)), static_cast<i32>(pivot.y + (local.x - pivot.x))};
+	};
+
+	const Vec2I quarter = onScreen(0.25f);
+	rig.ctx.InjectInput(MouseDown(quarter.x, quarter.y));
+	rig.ctx.Update();
+	EXPECT_NEAR(value, 25.0f, 1.5f);
+
+	const Vec2I most = onScreen(0.75f);
+	rig.ctx.InjectInput(MouseMove(most.x, most.y));
+	rig.ctx.InjectInput(MouseUp(most.x, most.y));
+	rig.ctx.Update();
+	EXPECT_NEAR(value, 75.0f, 1.5f);
+}
+
+TEST(WidgetsTest, CaretFollowsTurnedInput) {
+	Rig rig;
+	UI::Style inputStyle;
+	inputStyle.position = UI::Position::Absolute;
+	inputStyle.left = UI::Length::Pixel(0.0f);
+	inputStyle.top = UI::Length::Pixel(0.0f);
+	inputStyle.width = UI::Length::Pixel(200.0f);
+	inputStyle.height = UI::Length::Pixel(30.0f);
+	inputStyle.rotate = 180.0f;
+	UI::ElementHandle input = MakeChild(rig.ctx, rig.ctx.GetRoot(), inputStyle);
+	rig.ctx.SetText(input, Handle<FontAsset>{}, 14.0f, Color::White(), "abcdef");
+	rig.ctx.SetTextInput(input, true);
+	rig.ctx.Update();
+	rig.ctx.SetFocus(input);
+	rig.ctx.Update();
+
+	Click(rig.ctx, {198.0f, 15.0f});
+	rig.ctx.InjectInput(TextChar(U'X'));
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetTextString(input), "Xabcdef");
+}
+
 TEST(WidgetsTest, ThumbReactsToHoverAndDrag) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 20.0f));

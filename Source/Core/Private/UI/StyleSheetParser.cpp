@@ -308,6 +308,91 @@ namespace Shalltear::UI {
 			out = parsed;
 		}
 
+		bool ParseAngleDegrees(std::string_view value, f32& out) {
+			if (value == "none") {
+				out = 0.0f;
+				return true;
+			}
+			struct AngleUnit {
+				std::string_view suffix;
+				f32 degrees;
+			};
+			constexpr AngleUnit UNITS[] = {{"deg", 1.0f}, {"grad", 0.9f}, {"rad", 57.29577951f}, {"turn", 360.0f}};
+			std::string_view number = value;
+			f32 scale = 1.0f;
+			for (const AngleUnit& unit : UNITS) {
+				if (value.ends_with(unit.suffix)) {
+					number = value.substr(0, value.size() - unit.suffix.size());
+					scale = unit.degrees;
+					break;
+				}
+			}
+			f32 parsed = 0.0f;
+			const std::from_chars_result result = std::from_chars(number.data(), number.data() + number.size(), parsed);
+			if (number.empty() || result.ec != std::errc{} || result.ptr != number.data() + number.size()) {
+				return false;
+			}
+			out = parsed * scale;
+			return true;
+		}
+
+		enum class OriginAxis : u8 {
+			Either,
+			Horizontal,
+			Vertical,
+			Offset
+		};
+
+		bool ParseOriginToken(std::string_view token, Length& out, OriginAxis& axis) {
+			struct Keyword {
+				std::string_view name;
+				f32 fraction;
+				OriginAxis axis;
+			};
+			constexpr Keyword KEYWORDS[] = {{"center", 0.5f, OriginAxis::Either}, {"left", 0.0f, OriginAxis::Horizontal}, {"right", 1.0f, OriginAxis::Horizontal}, {"top", 0.0f, OriginAxis::Vertical}, {"bottom", 1.0f, OriginAxis::Vertical}};
+			for (const Keyword& keyword : KEYWORDS) {
+				if (token == keyword.name) {
+					out = Length::Percent(keyword.fraction);
+					axis = keyword.axis;
+					return true;
+				}
+			}
+			if (!LooksNumeric(token)) {
+				return false;
+			}
+			out = ParseLength(token);
+			axis = OriginAxis::Offset;
+			return true;
+		}
+
+		bool ParseTransformOrigin(std::string_view value, TransformOrigin& out) {
+			std::string_view tokens[3];
+			const u32 count = SplitInto(value, ' ', tokens, 3);
+			Length first;
+			Length second = Length::Percent(0.5f);
+			OriginAxis firstAxis = OriginAxis::Either;
+			OriginAxis secondAxis = OriginAxis::Either;
+			if (count == 0 || !ParseOriginToken(tokens[0], first, firstAxis) ||
+				(count > 1 && !ParseOriginToken(tokens[1], second, secondAxis))) {
+				return false;
+			}
+			if (count == 1) {
+				out = firstAxis == OriginAxis::Vertical ? TransformOrigin{Length::Percent(0.5f), first} : TransformOrigin{first, second};
+				return true;
+			}
+			const bool swap = firstAxis == OriginAxis::Vertical || secondAxis == OriginAxis::Horizontal;
+			if (swap && (firstAxis == OriginAxis::Offset || secondAxis == OriginAxis::Offset)) {
+				return false;
+			}
+			const OriginAxis xAxis = swap ? secondAxis : firstAxis;
+			const OriginAxis yAxis = swap ? firstAxis : secondAxis;
+			if (xAxis == OriginAxis::Vertical || yAxis == OriginAxis::Horizontal) {
+				return false;
+			}
+			out = swap ? TransformOrigin{second, first} : TransformOrigin{first, second};
+			return true;
+		}
+
 		struct Sink {
 			char* buffer = nullptr;
 			size_t capacity = 0;
@@ -505,7 +590,7 @@ namespace Shalltear::UI {
 				: name(propertyName), hash(propertyName), resolving(propertySetter), reader(propertyReader) {}
 		};
 
-		constexpr size_t PROPERTY_COUNT = 48;
+		constexpr size_t PROPERTY_COUNT = 50;
 
 		Align ParseAlign(std::string_view value, Align fallback) {
 			if (value == "center") {
@@ -607,6 +692,23 @@ namespace Shalltear::UI {
 				 [](const Style& s, Sink& o) { o.Put(s.opacity); }},
 				{"z-index", [](Style& s, std::string_view v) { s.zIndex = static_cast<i32>(ParseFloat(v)); },
 				 [](const Style& s, Sink& o) { o.Put(static_cast<f32>(s.zIndex)); }},
+				{"rotate", [](Style& s, std::string_view v) {
+					 if (!ParseAngleDegrees(v, s.rotate)) {
+						 SLT_LOG_WARN("UI", "stylesheet: rotate '{}' isn't an angle (deg/grad/rad/turn/none)", str(v));
+					 } },
+				 [](const Style& s, Sink& o) {
+					 o.Put(s.rotate);
+					 o.Put("deg");
+				 }},
+				{"transform-origin", [](Style& s, std::string_view v) {
+					 if (!ParseTransformOrigin(v, s.transformOrigin)) {
+						 SLT_LOG_WARN("UI", "stylesheet: transform-origin '{}' isn't 1-2 lengths/keywords", str(v));
+					 } },
+				 [](const Style& s, Sink& o) {
+					 WriteLength(o, s.transformOrigin.x);
+					 o.Put(" ");
+					 WriteLength(o, s.transformOrigin.y);
+				 }},
 				{"border-radius", [](Style& s, std::string_view v) { ParseRadii(v, s.borderRadius); },
 				 [](const Style& s, Sink& o) { WriteRadii(o, s.borderRadius); }},
 				{"border-width", [](Style& s, std::string_view v) { ParseEdges(v, s.borderWidth); },

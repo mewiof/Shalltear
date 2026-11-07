@@ -52,6 +52,7 @@ namespace Shalltear::UI {
 		std::function<void()> onDoubleClick;
 		std::function<void()> onHoverEnter;
 		std::function<void()> onHoverLeave;
+		// element's layout space px (rotate undone)
 		std::function<void(Vec2)> onPressDrag;
 		std::function<void()> onPressEnd;
 		std::function<bool(Vec2 notches)> onWheel;
@@ -65,7 +66,7 @@ namespace Shalltear::UI {
 		std::function<bool(char32_t)> onTextFilter;
 		std::function<void()> onPopupClosed;
 		std::function<bool(const DragPayload&)> onDragOver;
-		// context local pxs
+		// element's layout space px
 		std::function<void(const DragPayload&, Vec2 point)> onDrop;
 		std::function<void(Context&, ElementHandle, PaintScope&)> customDraw;
 	};
@@ -268,6 +269,8 @@ namespace Shalltear::UI {
 		KeyMod GetPointerMods() const;
 		KeyMod GetPressMods() const;
 		Vec2 GetPointerPosition() const;
+		// element's layout space px (rotate undone)
+		Vec2 GetPointerPosition(ElementHandle element) const;
 		bool WantsMouse() const;
 		bool WantsKeyboard() const;
 		SystemCursor GetDesiredCursor() const;

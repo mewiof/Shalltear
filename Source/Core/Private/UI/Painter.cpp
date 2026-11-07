@@ -12,6 +12,8 @@ namespace Shalltear::UI {
 		constexpr Radii ZeroRadii{};
 
 		constexpr f32 ROTATED_COVERAGE_MARGIN_PX = 1.0f;
+		// rotated edge AA should stay off content
+		constexpr f32 TURNED_LAYER_PAD_PX = 2.0f;
 
 		Radii ScaleRadii(const Radii& radii, f32 scale) {
 			return {radii.topLeft * scale, radii.topRight * scale, radii.bottomRight * scale, radii.bottomLeft * scale};
@@ -71,6 +73,8 @@ namespace Shalltear::UI {
 			RenderList* list = nullptr;
 			f32 scale = 1.0f;
 			Rect ink{};
+			// visible area in local coords
+			Rect frame{};
 			Rect maskRect{};
 			Radii maskRadii{};
 			bool hasMask = false;
@@ -985,7 +989,7 @@ namespace Shalltear::UI {
 			pop.z = list.commands[pushIndex].z;
 			list.commands.push_back(pop);
 
-			const Rect seen = RectIntersect(RectIntersect(state.ink, clipRect), ContextRect(ctx));
+			const Rect seen = RectIntersect(RectIntersect(state.ink, clipRect), state.frame);
 			if (seen.w <= 0.0f || seen.h <= 0.0f) {
 				return;
 			}
@@ -1030,23 +1034,17 @@ namespace Shalltear::UI {
 			state.ink = RectUnion(state.ink, quad.rect);
 		}
 
-		void BuildElement(PaintState& state, u32 index, Rect clipRect, Radii clipRadii, f32 opacity, i32 inheritedZ) {
+		void PaintElement(PaintState& state, u32 index, Rect clipRect, Radii clipRadii, f32 opacity, i32 inheritedZ, f32 ownOpacity) {
 			ContextImpl& ctx = *state.ctx;
 			Element& element = ctx.E(index);
 			const Style& style = ctx.ComputedS(index);
-			++ctx.paintStats.elementsVisited;
-			if (!HasFlag(element.flags, ElementFlags::Visible) || style.display == Display::None) {
-				ctx.Ink(index) = Rect{};
-				return;
-			}
-			++ctx.paintStats.elementsPainted;
 
 			const Rect parentInk = state.ink;
 
 			const Rect drawBounds = SnapRect(ctx.L(index).borderBox);
 			state.ink = drawBounds;
 			const i32 effectiveZ = inheritedZ + style.zIndex;
-			f32 combinedOpacity = opacity * std::clamp(style.opacity, 0.0f, 1.0f);
+			f32 combinedOpacity = opacity * std::clamp(ownOpacity, 0.0f, 1.0f);
 
 			Radii physicalRadii = ScaleRadii(style.borderRadius, state.scale);
 			bool shouldClip = style.overflow != Overflow::Visible;
@@ -1057,7 +1055,7 @@ namespace Shalltear::UI {
 			bool hasContent = hasChildren || element.textIndex != INVALID_UI_INDEX || hasCustomDraw ||
 							  HasAnyFlag(element.flags, ELEMENT_HAS_PICTURE);
 
-			bool opacityLayer = style.opacity < 1.0f && hasChildren;
+			bool opacityLayer = ownOpacity < 1.0f && hasChildren;
 			Radii maskSupplied = hasRadius ? MaskSuppliedArcs(state, drawBounds, physicalRadii) : ZeroRadii;
 			bool maskCoversArcs = hasRadius && RadiiMinus(physicalRadii, maskSupplied).IsZero();
 			bool roundedClipLayer = shouldClip && hasRadius && hasContent && !maskCoversArcs;
@@ -1104,7 +1102,7 @@ namespace Shalltear::UI {
 			Radii drawClipRadii;
 			f32 drawOpacity;
 			if (needsLayer) {
-				childClipRect = RectIntersect(childClipRect, ContextRect(ctx));
+				childClipRect = RectIntersect(childClipRect, state.frame);
 
 				UICommand push;
 				push.kind = UICommandKind::PushLayer;
@@ -1199,6 +1197,101 @@ namespace Shalltear::UI {
 			state.ink = RectUnion(parentInk, state.ink);
 		}
 
+		Rect PadToPixels(const Rect& rect, f32 pad) {
+			const f32 x0 = std::floor(rect.x) - pad;
+			const f32 y0 = std::floor(rect.y) - pad;
+			return {x0, y0, std::ceil(rect.x + rect.w) + pad - x0, std::ceil(rect.y + rect.h) + pad - y0};
+		}
+
+		void PaintTurned(PaintState& state, u32 index, const ElementTurn& turn, const Rect& clipRect, const Radii& clipRadii,
+						 f32 opacity, i32 inheritedZ) {
+			ContextImpl& ctx = *state.ctx;
+			RenderList& list = *state.list;
+			const Style& style = ctx.ComputedS(index);
+			const i32 effectiveZ = inheritedZ + style.zIndex;
+
+			const Rect parentInk = state.ink;
+			const Rect parentFrame = state.frame;
+			const Rect savedMaskRect = state.maskRect;
+			const Radii savedMaskRadii = state.maskRadii;
+			const bool savedHasMask = state.hasMask;
+
+			const Rect seen = RectIntersect(clipRect, parentFrame);
+			const Rect local = seen.w > 0.0f && seen.h > 0.0f ? TurnBounds(turn, seen, true) : Rect{};
+			state.frame = local;
+			state.hasMask = false;
+
+			const u32 pushIndex = static_cast<u32>(list.commands.size());
+			UICommand push;
+			push.kind = UICommandKind::PushLayer;
+			push.z = effectiveZ;
+			list.commands.push_back(push);
+
+			state.ink = Rect{};
+			PaintElement(state, index, local, ZeroRadii, 1.0f, inheritedZ, 1.0f);
+			const Rect drawn = state.ink;
+
+			const Rect shown = RectIntersect(drawn, local);
+			const bool visible = shown.w > 0.0f && shown.h > 0.0f;
+			const Rect layer = visible ? PadToPixels(shown, TURNED_LAYER_PAD_PX) : Rect{};
+			list.commands[pushIndex].layerBounds = layer;
+			UICommand pop;
+			pop.kind = UICommandKind::PopLayer;
+			pop.z = effectiveZ;
+			pop.layerBounds = layer;
+			list.commands.push_back(pop);
+
+			if (visible) {
+				const Vec2 center = TurnPoint(turn, {layer.x + layer.w * 0.5f, layer.y + layer.h * 0.5f});
+				UIQuad composite;
+				composite.rect = {center.x - layer.w * 0.5f, center.y - layer.h * 0.5f, layer.w, layer.h};
+				composite.uv = {0.0f, 0.0f, 1.0f, 1.0f};
+				composite.color0 = Color(1.0f, 1.0f, 1.0f, opacity * std::clamp(style.opacity, 0.0f, 1.0f));
+				composite.color1 = composite.color0;
+				composite.clipRect = clipRect;
+				composite.clipRadii = clipRadii;
+				composite.rotation = turn.rads;
+				composite.flags = QUAD_FLAG_PREMULTIPLIED | QUAD_FLAG_ROTATED;
+				UICommand command;
+				command.kind = UICommandKind::Quads;
+				command.sampler = SamplerKind::LinearClamp;
+				command.z = effectiveZ;
+				command.texture = LayerCompositeTexture;
+				command.firstQuad = static_cast<u32>(list.quads.size());
+				command.quadCount = 1;
+				list.quads.push_back(composite);
+				list.commands.push_back(command);
+			}
+
+			const Rect footprint = drawn.w > 0.0f && drawn.h > 0.0f ? TurnBounds(turn, PadToPixels(drawn, TURNED_LAYER_PAD_PX), false) : Rect{};
+			ctx.Ink(index) = footprint;
+			state.ink = RectUnion(parentInk, footprint);
+			state.frame = parentFrame;
+			state.maskRect = savedMaskRect;
+			state.maskRadii = savedMaskRadii;
+			state.hasMask = savedHasMask;
+		}
+
+		void BuildElement(PaintState& state, u32 index, Rect clipRect, Radii clipRadii, f32 opacity, i32 inheritedZ) {
+			ContextImpl& ctx = *state.ctx;
+			const Element& element = ctx.E(index);
+			const Style& style = ctx.ComputedS(index);
+			++ctx.paintStats.elementsVisited;
+			if (!HasFlag(element.flags, ElementFlags::Visible) || style.display == Display::None) {
+				ctx.Ink(index) = Rect{};
+				return;
+			}
+			++ctx.paintStats.elementsPainted;
+			if (style.rotate != 0.0f) {
+				const ElementTurn turn = ctx.TurnOf(index);
+				if (turn.turned) {
+					PaintTurned(state, index, turn, clipRect, clipRadii, opacity, inheritedZ);
+					return;
+				}
+			}
+			PaintElement(state, index, clipRect, clipRadii, opacity, inheritedZ, style.opacity);
+		}
+
 		bool OpensScope(UICommandKind kind) {
 			return kind == UICommandKind::PushLayer || kind == UICommandKind::PushShadow;
 		}
@@ -1277,6 +1370,7 @@ namespace Shalltear::UI {
 			state.ctx = &ctx;
 			state.list = &out;
 			state.scale = std::max(0.0f, ctx.desc.contentScale);
+			state.frame = ContextRect(ctx);
 			BuildElement(state, ctx.root, InfiniteClip, ZeroRadii, 1.0f, 0);
 
 			if (state.atlasUsed.x > 0 && state.atlasUsed.y > 0) {

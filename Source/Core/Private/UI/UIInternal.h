@@ -17,6 +17,7 @@
 
 #include "UI/RichText.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -68,6 +69,39 @@ namespace Shalltear::UI {
 		f32 x1 = (a.x + a.w) > (b.x + b.w) ? (a.x + a.w) : (b.x + b.w);
 		f32 y1 = (a.y + a.h) > (b.y + b.h) ? (a.y + a.h) : (b.y + b.h);
 		return {x0, y0, x1 - x0, y1 - y0};
+	}
+
+	// rads clockwise (+y down) about pivot, in parent's layout space
+	struct ElementTurn {
+		Vec2 pivot{};
+		f32 rads = 0.0f;
+		f32 cos = 1.0f;
+		f32 sin = 0.0f;
+		bool turned = false;
+	};
+
+	[[nodiscard]] inline Vec2 TurnPoint(const ElementTurn& turn, Vec2 point) {
+		const f32 dx = point.x - turn.pivot.x;
+		const f32 dy = point.y - turn.pivot.y;
+		return {turn.pivot.x + dx * turn.cos - dy * turn.sin, turn.pivot.y + dx * turn.sin + dy * turn.cos};
+	}
+
+	[[nodiscard]] inline Vec2 UnturnPoint(const ElementTurn& turn, Vec2 point) {
+		const f32 dx = point.x - turn.pivot.x;
+		const f32 dy = point.y - turn.pivot.y;
+		return {turn.pivot.x + dx * turn.cos + dy * turn.sin, turn.pivot.y - dx * turn.sin + dy * turn.cos};
+	}
+
+	[[nodiscard]] inline Rect TurnBounds(const ElementTurn& turn, const Rect& rect, bool inverse) {
+		const Vec2 corners[4] = {{rect.x, rect.y}, {rect.x + rect.w, rect.y}, {rect.x, rect.y + rect.h}, {rect.x + rect.w, rect.y + rect.h}};
+		Vec2 low{INFINITY, INFINITY};
+		Vec2 high{-INFINITY, -INFINITY};
+		for (const Vec2& corner : corners) {
+			const Vec2 moved = inverse ? UnturnPoint(turn, corner) : TurnPoint(turn, corner);
+			low = {std::min(low.x, moved.x), std::min(low.y, moved.y)};
+			high = {std::max(high.x, moved.x), std::max(high.y, moved.y)};
+		}
+		return {low.x, low.y, high.x - low.x, high.y - low.y};
 	}
 
 	struct TextMetrics {
@@ -470,6 +504,9 @@ namespace Shalltear::UI {
 		void ExpireDeadPointerClaim();
 		u32 HitTestIndex(Vec2 point, HitTestMode mode) const;
 		u32 HitTestRecursive(u32 index, Vec2 point, HitTestMode mode, const Rect* clip) const;
+		ElementTurn TurnOf(u32 index) const;
+		// context px -> index's layout space (own rotate undone too)
+		Vec2 ToLayoutSpace(u32 index, Vec2 point) const;
 		void SetHovered(u32 index);
 		void SetFocused(u32 index);
 		struct CaretMark {

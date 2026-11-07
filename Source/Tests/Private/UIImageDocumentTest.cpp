@@ -9,6 +9,7 @@
 #include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/Context.h"
 #include "Shalltear/Core/UI/UIDocument.h"
+#include "Shalltear/Core/UI/WidgetRegistry.h"
 
 #include "Shalltear/Editor/UIDocumentOps.h"
 
@@ -43,6 +44,20 @@ namespace {
 		list.Push(entry);
 	}
 
+	constexpr std::string_view SpriteOnly[] = {"SpriteAsset"};
+	constexpr UI::WidgetAttribute IconAttributes[] = {
+		{"icon", UI::WidgetAttributeType::Asset, {}, SpriteOnly},
+	};
+	const int IconOwner = 0;
+	const Asset* _iconReceived = nullptr;
+
+	UI::WidgetResult MakeIcon(UI::Context& context, UI::ElementHandle parent, const UI::WidgetArgs& args) {
+		_iconReceived = args.GetAsset("icon");
+		UI::ElementHandle element = context.CreateElement();
+		context.AppendChild(parent, element);
+		return {element, {}};
+	}
+
 	class UIImageDocumentFixture : public ::testing::Test {
 	protected:
 		std::filesystem::path _root;
@@ -73,6 +88,7 @@ namespace {
 			for (Asset* asset : _held) {
 				AssetDatabase::UnloadAsset(asset);
 			}
+			UI::WidgetRegistry::UnregisterOwnedBy(&IconOwner);
 			AssetDatabase::Terminate();
 			FileSystem::Unmount("project");
 			std::error_code ec;
@@ -305,4 +321,47 @@ TEST_F(UIImageDocumentFixture, BuilderEditResolvesNewSource) {
 	ASSERT_EQ(document->assets.size(), 1u);
 	EXPECT_EQ(document->assets[0].asset->assetId, SpriteGuid("Sprites/star"));
 	EXPECT_NE(document->Write().find("#Star"), str::npos);
+}
+
+TEST_F(UIImageDocumentFixture, CustomWidgetGetsDeclaredAsset) {
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &IconOwner));
+	Write("Hud.slxml", R"(<ui version="1"><panel><image src="project://Atlas.tga#Star"/><item-icon icon="project://Atlas.tga#Star"/></panel></ui>)");
+	UIDocumentAsset* document = Load("Hud.slxml");
+	ASSERT_NE(document, nullptr);
+	EXPECT_EQ(document->assets.size(), 1u);
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	_iconReceived = nullptr;
+	document->Instantiate(ctx, ctx.GetRoot());
+	ASSERT_NE(_iconReceived, nullptr);
+	EXPECT_EQ(_iconReceived->assetId, SpriteGuid("Sprites/star"));
+}
+
+TEST_F(UIImageDocumentFixture, RepeatedSourceCheckedPerWidget) {
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &IconOwner));
+	for (std::string_view body : {R"(<image src="project://Atlas.tga"/><item-icon icon="project://Atlas.tga"/>)",
+								  R"(<item-icon icon="project://Atlas.tga"/><image src="project://Atlas.tga"/>)"}) {
+		UIDocumentAsset document;
+		str error;
+		ASSERT_TRUE(document.Parse(str(R"(<ui version="1"><panel>)") + str(body) + str("</panel></ui>"), error)) << error;
+		EXPECT_FALSE(document.ResolveAssetReferences(error)) << body;
+		EXPECT_NE(error.find("<item-icon>"), str::npos) << error;
+		EXPECT_NE(error.find("SpriteAsset"), str::npos) << error;
+		EXPECT_TRUE(document.assets.empty());
+	}
+
+	Write("Hud.slxml", R"(<ui version="1"><panel><image src="project://Atlas.tga"/><item-icon icon="project://Atlas.tga#Star"/></panel></ui>)");
+	UIDocumentAsset* document = Load("Hud.slxml");
+	ASSERT_NE(document, nullptr);
+	ASSERT_EQ(document->assets.size(), 2u);
+	str error;
+	EXPECT_FALSE(UIDocumentOps::SetAttribute(*document, 2, "icon", "project://Atlas.tga", error));
+	EXPECT_NE(error.find("SpriteAsset"), str::npos) << error;
+	EXPECT_EQ(document->assets.size(), 2u);
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	_iconReceived = nullptr;
+	document->Instantiate(ctx, ctx.GetRoot());
+	ASSERT_NE(_iconReceived, nullptr);
+	EXPECT_EQ(_iconReceived->assetId, SpriteGuid("Sprites/star"));
 }

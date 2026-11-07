@@ -712,14 +712,24 @@ namespace Shalltear {
 
 		void CollectAssetUses(const UIDocumentAsset& document, Vector<AssetUse>& out) {
 			out.clear();
-			ForEachAssetAttribute(document, document.root, [&out](const AssetUse& use) {
-				for (const AssetUse& seen : out) {
-					if (seen.src == use.src) {
-						return;
-					}
+			ForEachAssetAttribute(document, document.root, [&out](const AssetUse& use) { out.push_back(use); });
+		}
+
+		bool IsFirstUse(const Vector<AssetUse>& uses, size_t index) {
+			for (size_t i = 0; i < index; ++i) {
+				if (uses[i].src == uses[index].src) {
+					return false;
 				}
-				out.push_back(use);
-			});
+			}
+			return true;
+		}
+
+		u32 CountDistinctUses(const Vector<AssetUse>& uses) {
+			u32 distinct = 0;
+			for (size_t i = 0; i < uses.size(); ++i) {
+				distinct += IsFirstUse(uses, i) ? 1u : 0u;
+			}
+			return distinct;
 		}
 
 		bool IsAcceptedAsset(const Asset& asset, const UI::WidgetAttribute& declared) {
@@ -732,6 +742,15 @@ namespace Shalltear {
 				}
 			}
 			return false;
+		}
+
+		const AssetUse* FindRefusingUse(const Vector<AssetUse>& uses, std::string_view src, const Asset& asset) {
+			for (const AssetUse& use : uses) {
+				if (use.src == src && !IsAcceptedAsset(asset, *use.declared)) {
+					return &use;
+				}
+			}
+			return nullptr;
 		}
 
 		str SpellAssetTypes(const UI::WidgetAttribute& declared) {
@@ -782,24 +801,30 @@ namespace Shalltear {
 		bool BindCookedAssets(UIDocumentAsset& document, CookReader& descriptor, str& error) {
 			Vector<AssetUse> uses{GetMemoryResource(MemTag::Asset)};
 			CollectAssetUses(document, uses);
+			const u32 distinct = CountDistinctUses(uses);
 			u32 count = 0;
 			descriptor.Read(count);
-			if (descriptor.Failed() || count != uses.size()) {
+			if (descriptor.Failed() || count != distinct) {
 				error = str("the cooked record has ") + std::to_string(count) + str(" asset reference(s), the document has ") +
-						std::to_string(uses.size());
+						std::to_string(distinct);
 				return false;
 			}
 			Vector<UIDocumentAssetRef> bound{GetMemoryResource(MemTag::Asset)};
-			for (const AssetUse& use : uses) {
+			for (size_t i = 0; i < uses.size(); ++i) {
+				if (!IsFirstUse(uses, i)) {
+					continue;
+				}
+				const AssetUse& use = uses[i];
 				Guid guid{};
 				descriptor.Read(guid);
 				Asset* loaded = descriptor.Failed() ? nullptr : AssetDatabase::LoadAssetByGuid(guid);
-				if (!loaded || !IsAcceptedAsset(*loaded, *use.declared)) {
+				const AssetUse* refusing = loaded ? FindRefusingUse(uses, use.src, *loaded) : &use;
+				if (refusing) {
 					if (loaded) {
 						AssetDatabase::UnloadAsset(loaded);
 					}
 					ReleaseAssetRefs(bound);
-					error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (not in the package)"));
+					error = Refuse(refusing->tag, str("uses '") + str(use.src) + str("' (not in the package)"));
 					return false;
 				}
 				bound.push_back(UIDocumentAssetRef{str(use.src), Handle<Asset>(loaded)});
@@ -1387,17 +1412,21 @@ namespace Shalltear {
 		Vector<AssetUse> uses{GetMemoryResource(MemTag::Asset)};
 		CollectAssetUses(*this, uses);
 		Vector<UIDocumentAssetRef> resolved{GetMemoryResource(MemTag::Asset)};
-		for (const AssetUse& use : uses) {
+		for (size_t i = 0; i < uses.size(); ++i) {
+			if (!IsFirstUse(uses, i)) {
+				continue;
+			}
+			const AssetUse& use = uses[i];
 			Asset* loaded = LoadReferencedAsset(use.src);
 			if (!loaded) {
 				ReleaseAssetRefs(resolved);
 				error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (didn't load)"));
 				return false;
 			}
-			if (!IsAcceptedAsset(*loaded, *use.declared)) {
+			if (const AssetUse* refusing = FindRefusingUse(uses, use.src, *loaded)) {
 				AssetDatabase::UnloadAsset(loaded);
 				ReleaseAssetRefs(resolved);
-				error = Refuse(use.tag, str("uses '") + str(use.src) + str("' (not a ") + SpellAssetTypes(*use.declared) + str(")"));
+				error = Refuse(refusing->tag, str("uses '") + str(use.src) + str("' (not a ") + SpellAssetTypes(*refusing->declared) + str(")"));
 				return false;
 			}
 			resolved.push_back(UIDocumentAssetRef{str(use.src), Handle<Asset>(loaded)});

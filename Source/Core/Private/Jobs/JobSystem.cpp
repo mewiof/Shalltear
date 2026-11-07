@@ -1,6 +1,7 @@
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Assert.h"
 #include "Shalltear/Core/Log.h"
+#include "Shalltear/Core/Memory.h"
 
 #include "Module/EngineStateTable.h"
 
@@ -386,6 +387,94 @@ namespace Shalltear {
 
 	u32 JobSystem::GetWorkerCount() {
 		return _data ? static_cast<u32>(_data->workerThreads.size()) : 0;
+	}
+
+	namespace {
+
+		struct LaneRun {
+			void (*call)(const void*, u32, u32, u32) = nullptr;
+			const void* body = nullptr;
+			u32 lanes = 0;
+			u32 count = 0;
+			u32 helpers = 0;
+			std::atomic<u32> next{1};
+			std::atomic<u32> done{0};
+			std::atomic<u32> spawned{0};
+			std::atomic<u32> refs{1};
+		};
+
+		u32 LaneFirst(u32 count, u32 lanes, u32 lane) {
+			return static_cast<u32>(static_cast<u64>(count) * lane / lanes);
+		}
+
+		void RunLane(LaneRun& run, u32 lane) {
+			run.call(run.body, lane, LaneFirst(run.count, run.lanes, lane), LaneFirst(run.count, run.lanes, lane + 1));
+			run.done.fetch_add(1, std::memory_order_release);
+		}
+
+		void RunClaimedLanes(LaneRun& run) {
+			for (u32 lane = run.next.fetch_add(1, std::memory_order_relaxed); lane < run.lanes;
+				 lane = run.next.fetch_add(1, std::memory_order_relaxed)) {
+				RunLane(run, lane);
+			}
+		}
+
+		void ReleaseLaneRun(LaneRun* run) {
+			if (run->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+				Delete(run);
+			}
+		}
+
+		void SpawnHelpers(LaneRun* run) {
+			constexpr u32 FANOUT = 2;
+			for (u32 i = 0; i < FANOUT && run->next.load(std::memory_order_relaxed) < run->lanes; ++i) {
+				if (run->spawned.fetch_add(1, std::memory_order_relaxed) >= run->helpers) {
+					return;
+				}
+				run->refs.fetch_add(1, std::memory_order_relaxed);
+				JobSystem::Submit([run]() {
+					SpawnHelpers(run);
+					RunClaimedLanes(*run);
+					ReleaseLaneRun(run);
+				});
+			}
+		}
+
+	} // namespace
+
+	u32 JobSystem::LaneCount(u32 count, u32 minPerLane) {
+		constexpr u32 LANES_PER_THREAD = 4;
+		const u32 workers = GetWorkerCount();
+		if (workers == 0) {
+			return 1;
+		}
+		const u32 wanted = std::max(1u, count / std::max(1u, minPerLane));
+		return std::min({wanted, (workers + 1) * LANES_PER_THREAD, MAX_LANES});
+	}
+
+	void JobSystem::RunLanes(u32 lanes, u32 count, LaneFunc call, const void* body) {
+		SLT_CORE_ASSERT_MSG(lanes >= 1 && lanes <= MAX_LANES, "lane count must be 1 to {} (got {})", MAX_LANES, lanes);
+		const u32 helpers = std::min(lanes - 1, GetWorkerCount());
+		if (helpers == 0) {
+			for (u32 lane = 0; lane < lanes; ++lane) {
+				call(body, lane, LaneFirst(count, lanes, lane), LaneFirst(count, lanes, lane + 1));
+			}
+			return;
+		}
+		// shared with late helpers (freed by last reference)
+		LaneRun* run = New<LaneRun>(MemTag::Core);
+		run->call = call;
+		run->body = body;
+		run->lanes = lanes;
+		run->count = count;
+		run->helpers = helpers;
+		SpawnHelpers(run);
+		RunLane(*run, 0);
+		RunClaimedLanes(*run);
+		while (run->done.load(std::memory_order_acquire) < lanes) {
+			std::this_thread::yield();
+		}
+		ReleaseLaneRun(run);
 	}
 
 } // namespace Shalltear

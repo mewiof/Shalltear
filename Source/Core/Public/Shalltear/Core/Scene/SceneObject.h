@@ -11,6 +11,7 @@
 #include "Shalltear/Core/Scene/Component.h"
 #include "Shalltear/Core/Types.h"
 
+#include <atomic>
 #include <string_view>
 
 namespace Shalltear {
@@ -57,6 +58,7 @@ namespace Shalltear {
 		Vec3 GetLocalScale() const { return _localScale; }
 		void SetLocalScale(const Vec3& scale);
 
+		// can be called from multiple threads if transforms aren't modified
 		const Mat4& GetWorldMatrix() const;
 		Vec3 GetWorldPosition() const;
 		void SetWorldPosition(const Vec3& position);
@@ -165,8 +167,14 @@ namespace Shalltear {
 		Vec3 _localPosition{};
 		Quat _localRotation = Quat::Identity();
 		Vec3 _localScale{1.0f, 1.0f, 1.0f};
-		mutable Mat4 _worldMatrix; // valid only when not _worldDirty
-		mutable bool _worldDirty = true;
+		enum class WorldState : u8 {
+			Clean,
+			Dirty,
+			Computing,
+		};
+
+		mutable Mat4 _worldMatrix; // valid only when _worldState is Clean
+		mutable std::atomic<WorldState> _worldState{WorldState::Dirty};
 		ScaleKind _scaleKind = ScaleKind::Identity;
 		bool _activeSelf = true;
 		bool _activeInHierarchy = false;

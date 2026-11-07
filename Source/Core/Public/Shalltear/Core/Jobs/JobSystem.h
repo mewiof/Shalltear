@@ -70,9 +70,23 @@ namespace Shalltear {
 		}
 
 		static u32 GetWorkerCount();
+
+		static constexpr u32 MAX_LANES = 64;
+
+		// up to 4 per thread, each >= minPerLane items (1 without workers)
+		static u32 LaneCount(u32 count, u32 minPerLane);
+
+		// lane 0 on caller thread, wait limited to own lanes
+		template <typename Fn>
+		static void ParallelFor(u32 lanes, u32 count, const Fn& fn) {
+			RunLanes(lanes, count, [](const void* body, u32 lane, u32 first, u32 end) { (*static_cast<const Fn*>(body))(lane, first, end); }, &fn);
+		}
 	private:
 		using JobConstructFunc = void (*)(void* dest, void* src);
 		static JobHandle SubmitPayload(void (*func)(void*), JobConstructFunc construct, void* srcPayload, std::span<const JobHandle> dependencies, JobType type);
+
+		using LaneFunc = void (*)(const void* body, u32 lane, u32 first, u32 end);
+		static void RunLanes(u32 lanes, u32 count, LaneFunc call, const void* body);
 	};
 
 } // namespace Shalltear

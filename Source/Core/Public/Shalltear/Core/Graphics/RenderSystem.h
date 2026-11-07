@@ -148,6 +148,7 @@ namespace Shalltear {
 		u32 proceduralDrawn = 0;
 		u32 proceduralCulled = 0;
 		u32 drawCallsSaved = 0;
+		u32 extractionLanes = 0;
 	};
 
 	class SHALLTEAR_CORE_API RenderSystem {

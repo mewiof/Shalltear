@@ -25,6 +25,7 @@
 #include "Shalltear/Core/Graphics/SkinAsset.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Math.h"
 #include "Shalltear/Core/Math/HalfFloat.h"
@@ -363,6 +364,8 @@ namespace Shalltear {
 		static_assert(sizeof(GPUDebugVertex) == 16);
 
 		constexpr size_t EXTRACTION_ARENA_BYTES = 2 * 1024 * 1024;
+		constexpr size_t LANE_ARENA_BYTES = 256 * 1024;
+		constexpr u32 RENDERERS_PER_LANE = 256;
 
 		constexpr RHI::Format SCENE_COLOR_FORMAT = RHI::Format::RGBA16Float;
 		constexpr RHI::Format SCENE_DEPTH_FORMAT = RHI::Format::D32Float;
@@ -386,6 +389,8 @@ namespace Shalltear {
 		constexpr RHI::Format SHADOW_ATLAS_FORMAT = RHI::Format::D32Float;
 
 		constexpr f32 SHADOW_CASTER_DISTANCE = 200.0f;
+
+		struct ExtractionLane;
 
 		class RenderState : public Object {
 		public:
@@ -596,6 +601,8 @@ namespace Shalltear {
 			IWindowOverlay* overlay = nullptr;
 
 			LinearAllocator* extractionArena = nullptr;
+			Vector<ExtractionLane*> extractionLanes{GetMemoryResource(MemTag::Graphics)};
+			MaterialAsset* errorMaterial = nullptr;
 
 			struct CameraWork {
 				Camera* camera = nullptr;
@@ -885,6 +892,8 @@ namespace Shalltear {
 			u32 lastProceduralCulled = 0;
 			u32 frameDrawCallsSaved = 0;
 			u32 lastDrawCallsSaved = 0;
+			u32 frameExtractionLanes = 0;
+			u32 lastExtractionLanes = 0;
 
 			Vector<GraphicsInternal::LightCandidate> lightCandidates{GetMemoryResource(MemTag::Graphics)};
 			Vector<u32> clusterTable{GetMemoryResource(MemTag::Graphics)};
@@ -1449,6 +1458,28 @@ namespace Shalltear {
 			u32 samplerBinding = 0;
 		};
 
+		enum class MeshDrawRefusal : u8;
+
+		// applied on main thread, in walk order
+		struct LaneDeferral {
+			enum class Kind : u8 {
+				Sampler,
+				Fallback,
+				Mismatch,
+				Refusal,
+			};
+			Kind kind = Kind::Sampler;
+			DrawTexture* out = nullptr;
+			const TextureAsset* texture = nullptr;
+			ShaderAsset* shader = nullptr;
+			const MaterialAsset* material = nullptr;
+			const ShaderResourceInfo* slot = nullptr;
+			u64 key = 0;
+			RHI::TextureDimension dimension = RHI::TextureDimension::Texture2D;
+			ShaderTextureFallback fallback = ShaderTextureFallback::White;
+			MeshDrawRefusal refusal{};
+		};
+
 		struct DrawMaterial {
 			ShaderAsset* shader = nullptr;
 			u32 variant = SHADER_BASE_VARIANT;
@@ -1495,10 +1526,28 @@ namespace Shalltear {
 			return bits >> 22;
 		}
 
+		constexpr u32 LANE_ENTRY_BITS = 26;
+		static_assert(JobSystem::MAX_LANES <= (1u << (32 - LANE_ENTRY_BITS)));
+
 		struct DrawOrder {
 			u64 key[3] = {};
 			f32 depth = 0.0f;
-			u32 entry = 0;
+			u32 entry = 0; // lane << LANE_ENTRY_BITS | index into lane's entries
+		};
+
+		// entry = last tie-break (order should not depend on lane count)
+		struct DrawOrderLess {
+			bool operator()(const DrawOrder& a, const DrawOrder& b) const {
+				for (u32 word = 0; word < 3; ++word) {
+					if (a.key[word] != b.key[word]) {
+						return a.key[word] < b.key[word];
+					}
+				}
+				if (a.depth != b.depth) {
+					return a.depth < b.depth;
+				}
+				return a.entry < b.entry;
+			}
 		};
 
 		// an id's low 32 bits = its live registry slot
@@ -1570,23 +1619,48 @@ namespace Shalltear {
 			return state.fallbackTextures[d][k];
 		}
 
-		RHI::SamplerHandle TextureSampler(RenderState& state, const TextureAsset& texture) {
+		u32 TextureSamplerKey(const RenderState& state, const TextureAsset& texture, RHI::SamplerDesc& outDesc) {
 			const bool volume = texture.GetDimension() == RHI::TextureDimension::Texture3D;
-			const RHI::SamplerDesc desc =
-				GraphicsInternal::TextureSamplerDesc(texture.settings, volume, state.anisotropicFiltering, state.maxAnisotropy);
-			const u32 key = static_cast<u32>(desc.filter) | static_cast<u32>(desc.mipFilter) << 1 | static_cast<u32>(desc.addressMode) << 2 |
-							static_cast<u32>(desc.maxAnisotropy) << 4;
+			outDesc = GraphicsInternal::TextureSamplerDesc(texture.settings, volume, state.anisotropicFiltering, state.maxAnisotropy);
+			return static_cast<u32>(outDesc.filter) | static_cast<u32>(outDesc.mipFilter) << 1 | static_cast<u32>(outDesc.addressMode) << 2 |
+				   static_cast<u32>(outDesc.maxAnisotropy) << 4;
+		}
+
+		const RenderState::CachedSampler* FindTextureSampler(const RenderState& state, u32 key) {
 			for (const RenderState::CachedSampler& cached : state.textureSamplers) {
 				if (cached.key == key) {
-					return cached.handle;
+					return &cached;
 				}
+			}
+			return nullptr;
+		}
+
+		RHI::SamplerHandle TextureSampler(RenderState& state, const TextureAsset& texture) {
+			RHI::SamplerDesc desc;
+			const u32 key = TextureSamplerKey(state, texture, desc);
+			if (const RenderState::CachedSampler* cached = FindTextureSampler(state, key)) {
+				return cached->handle;
 			}
 			const RHI::SamplerHandle handle = state.device->CreateSamplerResource(desc);
 			state.textureSamplers.push_back({key, handle});
 			return handle;
 		}
 
-		void ResolveMaterialTextures(DrawMaterial& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source) {
+		void WarnDimensionMismatch(RenderState& state, u64 key, const MaterialAsset& source, const ShaderResourceInfo& slot,
+								   const TextureAsset& texture) {
+			if (std::find(state.dimensionMismatchesWarned.begin(), state.dimensionMismatchesWarned.end(), key) !=
+				state.dimensionMismatchesWarned.end()) {
+				return;
+			}
+			state.dimensionMismatchesWarned.push_back(key);
+			SLT_LOG_WARN("Graphics", "material '{}': slot '{}' samples a {} texture and '{}' is {} (drawing its fallback)",
+						 source.virtualPath, slot.name, RHI::TextureDimensionName(slot.dimension), texture.virtualPath,
+						 RHI::TextureDimensionName(texture.GetDimension()));
+		}
+
+		// defer set -> no state write/RHI call (safe on a lane)
+		void ResolveMaterialTextures(DrawMaterial& entry, LinearAllocator& arena, ShaderAsset* target, const MaterialAsset* source,
+									 Vector<LaneDeferral>* defer = nullptr) {
 			RenderState& state = *_state;
 			u32 slotCount = target ? CountMaterialTextureSlots(*target) : 0;
 			if (slotCount == 0) {
@@ -1603,23 +1677,52 @@ namespace Shalltear {
 				if (texture && texture->texture.IsValid()) {
 					if (texture->GetDimension() == slot.dimension) {
 						out.texture = texture->texture;
-						out.sampler = TextureSampler(state, *texture);
+						if (!defer) {
+							out.sampler = TextureSampler(state, *texture);
+						} else {
+							RHI::SamplerDesc desc;
+							if (const RenderState::CachedSampler* cached = FindTextureSampler(state, TextureSamplerKey(state, *texture, desc))) {
+								out.sampler = cached->handle;
+							} else {
+								LaneDeferral& deferred = defer->emplace_back();
+								deferred.kind = LaneDeferral::Kind::Sampler;
+								deferred.out = &out;
+								deferred.texture = texture;
+							}
+						}
 					} else {
 						auto mix = [](u64 hash, u64 value) { return (hash ^ value) * 0x100000001B3ull; };
 						const u64 key = mix(mix(mix(mix(0xCBF29CE484222325ull, source->assetId.low), source->assetId.high),
 												StringHash(std::string_view{slot.name}).GetValue()),
 											texture->assetId.low ^ texture->assetId.high);
-						if (std::find(state.dimensionMismatchesWarned.begin(), state.dimensionMismatchesWarned.end(), key) ==
-							state.dimensionMismatchesWarned.end()) {
-							state.dimensionMismatchesWarned.push_back(key);
-							SLT_LOG_WARN("Graphics", "material '{}': slot '{}' samples a {} texture and '{}' is {} (drawing its fallback)",
-										 source->virtualPath, slot.name, RHI::TextureDimensionName(slot.dimension), texture->virtualPath,
-										 RHI::TextureDimensionName(texture->GetDimension()));
+						if (!defer) {
+							WarnDimensionMismatch(state, key, *source, slot, *texture);
+						} else {
+							LaneDeferral& deferred = defer->emplace_back();
+							deferred.kind = LaneDeferral::Kind::Mismatch;
+							deferred.texture = texture;
+							deferred.material = source;
+							deferred.slot = &slot;
+							deferred.key = key;
 						}
 					}
 				}
 				if (!out.texture.IsValid()) {
-					out.texture = FallbackTexture(state, slot.dimension, target->GetTextureFallback(slot.name));
+					const ShaderTextureFallback fallback = target->GetTextureFallback(slot.name);
+					if (!defer) {
+						out.texture = FallbackTexture(state, slot.dimension, fallback);
+					} else {
+						const u32 d = static_cast<u32>(slot.dimension);
+						const u32 k = static_cast<u32>(fallback);
+						out.texture = state.fallbackTextures[d][k];
+						if (!out.texture.IsValid() && !state.fallbackRefused[d][k]) {
+							LaneDeferral& deferred = defer->emplace_back();
+							deferred.kind = LaneDeferral::Kind::Fallback;
+							deferred.out = &out;
+							deferred.dimension = slot.dimension;
+							deferred.fallback = fallback;
+						}
+					}
 					out.sampler = state.repeatSampler;
 				}
 				if (!out.sampler.IsValid()) {
@@ -1935,7 +2038,8 @@ namespace Shalltear {
 		// results valid until arena reset
 		class DrawMaterials {
 		public:
-			DrawMaterials(LinearAllocator& arena, ShaderAsset* errorShader) : _arena(arena), _errorShader(errorShader) {}
+			DrawMaterials(LinearAllocator& arena, ShaderAsset* errorShader, const MaterialAsset& errorMaterial, Vector<LaneDeferral>& defer)
+				: _arena(arena), _errorShader(errorShader), _errorMaterial(errorMaterial), _defer(defer) {}
 
 			bool Resolve(MaterialAsset* material, DrawMaterial& out) {
 				if (!material) {
@@ -1983,7 +2087,11 @@ namespace Shalltear {
 				ShaderAsset* shader = material.shader.Get();
 				if (shader) {
 					if (const MeshDrawRefusal refusal = ClassifyMeshDraw(*shader, material); refusal != MeshDrawRefusal::None) {
-						NameMeshDrawRefusal(*shader, material, refusal);
+						LaneDeferral& deferred = _defer.emplace_back();
+						deferred.kind = LaneDeferral::Kind::Refusal;
+						deferred.shader = shader;
+						deferred.material = &material;
+						deferred.refusal = refusal;
 						shader = nullptr;
 					}
 				}
@@ -1995,7 +2103,7 @@ namespace Shalltear {
 				out.materialId = material.GetInstanceId();
 				out.sortGroup = SortGroupOf(*shader, out.materialId);
 				PackMaterialBlock(out, _arena, shader, &material);
-				ResolveMaterialTextures(out, _arena, shader, &material);
+				ResolveMaterialTextures(out, _arena, shader, &material, &_defer);
 				out.renderState = material.ResolveRenderState(shader->renderState);
 				out.alphaClipThreshold = material.alphaClipThreshold;
 				out.sortingPriority = material.sortingPriority;
@@ -2009,10 +2117,8 @@ namespace Shalltear {
 					DrawMaterial* error = _arena.Construct<DrawMaterial>();
 					error->shader = _errorShader;
 					error->sortGroup = SortGroupOf(*_errorShader, 0);
-					MaterialAsset errorMaterial;
-					errorMaterial.SetColor("baseColor", Color::Magenta());
-					PackMaterialBlock(*error, _arena, _errorShader, &errorMaterial);
-					ResolveMaterialTextures(*error, _arena, _errorShader, nullptr);
+					PackMaterialBlock(*error, _arena, _errorShader, &_errorMaterial);
+					ResolveMaterialTextures(*error, _arena, _errorShader, nullptr, &_defer);
 					error->renderState = _errorShader->renderState;
 					_error = error;
 				}
@@ -2025,49 +2131,49 @@ namespace Shalltear {
 
 			LinearAllocator& _arena;
 			ShaderAsset* _errorShader = nullptr;
+			const MaterialAsset& _errorMaterial;
+			Vector<LaneDeferral>& _defer;
 			const DrawMaterial* _error = nullptr;
 			Slot* _slots = nullptr;
 			const MaterialAsset* _lastKey = nullptr;
 			const DrawMaterial* _lastValue = nullptr;
 		};
 
-		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
-									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
-									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
-			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
-								"a draw's volume mask is 1 bit per shadow map");
-			RenderState& state = *_state;
-			RHI::Device& device = *state.device;
-			const bool isolated = kind != SceneKind::World;
-			const Vector<Handle<MeshRenderer>>& meshRenderers = isolated ? state.isolatedMeshRenderers : state.meshRenderers;
-			const Vector<Handle<SkinnedMeshRenderer>>& skinnedRenderers = isolated ? state.isolatedSkinnedMeshRenderers : state.skinnedMeshRenderers;
-			const Vector<RenderState::SkinnedOutput>& skinnedOutputs = isolated ? state.isolatedSkinnedOutputs : state.skinnedOutputs;
+		struct ExtractionLane {
+			LinearAllocator* arena = nullptr;
+			bool ownsArena = false;
+			Vector<DrawEntry*> entries{GetMemoryResource(MemTag::Graphics)};
+			Vector<DrawOrder> orders{GetMemoryResource(MemTag::Graphics)};
+			Vector<DrawOrder> bucket{GetMemoryResource(MemTag::Graphics)};
+			Vector<LaneDeferral> deferred{GetMemoryResource(MemTag::Graphics)};
+		};
 
-			arena.Reset();
-			u32 drawCapacity = 0;
-			for (Handle<MeshRenderer> handle : meshRenderers) {
-				MeshRenderer* renderer = handle.Get();
-				if (renderer && renderer->GetMesh().IsValid()) {
-					MeshAsset* mesh = renderer->GetMesh().Get();
-					if (mesh) {
-						drawCapacity += static_cast<u32>(mesh->submeshes.size());
-					}
-				}
-			}
-			for (Handle<SkinnedMeshRenderer> handle : skinnedRenderers) {
-				SkinnedMeshRenderer* renderer = handle.Get();
-				if (renderer && renderer->GetMesh().IsValid()) {
-					MeshAsset* mesh = renderer->GetMesh().Get();
-					if (mesh) {
-						drawCapacity += static_cast<u32>(mesh->submeshes.size());
-					}
-				}
-			}
-			DrawEntry** drawList = arena.AllocateAs<DrawEntry*>(drawCapacity ? drawCapacity : 1);
-			DrawOrder* orders = arena.AllocateAs<DrawOrder>(drawCapacity ? drawCapacity : 1);
-			u32 drawCount = 0;
+		struct DrawWalk {
+			DrawListUse use = DrawListUse::View;
+			std::span<const u64> onlyScenes;
+			std::span<const GraphicsInternal::CullVolume> volumes;
+			Vec3 sortOrigin;
+			u32 renderingLayerMask = ~0u;
+			MaterialAsset* overrideMaterial = nullptr;
+			const Vector<Handle<MeshRenderer>>* meshRenderers = nullptr;
+			const Vector<Handle<SkinnedMeshRenderer>>* skinnedRenderers = nullptr;
+			const Vector<RenderState::SkinnedOutput>* skinnedOutputs = nullptr;
+			ShaderAsset* errorShader = nullptr;
+			const MaterialAsset* errorMaterial = nullptr;
+		};
 
-			DrawMaterials materials(arena, state.standardShader.Get());
+		// called on a job lane (no state write/RHI call)
+		void WalkRenderers(const DrawWalk& walk, ExtractionLane& lane, u32 laneIndex, u32 first, u32 end) {
+			lane.entries.clear();
+			lane.orders.clear();
+			lane.deferred.clear();
+			if (lane.ownsArena) {
+				lane.arena->Reset();
+			}
+			LinearAllocator& arena = *lane.arena;
+			DrawMaterials materials(arena, walk.errorShader, *walk.errorMaterial, lane.deferred);
+			const std::span<const GraphicsInternal::CullVolume> volumes = walk.volumes;
+			const u32 laneBits = laneIndex << LANE_ENTRY_BITS;
 
 			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world, u32 renderingLayerMask,
 								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
@@ -2087,8 +2193,8 @@ namespace Shalltear {
 						volumeMask |= 1ull << volume;
 					}
 				}
-				f32 depth = Vec3::DistanceSquared(sortOrigin, worldBounds.Center());
-				const u32 depthBand = use == DrawListUse::View ? DepthBand(depth) : 0u;
+				f32 depth = Vec3::DistanceSquared(walk.sortOrigin, worldBounds.Center());
+				const u32 depthBand = walk.use == DrawListUse::View ? DepthBand(depth) : 0u;
 				const bool mirrored = world.ToMat3().Determinant() < 0.0f;
 
 				for (const SubMesh& submesh : mesh->submeshes) {
@@ -2107,21 +2213,22 @@ namespace Shalltear {
 					entry->castShadows = castShadows;
 					entry->receiveShadows = receiveShadows;
 					entry->object = object;
-					orders[drawCount] = OrderOf(*entry, depthBand, drawCount);
-					drawList[drawCount++] = entry;
+					lane.orders.push_back(OrderOf(*entry, depthBand, laneBits | static_cast<u32>(lane.entries.size())));
+					lane.entries.push_back(entry);
 				}
 			};
 
 			auto passesSceneFilter = [&](const SceneObject& owner) {
-				if (onlyScenes.empty()) {
+				if (walk.onlyScenes.empty()) {
 					return true;
 				}
 				u64 sceneId = owner.GetScene().GetInstanceId();
-				return std::find(onlyScenes.begin(), onlyScenes.end(), sceneId) != onlyScenes.end();
+				return std::find(walk.onlyScenes.begin(), walk.onlyScenes.end(), sceneId) != walk.onlyScenes.end();
 			};
 
-			for (Handle<MeshRenderer> handle : meshRenderers) {
-				MeshRenderer* renderer = handle.Get();
+			const u32 meshCount = static_cast<u32>(walk.meshRenderers->size());
+			for (u32 index = first; index < Math::Min(end, meshCount); ++index) {
+				MeshRenderer* renderer = (*walk.meshRenderers)[index].Get();
 				if (!renderer) {
 					continue;
 				}
@@ -2133,16 +2240,18 @@ namespace Shalltear {
 				if (!owner || !passesSceneFilter(*owner)) {
 					continue;
 				}
-				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), use)) {
+				if ((renderer->GetRenderingLayerMask() & walk.renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), walk.use)) {
 					continue;
 				}
 				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(), renderer->GetRenderingLayerMask(),
 						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
-						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
+						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
 
-			for (size_t i = 0; i < skinnedRenderers.size(); ++i) {
-				SkinnedMeshRenderer* renderer = skinnedRenderers[i].Get();
+			const Vector<RenderState::SkinnedOutput>& skinnedOutputs = *walk.skinnedOutputs;
+			for (u32 index = Math::Max(first, meshCount); index < end; ++index) {
+				const u32 i = index - meshCount;
+				SkinnedMeshRenderer* renderer = (*walk.skinnedRenderers)[i].Get();
 				if (!renderer) {
 					continue;
 				}
@@ -2154,7 +2263,7 @@ namespace Shalltear {
 				if (!owner || !passesSceneFilter(*owner)) {
 					continue;
 				}
-				if ((renderer->GetRenderingLayerMask() & renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), use)) {
+				if ((renderer->GetRenderingLayerMask() & walk.renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), walk.use)) {
 					continue;
 				}
 
@@ -2165,58 +2274,163 @@ namespace Shalltear {
 				const RenderState::SkinnedOutput* skinned = i < skinnedOutputs.size() && skinnedOutputs[i].vertexAddress ? &skinnedOutputs[i] : nullptr;
 				emitDraws(mesh, skinned ? skinned->vertexAddress : mesh->vertexBufferAddress, skinned ? skinned->bounds : mesh->bounds, world,
 						  renderer->GetRenderingLayerMask(), renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
-						  [&](u32 slot) { return overrideMaterial ? overrideMaterial : renderer->GetMaterial(slot).Get(); });
+						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetMaterial(slot).Get(); });
 			}
-			std::sort(orders, orders + drawCount, [](const DrawOrder& a, const DrawOrder& b) {
-				for (u32 word = 0; word < 3; ++word) {
-					if (a.key[word] != b.key[word]) {
-						return a.key[word] < b.key[word];
-					}
-				}
-				return a.depth < b.depth;
-			});
-			DrawEntry** sorted = arena.AllocateAs<DrawEntry*>(drawCount ? drawCount : 1);
-			for (u32 i = 0; i < drawCount; ++i) {
-				sorted[i] = drawList[orders[i].entry];
-			}
-			drawList = sorted;
+			std::sort(lane.orders.begin(), lane.orders.end(), DrawOrderLess{});
+		}
 
-			u64 perDrawAddress = 0;
-			if (drawCount > 0) {
-				RHI::TransientAllocation allocation = device.AllocateTransient(static_cast<u64>(drawCount) * sizeof(GPUPerDraw), 16);
-				if (allocation.IsValid()) {
-					perDrawAddress = device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
-					GPUPerDraw* perDraw = static_cast<GPUPerDraw*>(allocation.cpu);
-					for (u32 i = 0; i < drawCount; ++i) {
-						const DrawEntry& entry = *drawList[i];
-						GPUPerDraw& element = perDraw[i];
-						element = GPUPerDraw{};
-						element.world = entry.world;
-						Mat3 rotationScale = entry.world.ToMat3();
-						Mat3 normalMatrix;
-						if (!rotationScale.TryInvert(normalMatrix)) {
-							normalMatrix = Mat3::Identity();
-						}
-						normalMatrix = normalMatrix.Transposed();
-						element.normalMatrix0 = Vec4(normalMatrix.GetColumn(0), 0.0f);
-						element.normalMatrix1 = Vec4(normalMatrix.GetColumn(1), 0.0f);
-						element.normalMatrix2 = Vec4(normalMatrix.GetColumn(2), 0.0f);
-						element.vertexAddress = entry.vertexAddress;
-						element.alphaClipThreshold = entry.alphaClipThreshold;
-						if (entry.receiveShadows && (!entry.alpha || state.transparentReceiveShadows)) {
-							element.flags |= DRAW_RECEIVES_SHADOWS;
-						}
-						element.flags |= static_cast<u32>(entry.renderState.blend) << DRAW_BLEND_SHIFT;
-					}
-				} else {
-					drawCount = 0;
+		void ApplyLaneDeferrals(RenderState& state, Vector<LaneDeferral>& deferred) {
+			for (const LaneDeferral& entry : deferred) {
+				switch (entry.kind) {
+				case LaneDeferral::Kind::Sampler: {
+					const RHI::SamplerHandle sampler = TextureSampler(state, *entry.texture);
+					entry.out->sampler = sampler.IsValid() ? sampler : state.repeatSampler;
+					break;
 				}
+				case LaneDeferral::Kind::Fallback:
+					entry.out->texture = FallbackTexture(state, entry.dimension, entry.fallback);
+					break;
+				case LaneDeferral::Kind::Mismatch:
+					WarnDimensionMismatch(state, entry.key, *entry.material, *entry.slot, *entry.texture);
+					break;
+				case LaneDeferral::Kind::Refusal:
+					NameMeshDrawRefusal(*entry.shader, *entry.material, entry.refusal);
+					break;
+				}
+			}
+			deferred.clear();
+		}
+
+		void PackPerDraw(GPUPerDraw& out, const DrawEntry& entry, bool transparentReceiveShadows) {
+			GPUPerDraw element;
+			element.world = entry.world;
+			Mat3 rotationScale = entry.world.ToMat3();
+			Mat3 normalMatrix;
+			if (!rotationScale.TryInvert(normalMatrix)) {
+				normalMatrix = Mat3::Identity();
+			}
+			normalMatrix = normalMatrix.Transposed();
+			element.normalMatrix0 = Vec4(normalMatrix.GetColumn(0), 0.0f);
+			element.normalMatrix1 = Vec4(normalMatrix.GetColumn(1), 0.0f);
+			element.normalMatrix2 = Vec4(normalMatrix.GetColumn(2), 0.0f);
+			element.vertexAddress = entry.vertexAddress;
+			element.alphaClipThreshold = entry.alphaClipThreshold;
+			if (entry.receiveShadows && (!entry.alpha || transparentReceiveShadows)) {
+				element.flags |= DRAW_RECEIVES_SHADOWS;
+			}
+			element.flags |= static_cast<u32>(entry.renderState.blend) << DRAW_BLEND_SHIFT;
+			out = element;
+		}
+
+		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
+									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
+									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
+			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
+								"a draw's volume mask is 1 bit per shadow map");
+			RenderState& state = *_state;
+			RHI::Device& device = *state.device;
+			const bool isolated = kind != SceneKind::World;
+
+			if (!state.errorMaterial) {
+				state.errorMaterial = New<MaterialAsset>(MemTag::Graphics);
+				state.errorMaterial->SetColor("baseColor", Color::Magenta());
+			}
+			DrawWalk walk;
+			walk.use = use;
+			walk.onlyScenes = onlyScenes;
+			walk.volumes = volumes;
+			walk.sortOrigin = sortOrigin;
+			walk.renderingLayerMask = renderingLayerMask;
+			walk.overrideMaterial = overrideMaterial;
+			walk.meshRenderers = isolated ? &state.isolatedMeshRenderers : &state.meshRenderers;
+			walk.skinnedRenderers = isolated ? &state.isolatedSkinnedMeshRenderers : &state.skinnedMeshRenderers;
+			walk.skinnedOutputs = isolated ? &state.isolatedSkinnedOutputs : &state.skinnedOutputs;
+			walk.errorShader = state.standardShader.Get();
+			walk.errorMaterial = state.errorMaterial;
+
+			arena.Reset();
+			const u32 rendererCount = static_cast<u32>(walk.meshRenderers->size() + walk.skinnedRenderers->size());
+			const u32 lanes = JobSystem::LaneCount(rendererCount, RENDERERS_PER_LANE);
+			Vector<ExtractionLane*>& laneStates = state.extractionLanes;
+			while (laneStates.size() < lanes) {
+				ExtractionLane* lane = New<ExtractionLane>(MemTag::Graphics);
+				if (!laneStates.empty()) {
+					lane->arena = New<LinearAllocator>(MemTag::Graphics, LANE_ARENA_BYTES, MemTag::Graphics);
+					lane->ownsArena = true;
+				}
+				laneStates.push_back(lane);
+			}
+			laneStates[0]->arena = &arena;
+			state.frameExtractionLanes = Math::Max(state.frameExtractionLanes, lanes);
+
+			JobSystem::ParallelFor(lanes, rendererCount,
+								   [&](u32 lane, u32 first, u32 end) { WalkRenderers(walk, *laneStates[lane], lane, first, end); });
+			u32 drawCount = 0;
+			for (u32 lane = 0; lane < lanes; ++lane) {
+				ApplyLaneDeferrals(state, laneStates[lane]->deferred);
+				drawCount += static_cast<u32>(laneStates[lane]->orders.size());
 			}
 
 			ExtractedDraws extracted;
-			extracted.list = drawList;
+			extracted.list = arena.AllocateAs<DrawEntry*>(drawCount ? drawCount : 1);
+			if (drawCount == 0) {
+				return extracted;
+			}
+			const RHI::TransientAllocation allocation = device.AllocateTransient(static_cast<u64>(drawCount) * sizeof(GPUPerDraw), 16);
+			if (!allocation.IsValid()) {
+				return extracted;
+			}
+			GPUPerDraw* perDraw = static_cast<GPUPerDraw*>(allocation.cpu);
+			const bool transparentReceiveShadows = state.transparentReceiveShadows;
+			auto writeDraws = [&](const DrawOrder* orders, u32 count, u32 offset) {
+				for (u32 i = 0; i < count; ++i) {
+					const u32 entry = orders[i].entry;
+					DrawEntry* drawn = laneStates[entry >> LANE_ENTRY_BITS]->entries[entry & ((1u << LANE_ENTRY_BITS) - 1)];
+					extracted.list[offset + i] = drawn;
+					PackPerDraw(perDraw[offset + i], *drawn, transparentReceiveShadows);
+				}
+			};
+
+			if (lanes == 1) {
+				writeDraws(laneStates[0]->orders.data(), drawCount, 0);
+			} else {
+				constexpr u32 SAMPLES_PER_LANE = 8;
+				DrawOrder* samples = arena.AllocateAs<DrawOrder>(lanes * SAMPLES_PER_LANE);
+				u32 sampleCount = 0;
+				for (u32 lane = 0; lane < lanes; ++lane) {
+					const Vector<DrawOrder>& orders = laneStates[lane]->orders;
+					const u64 size = orders.size();
+					const u32 taken = static_cast<u32>(Math::Min<u64>(size, SAMPLES_PER_LANE));
+					for (u32 sample = 0; sample < taken; ++sample) {
+						samples[sampleCount++] = orders[(2 * sample + 1) * size / (2 * taken)];
+					}
+				}
+				std::sort(samples, samples + sampleCount, DrawOrderLess{});
+				DrawOrder* splitters = arena.AllocateAs<DrawOrder>(lanes - 1);
+				for (u32 bucket = 1; bucket < lanes; ++bucket) {
+					splitters[bucket - 1] = samples[static_cast<u64>(bucket) * sampleCount / lanes];
+				}
+
+				JobSystem::ParallelFor(lanes, lanes, [&](u32 bucket, u32, u32) {
+					Vector<DrawOrder>& merged = laneStates[bucket]->bucket;
+					merged.clear();
+					u32 offset = 0;
+					for (u32 source = 0; source < lanes; ++source) {
+						const Vector<DrawOrder>& orders = laneStates[source]->orders;
+						const DrawOrder* begin = orders.data();
+						const DrawOrder* finish = begin + orders.size();
+						const DrawOrder* low = bucket == 0 ? begin : std::lower_bound(begin, finish, splitters[bucket - 1], DrawOrderLess{});
+						const DrawOrder* high = bucket + 1 == lanes ? finish : std::lower_bound(begin, finish, splitters[bucket], DrawOrderLess{});
+						offset += static_cast<u32>(low - begin);
+						merged.insert(merged.end(), low, high);
+					}
+					std::sort(merged.begin(), merged.end(), DrawOrderLess{});
+					writeDraws(merged.data(), static_cast<u32>(merged.size()), offset);
+				});
+			}
+
 			extracted.count = drawCount;
-			extracted.perDrawAddress = perDrawAddress;
+			extracted.perDrawAddress = device.GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
 			return extracted;
 		}
 
@@ -7857,6 +8071,15 @@ namespace Shalltear {
 		FrameStages::UnregisterOwnedBy(&_FRAME_STAGE_OWNER);
 		MemoryManager::SetVramProvider(nullptr);
 
+		for (ExtractionLane* lane : state.extractionLanes) {
+			if (lane->ownsArena) {
+				Delete(lane->arena);
+			}
+			Delete(lane);
+		}
+		state.extractionLanes.clear();
+		Delete(state.errorMaterial);
+		state.errorMaterial = nullptr;
 		Delete(state.extractionArena);
 		state.extractionArena = nullptr;
 
@@ -8064,6 +8287,7 @@ namespace Shalltear {
 		stats.proceduralDrawn = _state->lastProceduralDrawn;
 		stats.proceduralCulled = _state->lastProceduralCulled;
 		stats.drawCallsSaved = _state->lastDrawCallsSaved;
+		stats.extractionLanes = _state->lastExtractionLanes;
 		return stats;
 	}
 
@@ -8697,6 +8921,7 @@ namespace Shalltear {
 			state.lastProceduralDrawn = 0;
 			state.lastProceduralCulled = 0;
 			state.lastDrawCallsSaved = 0;
+			state.lastExtractionLanes = 0;
 			state.viewLines.clear();
 			state.viewPassRows.clear();
 			state.viewScenes.clear();
@@ -8791,6 +9016,7 @@ namespace Shalltear {
 		state.lastProceduralDrawn = state.frameProceduralDrawn;
 		state.lastProceduralCulled = state.frameProceduralCulled;
 		state.lastDrawCallsSaved = state.frameDrawCallsSaved;
+		state.lastExtractionLanes = state.frameExtractionLanes;
 		state.frameLightsBinned = 0;
 		state.frameLightsDropped = 0;
 		state.frameClusterLightsDropped = 0;
@@ -8800,6 +9026,7 @@ namespace Shalltear {
 		state.frameProceduralDrawn = 0;
 		state.frameProceduralCulled = 0;
 		state.frameDrawCallsSaved = 0;
+		state.frameExtractionLanes = 0;
 	}
 
 	FramePassPlan::FramePassPlan(const GraphicsInternal::FramePassPlanInit& init)

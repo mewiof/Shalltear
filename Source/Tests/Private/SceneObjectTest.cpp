@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Math.h"
 #include "Shalltear/Core/Reflection/Walk.h"
 #include "Shalltear/Core/Scene.h"
@@ -224,6 +225,51 @@ TEST_F(SceneObjectFixture, WorldMatrixMatchesHandComposedChain) {
 	EXPECT_TRUE(Mat4::Approximately(child->GetWorldMatrix(), expectedChild, EPS));
 
 	ExpectVecNear(child->GetWorldPosition(), Vec3(3.0f, 2.0f, 3.0f));
+}
+
+TEST_F(SceneObjectFixture, WorldMatrixReadConcurrently) {
+	JobSystem::Initialize();
+	Handle<SceneObject> root = Make("Root");
+	std::vector<Handle<SceneObject>> mids;
+	std::vector<Handle<SceneObject>> leaves;
+	for (u32 m = 0; m < 4; ++m) {
+		Handle<SceneObject> mid = Make("Mid", root);
+		mid->SetLocalPosition(Vec3(static_cast<f32>(m), 1.0f, 0.0f));
+		mid->SetLocalRotation(Quat::FromEuler(0.0f, 30.0f * static_cast<f32>(m), 0.0f));
+		mids.push_back(mid);
+		for (u32 l = 0; l < 512; ++l) {
+			Handle<SceneObject> leaf = Make("Leaf", mid);
+			leaf->SetLocalPosition(Vec3(0.01f * static_cast<f32>(l), 0.0f, 2.0f));
+			leaf->SetLocalScale(Vec3(1.0f + 0.001f * static_cast<f32>(l)));
+			leaves.push_back(leaf);
+		}
+	}
+	const u32 count = static_cast<u32>(leaves.size());
+	const u32 lanes = JobSystem::LaneCount(count, 32);
+	ASSERT_GE(lanes, 2u);
+	std::vector<Mat4> read(count);
+	u32 wrong = 0;
+	for (u32 round = 0; round < 20; ++round) {
+		const Vec3 rootPosition(static_cast<f32>(round), -2.0f, 0.5f * static_cast<f32>(round));
+		const Quat rootRotation = Quat::FromEuler(10.0f, 7.0f * static_cast<f32>(round), 0.0f);
+		root->SetLocalPosition(rootPosition);
+		root->SetLocalRotation(rootRotation);
+		JobSystem::ParallelFor(lanes, count, [&](u32, u32 first, u32 end) {
+			for (u32 i = first; i < end; ++i) {
+				read[i] = leaves[i]->GetWorldMatrix();
+			}
+		});
+		const Mat4 rootWorld = Mat4::TRS(rootPosition, rootRotation, Vec3(1.0f));
+		for (u32 i = 0; i < count; ++i) {
+			const SceneObject& leaf = *leaves[i];
+			const SceneObject& mid = *mids[i / 512];
+			const Mat4 expected = rootWorld * Mat4::TRS(mid.GetLocalPosition(), mid.GetLocalRotation(), mid.GetLocalScale()) *
+								  Mat4::TRS(leaf.GetLocalPosition(), leaf.GetLocalRotation(), leaf.GetLocalScale());
+			wrong += !Mat4::Approximately(read[i], expected, EPS);
+		}
+	}
+	EXPECT_EQ(wrong, 0u);
+	JobSystem::Terminate();
 }
 
 TEST_F(SceneObjectFixture, ParentTRSChangeDirtiesTheWholeSubtree) {

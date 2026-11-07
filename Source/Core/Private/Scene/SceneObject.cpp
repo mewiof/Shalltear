@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Scene/Scene.h"
 
 #include <algorithm>
+#include <thread>
 
 namespace Shalltear {
 
@@ -223,10 +224,18 @@ namespace Shalltear {
 	}
 
 	const Mat4& SceneObject::GetWorldMatrix() const {
-		if (_worldDirty) {
-			Mat4 local = Mat4::TRS(_localPosition, _localRotation, _localScale);
-			_worldMatrix = _parent ? _parent->GetWorldMatrix() * local : local;
-			_worldDirty = false;
+		WorldState state = _worldState.load(std::memory_order_acquire);
+		while (state != WorldState::Clean) {
+			if (state == WorldState::Dirty && _worldState.compare_exchange_weak(state, WorldState::Computing, std::memory_order_acquire)) {
+				Mat4 local = Mat4::TRS(_localPosition, _localRotation, _localScale);
+				_worldMatrix = _parent ? _parent->GetWorldMatrix() * local : local;
+				_worldState.store(WorldState::Clean, std::memory_order_release);
+				break;
+			}
+			if (state == WorldState::Computing) {
+				std::this_thread::yield();
+				state = _worldState.load(std::memory_order_acquire);
+			}
 		}
 		return _worldMatrix;
 	}
@@ -273,10 +282,10 @@ namespace Shalltear {
 	}
 
 	void SceneObject::MarkWorldDirtyRecursive() const {
-		if (_worldDirty) {
+		if (_worldState.load(std::memory_order_relaxed) == WorldState::Dirty) {
 			return;
 		}
-		_worldDirty = true;
+		_worldState.store(WorldState::Dirty, std::memory_order_relaxed);
 		for (const SceneObject* child : _children) {
 			child->MarkWorldDirtyRecursive();
 		}

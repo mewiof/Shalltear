@@ -25,6 +25,7 @@
 #include "Shalltear/PostProcessing/PostProcessVolume.h"
 
 #include "PostProcessBlend.h"
+#include "PostProcessGrade.h"
 #include "PostProcessShader.h"
 #endif
 
@@ -320,6 +321,113 @@ TEST(PostProcessBlendTest, ZeroBlendDistanceIsHardEdge) {
 	EXPECT_NEAR(VolumeContribution(false, identity, size, 0.0f, 1.0f, Vec3(2.01f, 0, 0)), 0.0f, 1e-5f);
 }
 
+TEST(PostProcessBlendTest, BalanceAndTonesBlendByContribution) {
+	PostProcessProfile first;
+	first.whiteBalance = true;
+	first.temperature = 40.0f;
+	first.shadowsMidtonesHighlights = true;
+	first.shadows = Color(0.5f, 1.0f, 0.5f);
+	first.highlightsEnd = 0.8f;
+	PostProcessProfile second;
+	second.whiteBalance = true;
+	second.tint = -20.0f;
+
+	PostProcessOps::VolumeSample samples[2];
+	samples[0] = {0.0f, 1.0f, &first};
+	samples[1] = {1.0f, 0.25f, &second};
+	const PostProcessOps::ResolvedPostProcess resolved = PostProcessOps::Blend(samples);
+
+	EXPECT_TRUE(resolved.AnyEnabled());
+	EXPECT_FALSE(resolved.colorGrading);
+	ASSERT_TRUE(resolved.whiteBalance);
+	ASSERT_TRUE(resolved.shadowsMidtonesHighlights);
+	EXPECT_NEAR(resolved.temperature, 30.0f, 1e-4f);
+	EXPECT_NEAR(resolved.tint, -5.0f, 1e-4f);
+	EXPECT_NEAR(resolved.shadows.r, 0.5f, 1e-4f);
+	EXPECT_NEAR(resolved.shadows.g, 1.0f, 1e-4f);
+	EXPECT_NEAR(resolved.highlightsEnd, 0.8f, 1e-4f);
+	EXPECT_NEAR(resolved.shadowsEnd, 0.3f, 1e-4f);
+}
+
+namespace {
+
+	f64 DaylightLocusY(f64 x) {
+		return 2.870 * x - 3.000 * x * x - 0.275;
+	}
+
+	Vec3 Rec709OfWhite(f64 x, f64 y) {
+		const f64 X = x / y;
+		const f64 Z = (1.0 - x - y) / y;
+		return Vec3(static_cast<f32>(3.2406 * X - 1.5372 - 0.4986 * Z),
+					static_cast<f32>(-0.9689 * X + 1.8758 + 0.0415 * Z),
+					static_cast<f32>(0.0557 * X - 0.2040 + 1.0570 * Z));
+	}
+
+} // namespace
+
+TEST(PostProcessGradeTest, ZeroBalanceIsIdentity) {
+	const Mat3 balance = PostProcessOps::WhiteBalanceMatrix(0.0f, 0.0f);
+	for (u32 row = 0; row < 3; ++row) {
+		for (u32 column = 0; column < 3; ++column) {
+			EXPECT_NEAR(balance(row, column), row == column ? 1.0f : 0.0f, 1e-6f) << row << ',' << column;
+		}
+	}
+}
+
+TEST(PostProcessGradeTest, ChosenWhiteBecomesNeutral) {
+	const Vec3 neutral = Rec709OfWhite(0.31271, DaylightLocusY(0.31271));
+	const Vec2 cases[] = {Vec2(60.0f, 0.0f), Vec2(-80.0f, 0.0f), Vec2(0.0f, 45.0f), Vec2(-30.0f, -70.0f), Vec2(100.0f, 100.0f)};
+	for (const Vec2& slider : cases) {
+		const f64 warmth = slider.x / 65.0;
+		const f64 x = 0.31271 - warmth * (warmth < 0.0 ? 0.1 : 0.05);
+		const f64 y = DaylightLocusY(x) + slider.y / 65.0 * 0.05;
+		const Vec3 adapted = PostProcessOps::WhiteBalanceMatrix(slider.x, slider.y) * Rec709OfWhite(x, y);
+		EXPECT_NEAR(adapted.x, neutral.x, 2e-3f) << slider.x << ' ' << slider.y;
+		EXPECT_NEAR(adapted.y, neutral.y, 2e-3f) << slider.x << ' ' << slider.y;
+		EXPECT_NEAR(adapted.z, neutral.z, 2e-3f) << slider.x << ' ' << slider.y;
+	}
+	EXPECT_NEAR(neutral.x, 1.0f, 2e-3f);
+	EXPECT_NEAR(neutral.y, 1.0f, 2e-3f);
+	EXPECT_NEAR(neutral.z, 1.0f, 2e-3f);
+}
+
+TEST(PostProcessGradeTest, SlidersShiftGrayTheirWay) {
+	const Vec3 gray(0.5f, 0.5f, 0.5f);
+	const Vec3 warm = PostProcessOps::WhiteBalanceMatrix(50.0f, 0.0f) * gray;
+	EXPECT_GT(warm.x, gray.x);
+	EXPECT_LT(warm.z, gray.z);
+	const Vec3 cold = PostProcessOps::WhiteBalanceMatrix(-50.0f, 0.0f) * gray;
+	EXPECT_LT(cold.x, gray.x);
+	EXPECT_GT(cold.z, gray.z);
+	const Vec3 magenta = PostProcessOps::WhiteBalanceMatrix(0.0f, 50.0f) * gray;
+	EXPECT_LT(magenta.y, magenta.x);
+	EXPECT_LT(magenta.y, magenta.z);
+	const Vec3 green = PostProcessOps::WhiteBalanceMatrix(0.0f, -50.0f) * gray;
+	EXPECT_GT(green.y, green.x);
+	EXPECT_GT(green.y, green.z);
+	const Vec3 clamped = PostProcessOps::WhiteBalanceMatrix(400.0f, 0.0f) * gray;
+	const Vec3 limit = PostProcessOps::WhiteBalanceMatrix(100.0f, 0.0f) * gray;
+	EXPECT_NEAR(clamped.x, limit.x, 1e-6f);
+	EXPECT_NEAR(clamped.z, limit.z, 1e-6f);
+}
+
+TEST(PostProcessGradeTest, ToneOffsetRaisesAndLowers) {
+	const Vec3 lifted = PostProcessOps::ToneMultiplier(Color::White(), 0.25f);
+	EXPECT_NEAR(lifted.x, 2.0f, 1e-6f);
+	EXPECT_NEAR(lifted.z, 2.0f, 1e-6f);
+	const Vec3 lowered = PostProcessOps::ToneMultiplier(Color::White(), -0.5f);
+	EXPECT_NEAR(lowered.y, 0.5f, 1e-6f);
+	const Vec3 floored = PostProcessOps::ToneMultiplier(Color(0.2f, 0.4f, 1.0f), -0.5f);
+	EXPECT_EQ(floored.x, 0.0f);
+	EXPECT_EQ(floored.y, 0.0f);
+	EXPECT_NEAR(floored.z, 0.5f, 1e-6f);
+	const Vec3 tinted = PostProcessOps::ToneMultiplier(Color(0.5f, 1.0f, 0.5f), 0.0f);
+	EXPECT_NEAR(tinted.x, 0.5f, 1e-6f);
+	EXPECT_NEAR(tinted.y, 1.0f, 1e-6f);
+	const Vec3 capped = PostProcessOps::ToneMultiplier(Color::White(), 3.0f);
+	EXPECT_NEAR(capped.y, 5.0f, 1e-6f);
+}
+
 TEST(PostProcessBlendTest, FalloffInWorldUnits) {
 	Mat4 stretched = Mat4::Identity();
 	stretched = Mat4::Scale(Vec3(10.0f, 1.0f, 1.0f));
@@ -373,6 +481,16 @@ TEST(PostProcessRowTest, AProfileRoundTripsThroughItsDocument) {
 	written.vignetteSmoothness = 0.4f;
 	written.vignetteCenter = Vec2(0.4f, 0.6f);
 	written.vignetteRounded = true;
+	written.whiteBalance = true;
+	written.temperature = -35.0f;
+	written.tint = 12.0f;
+	written.shadowsMidtonesHighlights = true;
+	written.shadows = Color(0.5f, 1.0f, 0.75f, 1.0f);
+	written.shadowsOffset = 0.2f;
+	written.midtonesOffset = -0.4f;
+	written.highlights = Color(1.0f, 0.9f, 0.6f, 1.0f);
+	written.highlightsStart = 0.6f;
+	written.highlightsEnd = 1.5f;
 	ASSERT_TRUE(written.Export(file));
 
 	PostProcessProfile read;
@@ -388,6 +506,16 @@ TEST(PostProcessRowTest, AProfileRoundTripsThroughItsDocument) {
 	EXPECT_NEAR(read.vignetteSmoothness, 0.4f, 1e-4f);
 	EXPECT_NEAR(read.vignetteCenter.y, 0.6f, 1e-4f);
 	EXPECT_TRUE(read.vignetteRounded);
+	EXPECT_TRUE(read.whiteBalance);
+	EXPECT_NEAR(read.temperature, -35.0f, 1e-4f);
+	EXPECT_NEAR(read.tint, 12.0f, 1e-4f);
+	EXPECT_TRUE(read.shadowsMidtonesHighlights);
+	EXPECT_NEAR(read.shadows.b, 0.75f, 1e-4f);
+	EXPECT_NEAR(read.shadowsOffset, 0.2f, 1e-4f);
+	EXPECT_NEAR(read.midtonesOffset, -0.4f, 1e-4f);
+	EXPECT_NEAR(read.highlights.b, 0.6f, 1e-4f);
+	EXPECT_NEAR(read.highlightsStart, 0.6f, 1e-4f);
+	EXPECT_NEAR(read.highlightsEnd, 1.5f, 1e-4f);
 
 	std::error_code ec;
 	std::filesystem::remove_all(dir, ec);

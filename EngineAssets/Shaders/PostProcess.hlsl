@@ -11,18 +11,31 @@
 
 // must match PostProcessPush in PostProcessPass.cpp
 struct ShalltearPostProcessPush {
-	float4 colorFilterAndContrast;
-	// x is hue shift in rads
-	float4 hueSaturationAndFlags;
 	float4 vignetteColorAndIntensity;
 	float4 vignetteCenterSmoothnessRounded;
-	// xy is step's extent in pixels, w is 2^stops
+	// xy is step's extent in pixels
 	float4 extentAndStep;
 	float4 bloomTintAndIntensity;
 	float4 bloomParams;
+	uint64_t gradeAddress;
 };
 
 [[vk::push_constant]] ShalltearPostProcessPush gPost;
+
+// must match PostProcessGrade in PostProcessPass.cpp
+struct ShalltearPostGrade {
+	float4 colorFilterAndContrast;
+	// x is hue shift in rads, z is 2^stops
+	float4 hueSaturationExposure;
+	float4 whiteBalance0;
+	float4 whiteBalance1;
+	float4 whiteBalance2;
+	float4 shadows;
+	float4 midtones;
+	float4 highlights;
+	float4 limits;
+	uint4 flags;
+};
 
 #define SHALLTEAR_POST_STEP_PREFILTER 0
 #define SHALLTEAR_POST_STEP_DOWNSAMPLE 1
@@ -54,6 +67,38 @@ float3 ShalltearPostHueShift(float3 color, float radians) {
 		0.299 - 0.299 * c - 0.328 * s, 0.587 + 0.413 * c + 0.035 * s, 0.114 - 0.114 * c + 0.292 * s,
 		0.299 - 0.300 * c + 1.250 * s, 0.587 - 0.588 * c - 1.050 * s, 0.114 + 0.886 * c - 0.203 * s);
 	return mul(m, color);
+}
+
+float ShalltearPostRamp(float edge0, float edge1, float x) {
+	float t = saturate((x - edge0) / (edge1 - edge0));
+	return t * t * (3.0 - 2.0 * t);
+}
+
+float3 ShalltearPostGradeColor(float3 color, ShalltearPostGrade grade) {
+	if (grade.flags.x != 0u) {
+		color *= grade.hueSaturationExposure.z;
+	}
+	if (grade.flags.y != 0u) {
+		color = float3(dot(grade.whiteBalance0.rgb, color), dot(grade.whiteBalance1.rgb, color), dot(grade.whiteBalance2.rgb, color));
+	}
+	if (grade.flags.x != 0u) {
+		color = (color - SHALLTEAR_POST_CONTRAST_PIVOT) * grade.colorFilterAndContrast.w + SHALLTEAR_POST_CONTRAST_PIVOT;
+		color *= grade.colorFilterAndContrast.rgb;
+	}
+	if (grade.flags.z != 0u) {
+		float luma = dot(color, SHALLTEAR_POST_LUMA);
+		float shadows = 1.0 - ShalltearPostRamp(grade.limits.x, grade.limits.y, luma);
+		float highlights = ShalltearPostRamp(grade.limits.z, grade.limits.w, luma);
+		color *= grade.shadows.rgb * shadows + grade.midtones.rgb * (1.0 - shadows - highlights) + grade.highlights.rgb * highlights;
+	}
+	if (grade.flags.x != 0u) {
+		if (abs(grade.hueSaturationExposure.x) > 1e-6) {
+			color = ShalltearPostHueShift(color, grade.hueSaturationExposure.x);
+		}
+		float luma = dot(color, SHALLTEAR_POST_LUMA);
+		color = luma + (color - luma) * grade.hueSaturationExposure.y;
+	}
+	return max(color, 0.0);
 }
 
 float2 ShalltearBloomSourceTexel(uint step) {
@@ -137,20 +182,12 @@ float4 PSMain(VSOutput input) : SV_Target {
 		color += bloom * gPost.bloomTintAndIntensity.rgb * gPost.bloomTintAndIntensity.w;
 	}
 
-	if (gPost.hueSaturationAndFlags.z > 0.5) {
+	if (gPost.gradeAddress != 0) {
 		// after bloom, before curve
-		color *= gPost.extentAndStep.w;
-		color = (color - SHALLTEAR_POST_CONTRAST_PIVOT) * gPost.colorFilterAndContrast.w + SHALLTEAR_POST_CONTRAST_PIVOT;
-		color *= gPost.colorFilterAndContrast.rgb;
-		if (abs(gPost.hueSaturationAndFlags.x) > 1e-6) {
-			color = ShalltearPostHueShift(color, gPost.hueSaturationAndFlags.x);
-		}
-		float luma = dot(color, SHALLTEAR_POST_LUMA);
-		color = luma + (color - luma) * gPost.hueSaturationAndFlags.y;
-		color = max(color, 0.0);
+		color = ShalltearPostGradeColor(color, vk::RawBufferLoad<ShalltearPostGrade>(gPost.gradeAddress, 16));
 	}
 
-	if (gPost.hueSaturationAndFlags.w > 0.5) {
+	if (gPost.extentAndStep.w > 0.5) {
 		float2 d = abs(input.uv - gPost.vignetteCenterSmoothnessRounded.xy) * gPost.vignetteColorAndIntensity.w;
 		float aspect = gPost.extentAndStep.y > 0.0 ? gPost.extentAndStep.x / gPost.extentAndStep.y : 1.0;
 		d.x *= lerp(1.0, aspect, gPost.vignetteCenterSmoothnessRounded.w);

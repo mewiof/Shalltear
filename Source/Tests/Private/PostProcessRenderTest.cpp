@@ -18,6 +18,8 @@
 #include "Shalltear/PostProcessing/PostProcessPass.h"
 #include "Shalltear/PostProcessing/PostProcessProfile.h"
 #include "Shalltear/PostProcessing/PostProcessVolume.h"
+
+#include "PostProcessGrade.h"
 #endif
 
 #include <atomic>
@@ -157,20 +159,22 @@ namespace {
 			return volume;
 		}
 
-		bool AddBrightQuad(f32 intensity) {
+		bool AddBrightQuad(f32 intensity, const Vec3& position = Vec3(), const char* name = "Bright") {
 			Asset* unlitShader = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
 			Asset* quadMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Quad)));
 			if (!unlitShader || !quadMesh) {
 				return false;
 			}
-			FileSystem::WriteTextFile(Path((_root / "Bright.mat").generic_string()),
+			const str fileName = str(name) + ".mat";
+			FileSystem::WriteTextFile(Path((_root / fileName.c_str()).generic_string()),
 									  str("{\n\t\"shader\": \"") + unlitShader->assetId.ToString() + "\"\n}\n");
-			auto* material = static_cast<MaterialAsset*>(AssetDatabase::LoadAsset(Path("project://Bright.mat")));
+			auto* material = static_cast<MaterialAsset*>(AssetDatabase::LoadAsset(Path(str("project://") + fileName)));
 			if (!material) {
 				return false;
 			}
 			material->SetColor("baseColor", Color(intensity, intensity, intensity, 1.0f));
-			Handle<SceneObject> object = SceneSystem::CreateObject("Bright", _scene);
+			Handle<SceneObject> object = SceneSystem::CreateObject(name, _scene);
+			object->SetLocalPosition(position);
 			object->SetLocalScale(Vec3(0.6f, 0.6f, 0.6f));
 			Handle<MeshRenderer> renderer = object->AddComponent<MeshRenderer>();
 			renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(quadMesh)));
@@ -195,6 +199,36 @@ namespace {
 
 		static const u8* Texel(const Vector<u8>& pixels, Vec2I size, i32 x, i32 y) {
 			return pixels.data() + (static_cast<size_t>(y) * size.x + x) * 4;
+		}
+
+		static bool IsGray(const u8* texel, f32 value) {
+			return std::abs(texel[0] - value) <= 1.0f && std::abs(texel[1] - value) <= 1.0f && std::abs(texel[2] - value) <= 1.0f;
+		}
+
+		static bool FindGrayTexel(const Vector<u8>& pixels, Vec2I size, f32 value, Vec2I& out) {
+			for (i32 y = 1; y + 1 < size.y; ++y) {
+				for (i32 x = 1; x + 1 < size.x; ++x) {
+					bool inside = true;
+					for (i32 dy = -1; dy <= 1 && inside; ++dy) {
+						for (i32 dx = -1; dx <= 1 && inside; ++dx) {
+							inside = IsGray(Texel(pixels, size, x + dx, y + dy), value);
+						}
+					}
+					if (inside) {
+						out = Vec2I(x, y);
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		static void ExpectScaled(const u8* before, const u8* after, const Vec3& scale) {
+			const f32 factors[3] = {scale.x, scale.y, scale.z};
+			for (i32 channel = 0; channel < 3; ++channel) {
+				const f32 expected = LinearToByte(ByteToLinear(before[channel]) * factors[channel]);
+				EXPECT_NEAR(static_cast<f32>(after[channel]), expected, 2.0f) << channel << ' ' << static_cast<i32>(before[channel]);
+			}
 		}
 	};
 
@@ -268,6 +302,98 @@ TEST_F(PostProcessRenderFixture, PostExposureScalesFrameByStops) {
 		EXPECT_NEAR(static_cast<f32>(after[channel]), expected, 2.0f) << "channel " << channel;
 	}
 	EXPECT_GT(before[0] - after[0], 20);
+}
+
+TEST_F(PostProcessRenderFixture, WhiteBalanceRunsBeforeColorFilter) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+
+	PostProcessProfile* profile = MakeProfile("Balance.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->whiteBalance = true;
+	profile->temperature = -60.0f;
+	profile->tint = 20.0f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const u8* before = Texel(reference, referenceSize, size.x / 2, size.y / 2);
+	const Vec3 linear(ByteToLinear(before[0]), ByteToLinear(before[1]), ByteToLinear(before[2]));
+	const Vec3 balanced = PostProcessOps::WhiteBalanceMatrix(-60.0f, 20.0f) * linear;
+	const u8* cooled = Texel(pixels, size, size.x / 2, size.y / 2);
+	EXPECT_NEAR(static_cast<f32>(cooled[0]), LinearToByte(balanced.x), 2.0f);
+	EXPECT_NEAR(static_cast<f32>(cooled[1]), LinearToByte(balanced.y), 2.0f);
+	EXPECT_NEAR(static_cast<f32>(cooled[2]), LinearToByte(balanced.z), 2.0f);
+	EXPECT_GT(cooled[2], before[2] + 10);
+	EXPECT_LT(cooled[0], before[0]);
+
+	profile->colorGrading = true;
+	profile->colorFilter = Color(1.0f, 0.5f, 0.25f);
+	Vector<u8> filtered{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(Render(rows, filtered, size));
+	const u8* both = Texel(filtered, size, size.x / 2, size.y / 2);
+	EXPECT_NEAR(static_cast<f32>(both[0]), LinearToByte(balanced.x * 1.0f), 2.0f);
+	EXPECT_NEAR(static_cast<f32>(both[1]), LinearToByte(balanced.y * 0.5f), 2.0f);
+	EXPECT_NEAR(static_cast<f32>(both[2]), LinearToByte(balanced.z * 0.25f), 2.0f);
+}
+
+TEST_F(PostProcessRenderFixture, TonesFollowLuminance) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(AddBrightQuad(0.6f, Vec3(-1.2f, 0.0f, 0.0f), "Mid"));
+	ASSERT_TRUE(AddBrightQuad(0.9f, Vec3(1.2f, 0.0f, 0.0f), "High"));
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+
+	Vec2I mid{};
+	Vec2I high{};
+	ASSERT_TRUE(FindGrayTexel(reference, referenceSize, LinearToByte(0.6f), mid));
+	ASSERT_TRUE(FindGrayTexel(reference, referenceSize, LinearToByte(0.9f), high));
+	const Vec2I clear(referenceSize.x / 2, referenceSize.y / 2);
+	const u8* clearBefore = Texel(reference, referenceSize, clear.x, clear.y);
+	const f32 clearLuma = 0.2126f * ByteToLinear(clearBefore[0]) + 0.7152f * ByteToLinear(clearBefore[1]) + 0.0722f * ByteToLinear(clearBefore[2]);
+	ASSERT_LT(clearLuma, 0.45f);
+
+	PostProcessProfile* profile = MakeProfile("Tones.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->shadowsMidtonesHighlights = true;
+	profile->shadows = Color(0.5f, 1.0f, 0.5f);
+	profile->shadowsOffset = 0.1f;
+	profile->midtonesOffset = -0.25f;
+	profile->highlights = Color(1.0f, 1.0f, 0.5f);
+	profile->shadowsStart = 0.45f;
+	profile->shadowsEnd = 0.5f;
+	profile->highlightsStart = 0.7f;
+	profile->highlightsEnd = 0.75f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	ExpectScaled(clearBefore, Texel(pixels, size, clear.x, clear.y), Vec3(0.9f, 1.4f, 0.9f));
+	ExpectScaled(Texel(reference, referenceSize, mid.x, mid.y), Texel(pixels, size, mid.x, mid.y), Vec3(0.75f, 0.75f, 0.75f));
+	ExpectScaled(Texel(reference, referenceSize, high.x, high.y), Texel(pixels, size, high.x, high.y), Vec3(1.0f, 1.0f, 0.5f));
 }
 
 TEST_F(PostProcessRenderFixture, LeftVolumeLeavesFrame) {

@@ -19,6 +19,22 @@ namespace Shalltear::PostProcessOps {
 		f32 hueShift = 0.0f;
 		f32 saturation = 0.0f;
 
+		bool whiteBalance = false;
+		f32 temperature = 0.0f;
+		f32 tint = 0.0f;
+
+		bool shadowsMidtonesHighlights = false;
+		Color shadows = Color::White();
+		f32 shadowsOffset = 0.0f;
+		Color midtones = Color::White();
+		f32 midtonesOffset = 0.0f;
+		Color highlights = Color::White();
+		f32 highlightsOffset = 0.0f;
+		f32 shadowsStart = 0.0f;
+		f32 shadowsEnd = 0.3f;
+		f32 highlightsStart = 0.55f;
+		f32 highlightsEnd = 1.0f;
+
 		bool vignette = false;
 		Color vignetteColor = Color::Black();
 		Vec2 vignetteCenter{0.5f, 0.5f};
@@ -34,7 +50,7 @@ namespace Shalltear::PostProcessOps {
 		f32 bloomClamp = 65472.0f;
 		i32 bloomMaxIterations = 6;
 
-		bool AnyEnabled() const { return colorGrading || vignette || bloom; }
+		bool AnyEnabled() const { return colorGrading || whiteBalance || shadowsMidtonesHighlights || vignette || bloom; }
 
 		bool BloomContributes() const { return bloom && bloomIntensity > 0.0f; }
 	};

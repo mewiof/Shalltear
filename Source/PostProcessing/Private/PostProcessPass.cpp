@@ -2,6 +2,8 @@
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
+#include "Shalltear/Core/Graphics/RHIDevice.h"
+#include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/MathUtil.h"
@@ -10,10 +12,12 @@
 #include "Shalltear/PostProcessing/PostProcessVolume.h"
 
 #include "PostProcessBlend.h"
+#include "PostProcessGrade.h"
 #include "PostProcessShader.h"
 
 #include <array>
 #include <cmath>
+#include <cstring>
 
 namespace Shalltear {
 
@@ -21,17 +25,29 @@ namespace Shalltear {
 
 		// must match ShalltearPostProcessPush in PostProcess.hlsl
 		struct PostProcessPush {
-			f32 colorFilterAndContrast[4];
-			f32 hueSaturationAndFlags[4];
 			f32 vignetteColorAndIntensity[4];
 			f32 vignetteCenterSmoothnessRounded[4];
-			// xy = step extent px, z = step kind, w = post exposure multiplier
+			// xy = step extent px, z = step kind, w = vignette on
 			f32 extentAndStep[4];
 			f32 bloomTintAndIntensity[4];
 			// x = linear threshold, y = knee, z = scatter, w = clamp
 			f32 bloomParams[4];
+			u64 gradeAddress;
 		};
-		static_assert(sizeof(PostProcessPush) == 112, "the push block is 7 float4s (under the RHI's 128 B budget)");
+		static_assert(sizeof(PostProcessPush) == 88, "the push block is 5 float4s + an address (under the RHI's 128 B budget)");
+
+		// must match ShalltearPostGrade in PostProcess.hlsl
+		struct PostProcessGrade {
+			f32 colorFilterAndContrast[4];
+			f32 hueSaturationExposure[4];
+			f32 whiteBalance[3][4];
+			f32 shadows[4];
+			f32 midtones[4];
+			f32 highlights[4];
+			f32 limits[4];
+			u32 flags[4];
+		};
+		static_assert(sizeof(PostProcessGrade) == 160, "grade block is 10 float4s");
 
 		// shader reads these
 		enum class BloomStep : u32 {
@@ -51,6 +67,80 @@ namespace Shalltear {
 		// piecewise sRGB (not a 2.2 power)
 		f32 GammaToLinear(f32 value) {
 			return value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+		}
+
+		constexpr f32 MIN_LIMIT_WIDTH = 1e-4f;
+
+		void WriteMultiplier(f32 (&out)[4], const Vec3& multiplier) {
+			out[0] = multiplier.x;
+			out[1] = multiplier.y;
+			out[2] = multiplier.z;
+		}
+
+		bool IsNeutral(const Vec3& multiplier) {
+			return multiplier.x == 1.0f && multiplier.y == 1.0f && multiplier.z == 1.0f;
+		}
+
+		void WriteLimits(f32& start, f32& end, f32 authoredStart, f32 authoredEnd) {
+			start = Math::Max(authoredStart, 0.0f);
+			end = Math::Max(authoredEnd, 0.0f);
+			if (std::abs(end - start) < MIN_LIMIT_WIDTH) {
+				end = start + MIN_LIMIT_WIDTH;
+			}
+		}
+
+		bool BuildGrade(const PostProcessOps::ResolvedPostProcess& resolved, PostProcessGrade& grade) {
+			grade = PostProcessGrade{};
+			const bool adjustments = resolved.colorGrading;
+			const bool whiteBalance = resolved.whiteBalance && (resolved.temperature != 0.0f || resolved.tint != 0.0f);
+			const Vec3 shadows = PostProcessOps::ToneMultiplier(resolved.shadows, resolved.shadowsOffset);
+			const Vec3 midtones = PostProcessOps::ToneMultiplier(resolved.midtones, resolved.midtonesOffset);
+			const Vec3 highlights = PostProcessOps::ToneMultiplier(resolved.highlights, resolved.highlightsOffset);
+			const bool tones = resolved.shadowsMidtonesHighlights && !(IsNeutral(shadows) && IsNeutral(midtones) && IsNeutral(highlights));
+			if (!adjustments && !whiteBalance && !tones) {
+				return false;
+			}
+
+			grade.flags[0] = adjustments ? 1u : 0u;
+			grade.flags[1] = whiteBalance ? 1u : 0u;
+			grade.flags[2] = tones ? 1u : 0u;
+
+			grade.colorFilterAndContrast[0] = resolved.colorFilter.r;
+			grade.colorFilterAndContrast[1] = resolved.colorFilter.g;
+			grade.colorFilterAndContrast[2] = resolved.colorFilter.b;
+			grade.colorFilterAndContrast[3] = 1.0f + resolved.contrast * 0.01f;
+			grade.hueSaturationExposure[0] = resolved.hueShift * (3.14159265358979323846f / 180.0f);
+			grade.hueSaturationExposure[1] = 1.0f + resolved.saturation * 0.01f;
+			grade.hueSaturationExposure[2] = std::exp2(resolved.postExposure);
+
+			if (whiteBalance) {
+				const Mat3 matrix = PostProcessOps::WhiteBalanceMatrix(resolved.temperature, resolved.tint);
+				for (u32 row = 0; row < 3; ++row) {
+					for (u32 column = 0; column < 3; ++column) {
+						grade.whiteBalance[row][column] = matrix(row, column);
+					}
+				}
+			}
+
+			WriteMultiplier(grade.shadows, shadows);
+			WriteMultiplier(grade.midtones, midtones);
+			WriteMultiplier(grade.highlights, highlights);
+			WriteLimits(grade.limits[0], grade.limits[1], resolved.shadowsStart, resolved.shadowsEnd);
+			WriteLimits(grade.limits[2], grade.limits[3], resolved.highlightsStart, resolved.highlightsEnd);
+			return true;
+		}
+
+		u64 UploadGrade(const PostProcessGrade& grade) {
+			RHI::Device* device = RenderSystem::GetDevice();
+			if (!device) {
+				return 0;
+			}
+			const RHI::TransientAllocation allocation = device->AllocateTransient(sizeof(grade), 16);
+			if (!allocation.IsValid()) {
+				return 0;
+			}
+			std::memcpy(allocation.cpu, &grade, sizeof(grade));
+			return device->GetBufferDeviceAddress(allocation.buffer) + allocation.offset;
 		}
 
 	} // anonymous namespace
@@ -184,14 +274,10 @@ namespace Shalltear {
 		}
 
 		PostProcessPush push{};
-		push.colorFilterAndContrast[0] = resolved.colorFilter.r;
-		push.colorFilterAndContrast[1] = resolved.colorFilter.g;
-		push.colorFilterAndContrast[2] = resolved.colorFilter.b;
-		push.colorFilterAndContrast[3] = 1.0f + resolved.contrast * 0.01f;
-		push.hueSaturationAndFlags[0] = resolved.hueShift * (3.14159265358979323846f / 180.0f);
-		push.hueSaturationAndFlags[1] = 1.0f + resolved.saturation * 0.01f;
-		push.hueSaturationAndFlags[2] = resolved.colorGrading ? 1.0f : 0.0f;
-		push.hueSaturationAndFlags[3] = resolved.vignette ? 1.0f : 0.0f;
+		PostProcessGrade grade;
+		if (kind == BloomStep::Composite && BuildGrade(resolved, grade)) {
+			push.gradeAddress = UploadGrade(grade);
+		}
 
 		push.vignetteColorAndIntensity[0] = resolved.vignetteColor.r;
 		push.vignetteColorAndIntensity[1] = resolved.vignetteColor.g;
@@ -206,7 +292,7 @@ namespace Shalltear {
 		push.extentAndStep[0] = static_cast<f32>(extent.x);
 		push.extentAndStep[1] = static_cast<f32>(extent.y);
 		push.extentAndStep[2] = static_cast<f32>(static_cast<u32>(kind));
-		push.extentAndStep[3] = std::exp2(resolved.postExposure);
+		push.extentAndStep[3] = resolved.vignette ? 1.0f : 0.0f;
 
 		const bool hasPyramid = levels > 0;
 		push.bloomTintAndIntensity[0] = resolved.bloomTint.r;

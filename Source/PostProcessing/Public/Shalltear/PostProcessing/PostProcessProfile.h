@@ -22,6 +22,22 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(hueShift, SLT_RANGE(-180.0f, 180.0f))
 		SLT_REFLECT_FIELD(saturation, SLT_RANGE(-100.0f, 100.0f))
 
+		SLT_REFLECT_FIELD(whiteBalance, SLT_HEADER("White Balance"))
+		SLT_REFLECT_FIELD(temperature, SLT_RANGE(-100.0f, 100.0f))
+		SLT_REFLECT_FIELD(tint, SLT_RANGE(-100.0f, 100.0f))
+
+		SLT_REFLECT_FIELD(shadowsMidtonesHighlights, SLT_HEADER("Shadows Midtones Highlights"))
+		SLT_REFLECT_FIELD(shadows)
+		SLT_REFLECT_FIELD(shadowsOffset, SLT_RANGE(-1.0f, 1.0f))
+		SLT_REFLECT_FIELD(midtones)
+		SLT_REFLECT_FIELD(midtonesOffset, SLT_RANGE(-1.0f, 1.0f))
+		SLT_REFLECT_FIELD(highlights)
+		SLT_REFLECT_FIELD(highlightsOffset, SLT_RANGE(-1.0f, 1.0f))
+		SLT_REFLECT_FIELD(shadowsStart)
+		SLT_REFLECT_FIELD(shadowsEnd)
+		SLT_REFLECT_FIELD(highlightsStart)
+		SLT_REFLECT_FIELD(highlightsEnd)
+
 		SLT_REFLECT_FIELD(vignette, SLT_HEADER("Vignette"))
 		SLT_REFLECT_FIELD(vignetteColor)
 		SLT_REFLECT_FIELD(vignetteCenter)
@@ -53,6 +69,34 @@ namespace Shalltear {
 		f32 hueShift = 0.0f;
 
 		f32 saturation = 0.0f;
+
+		bool whiteBalance = false;
+
+		f32 temperature = 0.0f;
+
+		f32 tint = 0.0f;
+
+		bool shadowsMidtonesHighlights = false;
+
+		Color shadows = Color::White();
+
+		f32 shadowsOffset = 0.0f;
+
+		Color midtones = Color::White();
+
+		f32 midtonesOffset = 0.0f;
+
+		Color highlights = Color::White();
+
+		f32 highlightsOffset = 0.0f;
+
+		f32 shadowsStart = 0.0f;
+
+		f32 shadowsEnd = 0.3f;
+
+		f32 highlightsStart = 0.55f;
+
+		f32 highlightsEnd = 1.0f;
 
 		bool vignette = false;
 

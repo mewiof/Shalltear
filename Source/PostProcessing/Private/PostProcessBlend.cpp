@@ -27,6 +27,26 @@ namespace Shalltear::PostProcessOps {
 			into.colorGrading = true;
 		}
 
+		void AccumulateWhiteBalance(ResolvedPostProcess& into, const PostProcessProfile& from, f32 t) {
+			into.temperature = Lerp(into.temperature, from.temperature, t);
+			into.tint = Lerp(into.tint, from.tint, t);
+			into.whiteBalance = true;
+		}
+
+		void AccumulateShadowsMidtonesHighlights(ResolvedPostProcess& into, const PostProcessProfile& from, f32 t) {
+			into.shadows = Lerp(into.shadows, from.shadows, t);
+			into.shadowsOffset = Lerp(into.shadowsOffset, from.shadowsOffset, t);
+			into.midtones = Lerp(into.midtones, from.midtones, t);
+			into.midtonesOffset = Lerp(into.midtonesOffset, from.midtonesOffset, t);
+			into.highlights = Lerp(into.highlights, from.highlights, t);
+			into.highlightsOffset = Lerp(into.highlightsOffset, from.highlightsOffset, t);
+			into.shadowsStart = Lerp(into.shadowsStart, from.shadowsStart, t);
+			into.shadowsEnd = Lerp(into.shadowsEnd, from.shadowsEnd, t);
+			into.highlightsStart = Lerp(into.highlightsStart, from.highlightsStart, t);
+			into.highlightsEnd = Lerp(into.highlightsEnd, from.highlightsEnd, t);
+			into.shadowsMidtonesHighlights = true;
+		}
+
 		void AccumulateVignette(ResolvedPostProcess& into, const PostProcessProfile& from, f32 t) {
 			into.vignetteColor = Lerp(into.vignetteColor, from.vignetteColor, t);
 			into.vignetteCenter = Lerp(into.vignetteCenter, from.vignetteCenter, t);
@@ -61,6 +81,12 @@ namespace Shalltear::PostProcessOps {
 			const f32 t = Math::Clamp(sample.contribution, 0.0f, 1.0f);
 			if (sample.profile->colorGrading) {
 				AccumulateColorGrading(result, *sample.profile, t);
+			}
+			if (sample.profile->whiteBalance) {
+				AccumulateWhiteBalance(result, *sample.profile, t);
+			}
+			if (sample.profile->shadowsMidtonesHighlights) {
+				AccumulateShadowsMidtonesHighlights(result, *sample.profile, t);
 			}
 			if (sample.profile->vignette) {
 				AccumulateVignette(result, *sample.profile, t);

@@ -1091,6 +1091,71 @@ TEST_F(InspectorTest, MeshRendererShadowRowsEdit) {
 	DriveShadowRows(context, root, *renderer.Get());
 }
 
+TEST_F(InspectorTest, EnvironmentGradientAmbientRowsEdit) {
+	Handle<SceneObject> object = SceneSystem::CreateObject("Lighting", _scene);
+	Handle<Environment> environment = object.Get()->AddComponent<Environment>();
+	ASSERT_NE(environment.Get(), nullptr);
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 1600};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	UI::ElementHandle modeLabel = FindByText(context, root, "ambientMode");
+	ASSERT_TRUE(modeLabel.IsValid());
+	UI::ElementHandle modeRow = context.MakeHandle(context.GetElement(modeLabel)->parent);
+	UI::ElementHandle picker = FindByClass(context, modeRow, StringHash("slt-dropdown"), 0);
+	ASSERT_TRUE(context.IsAlive(picker));
+	EXPECT_EQ(context.GetTextString(NthChildOf(context, picker, 0)), "Sky");
+	ClickElement(context, picker);
+	ASSERT_EQ(context.GetOpenPopupCount(), 1u);
+	ClickElement(context, NthChildOf(context, context.GetOpenPopup(0), 1));
+	EXPECT_EQ(environment->GetAmbientMode(), AmbientMode::Gradient);
+	context.Update();
+
+	EXPECT_TRUE(FindByText(context, root, "ambientEquatorColor").IsValid());
+	EXPECT_TRUE(FindByText(context, root, "ambientGroundColor").IsValid());
+	UI::ElementHandle skyLabel = FindByText(context, root, "ambientSkyColor");
+	ASSERT_TRUE(skyLabel.IsValid());
+	UI::ElementHandle skyRow = context.MakeHandle(context.GetElement(skyLabel)->parent);
+	UI::ElementHandle color = FindByClass(context, skyRow, StringHash("slt-color-field"), 0);
+	ASSERT_TRUE(context.IsAlive(color));
+	Vector<UI::ElementHandle> channels{GetMemoryResource(MemTag::Editor)};
+	CollectByClass(context, color, StringHash("slt-number-input"), channels);
+	ASSERT_EQ(channels.size(), 4u);
+
+	ClickElement(context, channels[0]);
+	InputEvent selectAll{};
+	selectAll.type = InputEventType::KeyDown;
+	selectAll.key = Key::A;
+	selectAll.mods = KeyMod::Ctrl;
+	context.InjectInput(selectAll);
+	for (char c : std::string_view("153")) {
+		InputEvent typed{};
+		typed.type = InputEventType::Text;
+		typed.codepoint = static_cast<char32_t>(c);
+		context.InjectInput(typed);
+	}
+	InputEvent commit{};
+	commit.type = InputEventType::KeyDown;
+	commit.key = Key::Enter;
+	context.InjectInput(commit);
+	context.Update();
+	EXPECT_NEAR(environment->GetAmbientSkyColor().r, 0.6f, 1e-5f);
+
+	ASSERT_TRUE(UndoSystem::Undo());
+	EXPECT_FLOAT_EQ(environment->GetAmbientSkyColor().r, 0.25f);
+	ASSERT_TRUE(UndoSystem::Undo());
+	EXPECT_EQ(environment->GetAmbientMode(), AmbientMode::Sky);
+}
+
 TEST_F(InspectorTest, ShapelessSkinnedShadowRowsEdit) {
 	MeshAsset bare;
 	SubMesh only;

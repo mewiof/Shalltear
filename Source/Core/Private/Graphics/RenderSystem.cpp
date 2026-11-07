@@ -2804,9 +2804,24 @@ namespace Shalltear {
 			}
 			setup.drawSky = setup.drawSky || haveSky;
 
-			if (chosen->GetAmbientMode() == AmbientMode::Color || !haveSky || !skyIrradiance) {
-				const Color ambient = chosen->GetAmbientColor();
-				setup.sh[0] = Vec3{ambient.r, ambient.g, ambient.b} * (1.0f / 0.282095f);
+			const Color ambientColor = chosen->GetAmbientColor();
+			Vec3 ambientRadiance{ambientColor.r, ambientColor.g, ambientColor.b};
+			if (chosen->GetAmbientMode() == AmbientMode::Gradient) {
+				const Color sky = chosen->GetAmbientSkyColor();
+				const Color equator = chosen->GetAmbientEquatorColor();
+				const Color ground = chosen->GetAmbientGroundColor();
+				GraphicsInternal::SkyGradient gradient;
+				gradient.sky = Vec3{sky.r, sky.g, sky.b};
+				gradient.equator = Vec3{equator.r, equator.g, equator.b};
+				gradient.ground = Vec3{ground.r, ground.g, ground.b};
+				GraphicsInternal::IrradianceSH irradiance;
+				GraphicsInternal::ProjectGradientIrradiance(gradient, irradiance);
+				for (u32 i = 0; i < 9; ++i) {
+					setup.sh[i] = irradiance.coefficients[i];
+				}
+				ambientRadiance = irradiance.coefficients[0] * 0.282095f;
+			} else if (chosen->GetAmbientMode() == AmbientMode::Color || !haveSky || !skyIrradiance) {
+				setup.sh[0] = ambientRadiance * (1.0f / 0.282095f);
 				for (u32 i = 1; i < 9; ++i) {
 					setup.sh[i] = Vec3{};
 				}
@@ -2816,8 +2831,7 @@ namespace Shalltear {
 				setup.sh[i] = setup.sh[i] * diffuseScale;
 			}
 			setup.reflectionIntensity *= haveSky ? setup.skyIntensity : 1.0f;
-			const Color ambientColor = chosen->GetAmbientColor();
-			setup.flatRadiance = Vec3{ambientColor.r, ambientColor.g, ambientColor.b};
+			setup.flatRadiance = ambientRadiance;
 			return setup;
 		}
 

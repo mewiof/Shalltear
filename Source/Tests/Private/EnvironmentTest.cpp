@@ -33,6 +33,7 @@ using Shalltear::GraphicsInternal::BuildCubeFromGradient;
 using Shalltear::GraphicsInternal::EvaluateIrradianceSH;
 using Shalltear::GraphicsInternal::IrradianceSH;
 using Shalltear::GraphicsInternal::PrefilterRadianceCube;
+using Shalltear::GraphicsInternal::ProjectGradientIrradiance;
 using Shalltear::GraphicsInternal::RadianceCube;
 using Shalltear::GraphicsInternal::SkyGradient;
 
@@ -115,6 +116,33 @@ namespace {
 		Asset* shader = AssetDatabase::LoadAsset(Path("engine://Shaders/Lit.hlsl"));
 		return shader ? shader->assetId : Guid{};
 	}
+
+	Color ToColor(const Vec3& value) {
+		return Color(value.x, value.y, value.z, 1.0f);
+	}
+
+	void SetAmbientGradient(Environment& environment, const SkyGradient& gradient) {
+		environment.SetAmbientSkyColor(ToColor(gradient.sky));
+		environment.SetAmbientEquatorColor(ToColor(gradient.equator));
+		environment.SetAmbientGroundColor(ToColor(gradient.ground));
+	}
+
+	void SetSkyGradient(Environment& environment, const SkyGradient& gradient) {
+		environment.SetSkyColor(ToColor(gradient.sky));
+		environment.SetEquatorColor(ToColor(gradient.equator));
+		environment.SetGroundColor(ToColor(gradient.ground));
+	}
+
+	SkyGradient WarmGroundGradient() {
+		SkyGradient gradient;
+		gradient.sky = Vec3(0.10f, 0.20f, 0.80f);
+		gradient.equator = Vec3(0.40f, 0.40f, 0.40f);
+		gradient.ground = Vec3(0.70f, 0.35f, 0.05f);
+		return gradient;
+	}
+
+	constexpr const char* MATTE_BODY = "\t\"floats\": { \"metallic\": 0, \"roughness\": 1, \"reflectance\": 0 },\n"
+									   "\t\"colors\": { \"baseColor\": [1, 1, 1, 1] }";
 
 } // anonymous namespace
 
@@ -715,6 +743,136 @@ TEST_F(EnvironmentReadbackFixture, SkyNoneLightsAndKeepsClear) {
 	const size_t corner = (2u * static_cast<size_t>(size.x) + 2u) * 4u;
 	EXPECT_LT(pixels[corner], 20u);
 	EXPECT_GT(pixels[corner + 1], 100u);
+
+	TearDownStage(stage);
+}
+
+TEST_F(EnvironmentReadbackFixture, GradientAmbientLightsUnderPlainBackground) {
+	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* material = LoadMaterial("Matte.mat", LitShaderGuid(), MATTE_BODY);
+	ASSERT_NE(material, nullptr);
+
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(material, stage));
+	stage.sun->SetEnabled(false);
+
+	const SkyGradient gradient = WarmGroundGradient();
+	Handle<Environment> environment = AddEnvironment(stage);
+	environment->SetSkyMode(SkyMode::None);
+	environment->SetAmbientMode(AmbientMode::Gradient);
+	SetAmbientGradient(*environment, gradient);
+	IrradianceSH sh;
+	ProjectGradientIrradiance(gradient, sh);
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	Vec3 measured[2];
+	const f32 tilts[2] = {-50.0f, 50.0f};
+	for (u32 i = 0; i < 2; ++i) {
+		stage.quad->SetLocalRotation(Quat::AngleAxis(tilts[i], Vec3(1.0f, 0.0f, 0.0f)));
+		SceneSystem::EndFrame();
+		ASSERT_TRUE(RenderStage(stage, pixels, size, Color(0.0f, 0.25f, 0.0f, 1.0f)));
+		const Vec3 normal = stage.quad->TransformDirection(Vec3(0.0f, 0.0f, 1.0f)).Normalized();
+		const Vec3 expected = ExpectedTexel(EvaluateIrradianceSH(sh, normal));
+		measured[i] = CenterTexel(pixels, size);
+		EXPECT_NEAR(measured[i].x, expected.x, 2.0f) << "tilt " << tilts[i];
+		EXPECT_NEAR(measured[i].y, expected.y, 2.0f) << "tilt " << tilts[i];
+		EXPECT_NEAR(measured[i].z, expected.z, 2.0f) << "tilt " << tilts[i];
+
+		const size_t corner = (2u * static_cast<size_t>(size.x) + 2u) * 4u;
+		EXPECT_LT(pixels[corner], 20u);
+		EXPECT_GT(pixels[corner + 1], 100u);
+		EXPECT_LT(pixels[corner + 2], 20u);
+	}
+	EXPECT_GT(measured[0].z, measured[1].z + 20.0f);
+	EXPECT_GT(measured[1].x, measured[0].x + 20.0f);
+
+	TearDownStage(stage);
+}
+
+TEST_F(EnvironmentReadbackFixture, GradientAmbientDecoupledFromSky) {
+	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* material = LoadMaterial("Matte.mat", LitShaderGuid(), MATTE_BODY);
+	ASSERT_NE(material, nullptr);
+
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(material, stage));
+	stage.sun->SetEnabled(false);
+	stage.quad->SetLocalRotation(Quat::AngleAxis(-50.0f, Vec3(1.0f, 0.0f, 0.0f)));
+
+	const SkyGradient gradient = WarmGroundGradient();
+	Handle<Environment> environment = AddEnvironment(stage);
+	environment->SetSkyMode(SkyMode::Gradient);
+	SetSkyGradient(*environment, gradient);
+	environment->SetSunDiscSizeDeg(0.0f);
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	const Vec3 fromSky = CenterTexel(pixels, size);
+	const size_t skyTexel = (2u * static_cast<size_t>(size.x) + 2u) * 4u;
+	const u8 skyBytes[3] = {pixels[skyTexel], pixels[skyTexel + 1], pixels[skyTexel + 2]};
+
+	environment->SetAmbientMode(AmbientMode::Gradient);
+	SetAmbientGradient(*environment, gradient);
+	SceneSystem::EndFrame();
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	const Vec3 fromGradient = CenterTexel(pixels, size);
+	EXPECT_NEAR(fromGradient.x, fromSky.x, 1.0f);
+	EXPECT_NEAR(fromGradient.y, fromSky.y, 1.0f);
+	EXPECT_NEAR(fromGradient.z, fromSky.z, 1.0f);
+
+	SkyGradient flipped = gradient;
+	flipped.sky = gradient.ground;
+	flipped.ground = gradient.sky;
+	SetAmbientGradient(*environment, flipped);
+	SceneSystem::EndFrame();
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+	const Vec3 fromFlipped = CenterTexel(pixels, size);
+	EXPECT_GT(fromFlipped.x, fromSky.x + 20.0f);
+	EXPECT_LT(fromFlipped.z, fromSky.z - 20.0f);
+	EXPECT_EQ(pixels[skyTexel], skyBytes[0]);
+	EXPECT_EQ(pixels[skyTexel + 1], skyBytes[1]);
+	EXPECT_EQ(pixels[skyTexel + 2], skyBytes[2]);
+	EXPECT_GT(skyBytes[2], skyBytes[0] + 20u);
+
+	TearDownStage(stage);
+}
+
+TEST_F(EnvironmentReadbackFixture, MirrorUnderGradientReflectsMean) {
+	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* material = LoadMaterial("Chrome.mat", LitShaderGuid(), ShadingTest::MIRROR_BODY);
+	ASSERT_NE(material, nullptr);
+
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(material, stage));
+	stage.sun->SetEnabled(false);
+
+	const SkyGradient gradient = WarmGroundGradient();
+	Handle<Environment> environment = AddEnvironment(stage);
+	environment->SetSkyMode(SkyMode::None);
+	environment->SetAmbientMode(AmbientMode::Gradient);
+	environment->SetAmbientColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+	SetAmbientGradient(*environment, gradient);
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderStage(stage, pixels, size));
+
+	const Vec3 mean = (gradient.sky + gradient.equator * 2.0f + gradient.ground) * 0.25f;
+	const Vec3 expected = ExpectedTexel(ShadingTest::MirrorOf(mean));
+	const Vec3 measured = CenterTexel(pixels, size);
+	EXPECT_NEAR(measured.x, expected.x, 4.0f);
+	EXPECT_NEAR(measured.y, expected.y, 4.0f);
+	EXPECT_NEAR(measured.z, expected.z, 4.0f);
 
 	TearDownStage(stage);
 }

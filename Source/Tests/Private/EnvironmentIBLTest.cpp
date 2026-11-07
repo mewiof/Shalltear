@@ -16,6 +16,7 @@ using Shalltear::GraphicsInternal::EvaluateSkyGradient;
 using Shalltear::GraphicsInternal::IBL_MIP_COUNT;
 using Shalltear::GraphicsInternal::IrradianceSH;
 using Shalltear::GraphicsInternal::PrefilterRadianceCube;
+using Shalltear::GraphicsInternal::ProjectGradientIrradiance;
 using Shalltear::GraphicsInternal::RadianceCube;
 using Shalltear::GraphicsInternal::RadianceCubeBytes;
 using Shalltear::GraphicsInternal::RadianceCubeFaceOffset;
@@ -125,6 +126,35 @@ TEST(EnvironmentIBLTest, GradientHitsThreeStops) {
 	EXPECT_NEAR(EvaluateSkyGradient(gradient, Vec3(0.0f, -1.0f, 0.0f)).z, 1.0f, 1e-5f);
 	gradient.flat = true;
 	EXPECT_NEAR(EvaluateSkyGradient(gradient, Vec3(0.0f, -1.0f, 0.0f)).x, 1.0f, 1e-5f);
+}
+
+TEST(EnvironmentIBLTest, GradientProjectionMatchesCube) {
+	SkyGradient skewed;
+	skewed.sky = Vec3(0.9f, 0.2f, 0.1f);
+	skewed.equator = Vec3(0.1f, 0.7f, 0.3f);
+	skewed.ground = Vec3(0.3f, 0.05f, 0.8f);
+	const SkyGradient gradients[] = {skewed, FlatSky(Vec3(0.5f, 0.25f, 0.125f))};
+	for (const SkyGradient& gradient : gradients) {
+		RadianceCube cube;
+		BuildCubeFromGradient(gradient, 32, cube);
+		ASSERT_TRUE(cube.IsValid());
+		IrradianceSH numeric;
+		PrefilterRadianceCube(cube, numeric);
+
+		IrradianceSH closed;
+		ProjectGradientIrradiance(gradient, closed);
+		for (u32 i = 0; i < 9; ++i) {
+			EXPECT_NEAR(closed.coefficients[i].x, numeric.coefficients[i].x, 2e-3f) << "coefficient " << i;
+			EXPECT_NEAR(closed.coefficients[i].y, numeric.coefficients[i].y, 2e-3f) << "coefficient " << i;
+			EXPECT_NEAR(closed.coefficients[i].z, numeric.coefficients[i].z, 2e-3f) << "coefficient " << i;
+		}
+	}
+	IrradianceSH closed;
+	ProjectGradientIrradiance(skewed, closed);
+	const Vec3 up = EvaluateIrradianceSH(closed, Vec3(0.0f, 1.0f, 0.0f));
+	const Vec3 down = EvaluateIrradianceSH(closed, Vec3(0.0f, -1.0f, 0.0f));
+	EXPECT_GT(up.x, down.x + 0.2f);
+	EXPECT_GT(down.z, up.z + 0.2f);
 }
 
 TEST(EnvironmentIBLTest, UniformSkySameAtEveryRoughness) {

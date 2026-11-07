@@ -50,6 +50,9 @@ namespace Shalltear::GraphicsInternal {
 
 	SHALLTEAR_CORE_API void BuildCubeFromGradient(const SkyGradient& gradient, u32 faceSize, RadianceCube& out);
 
+	// must match EvaluateSkyGradient
+	SHALLTEAR_CORE_API void ProjectGradientIrradiance(const SkyGradient& gradient, IrradianceSH& outSH);
+
 	SHALLTEAR_CORE_API bool BuildCubeFromEquirect(std::span<const u8> source, Vec2I sourceSize, RHI::Format sourceFormat,
 												  u32 faceSize, RadianceCube& out);
 

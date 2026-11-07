@@ -391,6 +391,21 @@ namespace Shalltear::GraphicsInternal {
 		return gradient.equator + (gradient.ground - gradient.equator) * (-up);
 	}
 
+	void ProjectGradientIrradiance(const SkyGradient& gradient, IrradianceSH& outSH) {
+		const Vec3 sky = gradient.sky;
+		const Vec3 equator = gradient.flat ? gradient.sky : gradient.equator;
+		const Vec3 ground = gradient.flat ? gradient.sky : gradient.ground;
+		const Vec3 level = (sky + equator * 2.0f + ground) * 0.5f;
+		const Vec3 tilt = (sky - ground) * (1.0f / 3.0f);
+		const Vec3 bulge = (equator * 2.0f - sky - ground) * 0.25f;
+		const f32 ring = 2.0f * PI;
+		outSH = IrradianceSH{};
+		outSH.coefficients[0] = level * (0.282095f * ring);
+		outSH.coefficients[1] = tilt * (0.488603f * ring * (2.094395f / PI));
+		outSH.coefficients[6] = bulge * (0.5f * 0.315392f * ring * (0.785398f / PI));
+		outSH.coefficients[8] = bulge * (0.5f * 0.546274f * ring * (0.785398f / PI));
+	}
+
 	void BuildCubeFromGradient(const SkyGradient& gradient, u32 faceSize, RadianceCube& out) {
 		if (faceSize == 0) {
 			return;

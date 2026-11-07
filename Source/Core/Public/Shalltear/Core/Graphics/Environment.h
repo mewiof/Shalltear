@@ -20,6 +20,7 @@ namespace Shalltear {
 
 	enum class AmbientMode : u8 {
 		Sky = 0,
+		Gradient,
 		Color
 	};
 
@@ -52,6 +53,7 @@ SLT_END_ENUM()
 
 SLT_REFLECT_ENUM(::Shalltear::AmbientMode)
 SLT_ENUM_VALUE(Sky)
+SLT_ENUM_VALUE(Gradient)
 SLT_ENUM_VALUE(Color)
 SLT_END_ENUM()
 
@@ -95,6 +97,9 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_sunIntensityMultiplier, SLT_RANGE(0.0f, 8.0f))
 		SLT_REFLECT_FIELD(_ambientMode)
 		SLT_REFLECT_FIELD(_ambientColor)
+		SLT_REFLECT_FIELD(_ambientSkyColor)
+		SLT_REFLECT_FIELD(_ambientEquatorColor)
+		SLT_REFLECT_FIELD(_ambientGroundColor)
 		SLT_REFLECT_FIELD(_ambientIntensity, SLT_RANGE(0.0f, 8.0f))
 		SLT_REFLECT_FIELD(_reflectionIntensity, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_reflectionResolution)
@@ -171,6 +176,15 @@ namespace Shalltear {
 		Color GetAmbientColor() const { return _ambientColor; }
 		void SetAmbientColor(const Color& color) { _ambientColor = color; }
 
+		Color GetAmbientSkyColor() const { return _ambientSkyColor; }
+		void SetAmbientSkyColor(const Color& color) { _ambientSkyColor = color; }
+
+		Color GetAmbientEquatorColor() const { return _ambientEquatorColor; }
+		void SetAmbientEquatorColor(const Color& color) { _ambientEquatorColor = color; }
+
+		Color GetAmbientGroundColor() const { return _ambientGroundColor; }
+		void SetAmbientGroundColor(const Color& color) { _ambientGroundColor = color; }
+
 		f32 GetAmbientIntensity() const { return _ambientIntensity; }
 		void SetAmbientIntensity(f32 intensity) { _ambientIntensity = intensity; }
 
@@ -230,6 +244,9 @@ namespace Shalltear {
 		f32 _sunIntensityMultiplier = 1.0f;
 		AmbientMode _ambientMode = AmbientMode::Sky;
 		Color _ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
+		Color _ambientSkyColor{0.25f, 0.42f, 0.78f, 1.0f};
+		Color _ambientEquatorColor{0.62f, 0.70f, 0.80f, 1.0f};
+		Color _ambientGroundColor{0.10f, 0.09f, 0.08f, 1.0f};
 		f32 _ambientIntensity = 1.0f;
 		f32 _reflectionIntensity = 1.0f;
 		i32 _reflectionResolution = 128;

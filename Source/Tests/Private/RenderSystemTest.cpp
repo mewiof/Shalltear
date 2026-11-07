@@ -154,6 +154,24 @@ TEST(RenderSystemHeadlessTest, ShadowFlagsSaveByName) {
 	EXPECT_FALSE(skinnedLoaded.GetReceiveShadows());
 }
 
+TEST(RenderSystemHeadlessTest, AmbientGradientSavesByName) {
+	Environment environment;
+	environment.SetSkyMode(SkyMode::Cubemap);
+	environment.SetAmbientMode(AmbientMode::Gradient);
+	environment.SetAmbientSkyColor(Color(0.1f, 0.2f, 0.3f, 1.0f));
+	environment.SetAmbientEquatorColor(Color(0.4f, 0.5f, 0.6f, 1.0f));
+	environment.SetAmbientGroundColor(Color(0.7f, 0.8f, 0.9f, 1.0f));
+	const str text = TextSerializer::Serialize(&environment, Environment::GetReflectType());
+	EXPECT_NE(text.find("\"Gradient\""), str::npos) << text;
+
+	Environment loaded;
+	ASSERT_TRUE(TextSerializer::Deserialize(&loaded, Environment::GetReflectType(), text));
+	EXPECT_EQ(loaded.GetAmbientMode(), AmbientMode::Gradient);
+	EXPECT_FLOAT_EQ(loaded.GetAmbientSkyColor().b, 0.3f);
+	EXPECT_FLOAT_EQ(loaded.GetAmbientEquatorColor().g, 0.5f);
+	EXPECT_FLOAT_EQ(loaded.GetAmbientGroundColor().r, 0.7f);
+}
+
 TEST(RenderSystemHeadlessTest, StatsAreZeroWhenDown) {
 	ASSERT_FALSE(RenderSystem::IsInitialized());
 	EXPECT_FALSE(RenderSystem::IsRenderingAvailable());

@@ -9,6 +9,7 @@
 // entry = image idx in bits 0-19, sampler idx in 20-31
 #define SHALLTEAR_TABLE_SAMPLER_SHIFT 20u
 #define SHALLTEAR_TABLE_IMAGE_MASK 0xFFFFFu
+#define SHALLTEAR_TABLE_NONE 0xFFFFFFFFu
 
 float4 ShalltearTableSample2D(uint entry, float2 uv, float2 uvDdx, float2 uvDdy) {
 	return sltTableTextures2D[NonUniformResourceIndex(entry & SHALLTEAR_TABLE_IMAGE_MASK)].SampleGrad(

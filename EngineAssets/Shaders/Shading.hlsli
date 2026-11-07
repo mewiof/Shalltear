@@ -49,7 +49,8 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 	if (sltPunctualLightCount > 0.0) {
 		uint cluster = ShalltearClusterOf(surfaceInput.positionSS, viewDepth);
 		uint2 entry = ShalltearClusterEntry(cluster);
-		for (uint p = 0; p < entry.y; ++p) {
+		uint punctualCount = entry.y & 0xFFu;
+		for (uint p = 0; p < punctualCount; ++p) {
 			ShalltearLight light = ShalltearLoadLight(ShalltearClusterLight(entry, p));
 			if (!ShalltearLightReaches(light, drawLayers)) {
 				continue;

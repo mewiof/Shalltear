@@ -76,4 +76,24 @@ namespace Shalltear::GraphicsInternal {
 									 u32 lightsPerCluster, Vector<u32>& outTable, Vector<u32>& outIndices,
 									 Vector<f32>& scratchKeys);
 
+	// 8 bit count per kind, must match Lights.hlsli
+	inline constexpr u32 MAX_CLUSTER_ITEMS = 255;
+	inline constexpr u32 CLUSTER_DECAL_SHIFT = 8;
+
+	struct DecalBound {
+		Vec3 center;
+		f32 radius = 0.0f;
+	};
+
+	SHALLTEAR_CORE_API bool DecalDepthSpan(const Mat4& view, std::span<const DecalBound> decals, f32& outNearDepth, f32& outFarDepth);
+
+	// decals should be in draw order (first ones dropped from full cluster)
+	SHALLTEAR_CORE_API u32 BinDecals(const ClusterGrid& grid, const Mat4& view, std::span<const DecalBound> decals,
+									 u32 decalsPerCluster, Vector<u32>& outTable, Vector<u32>& outIndices);
+
+	// header = (offset, lights | decals << CLUSTER_DECAL_SHIFT), lights before decals
+	SHALLTEAR_CORE_API void MergeClusterLists(std::span<const u32> lightTable, std::span<const u32> lightIndices,
+											  std::span<const u32> decalTable, std::span<const u32> decalIndices,
+											  Vector<u32>& outHeader, Vector<u32>& outIndices);
+
 } // namespace Shalltear::GraphicsInternal

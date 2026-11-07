@@ -32,6 +32,7 @@ namespace Shalltear {
 
 		inline constexpr Guid SkinningShader{0x7cb3d340a65e4637, 0x4efde93d781eaa22};
 
+		inline constexpr Guid DecalShader{0x9a59af4a6d601949, 0x887a56e24d68e9ba};
 		inline constexpr Guid UIShader{0x338097fb9c0c87b0, 0x92e117f93e38c514};
 
 		inline constexpr Guid DefaultFont{0x5d280fd701b66993, 0xda09822ec0a9b52b};

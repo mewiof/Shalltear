@@ -12,6 +12,7 @@
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
+#include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/Skeleton.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Log.h"
@@ -461,6 +462,7 @@ namespace Shalltear::EditorIcons {
 				Plant(UnresolvedComponent::GetReflectType()->name, Mark::MissingComponent, onlyAbsent);
 				Plant(Camera::GetReflectType()->name, Mark::Camera, onlyAbsent);
 				Plant(Light::GetReflectType()->name, Mark::Light, onlyAbsent);
+				Plant(Decal::GetReflectType()->name, Mark::Decal, onlyAbsent);
 				Plant(MeshRenderer::GetReflectType()->name, Mark::MeshRenderer, onlyAbsent);
 				Plant(SkinnedMeshRenderer::GetReflectType()->name, Mark::SkinnedMeshRenderer, onlyAbsent);
 				Plant(Skeleton::GetReflectType()->name, Mark::Skeleton, onlyAbsent);

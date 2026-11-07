@@ -311,4 +311,93 @@ namespace Shalltear::GraphicsInternal {
 		return dropped;
 	}
 
+	bool DecalDepthSpan(const Mat4& view, std::span<const DecalBound> decals, f32& outNearDepth, f32& outFarDepth) {
+		bool any = false;
+		for (const DecalBound& decal : decals) {
+			const f32 depth = view.TransformPoint(decal.center).z;
+			if (depth + decal.radius <= 0.0f) {
+				continue;
+			}
+			outNearDepth = any ? Math::Min(outNearDepth, depth - decal.radius) : depth - decal.radius;
+			outFarDepth = any ? Math::Max(outFarDepth, depth + decal.radius) : depth + decal.radius;
+			any = true;
+		}
+		return any;
+	}
+
+	u32 BinDecals(const ClusterGrid& grid, const Mat4& view, std::span<const DecalBound> decals, u32 decalsPerCluster,
+				  Vector<u32>& outTable, Vector<u32>& outIndices) {
+		const u32 clusterCount = grid.ClusterCount();
+		outTable.assign(static_cast<size_t>(clusterCount) * 2, 0u);
+		outIndices.clear();
+		if (decals.empty() || decalsPerCluster == 0) {
+			return 0;
+		}
+		const u32 stride = Math::Min(Math::Min(decalsPerCluster, MAX_CLUSTER_ITEMS), static_cast<u32>(decals.size()));
+		outIndices.assign(static_cast<size_t>(clusterCount) * stride, 0u);
+
+		u32 dropped = 0;
+		for (u32 decal = static_cast<u32>(decals.size()); decal-- > 0;) {
+			const Vec3 viewPosition = view.TransformPoint(decals[decal].center);
+			ClusterSpan span;
+			if (!SpanOfSphere(grid, viewPosition, decals[decal].radius, span)) {
+				continue;
+			}
+			const f32 radiusSquared = Math::Max(decals[decal].radius * decals[decal].radius, 1e-8f);
+			for (u32 z = span.z0; z <= span.z1; ++z) {
+				for (u32 y = span.y0; y <= span.y1; ++y) {
+					for (u32 x = span.x0; x <= span.x1; ++x) {
+						Vec3 boxMin;
+						Vec3 boxMax;
+						ClusterBounds(grid, x, y, z, boxMin, boxMax);
+						if (SquaredDistanceToBox(viewPosition, boxMin, boxMax) > radiusSquared) {
+							continue;
+						}
+						const u32 cluster = (z * grid.dimY + y) * grid.dimX + x;
+						u32& count = outTable[static_cast<size_t>(cluster) * 2 + 1];
+						if (count == stride) {
+							++dropped;
+							continue;
+						}
+						outIndices[static_cast<size_t>(cluster) * stride + count++] = decal;
+					}
+				}
+			}
+		}
+
+		u32 total = 0;
+		u32 run[MAX_CLUSTER_ITEMS];
+		for (u32 cluster = 0; cluster < clusterCount; ++cluster) {
+			const u32 count = outTable[static_cast<size_t>(cluster) * 2 + 1];
+			const size_t base = static_cast<size_t>(cluster) * stride;
+			for (u32 i = 0; i < count; ++i) {
+				run[i] = outIndices[base + count - 1 - i];
+			}
+			for (u32 i = 0; i < count; ++i) {
+				outIndices[total + i] = run[i];
+			}
+			outTable[static_cast<size_t>(cluster) * 2] = total;
+			total += count;
+		}
+		outIndices.resize(total);
+		return dropped;
+	}
+
+	void MergeClusterLists(std::span<const u32> lightTable, std::span<const u32> lightIndices, std::span<const u32> decalTable,
+						   std::span<const u32> decalIndices, Vector<u32>& outHeader, Vector<u32>& outIndices) {
+		const size_t clusterCount = lightTable.size() / 2;
+		outHeader.assign(clusterCount * 2, 0u);
+		outIndices.resize(lightIndices.size() + decalIndices.size());
+		u32 total = 0;
+		for (size_t cluster = 0; cluster < clusterCount; ++cluster) {
+			const u32 lights = lightTable[cluster * 2 + 1];
+			const u32 decals = decalTable[cluster * 2 + 1];
+			outHeader[cluster * 2] = total;
+			outHeader[cluster * 2 + 1] = lights | (decals << CLUSTER_DECAL_SHIFT);
+			std::copy_n(lightIndices.begin() + lightTable[cluster * 2], lights, outIndices.begin() + total);
+			std::copy_n(decalIndices.begin() + decalTable[cluster * 2], decals, outIndices.begin() + total + lights);
+			total += lights + decals;
+		}
+	}
+
 } // namespace Shalltear::GraphicsInternal

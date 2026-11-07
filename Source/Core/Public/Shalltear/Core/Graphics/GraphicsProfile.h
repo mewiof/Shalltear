@@ -51,6 +51,7 @@ namespace Shalltear {
 
 		SLT_REFLECT_FIELD(lightsPerView, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_REFLECT_FIELD(lightsPerCluster, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+		SLT_REFLECT_FIELD(decalsPerCluster, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 
 		SLT_REFLECT_FIELD(shadowDistance, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowCascades, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
@@ -80,6 +81,8 @@ namespace Shalltear {
 		i32 lightsPerView = 256;
 
 		i32 lightsPerCluster = 32;
+
+		i32 decalsPerCluster = 32;
 
 		f32 shadowDistance = 60.0f;
 

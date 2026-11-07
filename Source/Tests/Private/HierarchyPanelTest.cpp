@@ -3215,6 +3215,29 @@ TEST_F(HierarchyPanelTest, EmptySpaceMenuOffersAllKinds) {
 	EXPECT_TRUE(MenuRowNamed(rig.context, popup, "Light").IsValid());
 }
 
+TEST_F(HierarchyPanelTest, DecalCreateAddsDecal) {
+	Vector<UI::Widgets::MenuItem> items{GetMemoryResource(MemTag::Editor)};
+	EditorSceneOps::BuildCreateMenu(_scene, {}, items);
+	const UI::Widgets::MenuItem* decal = nullptr;
+	for (const UI::Widgets::MenuItem& item : items) {
+		if (item.label == "Decal") {
+			decal = &item;
+		}
+	}
+	ASSERT_NE(decal, nullptr);
+	decal->onSelect();
+
+	Handle<SceneObject> created(static_cast<SceneObject*>(EditorSelection::GetActive().Get()));
+	ASSERT_TRUE(created.IsValid());
+	EXPECT_EQ(created.Get()->name, "Decal");
+	ASSERT_EQ(created.Get()->GetComponentCount(), 1u);
+	EXPECT_EQ(created.Get()->GetComponentAt(0).Get()->GetType()->name.GetValue(), StringHash("Decal").GetValue());
+
+	UndoSystem::Undo();
+	SceneSystem::EndFrame();
+	EXPECT_FALSE(created.IsValid());
+}
+
 TEST_F(HierarchyPanelTest, CameraCreateIsOneUndo) {
 	Handle<SceneObject> parent = SceneSystem::CreateObject("Parent", _scene);
 

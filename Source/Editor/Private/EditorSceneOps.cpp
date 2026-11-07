@@ -539,6 +539,13 @@ namespace Shalltear {
 		};
 		out.push_back(std::move(environment));
 
+		UI::Widgets::MenuItem decal;
+		decal.label = "Decal";
+		decal.onSelect = [target, under]() {
+			SelectCreated(CreateWithComponent("Decal", StringHash("Decal"), target, under));
+		};
+		out.push_back(std::move(decal));
+
 		if (!_createEntries) {
 			return;
 		}

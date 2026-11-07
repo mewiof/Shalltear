@@ -126,8 +126,7 @@ float3 ShalltearTransformNormal(float4 column0, float4 column1, float4 column2, 
 	float sltProbeCount;
 	float sltFogLayerCount;
 	uint64_t sltViewDataAddress;
-	float sltViewDataPad0;
-	float sltViewDataPad1;
+	uint64_t sltDecalAddress;
 };
 
 #include "ViewData.hlsli"

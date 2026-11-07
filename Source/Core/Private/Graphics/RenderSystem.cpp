@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
 #include "Shalltear/Core/Graphics/Camera.h"
+#include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/FramePass.h"
 #include "Shalltear/Core/Graphics/GraphicsProfile.h"
@@ -217,6 +218,24 @@ namespace Shalltear {
 		};
 		static_assert(sizeof(GPULightCookie) == sizeof(GPULight), "1 extension slot, must match ShalltearLightCookie");
 
+		struct GPUDecal {
+			Vec4 rows[3];
+			Vec4 uvScaleBias;
+			Vec4 baseColor;
+			Vec3 emissive;
+			f32 normalScale = 1.0f;
+			u32 baseColorEntry = RHI::TABLE_NONE;
+			u32 normalEntry = RHI::TABLE_NONE;
+			u32 maskEntry = RHI::TABLE_NONE;
+			u32 emissiveEntry = RHI::TABLE_NONE;
+			f32 angleFadeScale = 0.0f;
+			f32 angleFadeBias = 1.0f;
+			u32 layers = 0;
+			u32 pad0 = 0;
+		};
+		static_assert(sizeof(GPUDecal) == 128, "must match SHALLTEAR_DECAL_STRIDE");
+		constexpr u32 DECAL_EVERY_LAYER = 0x100u;
+
 		constexpr u32 LIGHT_LAYERS = 0xFFu;
 		constexpr u32 LIGHT_FLAG_COOKIE = 1u << 8;
 		constexpr u32 LIGHT_FLAG_EVERY_LAYER = 2u << 8;
@@ -258,8 +277,7 @@ namespace Shalltear {
 			f32 probeCount = 0.0f;
 			f32 fogLayerCount = 0.0f;
 			u64 viewDataAddress = 0;
-			f32 viewDataPad0 = 0.0f;
-			f32 viewDataPad1 = 0.0f;
+			u64 decalAddress = 0;
 		};
 		static_assert(sizeof(GPUViewUniforms) == 240);
 
@@ -435,6 +453,8 @@ namespace Shalltear {
 			Vector<Handle<Light>> lights{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<MeshRenderer>> meshRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<Light>> isolatedLights{GetMemoryResource(MemTag::Graphics)};
+			Vector<Handle<Decal>> decals{GetMemoryResource(MemTag::Graphics)};
+			Vector<Handle<Decal>> isolatedDecals{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<MeshRenderer>> isolatedMeshRenderers{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<Environment>> environments{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<Environment>> isolatedEnvironments{GetMemoryResource(MemTag::Graphics)};
@@ -727,6 +747,7 @@ namespace Shalltear {
 
 			u32 lightsPerView = 256;
 			u32 lightsPerCluster = 32;
+			u32 decalsPerCluster = 32;
 
 			f32 shadowDistance = 60.0f;
 			u32 shadowCascades = 4;
@@ -921,6 +942,18 @@ namespace Shalltear {
 			Vector<u32> clusterTable{GetMemoryResource(MemTag::Graphics)};
 			Vector<u32> clusterIndices{GetMemoryResource(MemTag::Graphics)};
 			Vector<f32> clusterKeys{GetMemoryResource(MemTag::Graphics)};
+			struct DecalCandidate {
+				GPUDecal record;
+				GraphicsInternal::DecalBound bound;
+			};
+			Vector<DecalCandidate> decalCandidates{GetMemoryResource(MemTag::Graphics)};
+			// priority << 32 | candidate idx
+			Vector<u64> decalOrder{GetMemoryResource(MemTag::Graphics)};
+			Vector<GraphicsInternal::DecalBound> decalBounds{GetMemoryResource(MemTag::Graphics)};
+			Vector<u32> decalTable{GetMemoryResource(MemTag::Graphics)};
+			Vector<u32> decalIndices{GetMemoryResource(MemTag::Graphics)};
+			Vector<u32> mergedClusterHeader{GetMemoryResource(MemTag::Graphics)};
+			Vector<u32> mergedClusterIndices{GetMemoryResource(MemTag::Graphics)};
 
 			void OnWindowResized(const WindowResizedEvent& event) {
 				if (event.live) {
@@ -3267,6 +3300,16 @@ namespace Shalltear {
 													  state.lightsPerView, outDirectionalCount, outDropped);
 		}
 
+		u32 TableEntryOf(RenderState& state, const TextureAsset* texture) {
+			if (!texture || !texture->texture.IsValid()) {
+				return RHI::TABLE_NONE;
+			}
+			const RHI::SamplerHandle sampler = TextureSampler(state, *texture);
+			const u32 image = state.device->GetTableIndex(texture->texture);
+			const u32 slot = sampler.IsValid() ? state.device->GetTableIndex(sampler) : RHI::TABLE_NONE;
+			return image == RHI::TABLE_NONE || slot == RHI::TABLE_NONE ? RHI::TABLE_NONE : image | (slot << TABLE_SAMPLER_SHIFT);
+		}
+
 		bool PackLightCookie(RenderState& state, const GraphicsInternal::LightCandidate& candidate, GPULightCookie& out) {
 			const TextureAsset* cookie = candidate.cookie;
 			if (!cookie || !cookie->texture.IsValid()) {
@@ -3283,14 +3326,12 @@ namespace Shalltear {
 				}
 				return false;
 			}
-			const RHI::SamplerHandle sampler = TextureSampler(state, *cookie);
-			const u32 image = state.device->GetTableIndex(cookie->texture);
-			const u32 slot = sampler.IsValid() ? state.device->GetTableIndex(sampler) : RHI::TABLE_NONE;
-			if (image == RHI::TABLE_NONE || slot == RHI::TABLE_NONE) {
+			const u32 entry = TableEntryOf(state, cookie);
+			if (entry == RHI::TABLE_NONE) {
 				return false;
 			}
 			out = GPULightCookie{};
-			out.entry = image | (slot << TABLE_SAMPLER_SHIFT);
+			out.entry = entry;
 
 			const Vec3& origin = candidate.position;
 			const Vec3& right = candidate.right;
@@ -3331,6 +3372,93 @@ namespace Shalltear {
 				info |= LIGHT_FLAG_EVERY_LAYER;
 			}
 			return info;
+		}
+
+		void ExtractDecals(const Mat4& viewProjection, const Vec3& cameraPosition, SceneKind kind, std::span<const u64> onlyScenes) {
+			RenderState& state = *_state;
+			state.decalCandidates.clear();
+			state.decalOrder.clear();
+			state.decalBounds.clear();
+			const bool isolated = kind != SceneKind::World;
+			const Vector<Handle<Decal>>& decals = isolated ? state.isolatedDecals : state.decals;
+			if (decals.empty()) {
+				return;
+			}
+			const std::span<const u64> scenes = isolated ? onlyScenes : std::span<const u64>{};
+			const Frustum frustum = Frustum::FromMatrix(viewProjection);
+			for (Handle<Decal> handle : decals) {
+				const Decal* decal = handle.Get();
+				const SceneObject* owner = decal ? decal->GetOwner().Get() : nullptr;
+				const MaterialAsset* material = decal ? decal->GetMaterial().Get() : nullptr;
+				if (!owner || !material) {
+					continue;
+				}
+				if (!scenes.empty() && std::find(scenes.begin(), scenes.end(), owner->GetScene().GetInstanceId()) == scenes.end()) {
+					continue;
+				}
+				if (material->shaderGuid != EngineBuiltins::DecalShader) {
+					const u64 key = decal->GetInstanceId() * 0x9E3779B97F4A7C15ull ^ material->GetInstanceId();
+					if (std::find(state.dimensionMismatchesWarned.begin(), state.dimensionMismatchesWarned.end(), key) ==
+						state.dimensionMismatchesWarned.end()) {
+						state.dimensionMismatchesWarned.push_back(key);
+						SLT_LOG_WARN("Graphics", "decal material '{}' doesn't use Decal shader (ignoring)", material->virtualPath);
+					}
+					continue;
+				}
+				const Mat4 decalToWorld = owner->GetWorldMatrix() * Mat4::Translation(decal->GetPivot()) * Mat4::Scale(decal->GetSize());
+				Mat4 worldToDecal;
+				if (!decalToWorld.TryInvert(worldToDecal)) {
+					continue;
+				}
+				const Vec3 center = decalToWorld.TransformPoint(Vec3());
+				f32 radius = 0.0f;
+				for (const Vec3& corner : {Vec3(0.5f, 0.5f, 0.5f), Vec3(-0.5f, 0.5f, 0.5f), Vec3(0.5f, -0.5f, 0.5f), Vec3(-0.5f, -0.5f, 0.5f)}) {
+					radius = Math::Max(radius, decalToWorld.TransformVector(corner).Length());
+				}
+				const f32 drawDistance = Math::Max(decal->GetDrawDistance(), 0.0f);
+				const f32 distance = (center - cameraPosition).Length();
+				if (distance > drawDistance || !frustum.Intersects(Sphere(center, radius))) {
+					continue;
+				}
+				const f32 fadeRange = drawDistance * (1.0f - Math::Clamp(decal->GetStartFade(), 0.0f, 1.0f));
+				const f32 fade = fadeRange > 1e-4f ? Math::Clamp((drawDistance - distance) / fadeRange, 0.0f, 1.0f) : 1.0f;
+
+				state.decalOrder.push_back((static_cast<u64>(static_cast<u32>(decal->GetPriority()) ^ 0x80000000u) << 32) |
+										   static_cast<u64>(state.decalCandidates.size()));
+				RenderState::DecalCandidate& candidate = state.decalCandidates.emplace_back();
+				candidate.bound = {center, radius};
+				GPUDecal& record = candidate.record;
+				for (u32 row = 0; row < 3; ++row) {
+					record.rows[row] = Vec4(worldToDecal(row, 0), worldToDecal(row, 1), worldToDecal(row, 2), worldToDecal(row, 3));
+				}
+				const Vec2 tiling = decal->GetTiling();
+				const Vec2 offset = decal->GetOffset();
+				record.uvScaleBias = Vec4(tiling.x, tiling.y, offset.x, offset.y);
+				const Color tint = material->GetColor(StringHash("baseColor"), Color::White());
+				record.baseColor = Vec4(tint.r, tint.g, tint.b, tint.a * Math::Clamp(decal->GetOpacity(), 0.0f, 1.0f) * fade);
+				if (const MaterialAsset::Param* emissive = material->FindParam(StringHash("emissive"))) {
+					record.emissive = Vec3(emissive->numbers[0], emissive->numbers[1], emissive->numbers[2]);
+				}
+				record.normalScale = material->GetFloat(StringHash("normalScale"), 1.0f);
+				record.baseColorEntry = TableEntryOf(state, material->GetTexture(StringHash("baseColorTexture")).Get());
+				record.normalEntry = TableEntryOf(state, material->GetTexture(StringHash("normalTexture")).Get());
+				record.maskEntry = TableEntryOf(state, material->GetTexture(StringHash("maskTexture")).Get());
+				record.emissiveEntry = TableEntryOf(state, material->GetTexture(StringHash("emissiveTexture")).Get());
+				const Vec2 angleFade = decal->GetAngleFade();
+				const f32 fadeStart = Math::Clamp(angleFade.x, 0.0f, 180.0f) * Math::DEG_TO_RAD;
+				const f32 fadeEnd = Math::Clamp(Math::Max(angleFade.y, angleFade.x), 0.0f, 180.0f) * Math::DEG_TO_RAD;
+				if (fadeStart < Math::PI) {
+					const f32 range = Math::Max(fadeEnd - fadeStart, 1e-4f);
+					record.angleFadeScale = -1.0f / range;
+					record.angleFadeBias = (fadeStart + range) / range;
+				}
+				const u32 mask = decal->GetRenderingLayerMask();
+				record.layers = (mask & LIGHT_LAYERS) | (mask == ~0u ? DECAL_EVERY_LAYER : 0u);
+			}
+			std::sort(state.decalOrder.begin(), state.decalOrder.end());
+			for (u64 key : state.decalOrder) {
+				state.decalBounds.push_back(state.decalCandidates[static_cast<u32>(key)].bound);
+			}
 		}
 
 		class ViewRecordScope {
@@ -4374,21 +4502,47 @@ namespace Shalltear {
 			if (punctualCount > 0 && !haveSpan) {
 				viewUniforms.punctualLightCount = 0.0f;
 			}
-			if (haveSpan) {
-				const GraphicsInternal::ClusterGrid grid = GraphicsInternal::BuildClusterGrid(projection, lightsNearDepth, lightsFarDepth);
+			ExtractDecals(viewProjection, cameraPosition, kind, onlyScenes);
+			const std::span<const GraphicsInternal::DecalBound> decalBounds{state.decalBounds.data(), state.decalBounds.size()};
+			f32 decalsNearDepth = 0.0f;
+			f32 decalsFarDepth = 0.0f;
+			const bool haveDecals = !decalBounds.empty() && GraphicsInternal::DecalDepthSpan(view, decalBounds, decalsNearDepth, decalsFarDepth);
+			if (haveSpan || haveDecals) {
+				const f32 nearDepth = haveSpan && haveDecals ? Math::Min(lightsNearDepth, decalsNearDepth) : haveSpan ? lightsNearDepth
+																													  : decalsNearDepth;
+				const f32 farDepth = haveSpan && haveDecals ? Math::Max(lightsFarDepth, decalsFarDepth) : haveSpan ? lightsFarDepth
+																												   : decalsFarDepth;
+				const GraphicsInternal::ClusterGrid grid = GraphicsInternal::BuildClusterGrid(projection, nearDepth, farDepth);
 				state.frameClusterLightsDropped += GraphicsInternal::BinLights(
-					grid, view, {candidates.data() + directionalCount, punctualCount}, directionalCount,
+					grid, view, {candidates.data() + directionalCount, haveSpan ? punctualCount : 0u}, directionalCount,
 					state.lightsPerCluster, state.clusterTable, state.clusterIndices, state.clusterKeys);
+				const Vector<u32>* header = &state.clusterTable;
+				const Vector<u32>* indices = &state.clusterIndices;
+				if (haveDecals) {
+					GraphicsInternal::BinDecals(grid, view, decalBounds, state.decalsPerCluster, state.decalTable, state.decalIndices);
+					GraphicsInternal::MergeClusterLists(state.clusterTable, state.clusterIndices, state.decalTable, state.decalIndices,
+														state.mergedClusterHeader, state.mergedClusterIndices);
+					header = &state.mergedClusterHeader;
+					indices = &state.mergedClusterIndices;
+					const u64 decalBytes = static_cast<u64>(state.decalCandidates.size()) * sizeof(GPUDecal);
+					if (RHI::TransientAllocation decalAllocation = device.AllocateTransient(decalBytes, 16); decalAllocation.IsValid()) {
+						GPUDecal* records = static_cast<GPUDecal*>(decalAllocation.cpu);
+						for (size_t i = 0; i < state.decalOrder.size(); ++i) {
+							records[i] = state.decalCandidates[static_cast<u32>(state.decalOrder[i])].record;
+						}
+						viewUniforms.decalAddress = device.GetBufferDeviceAddress(decalAllocation.buffer) + decalAllocation.offset;
+					}
+				}
 
-				const u64 tableBytes = state.clusterTable.size() * sizeof(u32);
-				const u64 indexBytes = state.clusterIndices.size() * sizeof(u32);
+				const u64 tableBytes = header->size() * sizeof(u32);
+				const u64 indexBytes = indices->size() * sizeof(u32);
 				RHI::TransientAllocation clusterAllocation = device.AllocateTransient(tableBytes + indexBytes, 16);
 				if (clusterAllocation.IsValid()) {
 					viewUniforms.clusterAddress = device.GetBufferDeviceAddress(clusterAllocation.buffer) + clusterAllocation.offset;
 					u8* destination = static_cast<u8*>(clusterAllocation.cpu);
-					std::memcpy(destination, state.clusterTable.data(), tableBytes);
+					std::memcpy(destination, header->data(), tableBytes);
 					if (indexBytes > 0) {
-						std::memcpy(destination + tableBytes, state.clusterIndices.data(), indexBytes);
+						std::memcpy(destination + tableBytes, indices->data(), indexBytes);
 					}
 					viewUniforms.clusterDimX = grid.dimX;
 					viewUniforms.clusterDimY = grid.dimY;
@@ -4399,6 +4553,7 @@ namespace Shalltear {
 					viewUniforms.clusterSliceBias = grid.sliceBias;
 				} else {
 					viewUniforms.punctualLightCount = 0.0f;
+					viewUniforms.decalAddress = 0;
 				}
 			}
 
@@ -7481,7 +7636,8 @@ namespace Shalltear {
 
 		void ApplyProfileToState(RenderState& state, const GraphicsProfile& profile) {
 			state.lightsPerView = static_cast<u32>(Math::Clamp(profile.lightsPerView, 1, 4096));
-			state.lightsPerCluster = static_cast<u32>(Math::Clamp(profile.lightsPerCluster, 1, 256));
+			state.lightsPerCluster = static_cast<u32>(Math::Clamp(profile.lightsPerCluster, 1, static_cast<i32>(GraphicsInternal::MAX_CLUSTER_ITEMS)));
+			state.decalsPerCluster = static_cast<u32>(Math::Clamp(profile.decalsPerCluster, 1, static_cast<i32>(GraphicsInternal::MAX_CLUSTER_ITEMS)));
 
 			state.shadowDistance = Math::Max(profile.shadowDistance, 0.0f);
 			state.shadowCascades = static_cast<u32>(
@@ -8774,6 +8930,26 @@ namespace Shalltear {
 		if (_state) {
 			SwapRemoveHandle(_state->lights, light);
 			SwapRemoveHandle(_state->isolatedLights, light);
+		}
+	}
+	void RenderSystem::RegisterDecal(Handle<Decal> decal) {
+		Decal* target = decal.Get();
+		if (!_state || !target) {
+			return;
+		}
+		Vector<Handle<Decal>>& list = KindOfOwningScene(*target) == SceneKind::World ? _state->decals : _state->isolatedDecals;
+		auto at = std::lower_bound(list.begin(), list.end(), decal, [](const Handle<Decal>& a, const Handle<Decal>& b) {
+			return a.GetInstanceId() < b.GetInstanceId();
+		});
+		if (at == list.end() || *at != decal) {
+			list.insert(at, decal);
+		}
+	}
+	void RenderSystem::UnregisterDecal(Handle<Decal> decal) {
+		if (_state) {
+			for (Vector<Handle<Decal>>* list : {&_state->decals, &_state->isolatedDecals}) {
+				list->erase(std::remove(list->begin(), list->end(), decal), list->end());
+			}
 		}
 	}
 	void RenderSystem::RegisterEnvironment(Handle<Environment> environment) {

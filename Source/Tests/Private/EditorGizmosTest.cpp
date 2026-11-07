@@ -102,6 +102,33 @@ TEST_F(EditorGizmosFixture, OnlyRegisteredGizmosDraw) {
 	EXPECT_EQ(_lines.size(), withCamera);
 }
 
+TEST_F(EditorGizmosFixture, SelectedDecalDrawsItsBox) {
+	Handle<SceneObject> object = MakeObject("Decal");
+	object->SetLocalPosition(Vec3(1.0f, 2.0f, 3.0f));
+	Handle<Decal> decal = object->AddComponent<Decal>();
+	decal->SetSize(Vec3(2.0f, 4.0f, 6.0f));
+	Draw();
+	EXPECT_EQ(_lines.size(), 0u);
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Draw();
+	ASSERT_EQ(_lines.size(), 13u);
+	Vec3 lowest = _lines[0].a;
+	Vec3 highest = _lines[0].a;
+	for (const DebugLine& line : _lines) {
+		for (const Vec3& point : {line.a, line.b}) {
+			lowest = Vec3(Math::Min(lowest.x, point.x), Math::Min(lowest.y, point.y), Math::Min(lowest.z, point.z));
+			highest = Vec3(Math::Max(highest.x, point.x), Math::Max(highest.y, point.y), Math::Max(highest.z, point.z));
+		}
+	}
+	EXPECT_NEAR(lowest.x, 0.0f, 1e-4f);
+	EXPECT_NEAR(highest.x, 2.0f, 1e-4f);
+	EXPECT_NEAR(lowest.y, 0.0f, 1e-4f);
+	EXPECT_NEAR(highest.y, 4.0f, 1e-4f);
+	EXPECT_NEAR(lowest.z, 0.5f, 1e-4f);
+	EXPECT_NEAR(highest.z, 6.5f, 1e-4f);
+}
+
 TEST_F(EditorGizmosFixture, UnselectedCameraIsIconOnly) {
 	Handle<SceneObject> object = MakeObject("Camera");
 	object->AddComponent<Camera>();

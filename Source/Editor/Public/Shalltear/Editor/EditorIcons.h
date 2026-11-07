@@ -219,6 +219,7 @@ namespace Shalltear::EditorIcons {
 		inline constexpr std::string_view Transform = "engine://Icons/Components/Transform.svg";
 		inline constexpr std::string_view Camera = "engine://Icons/Components/Camera.svg";
 		inline constexpr std::string_view Light = "engine://Icons/Components/Light.svg";
+		inline constexpr std::string_view Decal = "engine://Icons/Components/Decal.svg";
 		inline constexpr std::string_view MeshRenderer = "engine://Icons/Components/MeshRenderer.svg";
 		inline constexpr std::string_view SkinnedMeshRenderer = "engine://Icons/Components/SkinnedMeshRenderer.svg";
 		inline constexpr std::string_view Skeleton = "engine://Icons/Components/Skeleton.svg";

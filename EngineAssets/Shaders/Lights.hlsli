@@ -103,6 +103,7 @@ uint ShalltearClusterOf(float2 positionSS, float viewZ) {
 	return (z * sltClusterDims.y + tile.y) * sltClusterDims.x + tile.x;
 }
 
+// entry.y = light count in bits 0-7, decal count in 8-15
 uint2 ShalltearClusterEntry(uint cluster) {
 	return vk::RawBufferLoad<uint2>(sltClusterAddress + uint64_t(cluster) * 8, 8);
 }

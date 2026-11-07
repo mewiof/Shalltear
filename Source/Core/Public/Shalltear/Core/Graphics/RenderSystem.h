@@ -14,6 +14,7 @@
 namespace Shalltear {
 
 	class Camera;
+	class Decal;
 	class Environment;
 	class GraphicsProfile;
 	class Light;
@@ -202,6 +203,8 @@ namespace Shalltear {
 
 		static void RegisterLight(Handle<Light> light);
 		static void UnregisterLight(Handle<Light> light);
+		static void RegisterDecal(Handle<Decal> decal);
+		static void UnregisterDecal(Handle<Decal> decal);
 		static void RegisterEnvironment(Handle<Environment> environment);
 		static void UnregisterEnvironment(Handle<Environment> environment);
 		static void RegisterReflectionProbe(Handle<ReflectionProbe> probe);

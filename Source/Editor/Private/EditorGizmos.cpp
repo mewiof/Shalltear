@@ -1,6 +1,7 @@
 #include "Shalltear/Editor/EditorGizmos.h"
 
 #include "Shalltear/Core/Graphics/Camera.h"
+#include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/Light.h"
 #include "Shalltear/Core/Log.h"
@@ -28,6 +29,7 @@ namespace Shalltear {
 
 		Color32 CameraWire() { return EditorTheme::GetColor32(ColorToken::GizmoCameraWire); }
 		Color32 LightWire() { return EditorTheme::GetColor32(ColorToken::GizmoLightWire); }
+		Color32 VolumeWire() { return EditorTheme::GetColor32(ColorToken::GizmoVolumeWire); }
 
 		struct GizmoEntry {
 			ComponentGizmoFn gizmo;
@@ -121,6 +123,24 @@ namespace Shalltear {
 			}
 			const Mat4 projection = camera->BuildProjection(aspect);
 			AppendFrustum(*context.lines, (projection * view).Inverse(), color);
+		}
+
+		void DrawDecalGizmo(GizmoDrawContext& context, Handle<Component> component) {
+			Decal* decal = static_cast<Decal*>(component.Get());
+			SceneObject* owner = decal ? decal->GetOwner().Get() : nullptr;
+			if (!owner || !context.selected) {
+				return;
+			}
+			const Mat4 box = owner->GetWorldMatrix() * Mat4::Translation(decal->GetPivot()) * Mat4::Scale(decal->GetSize());
+			Vec3 corners[8];
+			for (u32 i = 0; i < 8; ++i) {
+				const f32 x = (i == 1 || i == 2 || i == 5 || i == 6) ? 0.5f : -0.5f;
+				const f32 y = (i == 2 || i == 3 || i == 6 || i == 7) ? 0.5f : -0.5f;
+				corners[i] = box.TransformPoint(Vec3(x, y, i < 4 ? -0.5f : 0.5f));
+			}
+			const Color32 color = VolumeWire();
+			AppendBoxEdges(*context.lines, corners, color);
+			context.lines->push_back({owner->GetWorldPosition(), box.TransformPoint(Vec3(0.0f, 0.0f, 0.5f)), color});
 		}
 
 		void DrawLightGizmo(GizmoDrawContext& context, Handle<Component> component) {
@@ -291,6 +311,7 @@ namespace Shalltear {
 		_state = New<GizmoState>(MemTag::Editor);
 		RegisterComponentGizmo(StringHash("Camera"), &DrawCameraGizmo);
 		RegisterComponentGizmo(StringHash("Light"), &DrawLightGizmo);
+		RegisterComponentGizmo(StringHash("Decal"), &DrawDecalGizmo);
 		RegisterComponentGizmo(StringHash("Environment"), &DrawEnvironmentGizmo);
 		RegisterSceneIcon(StringHash("Camera"));
 		RegisterSceneIcon(StringHash("Light"));

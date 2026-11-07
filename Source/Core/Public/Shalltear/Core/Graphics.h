@@ -13,6 +13,7 @@
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/Camera.h"
 #include "Shalltear/Core/Graphics/Light.h"
+#include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/GraphicsProfile.h"

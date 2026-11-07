@@ -29,6 +29,7 @@
 
 #define SLT_RENDER_SYSTEM_ANCHORS(X) \
 	X(Camera)                        \
+	X(Decal)                         \
 	X(Light)                         \
 	X(MeshRenderer)                  \
 	X(Environment)                   \

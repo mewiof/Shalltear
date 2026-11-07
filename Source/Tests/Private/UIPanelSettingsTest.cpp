@@ -113,6 +113,7 @@ TEST_F(UIPanelSettingsFixture, TheDefaultsAreTheConventionalOnes) {
 	EXPECT_EQ(settings.referenceResolution, (Vec2I{1200, 800}));
 	EXPECT_EQ(settings.screenMatchMode, UIPanelScreenMatchMode::MatchWidthOrHeight);
 	EXPECT_FLOAT_EQ(settings.match, 0.0f);
+	EXPECT_FALSE(settings.logarithmicMatch);
 	EXPECT_FLOAT_EQ(settings.sortOrder, 0.0f);
 	EXPECT_FALSE(settings.font.IsValid());
 }
@@ -160,6 +161,51 @@ TEST_F(UIPanelSettingsFixture, ScaleIsRatioToReference) {
 	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 1.0f);
 }
 
+TEST_F(UIPanelSettingsFixture, LogMatchIsGeometricBlend) {
+	UIPanelSettings settings;
+	settings.scaleMode = UIPanelScaleMode::ScaleWithScreenSize;
+	settings.referenceResolution = {2048, 1366};
+	settings.match = 0.75f;
+	EXPECT_NEAR(settings.ResolveContentScale({1920, 1080}, 1.0f), 0.827347f, 1e-5f);
+	settings.logarithmicMatch = true;
+	EXPECT_NEAR(settings.ResolveContentScale({1920, 1080}, 1.0f), 0.825035f, 1e-5f);
+
+	settings.referenceResolution = {1200, 800};
+	const Vec2I wide{2400, 400};
+	settings.match = 0.5f;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 1.0f);
+	settings.match = 0.25f;
+	EXPECT_NEAR(settings.ResolveContentScale(wide, 1.0f), 1.414214f, 1e-5f);
+	settings.match = 0.0f;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 2.0f);
+	settings.match = 1.0f;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 0.5f);
+	settings.match = 0.5f;
+	settings.scale = 2.0f;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 2.0f);
+
+	settings.logarithmicMatch = false;
+	settings.scale = 1.0f;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 1.25f);
+}
+
+TEST_F(UIPanelSettingsFixture, LogMatchOnlyMovesMatchMode) {
+	UIPanelSettings settings;
+	settings.logarithmicMatch = true;
+	settings.match = 0.5f;
+	settings.referenceResolution = {1200, 800};
+	const Vec2I wide{2400, 400};
+	settings.scaleMode = UIPanelScaleMode::ScaleWithScreenSize;
+	settings.screenMatchMode = UIPanelScreenMatchMode::Expand;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 0.5f);
+	settings.screenMatchMode = UIPanelScreenMatchMode::Shrink;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.0f), 2.0f);
+	settings.scaleMode = UIPanelScaleMode::ConstantPixelSize;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.25f), 1.0f);
+	settings.scaleMode = UIPanelScaleMode::ConstantPhysicalSize;
+	EXPECT_FLOAT_EQ(settings.ResolveContentScale(wide, 1.25f), 1.25f);
+}
+
 TEST_F(UIPanelSettingsFixture, ZeroScaleStillRenders) {
 	UIPanelSettings settings;
 	settings.scale = 0.0f;
@@ -186,6 +232,7 @@ TEST_F(UIPanelSettingsFixture, EveryFieldRoundTripsThroughTextForm) {
 	written.referenceResolution = {1920, 1080};
 	written.screenMatchMode = UIPanelScreenMatchMode::Expand;
 	written.match = 0.25f;
+	written.logarithmicMatch = true;
 	written.sortOrder = -3.0f;
 	written.fontSizePx = 18.0f;
 	written.textColor = Color(0.1f, 0.2f, 0.3f, 0.4f);
@@ -201,6 +248,7 @@ TEST_F(UIPanelSettingsFixture, EveryFieldRoundTripsThroughTextForm) {
 	EXPECT_EQ(read.referenceResolution, (Vec2I{1920, 1080}));
 	EXPECT_EQ(read.screenMatchMode, UIPanelScreenMatchMode::Expand);
 	EXPECT_FLOAT_EQ(read.match, 0.25f);
+	EXPECT_TRUE(read.logarithmicMatch);
 	EXPECT_FLOAT_EQ(read.sortOrder, -3.0f);
 	EXPECT_FLOAT_EQ(read.fontSizePx, 18.0f);
 	EXPECT_FLOAT_EQ(read.textColor.r, 0.1f);
@@ -209,6 +257,28 @@ TEST_F(UIPanelSettingsFixture, EveryFieldRoundTripsThroughTextForm) {
 	str text = FileSystem::ReadTextFile(document, MemTag::Debug);
 	EXPECT_NE(text.find("ScaleWithScreenSize"), str::npos) << text;
 	EXPECT_NE(text.find("referenceResolution"), str::npos) << text;
+}
+
+TEST_F(UIPanelSettingsFixture, CookCarriesLogMatch) {
+	UIPanelSettings written;
+	written.scaleMode = UIPanelScaleMode::ScaleWithScreenSize;
+	written.match = 0.5f;
+	written.logarithmicMatch = true;
+
+	PakStringPool strings;
+	Vector<u8> descriptorBytes{GetMemoryResource(MemTag::Debug)};
+	Vector<u8> payloadBytes{GetMemoryResource(MemTag::Debug)};
+	CookWriter descriptor(descriptorBytes, strings);
+	CookWriter payload(payloadBytes, strings);
+	ASSERT_TRUE(written.Cook(descriptor, payload));
+
+	CookReader descriptorReader(descriptorBytes.data(), descriptorBytes.size());
+	CookReader payloadReader(payloadBytes.data(), payloadBytes.size());
+	UIPanelSettings read;
+	ASSERT_TRUE(read.LoadCooked(descriptorReader, payloadReader));
+	EXPECT_EQ(read.scaleMode, UIPanelScaleMode::ScaleWithScreenSize);
+	EXPECT_TRUE(read.logarithmicMatch);
+	EXPECT_FLOAT_EQ(read.ResolveContentScale({2400, 400}, 1.0f), 1.0f);
 }
 
 TEST_F(UIPanelSettingsFixture, ImporterOwnsExtensionAndCanMintOne) {

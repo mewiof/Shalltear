@@ -240,6 +240,26 @@ TEST_F(UIScreenFixture, ScreenSurfaceSizeAndScale) {
 	UISystem::DestroySurface(own);
 }
 
+TEST_F(UIScreenFixture, LogMatchReachesLiveSurface) {
+	UseTextureScreen({640, 90});
+	Handle<UIPanelSettings> settings = MakeSettings();
+	settings->scaleMode = UIPanelScaleMode::ScaleWithScreenSize;
+	settings->referenceResolution = {320, 180};
+	settings->match = 0.5f;
+	UISurfaceId surface = Screen(settings);
+	UISystem::Update();
+	EXPECT_FLOAT_EQ(UISystem::GetSurfaceContext(surface)->GetContentScale(), 1.25f);
+
+	settings->logarithmicMatch = true;
+	UISystem::Update();
+	EXPECT_FLOAT_EQ(UISystem::GetSurfaceContext(surface)->GetContentScale(), 1.0f);
+
+	settings->logarithmicMatch = false;
+	UISystem::Update();
+	EXPECT_FLOAT_EQ(UISystem::GetSurfaceContext(surface)->GetContentScale(), 1.25f);
+	UISystem::DestroySurface(surface);
+}
+
 TEST_F(UIScreenFixture, AFullBleedChildFillsTheScreen) {
 	UseTextureScreen({400, 300});
 	UISurfaceId surface = Screen();

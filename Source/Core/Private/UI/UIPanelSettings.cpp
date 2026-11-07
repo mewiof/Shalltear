@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Serialization/TextSerializer.h"
 
 #include <algorithm>
+#include <cmath>
 
 SLT_REGISTER_TYPE(Shalltear::UIPanelSettings)
 
@@ -45,7 +46,8 @@ namespace Shalltear {
 				case UIPanelScreenMatchMode::MatchWidthOrHeight:
 				default: {
 					const f32 t = std::clamp(match, 0.0f, 1.0f);
-					magnification = widthRatio + (heightRatio - widthRatio) * t;
+					magnification = logarithmicMatch ? std::pow(widthRatio, 1.0f - t) * std::pow(heightRatio, t)
+													 : widthRatio + (heightRatio - widthRatio) * t;
 					break;
 				}
 				}

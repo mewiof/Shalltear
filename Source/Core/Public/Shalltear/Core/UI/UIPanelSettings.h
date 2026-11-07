@@ -54,6 +54,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(referenceResolution)
 		SLT_REFLECT_FIELD(screenMatchMode)
 		SLT_REFLECT_FIELD(match, SLT_RANGE(0.0f, 1.0f))
+		SLT_REFLECT_FIELD(logarithmicMatch)
 		SLT_REFLECT_FIELD(sortOrder)
 		SLT_REFLECT_FIELD(font)
 		SLT_REFLECT_FIELD(fontSizePx, SLT_RANGE(1.0f, 512.0f))
@@ -74,6 +75,7 @@ namespace Shalltear {
 		Vec2I referenceResolution{1200, 800};
 		UIPanelScreenMatchMode screenMatchMode = UIPanelScreenMatchMode::MatchWidthOrHeight;
 		f32 match = 0.0f;
+		bool logarithmicMatch = false;
 		f32 sortOrder = 0.0f;
 
 		Handle<FontAsset> font;

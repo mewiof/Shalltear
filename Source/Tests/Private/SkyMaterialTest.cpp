@@ -1016,3 +1016,65 @@ TEST_F(SkyMaterialFixture, ACookedSkyMaterialDrawsItsSky) {
 	sky->shader = imported;
 	Delete(shipped);
 }
+
+TEST_F(SkyMaterialFixture, SolidColorCameraKeepsMaterialSkyLight) {
+	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	const Vec3 tint(0.6f, 0.3f, 0.1f);
+	MaterialAsset* sky = LoadSky("Tint.mat", ModeTint, tint);
+	MaterialAsset* matte = LoadMaterial("Matte.mat", ShaderGuid("engine://Shaders/Lit.hlsl"),
+										"\t\"floats\": { \"metallic\": 0, \"roughness\": 1, \"reflectance\": 0 },\n"
+										"\t\"colors\": { \"baseColor\": [1, 1, 1, 1] }");
+	ASSERT_NE(sky, nullptr);
+	ASSERT_NE(matte, nullptr);
+	ShadingStage stage;
+	Handle<Environment> environment;
+	ASSERT_TRUE(BuildSkyStage(sky, stage, environment));
+	ASSERT_TRUE(AddQuad(stage, matte, 0.0f));
+	stage.sun->SetEnabled(false);
+	environment->SetAmbientColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+	WindowDesc windowDesc;
+	windowDesc.title = "SkyMaterialTest";
+	windowDesc.clientSize = {64, 64};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+	Handle<SceneObject> cameraObject = SceneSystem::CreateObject("Camera", stage.scene);
+	cameraObject->SetLocalPosition(ShadingTest::Eye);
+	cameraObject->SetLocalRotation(Quat::AngleAxis(180.0f, Vec3::Up()));
+	Handle<Camera> camera = cameraObject->AddComponent<Camera>();
+	camera->SetTargetWindow(window);
+	camera->SetClearColor(Color(0.0f, 0.25f, 0.5f, 1.0f));
+	camera->SetBackgroundType(BackgroundType::SolidColor);
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	auto renderFrames = [&]() {
+		for (u32 frame = 0; frame < RHI::FRAMES_IN_FLIGHT + 2; ++frame) {
+			WindowSystem::PumpEvents();
+			SceneSystem::EndFrame();
+			RenderSystem::RenderAll();
+		}
+		return RenderSystem::ReadbackWindowSceneColor(window, pixels, size);
+	};
+	ASSERT_TRUE(renderFrames());
+	const Vec3 lit = RadianceTexel(pixels, size, size.x / 2, size.y / 2);
+	EXPECT_NEAR(lit.x, tint.x, 0.02f);
+	EXPECT_NEAR(lit.y, tint.y, 0.02f);
+	EXPECT_NEAR(lit.z, tint.z, 0.02f);
+	EXPECT_EQ(RadianceTexel(pixels, size, 2, 2), Vec3(0.0f, 0.25f, 0.5f));
+
+	camera->SetBackgroundType(BackgroundType::Sky);
+	ASSERT_TRUE(renderFrames());
+	const Vec3 background = RadianceTexel(pixels, size, 2, 2);
+	EXPECT_NEAR(background.x, tint.x, 0.01f);
+	EXPECT_NEAR(background.z, tint.z, 0.01f);
+	const Vec3 litUnderSky = RadianceTexel(pixels, size, size.x / 2, size.y / 2);
+	EXPECT_NEAR(litUnderSky.x, lit.x, 0.005f);
+	EXPECT_NEAR(litUnderSky.y, lit.y, 0.005f);
+	EXPECT_NEAR(litUnderSky.z, lit.z, 0.005f);
+
+	TearDownStage(stage);
+}

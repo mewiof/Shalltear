@@ -13,6 +13,20 @@
 
 namespace Shalltear {
 
+	enum class BackgroundType : u8 {
+		Sky = 0,
+		SolidColor
+	};
+
+} // namespace Shalltear
+
+SLT_REFLECT_ENUM(::Shalltear::BackgroundType)
+SLT_ENUM_VALUE(Sky)
+SLT_ENUM_VALUE(SolidColor)
+SLT_END_ENUM()
+
+namespace Shalltear {
+
 	class SHALLTEAR_CORE_API Camera : public Component {
 	public:
 		SLT_REFLECT_COMPONENT(Camera, Component)
@@ -20,6 +34,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_nearPlane)
 		SLT_REFLECT_FIELD(_farPlane)
 		SLT_REFLECT_FIELD(_priority)
+		SLT_REFLECT_FIELD(_backgroundType)
 		SLT_REFLECT_FIELD(_clearColor)
 		SLT_REFLECT_FIELD(_cullingMask)
 		SLT_REFLECT_FIELD(_viewportRect)
@@ -43,6 +58,9 @@ namespace Shalltear {
 
 		i32 GetPriority() const { return _priority; }
 		void SetPriority(i32 priority) { _priority = priority; }
+
+		BackgroundType GetBackgroundType() const { return _backgroundType; }
+		void SetBackgroundType(BackgroundType type) { _backgroundType = type; }
 
 		Color GetClearColor() const { return _clearColor; }
 		void SetClearColor(const Color& color) { _clearColor = color; }
@@ -88,6 +106,7 @@ namespace Shalltear {
 		f32 _nearPlane = 0.1f;
 		f32 _farPlane = 1000.0f;
 		i32 _priority = 0;
+		BackgroundType _backgroundType = BackgroundType::Sky;
 		Color _clearColor = Color::Black();
 		u32 _cullingMask = ~0u;
 		RectF _viewportRect{0.0f, 0.0f, 1.0f, 1.0f};

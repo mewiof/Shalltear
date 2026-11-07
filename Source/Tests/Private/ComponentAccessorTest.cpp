@@ -371,7 +371,7 @@ TEST_F(ComponentAccessorFixture, MigratedComponentRoundTripsUnderNewKeys) {
 
 TEST_F(ComponentAccessorFixture, EveryMigratedComponentSpellsFieldsForDisk) {
 	Vector<CaMigratedType> migrated;
-	migrated.push_back({Camera::GetReflectType(), "Camera", 12});
+	migrated.push_back({Camera::GetReflectType(), "Camera", 13});
 	migrated.push_back({Light::GetReflectType(), "Light", 10});
 	migrated.push_back({MeshRenderer::GetReflectType(), "MeshRenderer", 5});
 	migrated.push_back({Skeleton::GetReflectType(), "Skeleton", 3});
@@ -406,9 +406,9 @@ TEST_F(ComponentAccessorFixture, EveryMigratedComponentSpellsFieldsForDisk) {
 	}
 
 #ifndef SHALLTEAR_SHARED
-	EXPECT_EQ(total, 13u + 4u + 80u + 17u + 3u + 1u + 3u + 4u);
+	EXPECT_EQ(total, 14u + 4u + 80u + 17u + 3u + 1u + 3u + 4u);
 #else
-	EXPECT_EQ(total, 13u + 4u + 10u + 3u + 1u + 3u + 4u);
+	EXPECT_EQ(total, 14u + 4u + 10u + 3u + 1u + 3u + 4u);
 #endif
 }
 

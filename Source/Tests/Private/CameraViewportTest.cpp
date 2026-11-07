@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
 #include "Shalltear/Core/Math/HalfFloat.h"
+#include "Shalltear/Core/Serialization/TextSerializer.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Window.h"
@@ -43,6 +44,17 @@ TEST(CameraViewportTest, NeighborsShareAnEdgeOnOddTargets) {
 	EXPECT_EQ(bottom.Bottom(), 99);
 }
 
+TEST(CameraViewportTest, BackgroundTypeSavesByName) {
+	Camera camera;
+	EXPECT_EQ(camera.GetBackgroundType(), BackgroundType::Sky);
+	camera.SetBackgroundType(BackgroundType::SolidColor);
+	const str text = TextSerializer::Serialize(&camera, Camera::GetReflectType());
+	EXPECT_NE(text.find("\"SolidColor\""), str::npos) << text;
+	Camera loaded;
+	ASSERT_TRUE(TextSerializer::Deserialize(&loaded, Camera::GetReflectType(), text));
+	EXPECT_EQ(loaded.GetBackgroundType(), BackgroundType::SolidColor);
+}
+
 TEST(CameraViewportTest, RectIsClampedToTarget) {
 	EXPECT_EQ(ViewportPixels(RectF(-0.25f, 0.5f, 0.5f, 1.0f), {200, 100}), RectI(0, 0, 50, 50));
 	EXPECT_EQ(ViewportPixels(RectF(0.75f, -1.0f, 1.0f, 3.0f), {200, 100}), RectI(150, 0, 50, 100));
@@ -72,6 +84,7 @@ namespace {
 
 	constexpr Color RED{1.0f, 0.0f, 0.0f, 1.0f};
 	constexpr Color BLUE{0.0f, 0.0f, 1.0f, 1.0f};
+	constexpr Color GREEN{0.0f, 1.0f, 0.0f, 1.0f};
 
 	class CameraViewportFixture : public ::testing::Test {
 	protected:
@@ -184,6 +197,13 @@ namespace {
 		static bool IsRed(const Vec3& c) { return c.x > 0.5f && c.y < 0.1f && c.z < 0.1f; }
 		static bool IsBlue(const Vec3& c) { return c.z > 0.5f && c.x < 0.1f && c.y < 0.1f; }
 		static bool IsBlack(const Vec3& c) { return c.x < 0.01f && c.y < 0.01f && c.z < 0.01f; }
+		static bool IsGreen(const Vec3& c) { return c.y > 0.5f && c.x < 0.1f && c.z < 0.1f; }
+
+		void AddGreenSky() {
+			Handle<Environment> environment = SceneSystem::CreateObject("Environment", _scene)->AddComponent<Environment>();
+			environment->SetSkyMode(SkyMode::Color);
+			environment->SetSkyColor(GREEN);
+		}
 
 		void ExpectSplitScreen() {
 			Handle<Window> window = HiddenWindow({256, 128});
@@ -460,4 +480,72 @@ TEST_F(CameraViewportFixture, SubmittedCameraDyingClearsTarget) {
 	EXPECT_LT(pixels[center], 16);
 	EXPECT_LT(pixels[center + 2], 16);
 	RenderSystem::DestroyViewTarget(target);
+}
+
+TEST_F(CameraViewportFixture, SolidColorReplacesSky) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> window = HiddenWindow({128, 64});
+	ASSERT_TRUE(window.IsValid());
+	AddGreenSky();
+	Handle<Camera> camera = AddCamera("Camera", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	RenderFrames();
+	EXPECT_TRUE(IsGreen(ReadWindow(window).At(64, 32)));
+
+	camera->SetBackgroundType(BackgroundType::SolidColor);
+	RenderFrames();
+	const Radiance image = ReadWindow(window);
+	for (i32 y : {0, 32, 63}) {
+		EXPECT_EQ(image.At(0, y), Vec3(0.0f, 0.0f, 1.0f));
+		EXPECT_EQ(image.At(127, y), Vec3(0.0f, 0.0f, 1.0f));
+	}
+}
+
+TEST_F(CameraViewportFixture, StackedCameraDrawsNoBackground) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> window = HiddenWindow({128, 64});
+	ASSERT_TRUE(window.IsValid());
+	AddGreenSky();
+	Handle<Camera> base = AddCamera("Base", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
+	base->SetBackgroundType(BackgroundType::SolidColor);
+	AddCamera("Stacked", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f), 1);
+	RenderFrames();
+	Radiance image = ReadWindow(window);
+	EXPECT_TRUE(IsRed(image.At(64, 32)));
+	EXPECT_TRUE(IsRed(image.At(0, 0)));
+
+	base->SetBackgroundType(BackgroundType::Sky);
+	RenderFrames();
+	image = ReadWindow(window);
+	EXPECT_TRUE(IsGreen(image.At(64, 32)));
+}
+
+TEST_F(CameraViewportFixture, InsetClearsByItsBackgroundType) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> window = HiddenWindow({256, 128});
+	ASSERT_TRUE(window.IsValid());
+	AddGreenSky();
+	Handle<Camera> base = AddCamera("Base", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
+	base->SetBackgroundType(BackgroundType::SolidColor);
+	Handle<Camera> inset = AddCamera("Inset", BLUE, RectF(0.5f, 0.5f, 0.5f, 0.5f), 1);
+	RenderFrames();
+	Radiance image = ReadWindow(window);
+	EXPECT_TRUE(IsGreen(image.At(192, 32)));
+	EXPECT_TRUE(IsRed(image.At(64, 32)));
+	EXPECT_TRUE(IsRed(image.At(192, 96)));
+
+	inset->SetBackgroundType(BackgroundType::SolidColor);
+	RenderFrames();
+	image = ReadWindow(window);
+	EXPECT_TRUE(IsBlue(image.At(192, 32)));
+	EXPECT_TRUE(IsBlue(image.At(255, 0)));
+	EXPECT_TRUE(IsRed(image.At(127, 32)));
 }

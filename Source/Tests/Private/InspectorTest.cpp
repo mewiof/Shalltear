@@ -1091,6 +1091,38 @@ TEST_F(InspectorTest, MeshRendererShadowRowsEdit) {
 	DriveShadowRows(context, root, *renderer.Get());
 }
 
+TEST_F(InspectorTest, CameraBackgroundTypeRowEdits) {
+	Handle<SceneObject> object = SceneSystem::CreateObject("Viewer", _scene);
+	Handle<Camera> camera = object.Get()->AddComponent<Camera>();
+	ASSERT_NE(camera.Get(), nullptr);
+
+	EditorSelection::Select(Handle<Object>(object.Get()));
+	Handle<EditorPanel> panel = OpenInspector();
+	ASSERT_TRUE(panel.IsValid());
+	MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 1400};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root = context.CreateElement();
+	context.AppendChild(context.GetRoot(), root);
+	panel.Get()->BuildContent(context, root);
+	context.Update();
+
+	UI::ElementHandle label = FindByText(context, root, "backgroundType");
+	ASSERT_TRUE(label.IsValid());
+	UI::ElementHandle row = context.MakeHandle(context.GetElement(label)->parent);
+	UI::ElementHandle picker = FindByClass(context, row, StringHash("slt-dropdown"), 0);
+	ASSERT_TRUE(context.IsAlive(picker));
+	EXPECT_EQ(context.GetTextString(NthChildOf(context, picker, 0)), "Sky");
+	ClickElement(context, picker);
+	ASSERT_EQ(context.GetOpenPopupCount(), 1u);
+	ClickElement(context, NthChildOf(context, context.GetOpenPopup(0), 1));
+	EXPECT_EQ(camera->GetBackgroundType(), BackgroundType::SolidColor);
+
+	ASSERT_TRUE(UndoSystem::Undo());
+	EXPECT_EQ(camera->GetBackgroundType(), BackgroundType::Sky);
+}
+
 TEST_F(InspectorTest, EnvironmentGradientAmbientRowsEdit) {
 	Handle<SceneObject> object = SceneSystem::CreateObject("Lighting", _scene);
 	Handle<Environment> environment = object.Get()->AddComponent<Environment>();

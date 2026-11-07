@@ -2031,6 +2031,7 @@ namespace Shalltear {
 			RHI::Format colorFormat = SCENE_COLOR_FORMAT;
 			RHI::Format depthFormat = SCENE_DEPTH_FORMAT;
 			bool clear = true;
+			bool drawSky = true;
 			u32 samples = 1;
 			Vec2I extent{1, 1};
 		};
@@ -4490,7 +4491,8 @@ namespace Shalltear {
 				drawProcedural(proceduralDraws[nextProcedural++]);
 			}
 
-			for (u32 layer = 0; layer < environment.skyCount; ++layer) {
+			const u32 skyCount = targets.drawSky ? environment.skyCount : 0;
+			for (u32 layer = 0; layer < skyCount; ++layer) {
 				const RenderState::EnvironmentSetup& sky = environment.skies[layer];
 				const f32 alpha = environment.skyAlpha[layer];
 				MaterialAsset* skyMaterial = sky.skyMaterial.Get();
@@ -5562,6 +5564,7 @@ namespace Shalltear {
 			targets.color = pass.textures[COLOR];
 			targets.depth = pass.textures[DEPTH];
 			targets.clear = pass.work.flag;
+			targets.drawSky = pass.work.flag && camera->GetBackgroundType() == BackgroundType::Sky;
 			targets.samples = state.msaaSamples;
 			targets.extent = renderSize;
 			Mat4 cameraWorld = cameraOwner->GetWorldMatrix();

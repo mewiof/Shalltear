@@ -20,6 +20,8 @@ namespace Shalltear {
 		i32 SetStateClip(AnimatorController& controller, i32 state, const Guid& clipGuid,
 						 Handle<AnimationClip> clip);
 
+		bool SetStateSpeedParameter(AnimatorController& controller, i32 state, std::string_view parameter);
+
 		i32 AddTransition(AnimatorController& controller, i32 fromState, i32 toState);
 		bool RemoveTransition(AnimatorController& controller, i32 fromState, i32 index);
 

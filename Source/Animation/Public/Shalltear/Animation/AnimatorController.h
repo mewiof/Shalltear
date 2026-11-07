@@ -113,6 +113,9 @@ namespace Shalltear {
 
 			f32 speed = 1.0f;
 
+			// multiplier on speed (Float parameter only)
+			str speedParameter;
+
 			i32 machine = 0;
 
 			Vec2 position{};

@@ -786,6 +786,125 @@ TEST_F(AnimatorControllerFixture, TravelWalksAuthoredEdges) {
 	(void)island;
 }
 
+TEST_F(AnimatorControllerFixture, SpeedParameterMultipliesStateSpeed) {
+	SkeletonAsset* skeleton = MakeSpine();
+	AnimationClip* clip = MakeClip();
+	AddRamp(*clip, "Chest", 1.0f, 1.0f, AnimationLoopMode::Loop);
+
+	AnimatorController* controller = MakeController();
+	AddParameter(*controller, "Pace", AnimatorParameterKind::Float, 0.5f);
+	const i32 state = AddState(*controller, "Run", AddLeaf(*controller, clip));
+	controller->states[static_cast<size_t>(state)].speed = 2.0f;
+	controller->states[static_cast<size_t>(state)].speedParameter = "Pace";
+	controller->machines[0].defaultState = state;
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	Handle<AnimatorStateMachine> driver = rig->AddComponent<AnimatorStateMachine>();
+	driver->SetController(Handle<AnimatorController>(controller));
+
+	for (i32 frame = 0; frame < 4; ++frame) {
+		RunUpdate(0.05f);
+	}
+	ASSERT_EQ(driver->GetCurrentState(0), state);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.2f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.2f, 1e-4f);
+
+	ASSERT_TRUE(driver->SetFloat("Pace", 1.5f));
+	RunUpdate(0.1f);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.5f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.5f, 1e-4f);
+
+	ASSERT_TRUE(driver->SetFloat("Pace", -1.0f));
+	RunUpdate(0.1f);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.3f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.3f, 1e-4f);
+
+	ASSERT_TRUE(driver->SetFloat("Pace", 0.0f));
+	RunUpdate(0.1f);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.3f, 1e-4f);
+}
+
+TEST_F(AnimatorControllerFixture, SpeedParameterAppliesOnEntry) {
+	SkeletonAsset* skeleton = MakeSpine();
+	AnimationClip* clip = MakeClip();
+	AddRamp(*clip, "Chest", 1.0f, 1.0f, AnimationLoopMode::Loop);
+
+	AnimatorController* controller = MakeController();
+	AddParameter(*controller, "Pace", AnimatorParameterKind::Float, 3.0f);
+	AddParameter(*controller, "Go", AnimatorParameterKind::Trigger);
+	const i32 leaf = AddLeaf(*controller, clip);
+	const i32 idle = AddState(*controller, "Idle", leaf);
+	const i32 run = AddState(*controller, "Run", leaf);
+	controller->states[static_cast<size_t>(run)].speed = 0.5f;
+	controller->states[static_cast<size_t>(run)].speedParameter = "Pace";
+	controller->machines[0].defaultState = idle;
+
+	AnimatorController::Transition go;
+	go.destination = run;
+	go.duration = 0.0f;
+	AnimatorController::Condition trigger;
+	trigger.parameter = "Go";
+	trigger.mode = AnimatorConditionMode::If;
+	go.conditions.push_back(std::move(trigger));
+	controller->states[static_cast<size_t>(idle)].transitions.push_back(std::move(go));
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	Handle<AnimatorStateMachine> driver = rig->AddComponent<AnimatorStateMachine>();
+	driver->SetController(Handle<AnimatorController>(controller));
+
+	RunUpdate(0.1f);
+	ASSERT_EQ(driver->GetCurrentState(0), idle);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.1f, 1e-4f);
+
+	ASSERT_TRUE(driver->SetTrigger("Go"));
+	RunUpdate(0.1f);
+	ASSERT_EQ(driver->GetCurrentState(0), run);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.15f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.15f, 1e-4f);
+
+	ASSERT_TRUE(driver->Play("Idle", 0.0f, 0));
+	EXPECT_FLOAT_EQ(animator->GetLayer(0)->speed, 1.0f);
+	ASSERT_TRUE(driver->Play("Run", 0.0f, 0));
+	EXPECT_FLOAT_EQ(animator->GetLayer(0)->speed, 1.5f);
+}
+
+TEST_F(AnimatorControllerFixture, SpeedParameterReadsOnlyFloat) {
+	SkeletonAsset* skeleton = MakeSpine();
+	AnimationClip* clip = MakeClip();
+	AddRamp(*clip, "Chest", 1.0f, 1.0f, AnimationLoopMode::Loop);
+
+	AnimatorController* controller = MakeController();
+	AddParameter(*controller, "Held", AnimatorParameterKind::Bool, 0.0f);
+	const i32 leaf = AddLeaf(*controller, clip);
+	const i32 boolBound = AddState(*controller, "BoolBound", leaf);
+	const i32 missing = AddState(*controller, "Missing", leaf);
+	controller->states[static_cast<size_t>(boolBound)].speed = 2.0f;
+	controller->states[static_cast<size_t>(boolBound)].speedParameter = "Held";
+	controller->states[static_cast<size_t>(missing)].speed = 2.0f;
+	controller->states[static_cast<size_t>(missing)].speedParameter = "Gone";
+	controller->machines[0].defaultState = boolBound;
+
+	Handle<SceneObject> rig = MakeRig(skeleton);
+	Handle<Animator> animator = rig->AddComponent<Animator>();
+	animator->SetApplyRootMotion(false);
+	Handle<AnimatorStateMachine> driver = rig->AddComponent<AnimatorStateMachine>();
+	driver->SetController(Handle<AnimatorController>(controller));
+
+	RunUpdate(0.1f);
+	ASSERT_EQ(driver->GetCurrentState(0), boolBound);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.2f, 1e-4f);
+
+	ASSERT_TRUE(driver->Play("Missing", 0.0f, 0));
+	RunUpdate(0.1f);
+	ASSERT_EQ(driver->GetCurrentState(0), missing);
+	EXPECT_NEAR(driver->GetNormalizedTime(0), 0.2f, 1e-4f);
+	EXPECT_NEAR(BoneX(rig, 3), 0.2f, 1e-4f);
+}
+
 TEST_F(AnimatorControllerFixture, ControllerRoundTripsFileAndCook) {
 	AnimationClip* clip = MakeClip();
 	AnimatorController* controller = MakeController();
@@ -837,6 +956,7 @@ TEST_F(AnimatorControllerFixture, ControllerRoundTripsFileAndCook) {
 
 	const i32 state = AddState(*controller, "Walk", innerIndex, 1);
 	controller->states[static_cast<size_t>(state)].speed = 2.5f;
+	controller->states[static_cast<size_t>(state)].speedParameter = "Speed";
 	controller->machines[0].defaultState = state;
 
 	controller->layers[0].weight = 0.625f;
@@ -876,6 +996,7 @@ TEST_F(AnimatorControllerFixture, ControllerRoundTripsFileAndCook) {
 		ASSERT_EQ(read.states.size(), 1u) << what;
 		EXPECT_EQ(read.states[0].machine, 1) << what;
 		EXPECT_FLOAT_EQ(read.states[0].speed, 2.5f) << what;
+		EXPECT_EQ(read.states[0].speedParameter, "Speed") << what;
 
 		ASSERT_EQ(read.layers.size(), 1u) << what;
 		EXPECT_FLOAT_EQ(read.layers[0].weight, 0.625f) << what;

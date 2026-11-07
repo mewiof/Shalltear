@@ -179,6 +179,25 @@ namespace Shalltear {
 			return target.motion;
 		}
 
+		bool SetStateSpeedParameter(AnimatorController& controller, i32 state, std::string_view parameter) {
+			if (!IsState(controller, state)) {
+				return false;
+			}
+			if (!parameter.empty()) {
+				const i32 index = controller.FindParameter(parameter);
+				if (index < 0 || controller.parameters[static_cast<size_t>(index)].kind != AnimatorParameterKind::Float) {
+					return false;
+				}
+			}
+			str& bound = controller.states[static_cast<size_t>(state)].speedParameter;
+			if (bound == parameter) {
+				return true;
+			}
+			bound = str(parameter);
+			Touch(controller);
+			return true;
+		}
+
 		i32 AddTransition(AnimatorController& controller, i32 fromState, i32 toState) {
 			if (!IsState(controller, fromState) || !IsState(controller, toState)) {
 				return -1;
@@ -433,6 +452,11 @@ namespace Shalltear {
 					}
 				}
 			}
+			for (AnimatorController::State& state : controller.states) {
+				if (state.speedParameter == name) {
+					state.speedParameter.clear();
+				}
+			}
 
 			controller.parameters.erase(controller.parameters.begin() + static_cast<std::ptrdiff_t>(parameter));
 			Touch(controller);
@@ -470,6 +494,11 @@ namespace Shalltear {
 					if (child.parameter == previous) {
 						child.parameter = renamed;
 					}
+				}
+			}
+			for (AnimatorController::State& state : controller.states) {
+				if (state.speedParameter == previous) {
+					state.speedParameter = renamed;
 				}
 			}
 			controller.parameters[static_cast<size_t>(parameter)].name = renamed;

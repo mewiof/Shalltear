@@ -168,6 +168,7 @@ namespace Shalltear {
 				row.AddMember("name", JSONValue::MakeString(state.name));
 				row.AddMember("motion", JSONValue::MakeNumber(state.motion));
 				row.AddMember("speed", JSONValue::MakeNumber(state.speed));
+				row.AddMember("speedParameter", JSONValue::MakeString(state.speedParameter));
 				row.AddMember("machine", JSONValue::MakeNumber(state.machine));
 				if (layout) {
 					row.AddMember("x", JSONValue::MakeNumber(state.position.x));
@@ -272,6 +273,7 @@ namespace Shalltear {
 				state.name = str(row["name"].AsString());
 				state.motion = static_cast<i32>(row["motion"].AsInt(-1));
 				state.speed = static_cast<f32>(row["speed"].AsNumber(1.0));
+				state.speedParameter = str(row["speedParameter"].AsString());
 				state.machine = static_cast<i32>(row["machine"].AsInt(0));
 				state.position = Vec2(static_cast<f32>(row["x"].AsNumber(0.0)), static_cast<f32>(row["y"].AsNumber(0.0)));
 				const JSONValue& transitions = row["transitions"];
@@ -421,6 +423,7 @@ namespace Shalltear {
 			descriptor.WriteString(state.name);
 			descriptor.Write(state.motion);
 			descriptor.Write(state.speed);
+			descriptor.WriteString(state.speedParameter);
 			descriptor.Write(state.machine);
 			descriptor.Write(state.position);
 			descriptor.Write(static_cast<u32>(state.transitions.size()));
@@ -534,7 +537,7 @@ namespace Shalltear {
 		}
 
 		descriptor.Read(count);
-		constexpr size_t BYTES_PER_STATE = sizeof(u32) + sizeof(i32) * 2 + sizeof(f32) + sizeof(Vec2) + sizeof(u32);
+		constexpr size_t BYTES_PER_STATE = sizeof(u32) * 2 + sizeof(i32) * 2 + sizeof(f32) + sizeof(Vec2) + sizeof(u32);
 		if (descriptor.Failed() || descriptor.Remaining() < static_cast<size_t>(count) * BYTES_PER_STATE) {
 			return false;
 		}
@@ -544,6 +547,7 @@ namespace Shalltear {
 			state.name = str(descriptor.ReadString());
 			descriptor.Read(state.motion);
 			descriptor.Read(state.speed);
+			state.speedParameter = str(descriptor.ReadString());
 			descriptor.Read(state.machine);
 			descriptor.Read(state.position);
 			u32 transitions = 0;
@@ -610,7 +614,7 @@ namespace Shalltear {
 			StringHash GetAssetType() const override { return StringHash("AnimatorController"); }
 
 			// bump when Cook output changes
-			u32 GetImporterVersion() const override { return 3; }
+			u32 GetImporterVersion() const override { return 4; }
 
 			Asset* Import(const Path& sourcePath) override {
 				auto* controller = New<AnimatorController>(MemTag::Asset);

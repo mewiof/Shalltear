@@ -135,6 +135,18 @@ namespace Shalltear {
 			return true;
 		}
 
+		f32 StateRate(const AnimatorController& asset, const AnimatorController::State& state, const Vector<f32>& values) {
+			if (state.speedParameter.empty()) {
+				return state.speed;
+			}
+			const i32 index = asset.FindParameter(state.speedParameter);
+			if (index < 0 || static_cast<size_t>(index) >= values.size() ||
+				asset.parameters[static_cast<size_t>(index)].kind != AnimatorParameterKind::Float) {
+				return state.speed;
+			}
+			return state.speed * values[static_cast<size_t>(index)];
+		}
+
 	} // anonymous namespace
 
 	void AnimatorStateMachine::Flatten(i32 node, f32 weight, f32 speed) {
@@ -207,7 +219,7 @@ namespace Shalltear {
 		if (!layer) {
 			return;
 		}
-		layer->speed = entered.speed;
+		layer->speed = StateRate(*asset, entered, _values);
 		layer->SetNormalizedTime(startNormalized);
 	}
 
@@ -478,6 +490,9 @@ namespace Shalltear {
 				EnterState(live, static_cast<i32>(index), take->destination, take->duration, start);
 			}
 			UpdateWeights(live, static_cast<i32>(index));
+			if (live.state >= 0 && static_cast<size_t>(live.state) < asset->states.size()) {
+				target->speed = StateRate(*asset, asset->states[static_cast<size_t>(live.state)], _values);
+			}
 		}
 	}
 

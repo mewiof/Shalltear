@@ -385,10 +385,13 @@ TEST_F(AnimatorGraphOpsFixture, ParameterRenameRewritesAllReaders) {
 	const i32 anyEdge = AnimatorGraphOps::AddAnyStateTransition(controller, 0, to);
 	controller.machines[0].anyState[static_cast<size_t>(anyEdge)].conditions.push_back(
 		AnimatorController::Condition{str("Speed"), AnimatorConditionMode::Less, 0.1f});
+	ASSERT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, to, "Speed"));
 
 	ASSERT_TRUE(AnimatorGraphOps::RenameParameter(controller, 0, "Velocity"));
 
 	EXPECT_EQ(controller.parameters[0].name, "Velocity");
+	EXPECT_EQ(controller.states[static_cast<size_t>(to)].speedParameter, "Velocity");
+	EXPECT_TRUE(controller.states[static_cast<size_t>(from)].speedParameter.empty());
 	EXPECT_EQ(controller.states[static_cast<size_t>(from)].transitions[0].conditions[0].parameter, "Velocity");
 	EXPECT_EQ(controller.machines[0].anyState[0].conditions[0].parameter, "Velocity");
 	EXPECT_EQ(controller.nodes[0].parameterX, "Velocity");
@@ -426,14 +429,49 @@ TEST_F(AnimatorGraphOpsFixture, ParameterRemovalDropsReaders) {
 		controller.states[static_cast<size_t>(from)].transitions[static_cast<size_t>(edge)].conditions;
 	conditions.push_back(AnimatorController::Condition{str("Speed"), AnimatorConditionMode::Greater, 0.5f});
 	conditions.push_back(AnimatorController::Condition{str("Grounded"), AnimatorConditionMode::If, 0.0f});
+	ASSERT_EQ(AnimatorGraphOps::AddParameter(controller, "Pace", AnimatorParameterKind::Float), 2);
+	ASSERT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, from, "Speed"));
+	ASSERT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, to, "Pace"));
 
 	ASSERT_TRUE(AnimatorGraphOps::RemoveParameter(controller, 0));
 
-	ASSERT_EQ(controller.parameters.size(), 1u);
+	ASSERT_EQ(controller.parameters.size(), 2u);
 	ASSERT_EQ(conditions.size(), 1u);
 	EXPECT_EQ(conditions[0].parameter, "Grounded");
 	ASSERT_EQ(controller.nodes.size(), 1u);
 	EXPECT_TRUE(controller.nodes[0].parameterX.empty());
+	EXPECT_TRUE(controller.states[static_cast<size_t>(from)].speedParameter.empty());
+	EXPECT_EQ(controller.states[static_cast<size_t>(to)].speedParameter, "Pace");
+}
+
+TEST_F(AnimatorGraphOpsFixture, StateSpeedParameterTakesFloatOnly) {
+	AnimatorController controller;
+	MakeBareGraph(controller);
+	ASSERT_EQ(AnimatorGraphOps::AddParameter(controller, "Pace", AnimatorParameterKind::Float), 0);
+	ASSERT_EQ(AnimatorGraphOps::AddParameter(controller, "Steps", AnimatorParameterKind::Int), 1);
+	ASSERT_EQ(AnimatorGraphOps::AddParameter(controller, "Held", AnimatorParameterKind::Bool), 2);
+	ASSERT_EQ(AnimatorGraphOps::AddParameter(controller, "Jump", AnimatorParameterKind::Trigger), 3);
+	const i32 state = AnimatorGraphOps::AddState(controller, 0, "Run", Vec2{});
+	AnimatorController::State& run = controller.states[static_cast<size_t>(state)];
+
+	const u32 before = controller.graphRevision;
+	ASSERT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, state, "Pace"));
+	EXPECT_EQ(run.speedParameter, "Pace");
+	EXPECT_NE(controller.graphRevision, before);
+
+	const u32 bound = controller.graphRevision;
+	EXPECT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, state, "Pace"));
+	for (const char* refused : {"Steps", "Held", "Jump", "Gone"}) {
+		EXPECT_FALSE(AnimatorGraphOps::SetStateSpeedParameter(controller, state, refused)) << refused;
+	}
+	EXPECT_FALSE(AnimatorGraphOps::SetStateSpeedParameter(controller, state + 1, "Pace"));
+	EXPECT_FALSE(AnimatorGraphOps::SetStateSpeedParameter(controller, -1, "Pace"));
+	EXPECT_EQ(run.speedParameter, "Pace");
+	EXPECT_EQ(controller.graphRevision, bound);
+
+	ASSERT_TRUE(AnimatorGraphOps::SetStateSpeedParameter(controller, state, ""));
+	EXPECT_TRUE(run.speedParameter.empty());
+	EXPECT_NE(controller.graphRevision, bound);
 }
 
 TEST_F(AnimatorGraphOpsFixture, ParameterMoveRestartsPlayers) {
@@ -1278,6 +1316,79 @@ TEST_F(AnimatorGraphPanelFixture, ConditionAndParameterRowsEditColumn) {
 	EXPECT_NE(written.find("\"New Bool\""), str::npos);
 	EXPECT_EQ(CountOf(written, "\"destination\""), 1u);
 	EXPECT_EQ(CountOf(written, "\"threshold\""), 0u);
+}
+
+constexpr std::string_view MultiplierJSON = R"({
+"parameters":[{"name":"Pace","kind":0,"default":1},{"name":"Grounded","kind":2,"default":0}],
+"nodes":[],
+"machines":[{"name":"Base Layer","parent":-1,"defaultState":0,"x":0,"y":0,"entryX":-260,"entryY":0,"anyX":-260,"anyY":144,"anyState":[]}],
+"states":[
+{"name":"Idle","motion":-1,"speed":1,"machine":0,"x":40,"y":40,"transitions":[]},
+{"name":"Walk","motion":-1,"speed":1,"machine":0,"x":360,"y":40,"transitions":[]}],
+"layers":[{"name":"Base Layer","machine":0,"weight":1,"blend":0,"mask":[]}]
+})";
+
+TEST_F(AnimatorGraphPanelFixture, StateMultiplierRowPicksFloatParameter) {
+	const Guid guid = StageController("Multiplier.controller", MultiplierJSON);
+	ASSERT_TRUE(guid.IsValid());
+	EditorSelection::SelectAsset(guid);
+
+	const TypeInfo* type = TypeRegistry::FindType(StringHash("AnimatorGraphPanel"));
+	ASSERT_NE(type, nullptr);
+
+	UI::ContextDesc desc;
+	desc.sizePx = {1100, 760};
+	PanelHarness harness(desc);
+	ASSERT_TRUE(harness.Open(type));
+
+	ClickElement(harness.context, FindByText(harness.context, harness.root, "Walk"));
+	harness.Settle();
+
+	auto openMultiplier = [&]() -> UI::ElementHandle {
+		const UI::Element* label = harness.context.GetElement(FindByText(harness.context, harness.root, "Multiplier"));
+		if (!label || label->nextSibling == UI::INVALID_UI_INDEX) {
+			return {};
+		}
+		ClickElement(harness.context, harness.context.MakeHandle(label->nextSibling));
+		return harness.context.GetOpenPopupCount() == 1 ? harness.context.GetOpenPopup(0) : UI::ElementHandle{};
+	};
+
+	UI::ElementHandle popup = openMultiplier();
+	ASSERT_TRUE(harness.context.IsAlive(popup));
+	EXPECT_EQ(ChildCountOf(harness.context, popup), 2u);
+	EXPECT_TRUE(harness.context.IsAlive(FindByText(harness.context, popup, "Pace")));
+	EXPECT_FALSE(harness.context.IsAlive(FindByText(harness.context, popup, "Grounded")));
+	ClickElement(harness.context, NthChildOf(harness.context, popup, 1));
+	harness.Settle();
+
+	ClickElement(harness.context, FindByText(harness.context, harness.root, "Save"));
+	const str bound = ReadController("Multiplier.controller");
+	ASSERT_FALSE(bound.empty());
+	EXPECT_EQ(CountOf(bound, "\"speedParameter\": \"Pace\""), 1u);
+	EXPECT_EQ(CountOf(bound, "\"speedParameter\": \"\""), 1u);
+	EXPECT_LT(bound.find("\"Walk\""), bound.find("\"speedParameter\": \"Pace\""));
+
+	UI::ElementHandle plus = BoardAddButton(harness.context, harness.root, "Parameters");
+	ASSERT_TRUE(harness.context.IsAlive(plus));
+	ClickElement(harness.context, plus);
+	ASSERT_EQ(harness.context.GetOpenPopupCount(), 1u);
+	UI::ElementHandle addFloat = FindByText(harness.context, harness.context.GetOpenPopup(0), "Float");
+	ASSERT_TRUE(harness.context.IsAlive(addFloat));
+	ClickElement(harness.context, addFloat);
+	harness.Settle();
+
+	popup = openMultiplier();
+	ASSERT_TRUE(harness.context.IsAlive(popup));
+	EXPECT_EQ(ChildCountOf(harness.context, popup), 3u);
+	EXPECT_TRUE(harness.context.IsAlive(FindByText(harness.context, popup, "New Float")));
+	ClickElement(harness.context, NthChildOf(harness.context, popup, 0));
+	harness.Settle();
+
+	ClickElement(harness.context, FindByText(harness.context, harness.root, "Save"));
+	const str cleared = ReadController("Multiplier.controller");
+	ASSERT_FALSE(cleared.empty());
+	EXPECT_EQ(CountOf(cleared, "\"speedParameter\": \"\""), 2u);
+	EXPECT_NE(cleared.find("\"New Float\""), str::npos);
 }
 
 TEST_F(AnimatorGraphPanelFixture, LayerStripAddsSettingsAuthor) {

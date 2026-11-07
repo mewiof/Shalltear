@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <span>
 #include <utility>
+#include <vector>
 
 namespace Shalltear {
 
@@ -1803,6 +1804,40 @@ namespace Shalltear {
 				ScrubAsOneEdit(speed, "State Speed");
 				UI::Widgets::NumberField(context, speedRow, speed);
 
+				std::vector<str> multipliers;
+				multipliers.emplace_back("None");
+				u32 boundMultiplier = 0;
+				for (const AnimatorController::Parameter& parameter : controller->parameters) {
+					if (parameter.kind != AnimatorParameterKind::Float) {
+						continue;
+					}
+					if (parameter.name == target.speedParameter) {
+						boundMultiplier = static_cast<u32>(multipliers.size());
+					}
+					multipliers.push_back(parameter.name);
+				}
+				Vector<std::string_view> multiplierItems{GetMemoryResource(MemTag::Editor)};
+				for (const str& name : multipliers) {
+					multiplierItems.push_back(name);
+				}
+				UI::ElementHandle multiplierRow = AddLabeledRow(context, _properties, "Multiplier");
+				UI::Widgets::DropdownDesc multiplier;
+				multiplier.items = std::span<const std::string_view>(multiplierItems.data(), multiplierItems.size());
+				multiplier.selected = boundMultiplier;
+				multiplier.font = UISystem::GetDefaultFont();
+				multiplier.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
+				multiplier.onSelect = [this, state, multipliers](u32 picked) {
+					AnimatorController* live = Graph();
+					if (!live || picked >= multipliers.size()) {
+						return;
+					}
+					const std::string_view name = picked == 0 ? std::string_view() : std::string_view(multipliers[picked]);
+					if (Edit("State Speed Multiplier", [&]() { return AnimatorGraphOps::SetStateSpeedParameter(*live, state, name); })) {
+						MarkEdited(false);
+					}
+				};
+				UI::Widgets::Dropdown(context, multiplierRow, multiplier);
+
 				UI::ElementHandle motionRow = AddLabeledRow(context, _properties, "Motion");
 				AddText(context, motionRow, ColorToken::WidgetText, MetricToken::FontSmall,
 						MotionLabel(*controller, target.motion));
@@ -2197,6 +2232,7 @@ namespace Shalltear {
 				}
 				MarkEdited(false);
 				_needsParameterRebuild = true;
+				_needsPropertyRebuild = true;
 				return ParameterId(added);
 			};
 

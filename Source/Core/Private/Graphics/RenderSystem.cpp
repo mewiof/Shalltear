@@ -5268,6 +5268,7 @@ namespace Shalltear {
 			GraphicsInternal::GraphResourceId skinBuffer = GraphicsInternal::INVALID_GRAPH_RESOURCE;
 		};
 
+		// must match ResolveRowTextureSlots
 		void DeclareRowPasses(RenderState& state, GraphicsInternal::RenderGraph& graph,
 							  const char* name, u32 zoneSite, GraphicsInternal::PassRecordFn record,
 							  GraphicsInternal::PassWork& work, u32 flatRow, const RowFrameResources& frame) {
@@ -5289,9 +5290,6 @@ namespace Shalltear {
 					graph.Write(state.rowPlanTargets[plan.firstTarget + declared.target].resource,
 								RHI::ResourceState::RenderTarget);
 				}
-				if (frame.skinBuffer != GraphicsInternal::INVALID_GRAPH_RESOURCE) {
-					graph.Read(frame.skinBuffer, RHI::ResourceState::ShaderResource);
-				}
 				if (HasFlag(requests, PassRequests::SceneColor)) {
 					graph.Read(frame.sceneColorCopy, RHI::ResourceState::ShaderResource);
 				}
@@ -5306,6 +5304,9 @@ namespace Shalltear {
 						graph.Read(state.rowPlanTargets[plan.firstTarget + slot].resource,
 								   RHI::ResourceState::ShaderResource);
 					}
+				}
+				if (frame.skinBuffer != GraphicsInternal::INVALID_GRAPH_RESOURCE) {
+					graph.Read(frame.skinBuffer, RHI::ResourceState::ShaderResource);
 				}
 			}
 			work.step = 0;

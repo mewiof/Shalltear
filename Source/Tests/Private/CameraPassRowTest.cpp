@@ -3,6 +3,7 @@
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Graphics/Camera.h"
+#include "Shalltear/Core/Graphics/FullScreenPass.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/ObjectPass.h"
@@ -16,6 +17,7 @@
 #include "ShadingHarness.h"
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 
 using namespace Shalltear;
@@ -255,6 +257,75 @@ TEST_F(CameraPassRowFixture, CullingMaskDropsUnnamedLayers) {
 	EXPECT_EQ(culled, 0.0f);
 	EXPECT_GT(drawn, 0.02f);
 
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}
+
+TEST_F(CameraPassRowFixture, ColorRowReadsSkinnedScene) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"))) {
+		GTEST_SKIP() << "Unlit.hlsl unavailable (dxcompiler.dll not staged?)";
+	}
+	ASSERT_TRUE(FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Rotate.hlsl")), CHANNEL_ROTATE_SHADER));
+	Asset* rotate = AssetDatabase::LoadAsset(Path("project://Rotate.hlsl"));
+	ASSERT_NE(rotate, nullptr);
+	ASSERT_TRUE(FileSystem::WriteTextFile(
+		FileSystem::Resolve(Path("project://Rotate.mat")),
+		"{\n\t\"shader\": \"" + rotate->assetId.ToString() + "\",\n\t\"colors\": { \"tint\": [1, 1, 1, 1] }\n}\n"));
+	Asset* material = AssetDatabase::LoadAsset(Path("project://Rotate.mat"));
+	ASSERT_NE(material, nullptr);
+
+	WindowDesc windowDesc;
+	windowDesc.title = "CameraRowSkinned";
+	windowDesc.clientSize = {128, 128};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+
+	Handle<Scene> scene = SceneSystem::CreateScene("CameraRowSkinned");
+	ASSERT_TRUE(AddSkinnedMesh(RepoDir("Source/Tests/Fixtures/Graphics"), _root, scene, Color(0.8f, 0.4f, 0.1f)).IsValid());
+	Handle<SceneObject> cameraObject = SceneSystem::CreateObject("Camera", scene);
+	cameraObject.Get()->SetLocalPosition(Vec3(0.0f, 1.0f, 4.0f));
+	cameraObject.Get()->SetLocalRotation(Quat::AngleAxis(180.0f, Vec3::Up()));
+	Handle<Camera> camera = cameraObject.Get()->AddComponent<Camera>();
+	camera.Get()->SetTargetWindow(window);
+	camera.Get()->SetClearColor(Color::Black());
+
+	DriveFrames(3);
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(RenderSystem::ReadbackWindowSceneColor(window, reference, referenceSize));
+	ASSERT_GT(PaintedFraction(window), 0.02f);
+
+	FullScreenPass* row = New<FullScreenPass>(MemTag::Asset);
+	ASSERT_NE(row, nullptr);
+	row->point = PassPoint::Post;
+	row->material = Handle<MaterialAsset>(static_cast<MaterialAsset*>(material));
+	camera.Get()->SetPass(0, Handle<RenderPass>(row));
+	DriveFrames(3);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderSystem::ReadbackWindowSceneColor(window, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const u16* before = reinterpret_cast<const u16*>(reference.data());
+	const u16* after = reinterpret_cast<const u16*>(pixels.data());
+	u32 mismatched = 0;
+	for (size_t texel = 0; texel < static_cast<size_t>(size.x) * size.y; ++texel) {
+		for (size_t channel = 0; channel < 3; ++channel) {
+			if (std::abs(HalfToFloat(after[texel * 4 + channel]) - HalfToFloat(before[texel * 4 + (channel + 1) % 3])) > 1e-3f) {
+				++mismatched;
+				break;
+			}
+		}
+	}
+	EXPECT_EQ(mismatched, 0u);
+	EXPECT_GT(PaintedFraction(window), 0.02f);
+
+	camera.Get()->SetPass(0, {});
+	Delete(row);
 	SceneSystem::UnloadScene(scene);
 	SceneSystem::EndFrame();
 }

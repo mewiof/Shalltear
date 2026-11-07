@@ -12,6 +12,7 @@
 
 #include "Shalltear/Editor/EditorViewportOps.h"
 
+#include "PassProbes.h"
 #include "ZoneProbe.h"
 
 #ifndef SHALLTEAR_SHARED
@@ -203,17 +204,17 @@ namespace {
 			return pixels.data() + (static_cast<size_t>(y) * size.x + x) * 4;
 		}
 
-		static bool IsGray(const u8* texel, f32 value) {
-			return std::abs(texel[0] - value) <= 1.0f && std::abs(texel[1] - value) <= 1.0f && std::abs(texel[2] - value) <= 1.0f;
+		static bool IsColor(const u8* texel, const Vec3& bytes) {
+			return std::abs(texel[0] - bytes.x) <= 1.0f && std::abs(texel[1] - bytes.y) <= 1.0f && std::abs(texel[2] - bytes.z) <= 1.0f;
 		}
 
-		static bool FindGrayTexel(const Vector<u8>& pixels, Vec2I size, f32 value, Vec2I& out) {
+		static bool FindColorTexel(const Vector<u8>& pixels, Vec2I size, const Vec3& bytes, Vec2I& out) {
 			for (i32 y = 1; y + 1 < size.y; ++y) {
 				for (i32 x = 1; x + 1 < size.x; ++x) {
 					bool inside = true;
 					for (i32 dy = -1; dy <= 1 && inside; ++dy) {
 						for (i32 dx = -1; dx <= 1 && inside; ++dx) {
-							inside = IsGray(Texel(pixels, size, x + dx, y + dy), value);
+							inside = IsColor(Texel(pixels, size, x + dx, y + dy), bytes);
 						}
 					}
 					if (inside) {
@@ -223,6 +224,18 @@ namespace {
 				}
 			}
 			return false;
+		}
+
+		static bool FindGrayTexel(const Vector<u8>& pixels, Vec2I size, f32 value, Vec2I& out) {
+			return FindColorTexel(pixels, size, Vec3(value, value, value), out);
+		}
+
+		static Vec3 ColorBytes(const Color& linear) {
+			return Vec3(LinearToByte(linear.r), LinearToByte(linear.g), LinearToByte(linear.b));
+		}
+
+		bool AddSkinnedMesh(const Color& color) {
+			return PassProbes::AddSkinnedMesh(FindRepoDir("Source/Tests/Fixtures/Graphics"), _root, _scene, color).IsValid();
 		}
 
 		static void ExpectScaled(const u8* before, const u8* after, const Vec3& scale) {
@@ -618,6 +631,46 @@ TEST_F(PostProcessRenderFixture, VignetteRunsBeforeGrade) {
 	EXPECT_GT(Texel(reference, referenceSize, 0, 0)[2], 40);
 }
 
+TEST_F(PostProcessRenderFixture, VignetteOverSkinnedMesh) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const Color green(0.1f, 0.8f, 0.2f);
+	ASSERT_TRUE(AddSkinnedMesh(green));
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+	Vec2I mesh{};
+	ASSERT_TRUE(FindColorTexel(reference, referenceSize, ColorBytes(green), mesh));
+
+	PostProcessProfile* profile = MakeProfile("SkinnedVignette.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->vignette = true;
+	profile->vignetteIntensity = 0.4f;
+	profile->vignetteSmoothness = 0.2f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const std::array<Vec2I, 5> probes = VignetteProbes(size);
+	for (const Vec2I& probe : {probes[0], probes[1], probes[2], probes[3], probes[4], mesh}) {
+		const f32 factor = VignetteFactor(size, probe, 0.4f, 0.2f);
+		SCOPED_TRACE(::testing::Message() << "at " << probe.x << ',' << probe.y);
+		ExpectScaled(Texel(reference, referenceSize, probe.x, probe.y), Texel(pixels, size, probe.x, probe.y),
+					 Vec3(factor, factor, factor));
+	}
+	EXPECT_LT(Texel(pixels, size, 0, 0)[0] + 40, Texel(reference, referenceSize, 0, 0)[0]);
+}
+
 TEST_F(PostProcessRenderFixture, BloomSpreadsLocally) {
 	if (!Ready()) {
 		GTEST_SKIP() << "no device";
@@ -664,6 +717,55 @@ TEST_F(PostProcessRenderFixture, BloomSpreadsLocally) {
 	ASSERT_LT(nearBefore, 40);
 	EXPECT_GT(nearAfter, nearBefore + 12) << static_cast<i32>(nearBefore) << " -> " << static_cast<i32>(nearAfter);
 	EXPECT_LT(cornerAfter - cornerBefore, nearAfter - nearBefore);
+}
+
+TEST_F(PostProcessRenderFixture, BloomSpreadsFromSkinnedMesh) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const Color clear = Color(0.0f, 0.0f, 0.0f);
+	ASSERT_TRUE(AddSkinnedMesh(Color(12.0f, 12.0f, 12.0f)));
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize, clear));
+
+	PostProcessProfile* profile = MakeProfile("SkinnedBloom.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->bloom = true;
+	profile->bloomIntensity = 1.0f;
+	profile->bloomThreshold = 0.9f;
+	AddVolume(profile);
+
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size, clear));
+	ASSERT_EQ(size, referenceSize);
+
+	i32 edgeY = -1;
+	for (i32 y = 0; y < size.y; ++y) {
+		if (Texel(reference, referenceSize, size.x / 2, y)[0] > 200) {
+			edgeY = y;
+		}
+	}
+	ASSERT_GT(edgeY, 0);
+	ASSERT_LT(edgeY + 6, size.y);
+
+	const i32 nearY = edgeY + 4;
+	const u8 nearBefore = Texel(reference, referenceSize, size.x / 2, nearY)[0];
+	const u8 nearAfter = Texel(pixels, size, size.x / 2, nearY)[0];
+	const u8 cornerBefore = Texel(reference, referenceSize, 1, size.y - 2)[0];
+	const u8 cornerAfter = Texel(pixels, size, 1, size.y - 2)[0];
+
+	ASSERT_LT(nearBefore, 40);
+	EXPECT_GT(nearAfter, nearBefore + 12) << static_cast<i32>(nearBefore) << " -> " << static_cast<i32>(nearAfter);
+	EXPECT_LT(cornerAfter - cornerBefore, nearAfter - nearBefore);
+	EXPECT_GE(Texel(pixels, size, size.x / 2, edgeY)[0], Texel(reference, referenceSize, size.x / 2, edgeY)[0]);
 }
 
 TEST_F(PostProcessRenderFixture, ZeroBloomLeavesFrame) {

@@ -1,14 +1,21 @@
 #pragma once
 
+#include "Shalltear/Core/Asset/AssetDatabase.h"
+#include "Shalltear/Core/FileSystem.h"
+#include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/RenderPass.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
+#include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Color.h"
 #include "Shalltear/Core/Math/Matrix.h"
 #include "Shalltear/Core/Math/Vector.h"
+#include "Shalltear/Core/Scene/SceneObject.h"
+#include "Shalltear/Core/Scene/SceneSystem.h"
 
 #include "Shalltear/Editor/EditorViewportOps.h"
 
+#include <filesystem>
 #include <span>
 
 namespace PassProbes {
@@ -58,5 +65,63 @@ namespace PassProbes {
 			drew = context.DrawProcedural(shader, bytes);
 		}
 	};
+
+	inline constexpr const char* CHANNEL_ROTATE_SHADER =
+		"#pragma shalltear_blend opaque\n"
+		"#pragma shalltear_depth off\n"
+		"#pragma shalltear_cull off\n"
+		"[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 tint; };\n"
+		"[[vk::binding(0, 2)]] Texture2D sltSceneColor;\n"
+		"[[vk::binding(1, 2)]] SamplerState sltSceneSampler;\n"
+		"struct VSOutput { float4 positionCS : SV_Position; float2 uv : TEXCOORD0; };\n"
+		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
+		"\tVSOutput output;\n"
+		"\tfloat2 corner = float2((vertexId << 1) & 2, vertexId & 2);\n"
+		"\toutput.positionCS = float4(corner * 2.0 - 1.0, 0.0, 1.0);\n"
+		"\toutput.uv = float2(corner.x, 1.0 - corner.y);\n"
+		"\treturn output;\n"
+		"}\n"
+		"float4 PSMain(VSOutput input) : SV_Target {\n"
+		"\tfloat4 scene = sltSceneColor.Sample(sltSceneSampler, input.uv);\n"
+		"\treturn float4(scene.g, scene.b, scene.r, 1) * tint;\n"
+		"}\n";
+
+	inline Handle<SkinnedMeshRenderer> FindSkinnedRenderer(const Handle<SceneObject>& object) {
+		if (Handle<SkinnedMeshRenderer> found = object->GetComponent<SkinnedMeshRenderer>(); found.IsValid()) {
+			return found;
+		}
+		for (u32 i = 0; i < object->GetChildCount(); ++i) {
+			if (Handle<SkinnedMeshRenderer> found = FindSkinnedRenderer(object->GetChild(i)); found.IsValid()) {
+				return found;
+			}
+		}
+		return {};
+	}
+
+	inline Handle<SkinnedMeshRenderer> AddSkinnedMesh(const std::filesystem::path& fixtures, const std::filesystem::path& projectRoot,
+													  const Handle<Scene>& scene, const Color& color) {
+		Asset* unlitShader = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
+		std::error_code ec;
+		std::filesystem::copy_file(fixtures / "SimpleSkin.gltf", projectRoot / "SimpleSkin.gltf",
+								   std::filesystem::copy_options::overwrite_existing, ec);
+		Asset* model = ec || !unlitShader ? nullptr : AssetDatabase::LoadAsset(Path("project://SimpleSkin.gltf"));
+		if (!model) {
+			return {};
+		}
+		const Guid modelGuid = model->assetId;
+		AssetDatabase::UnloadAsset(model);
+		FileSystem::WriteTextFile(Path((projectRoot / "SkinnedMesh.mat").generic_string()),
+								  str("{\n\t\"shader\": \"") + unlitShader->assetId.ToString() + "\"\n}\n");
+		auto* material = static_cast<MaterialAsset*>(AssetDatabase::LoadAsset(Path("project://SkinnedMesh.mat")));
+		Handle<SceneObject> root = SceneSystem::Instantiate(modelGuid, scene);
+		Handle<SkinnedMeshRenderer> renderer = root.IsValid() ? FindSkinnedRenderer(root) : Handle<SkinnedMeshRenderer>{};
+		if (!material || !renderer.IsValid()) {
+			return {};
+		}
+		material->SetColor("baseColor", color);
+		renderer->SetMaterial(0, Handle<MaterialAsset>(material));
+		SceneSystem::EndFrame();
+		return renderer;
+	}
 
 } // namespace PassProbes

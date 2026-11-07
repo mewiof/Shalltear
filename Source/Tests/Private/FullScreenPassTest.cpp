@@ -48,25 +48,7 @@ namespace {
 		return {};
 	}
 
-	constexpr const char* CHANNEL_ROTATE_SHADER =
-		"#pragma shalltear_blend opaque\n"
-		"#pragma shalltear_depth off\n"
-		"#pragma shalltear_cull off\n"
-		"[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 tint; };\n"
-		"[[vk::binding(0, 2)]] Texture2D sltSceneColor;\n"
-		"[[vk::binding(1, 2)]] SamplerState sltSceneSampler;\n"
-		"struct VSOutput { float4 positionCS : SV_Position; float2 uv : TEXCOORD0; };\n"
-		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
-		"\tVSOutput output;\n"
-		"\tfloat2 corner = float2((vertexId << 1) & 2, vertexId & 2);\n"
-		"\toutput.positionCS = float4(corner * 2.0 - 1.0, 0.0, 1.0);\n"
-		"\toutput.uv = float2(corner.x, 1.0 - corner.y);\n"
-		"\treturn output;\n"
-		"}\n"
-		"float4 PSMain(VSOutput input) : SV_Target {\n"
-		"\tfloat4 scene = sltSceneColor.Sample(sltSceneSampler, input.uv);\n"
-		"\treturn float4(scene.g, scene.b, scene.r, 1) * tint;\n"
-		"}\n";
+	using PassProbes::CHANNEL_ROTATE_SHADER;
 
 	constexpr const char* FLAT_SHADER =
 		"#pragma shalltear_blend opaque\n"
@@ -463,6 +445,41 @@ TEST_F(FullScreenPassFixture, SingleSampleCopyIsBlit) {
 	ASSERT_GT(NonBlackTexels(reference, referenceSize), 200u);
 	ASSERT_EQ(size, referenceSize);
 	ASSERT_GT(NonBlackTexels(pixels, size), 200u);
+	EXPECT_EQ(TexelsNotMatchingTheRotationOf(reference, pixels, size), 0u);
+}
+
+TEST_F(FullScreenPassFixture, PostColorReadsSkinnedScene) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	_scene = SceneSystem::CreateScene("Skinned");
+	ASSERT_TRUE(PassProbes::AddSkinnedMesh(FindRepoDir("Source/Tests/Fixtures/Graphics"), _root, _scene,
+										   Color(0.8f, 0.4f, 0.1f))
+					.IsValid());
+	WriteProjectFile("Rotate.hlsl", CHANNEL_ROTATE_SHADER);
+	MaterialAsset* material = LoadMaterial("Rotate.mat", "Rotate.hlsl",
+										   "\t\"colors\": { \"tint\": [1, 1, 1, 1] }");
+	ASSERT_NE(material, nullptr);
+
+	FullScreenPass row;
+	row.point = PassPoint::Post;
+	row.material = Handle<MaterialAsset>(material);
+
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+	ASSERT_GT(NonBlackTexels(reference, referenceSize), 200u);
+
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+	EXPECT_GT(NonBlackTexels(pixels, size), 200u);
 	EXPECT_EQ(TexelsNotMatchingTheRotationOf(reference, pixels, size), 0u);
 }
 

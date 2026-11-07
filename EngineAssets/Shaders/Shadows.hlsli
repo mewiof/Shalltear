@@ -51,14 +51,11 @@ float3 ShalltearShadowProject(ShalltearShadowMap map, float3 positionWS) {
 
 // should stop far fetches on slanted receiver reading itself as occluder
 float2 ShalltearShadowReceiverSlope(ShalltearShadowMap map, float texelSize, float3 biased, float3 projected,
-									float3 positionDdx, float3 positionDdy, float3 lightDirection) {
+									float3 positionDdx, float3 positionDdy) {
 	float3 acrossX = ShalltearShadowProject(map, biased + positionDdx * (texelSize / max(length(positionDdx), 1e-20))) - projected;
 	float3 acrossY = ShalltearShadowProject(map, biased + positionDdy * (texelSize / max(length(positionDdy), 1e-20))) - projected;
 	float3 plane = cross(acrossX, acrossY);
-	float towardLight = abs(ShalltearShadowProject(map, biased - lightDirection * texelSize).z - projected.z);
-	float steepest = SHALLTEAR_SHADOW_MAX_SLOPE * towardLight / sltShadowAtlasTexel;
-	float divisor = max(max(abs(plane.z), length(plane.xy) / max(steepest, 1e-20)), 1e-30);
-	return -plane.xy * ((plane.z < 0.0 ? -1.0 : 1.0) / divisor);
+	return -plane.xy * ((plane.z < 0.0 ? -1.0 : 1.0) / max(abs(plane.z), 1e-30));
 }
 
 // tent's area from its left foot to x
@@ -79,7 +76,7 @@ float2 ShalltearShadowTentFetch(uint pair, uint pairs, float offset, float halfW
 }
 
 // widths 1-7 cost 1-16 bilinear fetches
-float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, float2 slope, float4 uvBounds) {
+float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, float2 slope, float2 reach, float4 uvBounds) {
 	uint width = (uint)max(sltShadowPcfTaps, 1.0);
 	if (width <= 1) {
 		return atlas.SampleCmpLevelZero(sltShadowSampler, clamp(uv, uvBounds.xy, uvBounds.zw), reference);
@@ -94,7 +91,7 @@ float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, fl
 		float2 row = ShalltearShadowTentFetch(y, pairs, offset.y, halfWidth);
 		for (uint x = 0; x < pairs; ++x) {
 			float2 column = ShalltearShadowTentFetch(x, pairs, offset.x, halfWidth);
-			float2 tap = clamp((corner + float2(column.x, row.x)) * sltShadowAtlasTexel, uvBounds.xy, uvBounds.zw);
+			float2 tap = clamp(uv + ((corner + float2(column.x, row.x)) * sltShadowAtlasTexel - uv) * reach, uvBounds.xy, uvBounds.zw);
 			sum += column.y * row.y * atlas.SampleCmpLevelZero(sltShadowSampler, tap, reference + dot(tap - uv, slope));
 		}
 	}
@@ -109,8 +106,10 @@ float ShalltearSampleShadowMap(Texture2D<float> atlas, uint index, float texelSi
 	if (projected.z <= 0.0 || projected.z >= 1.0) {
 		return 1.0;
 	}
-	float2 slope = ShalltearShadowReceiverSlope(map, texelSize, biased, projected, positionDdx, positionDdy, lightDirection);
-	return ShalltearShadowTent(atlas, projected.xy, projected.z, slope, map.uvBounds);
+	float2 slope = ShalltearShadowReceiverSlope(map, texelSize, biased, projected, positionDdx, positionDdy);
+	float towardLight = abs(ShalltearShadowProject(map, biased - lightDirection * texelSize).z - projected.z);
+	float2 reach = min(1.0, SHALLTEAR_SHADOW_MAX_SLOPE * towardLight / (sltShadowAtlasTexel * max(abs(slope), 1e-30)));
+	return ShalltearShadowTent(atlas, projected.xy, projected.z, slope, reach, map.uvBounds);
 }
 
 float ShalltearSampleCascade(uint index, float3 positionWS, float3 positionDdx, float3 positionDdy,

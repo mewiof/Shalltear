@@ -3046,6 +3046,71 @@ TEST_F(ShadowFilterFixture, SlantedReceiverUnshadowed) {
 	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
 }
 
+TEST_F(ShadowFilterFixture, GrazingReceiverReadsUnshadowedAtEveryWidth) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(87.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	_light->SetIntensity(10.0f);
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectNoSelfShadowAtEveryWidth());
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+}
+
+TEST_F(ShadowFilterFixture, GrazingSpotReceiverUnshadowed) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(87.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	Handle<SceneObject> owner = _light->GetOwner();
+	owner->SetLocalPosition(Vec3(-6.0f, 0.3f, 0.0f));
+	owner->SetLocalRotation(Quat::LookRotation(Vec3(6.0f, -0.3f, 0.0f)));
+	_light->SetLightType(LightType::Spot);
+	_light->SetRange(20.0f);
+	_light->SetSpotAngleDeg(60.0f);
+	_light->SetIntensity(360.0f);
+	_light->SetCastShadows(true);
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectNoSelfShadowAtEveryWidth());
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+}
+
+TEST_F(ShadowFilterFixture, GrazingContactShadowStaysDark) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(87.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	_light->SetIntensity(10.0f);
+	Box("Cube", Vec3(0.0f, 0.5f, 0.0f), Vec3(1.0f, 1.0f, 1.0f));
+	SceneSystem::EndFrame();
+	_window = 1.6f;
+	_center = Vec3(0.5f, 0.0f, 0.1f);
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+
+	UseProfile([](GraphicsProfile& profile) { profile.shadowPcfTaps = 1; });
+	Vector<f32> hard{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_NO_FATAL_FAILURE(ShadowFactor(hard));
+	u32 inside = 0;
+	for (f32 value : hard) {
+		inside += value < 0.01f ? 1u : 0u;
+	}
+	ASSERT_GT(inside, 50000u);
+	for (i32 width : {3, 5, 7}) {
+		UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
+		Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+		ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+		f64 sum = 0.0;
+		for (size_t i = 0; i < factor.size(); ++i) {
+			sum += hard[i] < 0.01f ? factor[i] : 0.0f;
+		}
+		EXPECT_LT(sum / inside, 0.12) << "width " << width;
+	}
+}
+
 TEST_F(ShadowFilterFixture, CubeShadowMeetsBase) {
 	const Vec3 travel = Travel(45.0f, 25.0f);
 	ASSERT_NO_FATAL_FAILURE(BuildRig(travel, 8.0f));

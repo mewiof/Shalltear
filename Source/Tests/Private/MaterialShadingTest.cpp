@@ -775,6 +775,45 @@ namespace {
 
 } // anonymous namespace
 
+TEST_F(MaterialReadbackFixture, SphereTerminatorHasNoAcne) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Terminator.hlsl", TerminatorShader(""));
+	Asset* shader = AssetDatabase::LoadAsset(Path("project://Terminator.hlsl"));
+	ASSERT_NE(shader, nullptr);
+	MaterialAsset* material = LoadMaterial("Terminator.mat", shader->assetId, "");
+	ASSERT_NE(material, nullptr);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	RenderTerminator(material, pixels);
+	if (HasFatalFailure()) {
+		return;
+	}
+	u32 facing = 0;
+	u32 acne = 0;
+	u32 averted = 0;
+	u32 shadowed = 0;
+	for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+		if (!TerminatorDrew(pixels, i)) {
+			continue;
+		}
+		if (pixels[i + 1] > 200) {
+			++facing;
+			acne += pixels[i] < 249 ? 1u : 0u;
+		} else if (pixels[i + 1] < 50) {
+			++averted;
+			shadowed += pixels[i] < 128 ? 1u : 0u;
+		}
+	}
+	EXPECT_GT(facing, 10000u);
+	EXPECT_GT(averted, 10000u);
+	EXPECT_GT(shadowed, averted / 2);
+	EXPECT_EQ(acne, 0u) << facing;
+}
+
 TEST_F(MaterialReadbackFixture, ShadowIgnoresNormalMap) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";

@@ -53,7 +53,14 @@ namespace Shalltear::SceneRequests {
 	}
 
 	// bindings sorted by set in MergeReflections
-	inline bool DeclaresSceneSet(const ShaderAsset& shader) { return !shader.bindings.empty() && shader.bindings.back().set == SET; }
+	inline bool DeclaresSceneSet(const ShaderAsset& shader) {
+		for (auto binding = shader.bindings.rbegin(); binding != shader.bindings.rend() && binding->set >= SET; ++binding) {
+			if (binding->set == SET) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	inline bool MayReadSceneOnMesh(const ShaderAsset& shader) {
 		return DeclaresSceneSet(shader) && DeclaresViewSet(shader) && DeclaredBy(shader) != PassRequests::None;

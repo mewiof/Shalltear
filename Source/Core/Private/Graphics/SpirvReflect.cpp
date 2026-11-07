@@ -410,7 +410,26 @@ namespace Shalltear {
 				auto typeIt = types.find(pointee);
 				u16 typeOp = typeIt != types.end() ? typeIt->second.op : u16{0};
 
-				if (typeOp == OpTypeArray || typeOp == OpTypeRuntimeArray) {
+				if (binding.set == RHI::TABLE_SET) {
+					if (typeOp != OpTypeRuntimeArray) {
+						reflection.error = std::format("resource '{}' in set {} isn't a texture table array", nameOf(id), RHI::TABLE_SET);
+						return reflection;
+					}
+					typeIt = types.find(typeIt->second.words[0]);
+					typeOp = typeIt != types.end() ? typeIt->second.op : u16{0};
+					const bool sampler = typeOp == OpTypeSampler && binding.binding == RHI::TABLE_SAMPLERS_BINDING;
+					RHI::TextureDimension dimension = RHI::TextureDimension::Count;
+					if (typeOp == OpTypeImage) {
+						dimension = ImageDimension(typeIt->second.words[1], typeIt->second.words[3] != 0);
+					}
+					const bool image = (binding.binding == RHI::TABLE_TEXTURES_2D_BINDING && dimension == RHI::TextureDimension::Texture2D) ||
+									   (binding.binding == RHI::TABLE_TEXTURES_CUBE_BINDING && dimension == RHI::TextureDimension::Cube) ||
+									   (binding.binding == RHI::TABLE_TEXTURES_3D_BINDING && dimension == RHI::TextureDimension::Texture3D);
+					if (!sampler && !image) {
+						reflection.error = std::format("resource '{}' doesn't match texture table binding {}", nameOf(id), binding.binding);
+						return reflection;
+					}
+				} else if (typeOp == OpTypeArray || typeOp == OpTypeRuntimeArray) {
 					reflection.error = std::format("resource '{}' is an array of descriptors (unsupported)", nameOf(id));
 					return reflection;
 				}
@@ -523,7 +542,7 @@ namespace Shalltear {
 
 		for (const RHI::DescriptorBindingDesc& binding : outBindings) {
 			if (binding.set >= RHI::MAX_DESCRIPTOR_SETS) {
-				outError = std::format("set {} binding {} violates the binding convention (set 0 = per-view, set 1 = per-material, set 2 = the pass row's requests)", binding.set, binding.binding);
+				outError = std::format("set {} binding {} violates the binding convention (set 0 = per-view, set 1 = per-material, set 2 = the pass row's requests, set 3 = texture table)", binding.set, binding.binding);
 				return false;
 			}
 		}

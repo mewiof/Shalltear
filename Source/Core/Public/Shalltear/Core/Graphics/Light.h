@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Color.h"
 #include "Shalltear/Core/Math/MathReflect.h"
 #include "Shalltear/Core/Scene/Component.h"
@@ -36,6 +38,11 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_shadowStrength, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_shadowBias, SLT_RANGE(0.0f, 4.0f))
 		SLT_REFLECT_FIELD(_shadowNormalBias, SLT_RANGE(0.0f, 4.0f))
+		SLT_REFLECT_FIELD(_cookie)
+		SLT_REFLECT_FIELD(_cookieSize)
+		SLT_REFLECT_FIELD(_cookieOffset)
+		SLT_REFLECT_FIELD(_renderingLayerMask)
+		SLT_REFLECT_FIELD(_shadowLayerMask)
 		SLT_END_REFLECT()
 
 		Light() = default;
@@ -70,6 +77,23 @@ namespace Shalltear {
 
 		f32 GetShadowNormalBias() const { return _shadowNormalBias; }
 		void SetShadowNormalBias(f32 bias) { _shadowNormalBias = bias; }
+
+		// 2D for directional/spot, cube for point
+		Handle<TextureAsset> GetCookie() const { return _cookie; }
+		void SetCookie(Handle<TextureAsset> cookie) { _cookie = cookie; }
+
+		// directional only
+		Vec2 GetCookieSize() const { return _cookieSize; }
+		void SetCookieSize(const Vec2& size) { _cookieSize = size; }
+		Vec2 GetCookieOffset() const { return _cookieOffset; }
+		void SetCookieOffset(const Vec2& offset) { _cookieOffset = offset; }
+
+		// first 8 layers only (all bits set = all layers)
+		u32 GetRenderingLayerMask() const { return _renderingLayerMask; }
+		void SetRenderingLayerMask(u32 mask) { _renderingLayerMask = mask; }
+
+		u32 GetShadowLayerMask() const { return _shadowLayerMask; }
+		void SetShadowLayerMask(u32 mask) { _shadowLayerMask = mask; }
 	protected:
 		void OnEnable() override;
 		void OnDisable() override;
@@ -84,6 +108,11 @@ namespace Shalltear {
 		f32 _shadowStrength = 1.0f;
 		f32 _shadowBias = 1.0f;
 		f32 _shadowNormalBias = 1.0f;
+		Handle<TextureAsset> _cookie;
+		Vec2 _cookieSize{1.0f, 1.0f};
+		Vec2 _cookieOffset{0.0f, 0.0f};
+		u32 _renderingLayerMask = ~0u;
+		u32 _shadowLayerMask = ~0u;
 	};
 
 } // namespace Shalltear

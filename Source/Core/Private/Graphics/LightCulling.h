@@ -28,6 +28,14 @@ namespace Shalltear::GraphicsInternal {
 		// full angle (not half)
 		f32 outerAngleDeg = 0.0f;
 
+		u32 renderingLayerMask = ~0u;
+		u32 shadowLayerMask = ~0u;
+		TextureAsset* cookie = nullptr;
+		Vec3 right;
+		Vec3 up;
+		Vec2 cookieSize{1.0f, 1.0f};
+		Vec2 cookieOffset;
+
 		bool IsDirectional() const { return type == LightType::Directional; }
 	};
 

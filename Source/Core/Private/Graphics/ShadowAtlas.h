@@ -48,6 +48,7 @@ namespace Shalltear::GraphicsInternal {
 		f32 normalBias = 0.0f;
 		f32 importance = 0.0f;
 		u32 tileSize = MIN_PUNCTUAL_TILE;
+		u32 layerMask = ~0u;
 
 		u32 MapCount() const { return type == LightType::Point ? POINT_SHADOW_FACES : 1u; }
 	};

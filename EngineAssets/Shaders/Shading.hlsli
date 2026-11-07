@@ -17,7 +17,7 @@ float3 ShalltearIntegrateLight(ShalltearSurfaceInput surfaceInput, ShalltearSurf
 #endif
 }
 
-float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurface surface, float3 normalWS, float receivesShadows) {
+float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurface surface, float3 normalWS, float receivesShadows, uint drawLayers) {
 	// walks diverge
 	float3 positionDdx = ddx(surfaceInput.positionWS);
 	float3 positionDdy = ddy(surfaceInput.positionWS);
@@ -34,7 +34,11 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 	uint directionalCount = (uint)sltDirectionalLightCount;
 	for (uint d = 0; d < directionalCount; ++d) {
 		ShalltearLight directional = ShalltearLoadLight(d);
+		if (!ShalltearLightReaches(directional, drawLayers)) {
+			continue;
+		}
 		ShalltearLightSample sample = ShalltearSampleDirectional(directional);
+		sample.color *= ShalltearLightCookieColor(directional, surfaceInput.positionWS, positionDdx, positionDdy);
 		sample.shadow = lerp(1.0, ShalltearDirectionalShadow(directional.shadowIndex, directional.shadowCount, surfaceInput.positionWS, positionDdx,
 															 positionDdy, surfaceInput.normalWS, directional.direction, viewDepth),
 							 receivesShadows * directional.shadowStrength);
@@ -47,7 +51,11 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 		uint2 entry = ShalltearClusterEntry(cluster);
 		for (uint p = 0; p < entry.y; ++p) {
 			ShalltearLight light = ShalltearLoadLight(ShalltearClusterLight(entry, p));
+			if (!ShalltearLightReaches(light, drawLayers)) {
+				continue;
+			}
 			ShalltearLightSample sample = ShalltearSamplePunctual(light, surfaceInput.positionWS);
+			sample.color *= ShalltearLightCookieColor(light, surfaceInput.positionWS, positionDdx, positionDdy);
 			if (light.shadowCount > 0) {
 				sample.shadow = lerp(1.0, ShalltearPunctualShadow(light.shadowIndex, light.shadowCount, light.position, surfaceInput.positionWS,
 																  positionDdx, positionDdy, surfaceInput.normalWS),
@@ -58,6 +66,10 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 		}
 	}
 	return lighting;
+}
+
+float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurface surface, float3 normalWS, float receivesShadows) {
+	return ShalltearShadeSurface(surfaceInput, surface, normalWS, receivesShadows, 0xFFu);
 }
 
 #endif

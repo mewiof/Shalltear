@@ -363,6 +363,9 @@ namespace Shalltear::RHI {
 	}
 
 	void DeviceImpl::FlushDeletionQueue(DeletionQueue& queue) {
+		for (const DeletionQueue::TableRelease& release : queue.tableReleases) {
+			table.freeIndices[release.binding].push_back(release.index);
+		}
 		for (const DeletionQueue::DeferredBuffer& entry : queue.buffers) {
 			vmaDestroyBuffer(allocator, entry.buffer, entry.allocation);
 		}
@@ -388,6 +391,7 @@ namespace Shalltear::RHI {
 		queue.samplers.clear();
 		queue.pipelines.clear();
 		queue.pipelineLayouts.clear();
+		queue.tableReleases.clear();
 	}
 
 	UploadRingBlock& DeviceImpl::EnsureUploadSpace(u64 size, u64 alignment) {
@@ -620,9 +624,15 @@ namespace Shalltear::RHI {
 		features.pNext = &features12;
 		features.features.samplerAnisotropy = VK_TRUE;
 		features.features.shaderInt64 = VK_TRUE;
+		bool tableFeatures = false;
 		{
+			VkPhysicalDeviceVulkan12Features supported12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 			VkPhysicalDeviceFeatures2 supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+			supported.pNext = &supported12;
 			impl->fi.vkGetPhysicalDeviceFeatures2(impl->physicalDevice, &supported);
+			tableFeatures = supported12.runtimeDescriptorArray && supported12.shaderSampledImageArrayNonUniformIndexing &&
+							supported12.descriptorBindingPartiallyBound && supported12.descriptorBindingSampledImageUpdateAfterBind &&
+							supported12.descriptorBindingUpdateUnusedWhilePending;
 			impl->fillModeNonSolid = supported.features.fillModeNonSolid == VK_TRUE;
 			impl->imageCubeArray = supported.features.imageCubeArray == VK_TRUE;
 			impl->textureCompressionBC = supported.features.textureCompressionBC == VK_TRUE;
@@ -630,6 +640,11 @@ namespace Shalltear::RHI {
 		features.features.fillModeNonSolid = impl->fillModeNonSolid ? VK_TRUE : VK_FALSE;
 		features.features.imageCubeArray = impl->imageCubeArray ? VK_TRUE : VK_FALSE;
 		features.features.textureCompressionBC = impl->textureCompressionBC ? VK_TRUE : VK_FALSE;
+		features12.runtimeDescriptorArray = tableFeatures ? VK_TRUE : VK_FALSE;
+		features12.shaderSampledImageArrayNonUniformIndexing = tableFeatures ? VK_TRUE : VK_FALSE;
+		features12.descriptorBindingPartiallyBound = tableFeatures ? VK_TRUE : VK_FALSE;
+		features12.descriptorBindingSampledImageUpdateAfterBind = tableFeatures ? VK_TRUE : VK_FALSE;
+		features12.descriptorBindingUpdateUnusedWhilePending = tableFeatures ? VK_TRUE : VK_FALSE;
 
 		Vector<const char*> deviceExtensions{GetMemoryResource(MemTag::Graphics)};
 		if (!impl->headless || haveSurfaceExtensions) {
@@ -658,6 +673,11 @@ namespace Shalltear::RHI {
 			return fail("device function table incomplete");
 		}
 		impl->fd.vkGetDeviceQueue(impl->device, impl->queueFamily, 0, &impl->queue);
+		if (!tableFeatures) {
+			SLT_LOG_WARN("Graphics", "Adapter lacks descriptor indexing features for texture table");
+		} else {
+			impl->CreateTable();
+		}
 
 		VmaVulkanFunctions vmaFunctions{};
 		vmaFunctions.vkGetInstanceProcAddr = VulkanLoader::GetInstanceProcAddrFn();
@@ -794,6 +814,7 @@ namespace Shalltear::RHI {
 		for (auto& [hash, layout] : impl->setLayoutCache) {
 			impl->fd.vkDestroyDescriptorSetLayout(impl->device, layout, nullptr);
 		}
+		impl->DestroyTable();
 
 		impl->fd.vkDestroyPipelineCache(impl->device, impl->pipelineCache, nullptr);
 		impl->fd.vkDestroyFence(impl->device, impl->immediateFence, nullptr);

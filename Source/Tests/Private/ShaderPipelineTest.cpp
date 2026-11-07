@@ -264,10 +264,10 @@ TEST(SpirvReflectTest, MergeRejectsExtraSet) {
 	};
 
 	str accepted;
-	EXPECT_TRUE(merge(2, accepted)) << accepted;
+	EXPECT_TRUE(merge(3, accepted)) << accepted;
 	str refused;
-	EXPECT_FALSE(merge(3, refused));
-	EXPECT_NE(refused.find("set 3"), str::npos) << refused;
+	EXPECT_FALSE(merge(4, refused));
+	EXPECT_NE(refused.find("set 4"), str::npos) << refused;
 }
 
 TEST(SpirvReflectTest, RejectsMalformedModules) {

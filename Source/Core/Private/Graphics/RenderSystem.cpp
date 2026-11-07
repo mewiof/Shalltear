@@ -120,6 +120,7 @@ namespace Shalltear {
 				u32 firstRead = 0;
 				u32 readCount = 0;
 				u32 index = 0;
+				u32 renderer = 0;
 				ShadowCasting castShadows = ShadowCasting::Off;
 			};
 			struct Read {
@@ -202,9 +203,29 @@ namespace Shalltear {
 			u32 shadowIndex = 0;
 			u32 shadowCount = 0;
 			f32 shadowStrength = 1.0f;
-			u32 pad0 = 0;
+			// bits 0-7 layers, 8-15 flags, 16-31 extension slot
+			u32 info = 0;
 		};
 		static_assert(sizeof(GPULight) == 64);
+
+		struct GPULightCookie {
+			Vec4 rows[3];
+			u32 entry = 0;
+			u32 projection = 0;
+			u32 pad0 = 0;
+			u32 pad1 = 0;
+		};
+		static_assert(sizeof(GPULightCookie) == sizeof(GPULight), "1 extension slot, must match ShalltearLightCookie");
+
+		constexpr u32 LIGHT_LAYERS = 0xFFu;
+		constexpr u32 LIGHT_FLAG_COOKIE = 1u << 8;
+		constexpr u32 LIGHT_FLAG_EVERY_LAYER = 2u << 8;
+		constexpr u32 LIGHT_EXTENSION_SHIFT = 16;
+		constexpr u32 COOKIE_ORTHOGRAPHIC = 0;
+		constexpr u32 COOKIE_PERSPECTIVE = 1;
+		constexpr u32 COOKIE_CUBE = 2;
+		// must match SHALLTEAR_TABLE_SAMPLER_SHIFT
+		constexpr u32 TABLE_SAMPLER_SHIFT = 20;
 
 		struct GPUViewUniforms {
 			Mat4 viewProjection;
@@ -381,6 +402,7 @@ namespace Shalltear {
 		constexpr i32 MAX_SHADOW_ATLAS_SIZE = 8192;
 		constexpr u32 DRAW_RECEIVES_SHADOWS = 1u;
 		constexpr u32 DRAW_BLEND_SHIFT = 1u;
+		constexpr u32 DRAW_LAYERS_SHIFT = 8u;
 		static_assert(static_cast<u32>(RHI::BlendMode::Count) <= 8u, "the blend's 3 bits of the per-draw flags");
 		static_assert(static_cast<u32>(RHI::BlendMode::Opaque) == 0u && static_cast<u32>(RHI::BlendMode::Alpha) == 1u &&
 						  static_cast<u32>(RHI::BlendMode::Additive) == 2u && static_cast<u32>(RHI::BlendMode::Premultiplied) == 3u &&
@@ -2180,19 +2202,13 @@ namespace Shalltear {
 								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
 				AABB worldBounds = bounds.IsValid() ? bounds.Transformed(world) : AABB{};
 				u64 volumeMask = 0;
-				if (bounds.IsValid()) {
-					for (u32 volume = 0; volume < static_cast<u32>(volumes.size()); ++volume) {
-						if (volumes[volume].Intersects(worldBounds)) {
-							volumeMask |= 1ull << volume;
-						}
-					}
-					if (volumeMask == 0) {
-						return;
-					}
-				} else {
-					for (u32 volume = 0; volume < static_cast<u32>(volumes.size()); ++volume) {
+				for (u32 volume = 0; volume < static_cast<u32>(volumes.size()); ++volume) {
+					if ((renderingLayerMask & volumes[volume].layerMask) != 0 && (!bounds.IsValid() || volumes[volume].Intersects(worldBounds))) {
 						volumeMask |= 1ull << volume;
 					}
+				}
+				if (volumeMask == 0) {
+					return;
 				}
 				f32 depth = Vec3::DistanceSquared(walk.sortOrigin, worldBounds.Center());
 				const u32 depthBand = walk.use == DrawListUse::View ? DepthBand(depth) : 0u;
@@ -2320,6 +2336,7 @@ namespace Shalltear {
 				element.flags |= DRAW_RECEIVES_SHADOWS;
 			}
 			element.flags |= static_cast<u32>(entry.renderState.blend) << DRAW_BLEND_SHIFT;
+			element.flags |= (entry.renderingLayerMask & LIGHT_LAYERS) << DRAW_LAYERS_SHIFT;
 			out = element;
 		}
 
@@ -2460,7 +2477,7 @@ namespace Shalltear {
 					continue;
 				}
 				const GraphicsInternal::ProceduralFrame::Renderer& declared = frame.renderers[index];
-				if (volume && declared.bounded && !volume->Intersects(declared.bounds)) {
+				if (volume && ((declared.renderingLayerMask & volume->layerMask) == 0 || (declared.bounded && !volume->Intersects(declared.bounds)))) {
 					continue;
 				}
 				ProceduralRenderer* renderer = declared.renderer.Get();
@@ -3235,10 +3252,85 @@ namespace Shalltear {
 				candidate.shadowBias = Math::Max(light->GetShadowBias(), 0.0f);
 				candidate.shadowNormalBias = Math::Max(light->GetShadowNormalBias(), 0.0f);
 				candidate.stableKey = light->GetInstanceId();
+				candidate.renderingLayerMask = light->GetRenderingLayerMask();
+				candidate.shadowLayerMask = light->GetShadowLayerMask();
+				candidate.cookie = light->GetCookie().Get();
+				if (candidate.cookie) {
+					candidate.right = lightOwner->TransformDirection(Vec3::Right()).Normalized();
+					candidate.up = lightOwner->TransformDirection(Vec3::Up()).Normalized();
+					candidate.cookieSize = light->GetCookieSize();
+					candidate.cookieOffset = light->GetCookieOffset();
+				}
 			}
 
 			return GraphicsInternal::SelectViewLights({candidates.data(), candidates.size()}, cameraPosition,
 													  state.lightsPerView, outDirectionalCount, outDropped);
+		}
+
+		bool PackLightCookie(RenderState& state, const GraphicsInternal::LightCandidate& candidate, GPULightCookie& out) {
+			const TextureAsset* cookie = candidate.cookie;
+			if (!cookie || !cookie->texture.IsValid()) {
+				return false;
+			}
+			const RHI::TextureDimension wanted = candidate.type == LightType::Point ? RHI::TextureDimension::Cube : RHI::TextureDimension::Texture2D;
+			if (cookie->GetDimension() != wanted) {
+				const u64 key = candidate.stableKey * 0x9E3779B97F4A7C15ull ^ cookie->GetInstanceId();
+				if (std::find(state.dimensionMismatchesWarned.begin(), state.dimensionMismatchesWarned.end(), key) ==
+					state.dimensionMismatchesWarned.end()) {
+					state.dimensionMismatchesWarned.push_back(key);
+					SLT_LOG_WARN("Graphics", "light cookie '{}' is {} (expected {}, ignoring)", cookie->virtualPath,
+								 RHI::TextureDimensionName(cookie->GetDimension()), RHI::TextureDimensionName(wanted));
+				}
+				return false;
+			}
+			const RHI::SamplerHandle sampler = TextureSampler(state, *cookie);
+			const u32 image = state.device->GetTableIndex(cookie->texture);
+			const u32 slot = sampler.IsValid() ? state.device->GetTableIndex(sampler) : RHI::TABLE_NONE;
+			if (image == RHI::TABLE_NONE || slot == RHI::TABLE_NONE) {
+				return false;
+			}
+			out = GPULightCookie{};
+			out.entry = image | (slot << TABLE_SAMPLER_SHIFT);
+
+			const Vec3& origin = candidate.position;
+			const Vec3& right = candidate.right;
+			const Vec3& up = candidate.up;
+			const Vec3& forward = candidate.direction;
+			auto row = [&](const Vec3& axis, f32 bias) { return Vec4(axis, bias - Vec3::Dot(axis, origin)); };
+			switch (candidate.type) {
+			case LightType::Directional: {
+				auto safe = [](f32 value) { return std::abs(value) > 1e-4f ? value : std::copysign(1e-4f, value); };
+				const f32 width = safe(candidate.cookieSize.x);
+				const f32 height = safe(candidate.cookieSize.y);
+				out.projection = COOKIE_ORTHOGRAPHIC;
+				out.rows[0] = row(right / width, 0.5f - candidate.cookieOffset.x / width);
+				out.rows[1] = row(-up / height, 0.5f + candidate.cookieOffset.y / height);
+				break;
+			}
+			case LightType::Spot: {
+				const f32 slope = std::tan(Math::Clamp(candidate.outerAngleDeg, 1.0f, 179.0f) * 0.5f * Math::DEG_TO_RAD);
+				out.projection = COOKIE_PERSPECTIVE;
+				out.rows[0] = row(forward * (0.5f * slope) + right * 0.5f, 0.0f);
+				out.rows[1] = row(forward * (0.5f * slope) - up * 0.5f, 0.0f);
+				out.rows[2] = row(forward * slope, 0.0f);
+				break;
+			}
+			case LightType::Point:
+				out.projection = COOKIE_CUBE;
+				out.rows[0] = row(right, 0.0f);
+				out.rows[1] = row(up, 0.0f);
+				out.rows[2] = row(forward, 0.0f);
+				break;
+			}
+			return true;
+		}
+
+		u32 LightInfo(const GraphicsInternal::LightCandidate& candidate) {
+			u32 info = candidate.renderingLayerMask & LIGHT_LAYERS;
+			if (candidate.renderingLayerMask == ~0u) {
+				info |= LIGHT_FLAG_EVERY_LAYER;
+			}
+			return info;
 		}
 
 		class ViewRecordScope {
@@ -3448,6 +3540,7 @@ namespace Shalltear {
 						volumes.push_back(GraphicsInternal::BuildCasterVolume(
 							cascade.viewProjection, fitView, fitProjection, GraphicsInternal::CascadeReceiverDepths(splits, i),
 							towardLight, cascade.worldTexelSize * marginTexels));
+						volumes.back().layerMask = candidates[casterIndex].shadowLayerMask;
 						++mapCount;
 					}
 				}
@@ -3470,6 +3563,7 @@ namespace Shalltear {
 				request.strength = candidate.shadowStrength;
 				request.depthBias = candidate.shadowBias;
 				request.normalBias = candidate.shadowNormalBias;
+				request.layerMask = candidate.shadowLayerMask;
 				const f32 coverage = GraphicsInternal::ShadowScreenCoverage(projection, cameraPosition,
 																			candidate.position, candidate.range);
 				request.importance = GraphicsInternal::ShadowImportance(coverage, candidate.color);
@@ -3520,6 +3614,7 @@ namespace Shalltear {
 					volumes.push_back(GraphicsInternal::BuildCasterVolume(
 						built.viewProjection, view, projection, Vec2(lightDepth - depthReach, lightDepth + depthReach),
 						Vec4(request.position, 1.0f), built.worldTexelSizePerUnit * request.range * marginTexels));
+					volumes.back().layerMask = request.layerMask;
 					++mapCount;
 				}
 				RenderState::ShadowAllocation& allocation = state.shadowAllocations.emplace_back();
@@ -4225,14 +4320,27 @@ namespace Shalltear {
 			state.pendingShadow = RenderState::ShadowSetup{};
 
 			if (lightCount > 0) {
-				RHI::TransientAllocation lightAllocation = device.AllocateTransient(static_cast<u64>(lightCount) * sizeof(GPULight), 16);
+				u32 cookieCount = 0;
+				for (u32 i = 0; i < lightCount; ++i) {
+					cookieCount += candidates[i].cookie ? 1u : 0u;
+				}
+				RHI::TransientAllocation lightAllocation =
+					device.AllocateTransient(static_cast<u64>(lightCount + cookieCount) * sizeof(GPULight), 16);
 				if (lightAllocation.IsValid()) {
 					viewUniforms.lightAddress = device.GetBufferDeviceAddress(lightAllocation.buffer) + lightAllocation.offset;
 					GPULight* records = static_cast<GPULight*>(lightAllocation.cpu);
+					u32 nextExtension = lightCount;
 					for (u32 i = 0; i < lightCount; ++i) {
 						const GraphicsInternal::LightCandidate& candidate = candidates[i];
 						GPULight& record = records[i];
 						record = GPULight{};
+						record.info = LightInfo(candidate);
+						GPULightCookie cookie;
+						if (candidate.cookie && PackLightCookie(state, candidate, cookie)) {
+							std::memcpy(&records[nextExtension], &cookie, sizeof(cookie));
+							record.info |= LIGHT_FLAG_COOKIE | (nextExtension << LIGHT_EXTENSION_SHIFT);
+							++nextExtension;
+						}
 						record.position = candidate.position;
 						if (candidate.range > 0.0f) {
 							record.invRangeSquared = 1.0f / (candidate.range * candidate.range);
@@ -7719,6 +7827,7 @@ namespace Shalltear {
 		item.sortPoint = sortPoint;
 		item.firstRead = static_cast<u32>(frame.reads.size());
 		item.index = renderer.itemCount;
+		item.renderer = _renderer;
 		item.castShadows = castShadows;
 		_inStep = false;
 		return renderer.itemCount++;
@@ -7886,6 +7995,7 @@ namespace Shalltear {
 			element.flags |= DRAW_RECEIVES_SHADOWS;
 		}
 		element.flags |= static_cast<u32>(blend) << DRAW_BLEND_SHIFT;
+		element.flags |= (_frame->renderers[_frame->items[_flatItem].renderer].renderingLayerMask & LIGHT_LAYERS) << DRAW_LAYERS_SHIFT;
 		u8* cpu = static_cast<u8*>(allocation.cpu);
 		std::memcpy(cpu, &element, sizeof(GPUPerDraw));
 		std::memcpy(cpu + sizeof(GPUPerDraw), vertices.data(), vertices.size_bytes());

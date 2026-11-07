@@ -386,8 +386,16 @@ namespace Shalltear::RHI {
 
 	inline constexpr u64 WHOLE_BUFFER = ~0ull;
 
-	inline constexpr u32 MAX_DESCRIPTOR_SETS = 3;
+	inline constexpr u32 MAX_DESCRIPTOR_SETS = 4;
 	inline constexpr u32 MAX_COLOR_ATTACHMENTS = 4;
+
+	// device's persistent table (never transient)
+	inline constexpr u32 TABLE_SET = 3;
+	inline constexpr u32 TABLE_SAMPLERS_BINDING = 0;
+	inline constexpr u32 TABLE_TEXTURES_2D_BINDING = 1;
+	inline constexpr u32 TABLE_TEXTURES_CUBE_BINDING = 2;
+	inline constexpr u32 TABLE_TEXTURES_3D_BINDING = 3;
+	inline constexpr u32 TABLE_NONE = ~0u;
 
 	struct GraphicsPipelineDesc {
 		// spans read only during creation

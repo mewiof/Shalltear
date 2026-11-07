@@ -62,6 +62,10 @@ namespace Shalltear::RHI {
 		void DestroyResource(SamplerHandle handle);
 		void DestroyResource(PipelineHandle handle);
 
+		// valid until resource destroyed (slot reused after frames in flight end)
+		u32 GetTableIndex(TextureHandle texture);
+		u32 GetTableIndex(SamplerHandle sampler);
+
 		u64 GetBufferDeviceAddress(BufferHandle buffer) const;
 		void* GetMappedPointer(BufferHandle buffer) const; // CPUToGPU/Readback only
 		bool IsAlive(TextureHandle texture) const;

@@ -345,7 +345,9 @@ TEST_F(GraphicsImportFixture, EngineShadersImport) {
 	EXPECT_FALSE(standard->variants[SHADER_BASE_VARIANT].pixelSpirv.empty());
 	EXPECT_EQ(standard->pushConstantSize, 16u);
 	EXPECT_EQ(standard->renderState.blend, RHI::BlendMode::Opaque);
-	EXPECT_EQ(standard->bindings.size(), 21u);
+	EXPECT_EQ(standard->bindings.size(), 25u);
+	EXPECT_EQ(standard->bindings.back().set, RHI::TABLE_SET);
+	EXPECT_EQ(standard->bindings.back().binding, RHI::TABLE_TEXTURES_3D_BINDING);
 	AssetDatabase::UnloadAsset(shader);
 
 	Asset* wireAsset = AssetDatabase::LoadAsset(Path("engine://Shaders/Wireframe.hlsl"));

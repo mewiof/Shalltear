@@ -97,6 +97,8 @@ namespace Shalltear::RHI {
 		u32 samples = 1;
 		u32 arrayLayers = 1;
 		u32 depth = 1;
+		TextureDimension dimension = TextureDimension::Texture2D;
+		u32 tableIndex = TABLE_NONE;
 		bool external = false;
 		ResourceState state = ResourceState::Undefined;
 
@@ -108,6 +110,7 @@ namespace Shalltear::RHI {
 
 	struct SamplerResource {
 		VkSampler sampler = VK_NULL_HANDLE;
+		u32 tableIndex = TABLE_NONE;
 	};
 
 	struct PipelineResource {
@@ -117,6 +120,7 @@ namespace Shalltear::RHI {
 		VkShaderStageFlags pushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		VkDescriptorSetLayout setLayouts[MAX_DESCRIPTOR_SETS] = {};
 		u32 setCount = 0;
+		bool bindsTable = false;
 		Vector<DescriptorBindingDesc> bindings{GetMemoryResource(MemTag::Graphics)};
 		u32 pushConstantSize = 0;
 		Format colorFormats[MAX_COLOR_ATTACHMENTS] = {};
@@ -140,10 +144,42 @@ namespace Shalltear::RHI {
 		Vector<VkSampler> samplers{GetMemoryResource(MemTag::Graphics)};
 		Vector<VkPipeline> pipelines{GetMemoryResource(MemTag::Graphics)};
 		Vector<VkPipelineLayout> pipelineLayouts{GetMemoryResource(MemTag::Graphics)};
+		struct TableRelease {
+			u32 binding;
+			u32 index;
+		};
+		Vector<TableRelease> tableReleases{GetMemoryResource(MemTag::Graphics)};
 
 		bool IsEmpty() const {
-			return buffers.empty() && textures.empty() && samplers.empty() && pipelines.empty() && pipelineLayouts.empty();
+			return buffers.empty() && textures.empty() && samplers.empty() && pipelines.empty() && pipelineLayouts.empty() &&
+				   tableReleases.empty();
 		}
+	};
+
+	inline constexpr u32 TABLE_BINDING_COUNT = 4;
+
+	inline u32 TableBindingOf(TextureDimension dimension) {
+		switch (dimension) {
+		case TextureDimension::Texture2D:
+			return TABLE_TEXTURES_2D_BINDING;
+		case TextureDimension::Cube:
+			return TABLE_TEXTURES_CUBE_BINDING;
+		case TextureDimension::Texture3D:
+			return TABLE_TEXTURES_3D_BINDING;
+		default:
+			return TABLE_NONE;
+		}
+	}
+
+	struct TextureTable {
+		VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+		VkDescriptorPool pool = VK_NULL_HANDLE;
+		VkDescriptorSet set = VK_NULL_HANDLE;
+		u32 capacity[TABLE_BINDING_COUNT] = {};
+		u32 used[TABLE_BINDING_COUNT] = {};
+		Vector<u32> freeIndices[TABLE_BINDING_COUNT] = {
+			Vector<u32>{GetMemoryResource(MemTag::Graphics)}, Vector<u32>{GetMemoryResource(MemTag::Graphics)},
+			Vector<u32>{GetMemoryResource(MemTag::Graphics)}, Vector<u32>{GetMemoryResource(MemTag::Graphics)}};
 	};
 
 	struct ResolvedWrite {
@@ -274,6 +310,7 @@ namespace Shalltear::RHI {
 		ResourcePool<PipelineResource> pipelines;
 
 		HashMap<u64, VkDescriptorSetLayout> setLayoutCache{GetMemoryResource(MemTag::Graphics)};
+		TextureTable table;
 
 		VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
@@ -317,6 +354,10 @@ namespace Shalltear::RHI {
 		void FlushDeletionQueue(DeletionQueue& queue);
 		DeletionQueue& DeletionQueueForDestroy();
 		VkDescriptorSetLayout GetOrCreateSetLayout(std::span<const DescriptorBindingDesc> setBindings);
+		bool CreateTable();
+		void DestroyTable();
+		u32 AcquireTableIndex(u32 binding);
+		void WriteTableEntry(u32 binding, u32 index, VkImageView view, VkSampler sampler);
 		VkDescriptorSet AllocateTransientDescriptorSet(VkDescriptorSetLayout layout);
 		VkDescriptorSet FindTransientSetWithContent(VkDescriptorSetLayout layout, u64 hash, const ResolvedWrite* writes, u32 writeCount);
 		void RememberTransientSetContent(VkDescriptorSetLayout layout, u64 hash, const ResolvedWrite* writes, u32 writeCount, VkDescriptorSet set);

@@ -367,6 +367,7 @@ namespace Shalltear::RHI {
 		resource.samples = samples;
 		resource.arrayLayers = arrayLayers;
 		resource.depth = depth;
+		resource.dimension = dimension;
 		resource.state = ResourceState::Undefined;
 
 		impl->SetDebugName(reinterpret_cast<u64>(image), VK_OBJECT_TYPE_IMAGE, desc.debugName);
@@ -384,6 +385,9 @@ namespace Shalltear::RHI {
 			return;
 		}
 		DeletionQueue& queue = impl->DeletionQueueForDestroy();
+		if (resource->tableIndex != TABLE_NONE) {
+			queue.tableReleases.push_back({TableBindingOf(resource->dimension), resource->tableIndex});
+		}
 		queue.textures.push_back(
 			{resource->external ? VK_NULL_HANDLE : resource->image, resource->view, resource->allocation});
 		for (VkImageView layerView : resource->layerViews) {
@@ -470,7 +474,11 @@ namespace Shalltear::RHI {
 			}
 			return;
 		}
-		impl->DeletionQueueForDestroy().samplers.push_back(resource->sampler);
+		DeletionQueue& queue = impl->DeletionQueueForDestroy();
+		if (resource->tableIndex != TABLE_NONE) {
+			queue.tableReleases.push_back({TABLE_SAMPLERS_BINDING, resource->tableIndex});
+		}
+		queue.samplers.push_back(resource->sampler);
 		*resource = SamplerResource{};
 		impl->samplers.Release(handle.index);
 	}

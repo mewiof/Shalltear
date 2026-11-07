@@ -81,6 +81,13 @@ namespace Shalltear::RHI {
 
 			Vector<DescriptorBindingDesc> sorted{GetMemoryResource(MemTag::Graphics)};
 			for (u32 set = 0; set < setCount; ++set) {
+				if (set == TABLE_SET) {
+					if (!impl.table.layout) {
+						return false;
+					}
+					setLayouts[set] = impl.table.layout;
+					continue;
+				}
 				sorted.clear();
 				for (const DescriptorBindingDesc& binding : bindings) {
 					if (binding.set == set) {
@@ -161,6 +168,147 @@ namespace Shalltear::RHI {
 
 		setLayoutCache.emplace(hash, layout);
 		return layout;
+	}
+
+	bool DeviceImpl::CreateTable() {
+		VkPhysicalDeviceVulkan12Properties limits{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES};
+		VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+		properties.pNext = &limits;
+		fi.vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
+
+		constexpr u32 RESERVED_SAMPLERS = 16;
+		constexpr u32 RESERVED_IMAGES = 64;
+		const u32 samplers = std::min(limits.maxPerStageDescriptorUpdateAfterBindSamplers, limits.maxDescriptorSetUpdateAfterBindSamplers);
+		const u32 images = std::min({limits.maxPerStageDescriptorUpdateAfterBindSampledImages, limits.maxDescriptorSetUpdateAfterBindSampledImages,
+									 limits.maxPerStageUpdateAfterBindResources});
+		const u32 imageBudget = images > RESERVED_IMAGES ? images - RESERVED_IMAGES : 0;
+		table.capacity[TABLE_SAMPLERS_BINDING] = std::min(256u, samplers > RESERVED_SAMPLERS ? samplers - RESERVED_SAMPLERS : 0);
+		table.capacity[TABLE_TEXTURES_CUBE_BINDING] = std::min(256u, imageBudget / 8);
+		table.capacity[TABLE_TEXTURES_3D_BINDING] = std::min(256u, imageBudget / 8);
+		table.capacity[TABLE_TEXTURES_2D_BINDING] =
+			std::min(4096u, imageBudget - table.capacity[TABLE_TEXTURES_CUBE_BINDING] - table.capacity[TABLE_TEXTURES_3D_BINDING]);
+		for (u32 binding = 0; binding < TABLE_BINDING_COUNT; ++binding) {
+			if (table.capacity[binding] == 0) {
+				SLT_LOG_WARN("Graphics", "Device limits too low for texture table ({} sampler(s), {} image(s))", samplers, images);
+				return false;
+			}
+		}
+
+		VkDescriptorSetLayoutBinding bindings[TABLE_BINDING_COUNT]{};
+		VkDescriptorBindingFlags flags[TABLE_BINDING_COUNT]{};
+		for (u32 binding = 0; binding < TABLE_BINDING_COUNT; ++binding) {
+			bindings[binding].binding = binding;
+			bindings[binding].descriptorType = binding == TABLE_SAMPLERS_BINDING ? VK_DESCRIPTOR_TYPE_SAMPLER : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			bindings[binding].descriptorCount = table.capacity[binding];
+			bindings[binding].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+			flags[binding] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+							 VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+		}
+		VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+		flagsInfo.bindingCount = TABLE_BINDING_COUNT;
+		flagsInfo.pBindingFlags = flags;
+		VkDescriptorSetLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+		layoutInfo.pNext = &flagsInfo;
+		layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+		layoutInfo.bindingCount = TABLE_BINDING_COUNT;
+		layoutInfo.pBindings = bindings;
+		SLT_VK_CHECK(fd.vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &table.layout));
+
+		const VkDescriptorPoolSize sizes[] = {
+			{VK_DESCRIPTOR_TYPE_SAMPLER, table.capacity[TABLE_SAMPLERS_BINDING]},
+			{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, table.capacity[TABLE_TEXTURES_2D_BINDING] + table.capacity[TABLE_TEXTURES_CUBE_BINDING] +
+												   table.capacity[TABLE_TEXTURES_3D_BINDING]},
+		};
+		VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+		poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+		poolInfo.maxSets = 1;
+		poolInfo.poolSizeCount = static_cast<u32>(std::size(sizes));
+		poolInfo.pPoolSizes = sizes;
+		SLT_VK_CHECK(fd.vkCreateDescriptorPool(device, &poolInfo, nullptr, &table.pool));
+
+		VkDescriptorSetAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+		allocateInfo.descriptorPool = table.pool;
+		allocateInfo.descriptorSetCount = 1;
+		allocateInfo.pSetLayouts = &table.layout;
+		SLT_VK_CHECK(fd.vkAllocateDescriptorSets(device, &allocateInfo, &table.set));
+		return true;
+	}
+
+	void DeviceImpl::DestroyTable() {
+		if (table.pool) {
+			fd.vkDestroyDescriptorPool(device, table.pool, nullptr);
+		}
+		if (table.layout) {
+			fd.vkDestroyDescriptorSetLayout(device, table.layout, nullptr);
+		}
+		table = TextureTable{};
+	}
+
+	u32 DeviceImpl::AcquireTableIndex(u32 binding) {
+		Vector<u32>& freeIndices = table.freeIndices[binding];
+		if (!freeIndices.empty()) {
+			const u32 index = freeIndices.back();
+			freeIndices.pop_back();
+			return index;
+		}
+		if (!table.set || table.used[binding] >= table.capacity[binding]) {
+			return TABLE_NONE;
+		}
+		return table.used[binding]++;
+	}
+
+	void DeviceImpl::WriteTableEntry(u32 binding, u32 index, VkImageView view, VkSampler sampler) {
+		VkDescriptorImageInfo image{};
+		image.imageView = view;
+		image.sampler = sampler;
+		image.imageLayout = view ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+		VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+		write.dstSet = table.set;
+		write.dstBinding = binding;
+		write.dstArrayElement = index;
+		write.descriptorCount = 1;
+		write.descriptorType = binding == TABLE_SAMPLERS_BINDING ? VK_DESCRIPTOR_TYPE_SAMPLER : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		write.pImageInfo = &image;
+		fd.vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+	}
+
+	u32 Device::GetTableIndex(TextureHandle texture) {
+		DeviceImpl* impl = _impl;
+		SLT_RHI_ASSERT_MAIN_THREAD(impl);
+		TextureResource* resource = impl->textures.Resolve(texture);
+		if (!resource || !impl->table.set) {
+			return TABLE_NONE;
+		}
+		if (resource->tableIndex != TABLE_NONE) {
+			return resource->tableIndex;
+		}
+		const u32 binding = TableBindingOf(resource->dimension);
+		if (binding == TABLE_NONE || !HasFlag(resource->usage, TextureUsage::Sampled) || resource->samples > 1 || IsDepthFormat(resource->format)) {
+			return TABLE_NONE;
+		}
+		const u32 index = impl->AcquireTableIndex(binding);
+		if (index != TABLE_NONE) {
+			impl->WriteTableEntry(binding, index, resource->view, VK_NULL_HANDLE);
+			resource->tableIndex = index;
+		}
+		return index;
+	}
+
+	u32 Device::GetTableIndex(SamplerHandle sampler) {
+		DeviceImpl* impl = _impl;
+		SLT_RHI_ASSERT_MAIN_THREAD(impl);
+		SamplerResource* resource = impl->samplers.Resolve(sampler);
+		if (!resource || !impl->table.set) {
+			return TABLE_NONE;
+		}
+		if (resource->tableIndex == TABLE_NONE) {
+			const u32 index = impl->AcquireTableIndex(TABLE_SAMPLERS_BINDING);
+			if (index != TABLE_NONE) {
+				impl->WriteTableEntry(TABLE_SAMPLERS_BINDING, index, VK_NULL_HANDLE, resource->sampler);
+				resource->tableIndex = index;
+			}
+		}
+		return resource->tableIndex;
 	}
 
 	VkDescriptorSet DeviceImpl::AllocateTransientDescriptorSet(VkDescriptorSetLayout layout) {
@@ -274,7 +422,7 @@ namespace Shalltear::RHI {
 		DeviceImpl* impl = _impl;
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
 		SLT_CORE_ASSERT_MSG(impl->inFrame, "CreateTransientSet outside a frame");
-		SLT_CORE_ASSERT(setIndex < MAX_DESCRIPTOR_SETS);
+		SLT_CORE_ASSERT(setIndex < MAX_DESCRIPTOR_SETS && setIndex != TABLE_SET);
 
 		TransientSetWriter writer;
 		PipelineResource* resource = impl->pipelines.Resolve(pipeline);
@@ -681,6 +829,7 @@ namespace Shalltear::RHI {
 			resource.setLayouts[set] = setLayouts[set];
 		}
 		resource.setCount = setCount;
+		resource.bindsTable = setCount > TABLE_SET;
 		resource.bindings.assign(desc.bindings.begin(), desc.bindings.end());
 		resource.pushConstantSize = desc.pushConstantSize;
 		for (u32 i = 0; i < desc.colorFormatCount; ++i) {
@@ -750,6 +899,7 @@ namespace Shalltear::RHI {
 			resource.setLayouts[set] = setLayouts[set];
 		}
 		resource.setCount = setCount;
+		resource.bindsTable = setCount > TABLE_SET;
 		resource.bindings.assign(desc.bindings.begin(), desc.bindings.end());
 		resource.pushConstantSize = desc.pushConstantSize;
 

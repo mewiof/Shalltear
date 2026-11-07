@@ -26,9 +26,11 @@ float4 PSMain(ShalltearVaryings input, bool isFrontFace : SV_IsFrontFace) : SV_T
 
 	float3 normalWS = ShalltearTransformSurfaceNormal(surfaceInput, surface.normal);
 
-	float receivesShadows = (ShalltearLoadDrawFlags(drawAddress) & SHALLTEAR_DRAW_RECEIVES_SHADOWS) != 0 ? 1.0 : 0.0;
+	uint drawFlags = ShalltearLoadDrawFlags(drawAddress);
+	float receivesShadows = (drawFlags & SHALLTEAR_DRAW_RECEIVES_SHADOWS) != 0 ? 1.0 : 0.0;
+	uint drawLayers = (drawFlags >> SHALLTEAR_DRAW_LAYERS_SHIFT) & 0xFFu;
 
-	float4 color = float4(ShalltearShadeSurface(surfaceInput, surface, normalWS, receivesShadows) + surface.emissive, surface.alpha);
+	float4 color = float4(ShalltearShadeSurface(surfaceInput, surface, normalWS, receivesShadows, drawLayers) + surface.emissive, surface.alpha);
 	uint blend = ShalltearLoadDrawBlend(drawAddress);
 	return ShalltearExpose(ShalltearApplyFog(color, surfaceInput.positionWS, blend), blend);
 }

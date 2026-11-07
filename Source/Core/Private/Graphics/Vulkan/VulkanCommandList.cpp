@@ -182,6 +182,9 @@ namespace Shalltear::RHI {
 		}
 #endif
 		d.fd.vkCmdBindPipeline(_impl->commandBuffer, resource->bindPoint, resource->pipeline);
+		if (resource->bindsTable) {
+			d.fd.vkCmdBindDescriptorSets(_impl->commandBuffer, resource->bindPoint, resource->layout, TABLE_SET, 1, &d.table.set, 0, nullptr);
+		}
 		_impl->boundPipelineIndex = pipeline.index;
 		if (!compute) {
 			SetFrontFace(FrontFace::Clockwise);

@@ -43,10 +43,11 @@ struct ShalltearPerDraw {
 	float4 normalMatrix2;
 	uint64_t vertexAddress;
 	float alphaClipThreshold;
-	// bit 0 receives shadows, bits 1-3 carry blend
+	// bit 0 receives shadows, bits 1-3 carry blend, bits 8-15 rendering layers
 	uint flags;
 };
 #define SHALLTEAR_DRAW_RECEIVES_SHADOWS 1u
+#define SHALLTEAR_DRAW_LAYERS_SHIFT 8u
 // values are RHI::BlendMode's which RenderSystem.cpp asserts
 #define SHALLTEAR_DRAW_BLEND_SHIFT 1u
 #define SHALLTEAR_DRAW_BLEND_MASK 7u

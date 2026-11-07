@@ -13,6 +13,7 @@ namespace Shalltear::GraphicsInternal {
 
 		Plane planes[MAX_PLANES];
 		u32 planeCount = 0;
+		u32 layerMask = ~0u;
 
 		constexpr CullVolume() noexcept = default;
 

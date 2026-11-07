@@ -36,7 +36,7 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 		ShalltearLight directional = ShalltearLoadLight(d);
 		ShalltearLightSample sample = ShalltearSampleDirectional(directional);
 		sample.shadow = lerp(1.0, ShalltearDirectionalShadow(directional.shadowIndex, directional.shadowCount, surfaceInput.positionWS, positionDdx,
-															 positionDdy, normalWS, directional.direction, viewDepth),
+															 positionDdy, surfaceInput.normalWS, directional.direction, viewDepth),
 							 receivesShadows * directional.shadowStrength);
 		sample.attenuation *= sample.shadow;
 		lighting += ShalltearIntegrateLight(surfaceInput, surface, normalWS, sample);
@@ -50,7 +50,7 @@ float3 ShalltearShadeSurface(ShalltearSurfaceInput surfaceInput, ShalltearSurfac
 			ShalltearLightSample sample = ShalltearSamplePunctual(light, surfaceInput.positionWS);
 			if (light.shadowCount > 0) {
 				sample.shadow = lerp(1.0, ShalltearPunctualShadow(light.shadowIndex, light.shadowCount, light.position, surfaceInput.positionWS,
-																  positionDdx, positionDdy, normalWS),
+																  positionDdx, positionDdy, surfaceInput.normalWS),
 									 receivesShadows * light.shadowStrength);
 				sample.attenuation *= sample.shadow;
 			}

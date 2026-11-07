@@ -721,6 +721,109 @@ TEST_F(MaterialReadbackFixture, ACustomLightingSurfaceCastsItsShadow) {
 
 namespace {
 
+	str TerminatorShader(const char* surfaceLines) {
+		return str("#define SHALLTEAR_CUSTOM_LIGHTING\n"
+				   "#pragma shalltear_template lit\n"
+				   "[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 unused; };\n"
+				   "float3 ShalltearLightingFunction(ShalltearSurfaceInput input, ShalltearSurface surface, float3 normalWS, ShalltearLightSample light) {\n"
+				   "\tfloat3 facet = normalize(cross(ddx(input.positionWS), ddy(input.positionWS)));\n"
+				   "\tfloat facing = dot(facet, light.direction) * sign(dot(facet, input.normalWS));\n"
+				   "\treturn float3(light.shadow, facing > 0.005 ? 1.0 : (facing < 0.0 ? 0.0 : 0.5), 0.25);\n"
+				   "}\n"
+				   "void ShalltearSurfaceFunction(ShalltearSurfaceInput input, inout ShalltearSurface surface) {\n"
+				   "\tsurface.baseColor = float3(0.0, 0.0, 0.0);\n"
+				   "\tsurface.reflectance = 0.0;\n") +
+			   surfaceLines + "}\n";
+	}
+
+	void RenderTerminator(MaterialAsset* material, Vector<u8>& pixels) {
+		Asset* sphere = AssetDatabase::LoadAsset(Path("engine://Meshes/Sphere.primitive"));
+		ASSERT_NE(sphere, nullptr);
+		Handle<Scene> scene = SceneSystem::CreateScene("Terminator");
+		Handle<SceneObject> body = SceneSystem::CreateObject("Sphere", scene);
+		body->SetLocalScale(Vec3(2.0f, 2.0f, 2.0f));
+		Handle<MeshRenderer> renderer = body->AddComponent<MeshRenderer>();
+		renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(sphere)));
+		renderer->SetMaterial(0, Handle<MaterialAsset>(material));
+		Handle<SceneObject> sun = SceneSystem::CreateObject("Sun", scene);
+		sun->SetLocalRotation(Quat::FromEuler(Vec3(30.0f, 90.0f, 0.0f)));
+		sun->AddComponent<Light>()->SetIntensity(1.0f);
+		SceneSystem::EndFrame();
+
+		ViewTargetId target = RenderSystem::CreateViewTarget({512, 512});
+		ASSERT_NE(target, INVALID_VIEW_TARGET);
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(Vec3(0.0f, 0.5f, 3.0f), Vec3(0.0f, 0.0f, 0.0f));
+		desc.projection = Mat4::PerspectiveReverseZ(60.0f, 1.0f, 0.1f, 100.0f);
+		desc.cameraPosition = Vec3(0.0f, 0.5f, 3.0f);
+		desc.clearColor = Color::Black();
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		Vec2I size{};
+		const bool read = RenderSystem::ReadbackViewTarget(target, pixels, size);
+		const u32 shadowLights = RenderSystem::GetStats().shadowLights;
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		SceneSystem::EndFrame();
+		ASSERT_TRUE(read);
+		ASSERT_GT(shadowLights, 0u);
+	}
+
+	bool TerminatorDrew(const Vector<u8>& pixels, size_t i) {
+		return std::abs(static_cast<i32>(pixels[i + 2]) - 137) <= 3;
+	}
+
+} // anonymous namespace
+
+TEST_F(MaterialReadbackFixture, ShadowIgnoresNormalMap) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Flat.hlsl", TerminatorShader(""));
+	WriteProjectFile("Bumped.hlsl", TerminatorShader("\tsurface.normal = normalize(float3(0.35 * sin(input.uv.x * 900.0), 0.35 * cos(input.uv.y * 700.0), 1.0));\n"));
+	Asset* flat = AssetDatabase::LoadAsset(Path("project://Flat.hlsl"));
+	Asset* bumped = AssetDatabase::LoadAsset(Path("project://Bumped.hlsl"));
+	ASSERT_NE(flat, nullptr);
+	ASSERT_NE(bumped, nullptr);
+	MaterialAsset* flatMaterial = LoadMaterial("Flat.mat", flat->assetId, "");
+	MaterialAsset* bumpedMaterial = LoadMaterial("Bumped.mat", bumped->assetId, "");
+	ASSERT_NE(flatMaterial, nullptr);
+	ASSERT_NE(bumpedMaterial, nullptr);
+	Vector<u8> flatPixels{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> bumpedPixels{GetMemoryResource(MemTag::Graphics)};
+	RenderTerminator(flatMaterial, flatPixels);
+	if (HasFatalFailure()) {
+		return;
+	}
+	RenderTerminator(bumpedMaterial, bumpedPixels);
+	if (HasFatalFailure()) {
+		return;
+	}
+	ASSERT_EQ(flatPixels.size(), bumpedPixels.size());
+	u32 drawn = 0;
+	u32 shadowed = 0;
+	u32 lit = 0;
+	u32 differing = 0;
+	for (size_t i = 0; i + 3 < flatPixels.size(); i += 4) {
+		if (!TerminatorDrew(flatPixels, i)) {
+			continue;
+		}
+		++drawn;
+		shadowed += flatPixels[i] < 128 ? 1u : 0u;
+		lit += flatPixels[i] > 250 ? 1u : 0u;
+		differing += std::abs(static_cast<i32>(flatPixels[i]) - static_cast<i32>(bumpedPixels[i])) > 1 ? 1u : 0u;
+	}
+	EXPECT_GT(drawn, 20000u);
+	EXPECT_GT(shadowed, 10000u);
+	EXPECT_GT(lit, 10000u);
+	EXPECT_EQ(differing, 0u);
+}
+
+namespace {
+
 	using TestImages::FLIPBOOK_CELLS;
 	using TestImages::WriteFlipbook;
 	using TestImages::WriteTga;

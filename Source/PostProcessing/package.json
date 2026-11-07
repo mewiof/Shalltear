@@ -2,6 +2,6 @@
 	"name": "dev.shalltear.postprocessing",
 	"version": "1.0.0",
 	"displayName": "Post Processing",
-	"description": "Camera effects controlled by post-processing volumes: ambient occlusion, bloom, color grading and vignette.",
+	"description": "Camera effects controlled by post-processing volumes: ambient occlusion, bloom, color grading and vignette. Lens flares for lights and bright objects.",
 	"kind": "engine"
 }

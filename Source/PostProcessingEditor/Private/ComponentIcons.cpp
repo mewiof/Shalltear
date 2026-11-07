@@ -5,6 +5,7 @@
 #include "Shalltear/Editor/ComponentMenu.h"
 #include "Shalltear/Editor/EditorIcons.h"
 
+#include "Shalltear/PostProcessing/LensFlare.h"
 #include "Shalltear/PostProcessing/PostProcessVolume.h"
 
 namespace Shalltear::PostProcessingEditor {
@@ -13,6 +14,8 @@ namespace Shalltear::PostProcessingEditor {
 
 		constexpr std::string_view VolumeMark = "engine://Icons/Components/PostProcessVolume.svg";
 
+		constexpr std::string_view FlareMark = "engine://Icons/Components/LensFlare.svg";
+
 		constexpr std::string_view Category = "Rendering";
 
 	} // anonymous namespace
@@ -20,6 +23,8 @@ namespace Shalltear::PostProcessingEditor {
 	void RegisterComponentPresentation(const void* owner) {
 		EditorIcons::ComponentIcons::Register(PostProcessVolume::GetReflectType()->name, VolumeMark, owner);
 		ComponentMenu::Register(PostProcessVolume::GetReflectType()->name, Category, owner);
+		EditorIcons::ComponentIcons::Register(LensFlare::GetReflectType()->name, FlareMark, owner);
+		ComponentMenu::Register(LensFlare::GetReflectType()->name, Category, owner);
 	}
 
 } // namespace Shalltear::PostProcessingEditor

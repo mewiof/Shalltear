@@ -595,10 +595,13 @@ TEST_F(PostProcessDisableCycleFixture, RegistersTypesAndImporter) {
 	EXPECT_NE(TypeRegistry::FindType(StringHash("PostProcessProfile")), nullptr);
 	EXPECT_NE(TypeRegistry::FindType(StringHash("PostProcessPass")), nullptr);
 	EXPECT_NE(TypeRegistry::FindType(StringHash("AmbientOcclusionPass")), nullptr);
+	EXPECT_NE(TypeRegistry::FindType(StringHash("LensFlare")), nullptr);
+	EXPECT_NE(TypeRegistry::FindType(StringHash("LensFlareAsset")), nullptr);
+	EXPECT_NE(TypeRegistry::FindType(StringHash("LensFlarePass")), nullptr);
 
 	EXPECT_EQ(FrameStages::UnregisterOwnedBy(owner), 0u);
 
-	EXPECT_EQ(AssetImporterRegistry::UnregisterOwnedBy(owner), 1u);
+	EXPECT_EQ(AssetImporterRegistry::UnregisterOwnedBy(owner), 2u);
 }
 
 #ifdef SHALLTEAR_SHARED
@@ -612,5 +615,8 @@ TEST_F(PostProcessDisableCycleFixture, TypesSweptWithImage) {
 	EXPECT_EQ(TypeRegistry::FindType(StringHash("PostProcessVolume")), nullptr);
 	EXPECT_EQ(TypeRegistry::FindType(StringHash("PostProcessProfile")), nullptr);
 	EXPECT_EQ(TypeRegistry::FindType(StringHash("PostProcessPass")), nullptr);
+	EXPECT_EQ(TypeRegistry::FindType(StringHash("LensFlare")), nullptr);
+	EXPECT_EQ(TypeRegistry::FindType(StringHash("LensFlareAsset")), nullptr);
+	EXPECT_EQ(TypeRegistry::FindType(StringHash("LensFlarePass")), nullptr);
 }
 #endif

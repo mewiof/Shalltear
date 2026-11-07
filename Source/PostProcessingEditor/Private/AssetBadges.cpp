@@ -9,6 +9,8 @@ namespace Shalltear::PostProcessingEditor {
 	void RegisterAssetBadges(const void* owner) {
 		EditorPreviews::AssetBadges::Register(StringHash("PostProcessProfile"), EditorIcons::Glyph::Effects,
 											  EditorTheme::ColorToken::AssetProfile, owner);
+		EditorPreviews::AssetBadges::Register(StringHash("LensFlareAsset"), EditorIcons::Glyph::Star,
+											  EditorTheme::ColorToken::AssetEffect, owner);
 	}
 
 } // namespace Shalltear::PostProcessingEditor

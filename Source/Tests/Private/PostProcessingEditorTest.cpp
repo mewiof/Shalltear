@@ -86,12 +86,20 @@ TEST_F(PostProcessingEditorFixture, PackageRegistersBadgeAndGroupForComponent) {
 	EXPECT_EQ(EditorPreviews::BadgeForAssetType(StringHash("PostProcessProfile")).icon.glyph,
 			  EditorIcons::Glyph::Effects.glyph);
 
+	const TypeInfo* flare = TypeRegistry::FindType(StringHash("LensFlare"));
+	ASSERT_NE(flare, nullptr);
+	EXPECT_EQ(EditorIcons::ComponentIcons::For(flare), "engine://Icons/Components/LensFlare.svg");
+	EXPECT_EQ(ComponentMenu::CategoryFor(flare), "Rendering");
+	EXPECT_EQ(EditorPreviews::BadgeForAssetType(StringHash("LensFlareAsset")).icon.glyph, EditorIcons::Glyph::Star.glyph);
+
 	EXPECT_GT(EditorExtensions::Unload(_moduleBase), 0u);
 	_moduleBase = nullptr;
 	EXPECT_EQ(EditorIcons::ComponentIcons::For(volume), EditorIcons::Mark::Component);
 	EXPECT_TRUE(ComponentMenu::CategoryFor(volume).empty());
 	EXPECT_EQ(EditorPreviews::BadgeForAssetType(StringHash("PostProcessProfile")).icon.glyph,
 			  EditorIcons::Glyph::AssetGeneric.glyph);
+	EXPECT_EQ(EditorIcons::ComponentIcons::For(flare), EditorIcons::Mark::Component);
+	EXPECT_EQ(EditorPreviews::BadgeForAssetType(StringHash("LensFlareAsset")).icon.glyph, EditorIcons::Glyph::AssetGeneric.glyph);
 }
 
 #endif

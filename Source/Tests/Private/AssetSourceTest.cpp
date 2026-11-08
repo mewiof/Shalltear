@@ -144,6 +144,41 @@ TEST_F(AssetSourceFixture, GuidResolvesFromPackageOnly) {
 	AssetDatabase::UnloadAsset(loaded);
 }
 
+TEST_F(AssetSourceFixture, MountedPackageSwappedForUpdate) {
+	StageText("Assets/Readme.txt", "first release");
+	AssetDatabase::ScanProjectDirectory();
+	Guid guid = GuidOf("project://Assets/Readme.txt");
+	ASSERT_TRUE(guid.IsValid());
+	Vector<Guid> guids{GetMemoryResource(MemTag::Editor)};
+	guids.push_back(guid);
+	CookInto(guids);
+	CloseProject();
+
+	OpenSourceProject();
+	StageText("Assets/Readme.txt", "second release");
+	AssetDatabase::ScanProjectDirectory();
+	ASSERT_EQ(GuidOf("project://Assets/Readme.txt"), guid);
+	CookInto(guids, "Update.slpak");
+	CloseProject();
+
+	OpenStagedTree();
+	str error;
+	ASSERT_TRUE(AssetDatabase::MountPackage(StagedPackage(), error)) << error;
+	const std::filesystem::path live = _staged / "Content.slpak";
+	const std::filesystem::path aside = _staged / "Content.slpak.old";
+	std::error_code ec;
+	std::filesystem::rename(live, aside, ec);
+	ASSERT_FALSE(ec);
+	std::filesystem::rename(_staged / "Update.slpak", live, ec);
+	ASSERT_FALSE(ec);
+	EXPECT_TRUE(std::filesystem::remove(aside, ec));
+
+	Asset* loaded = AssetDatabase::LoadAssetByGuid(guid);
+	ASSERT_NE(loaded, nullptr);
+	EXPECT_EQ(static_cast<TextAsset*>(loaded)->content, "first release");
+	AssetDatabase::UnloadAsset(loaded);
+}
+
 TEST_F(AssetSourceFixture, DocumentIdentityFromSourceNotRecord) {
 	Handle<Scene> scene = SceneSystem::CreateScene("Level");
 	Handle<SceneObject> root = SceneSystem::CreateObject("Root", scene);

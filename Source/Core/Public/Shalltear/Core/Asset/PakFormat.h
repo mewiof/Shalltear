@@ -418,8 +418,11 @@ namespace Shalltear {
 		return true;
 	}
 
+	class FileReader;
+
 	struct PakPayloadLocator {
-		str physicalPath;
+		// valid during LoadCooked only. Reopen to read later
+		const FileReader* file = nullptr;
 		u64 offset = 0;
 		u64 size = 0;
 	};

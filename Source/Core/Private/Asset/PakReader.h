@@ -26,7 +26,7 @@ namespace Shalltear {
 			Unmount();
 
 			FileReader file;
-			if (!file.Open(physicalPath)) {
+			if (!file.Open(physicalPath, FileSharing::ReadDelete)) {
 				outError = std::format("'{}' couldn't be opened for reading", physicalPath.ToString());
 				return false;
 			}
@@ -106,6 +106,8 @@ namespace Shalltear {
 		}
 
 		bool IsMounted() const { return _mounted; }
+
+		const FileReader& GetFile() const { return _file; }
 
 		const PakSuperblock& GetSuperblock() const { return *reinterpret_cast<const PakSuperblock*>(_data); }
 

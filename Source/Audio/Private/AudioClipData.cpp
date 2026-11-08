@@ -247,7 +247,7 @@ namespace Shalltear {
 				return nullptr;
 			}
 			FileReader file;
-			if (!file.Open(Path(locator.physicalPath)) || locator.offset > file.GetSize() || locator.size > file.GetSize() - locator.offset) {
+			if (!locator.file || !file.Open(*locator.file) || locator.offset > file.GetSize() || locator.size > file.GetSize() - locator.offset) {
 				return nullptr;
 			}
 			if (codec == AudioClipEncoding::Qoa) {

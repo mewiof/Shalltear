@@ -604,6 +604,16 @@ namespace {
 		return path;
 	}
 
+	AudioClipData* LocateInFile(AudioClipEncoding codec, const std::filesystem::path& path, u64 offset, u64 size, const ChannelLayout& layout, u32 sampleRate, u64 frames) {
+		FileReader file;
+		file.Open(Path(path.generic_string()));
+		PakPayloadLocator locator;
+		locator.file = &file;
+		locator.offset = offset;
+		locator.size = size;
+		return CreateLocatedClipData(codec, locator, layout, sampleRate, frames, PRIME);
+	}
+
 } // anonymous namespace
 
 TEST(AudioStreamTest, FileStreamHoldsOnlyPrime) {
@@ -615,19 +625,15 @@ TEST(AudioStreamTest, FileStreamHoldsOnlyPrime) {
 		const u8* bytes = nullptr;
 		u64 size = 0;
 		GetPayload(*resident.Get(), bytes, size);
-		PakPayloadLocator locator;
-		locator.physicalPath = path.generic_string();
-		locator.offset = 1234;
-		locator.size = size;
 		{
-			ClipBlock located(CreateLocatedClipData(resident.Get()->encoding, locator, resident.Get()->layout, 48000, resident.Get()->frames, PRIME));
+			ClipBlock located(LocateInFile(resident.Get()->encoding, path, 1234, size, resident.Get()->layout, 48000, resident.Get()->frames));
 			ASSERT_TRUE(located);
 			const AudioClipData& data = *located.Get();
 			EXPECT_TRUE(data.source.file.IsOpen());
 			EXPECT_EQ(data.source.memory, nullptr);
 			EXPECT_EQ(data.payloadBytes, data.primeFrames * 2 * sizeof(f32));
 			Buffer over(16, MemTag::Audio);
-			EXPECT_FALSE(FileSystem::WriteFile(Path(locator.physicalPath), over));
+			EXPECT_FALSE(FileSystem::WriteFile(Path(path.generic_string()), over));
 
 			StreamingMixer heard;
 			StreamingMixer held;
@@ -650,11 +656,8 @@ TEST(AudioStreamTest, CorruptFramePlaysSilence) {
 	const u8* bytes = nullptr;
 	u64 size = 0;
 	GetPayload(*resident.Get(), bytes, size);
-	PakPayloadLocator locator;
-	locator.physicalPath = path.generic_string();
-	locator.size = size;
 	{
-		ClipBlock located(CreateLocatedClipData(AudioClipEncoding::Qoa, locator, resident.Get()->layout, 48000, resident.Get()->frames, PRIME));
+		ClipBlock located(LocateInFile(AudioClipEncoding::Qoa, path, 0, size, resident.Get()->layout, 48000, resident.Get()->frames));
 		ASSERT_TRUE(located);
 		StreamingMixer heard;
 		StreamingMixer held;
@@ -681,12 +684,8 @@ TEST(AudioStreamTest, OpusFileStreamPlaysDecode) {
 	ASSERT_TRUE(clip);
 	const AudioClipData& cooked = *clip.cooked.Get();
 	const std::filesystem::path path = WritePayloadFile("shalltear_stream_opus.bin", cooked, 777);
-	PakPayloadLocator locator;
-	locator.physicalPath = path.generic_string();
-	locator.offset = 777;
-	locator.size = cooked.source.size;
 	{
-		ClipBlock located(CreateLocatedClipData(AudioClipEncoding::Opus, locator, cooked.layout, OPUS_RATE, cooked.frames, PRIME));
+		ClipBlock located(LocateInFile(AudioClipEncoding::Opus, path, 777, cooked.source.size, cooked.layout, OPUS_RATE, cooked.frames));
 		ASSERT_TRUE(located);
 		const AudioClipData& data = *located.Get();
 		EXPECT_EQ(data.source.memory, nullptr);
@@ -717,11 +716,8 @@ TEST(AudioStreamTest, BadOpusPacketIsSilence) {
 		file.data[cooked.opus.offsets[bad]] = static_cast<u8>((30u << 3) | (1u << 2));
 		ASSERT_TRUE(FileSystem::WriteFile(Path(path.generic_string()), file));
 	}
-	PakPayloadLocator locator;
-	locator.physicalPath = path.generic_string();
-	locator.size = cooked.source.size;
 	{
-		ClipBlock located(CreateLocatedClipData(AudioClipEncoding::Opus, locator, cooked.layout, OPUS_RATE, cooked.frames, PRIME));
+		ClipBlock located(LocateInFile(AudioClipEncoding::Opus, path, 0, cooked.source.size, cooked.layout, OPUS_RATE, cooked.frames));
 		ASSERT_TRUE(located);
 		StreamingMixer heard;
 		StreamingMixer held;
@@ -754,11 +750,7 @@ TEST(AudioStreamTest, MismatchedPayloadRefused) {
 	u64 size = 0;
 	GetPayload(clip, bytes, size);
 	auto locate = [&](u64 offset, u64 bytesAt, u64 frames, const std::filesystem::path& where) {
-		PakPayloadLocator locator;
-		locator.physicalPath = where.generic_string();
-		locator.offset = offset;
-		locator.size = bytesAt;
-		AudioClipData* data = CreateLocatedClipData(AudioClipEncoding::Qoa, locator, clip.layout, 48000, frames, PRIME);
+		AudioClipData* data = LocateInFile(AudioClipEncoding::Qoa, where, offset, bytesAt, clip.layout, 48000, frames);
 		const bool made = data != nullptr;
 		ReleaseClipData(data);
 		return made;
@@ -943,6 +935,77 @@ TEST_F(LocatedClipFixture, PackagedClipStreamsFromPackage) {
 	EXPECT_TRUE(recooked.payload == source.payload);
 }
 
+TEST_F(LocatedClipFixture, SwappedPackageStillStreams) {
+	auto cook = [](AudioClip& clip, const std::filesystem::path& at) {
+		PakStringPool strings;
+		CookOps::PakAssetSource source;
+		str error;
+		if (!CookOps::CookAsset(clip, strings, source, error) || source.residency != PakResidency::Streamed) {
+			return false;
+		}
+		Vector<CookOps::PakAssetSource> sources{GetMemoryResource(MemTag::Editor)};
+		sources.push_back(source);
+		CookOps::PakWriteDesc desc;
+		desc.strings.assign(strings.Texts().begin(), strings.Texts().end());
+		return CookOps::WritePackage(Path(at.generic_string()), sources, desc, error);
+	};
+	const std::filesystem::path source = _project / "Assets/Theme.streamclip";
+	const std::filesystem::path live = _root / "Content.slpak";
+	const std::filesystem::path update = _root / "Update.slpak";
+	const std::filesystem::path aside = _root / "Content.slpak.old";
+
+	FileSystem::WriteTextFile(Path(source.generic_string()), "a theme");
+	AudioClip* release = Load("project://Assets/Theme.streamclip");
+	ASSERT_NE(release, nullptr);
+	const Guid guid = release->assetId;
+	ClipBlock released(ResidentOf(*release));
+	ASSERT_TRUE(released);
+	ASSERT_TRUE(cook(*release, live));
+
+	FileSystem::WriteTextFile(Path(source.generic_string()), "a theme, v2");
+	Restart();
+	AudioClip* next = Load("project://Assets/Theme.streamclip");
+	ASSERT_NE(next, nullptr);
+	ASSERT_EQ(next->assetId, guid);
+	EXPECT_EQ(_importer.imports, 2);
+	ClipBlock updated(ResidentOf(*next));
+	ASSERT_TRUE(updated);
+	const u8* releaseBytes = nullptr;
+	const u8* updateBytes = nullptr;
+	u64 releaseSize = 0;
+	u64 updateSize = 0;
+	GetPayload(*released.Get(), releaseBytes, releaseSize);
+	GetPayload(*updated.Get(), updateBytes, updateSize);
+	ASSERT_EQ(releaseSize, updateSize);
+	ASSERT_NE(std::memcmp(releaseBytes, updateBytes, static_cast<size_t>(releaseSize)), 0);
+	ASSERT_TRUE(cook(*next, update));
+	ASSERT_EQ(std::filesystem::file_size(live), std::filesystem::file_size(update));
+
+	Restart();
+	str error;
+	ASSERT_TRUE(AssetDatabase::MountPackage(Path(live.generic_string()), error)) << error;
+	std::error_code ec;
+	std::filesystem::rename(live, aside, ec);
+	ASSERT_FALSE(ec);
+	std::filesystem::rename(update, live, ec);
+	ASSERT_FALSE(ec);
+
+	AudioClip* cooked = static_cast<AudioClip*>(AssetDatabase::LoadAssetByGuid(guid));
+	ASSERT_NE(cooked, nullptr);
+	const AudioClipData* data = AudioClipAccess::GetPlayback(*cooked);
+	ASSERT_NE(data, nullptr);
+	ASSERT_TRUE(data->source.file.IsOpen());
+	EXPECT_TRUE(std::filesystem::remove(aside, ec));
+
+	StreamingMixer heard;
+	StreamingMixer held;
+	held.Start(0, const_cast<AudioClipData*>(released.Get()), 0.87f);
+	heard.Start(0, const_cast<AudioClipData*>(data), 0.87f);
+	EXPECT_EQ(FirstDifference(heard.Render(500), held.Render(500)), -1);
+	EXPECT_EQ(heard.Underruns(), 0u);
+	EXPECT_EQ(heard.Streamer().GetFailures(), 0u);
+}
+
 TEST_F(LocatedClipFixture, ArtifactClipStreamsFromArtifact) {
 	FileSystem::WriteTextFile(Path((_project / "Assets/Line.streamclip").generic_string()), "a line of dialogue");
 	AudioClip* imported = Load("project://Assets/Line.streamclip");
@@ -974,6 +1037,7 @@ TEST_F(LocatedClipFixture, ArtifactClipStreamsFromArtifact) {
 	EXPECT_EQ(view.header.sourceMtime, moved);
 	Buffer over(16, MemTag::Asset);
 	EXPECT_FALSE(FileSystem::WriteFile(artifact, over));
+	EXPECT_FALSE(std::filesystem::remove(std::filesystem::path(artifact.ToString()), ec));
 
 	StreamingMixer heard;
 	StreamingMixer held;

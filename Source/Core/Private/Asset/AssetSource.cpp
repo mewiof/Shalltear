@@ -85,7 +85,7 @@ namespace Shalltear {
 				TypeRegistry::DestroyObjectInstance(asset);
 				return nullptr;
 			}
-			locator.physicalPath = located ? _path : str();
+			locator.file = &_reader.GetFile();
 		}
 		CookReader payload(payloadBytes.data, payloadBytes.size, {}, located ? &locator : nullptr);
 

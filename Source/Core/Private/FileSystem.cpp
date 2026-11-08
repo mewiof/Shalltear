@@ -491,7 +491,7 @@ namespace Shalltear {
 #endif
 	}
 
-	FileReader::FileReader(FileReader&& other) noexcept : _handle(other._handle), _size(other._size) {
+	FileReader::FileReader(FileReader&& other) noexcept : _handle(other._handle), _size(other._size), _sharing(other._sharing) {
 		other._handle = nullptr;
 		other._size = 0;
 	}
@@ -501,30 +501,61 @@ namespace Shalltear {
 			FileReader closing(std::move(*this));
 			_handle = other._handle;
 			_size = other._size;
+			_sharing = other._sharing;
 			other._handle = nullptr;
 			other._size = 0;
 		}
 		return *this;
 	}
 
-	bool FileReader::Open(const Path& physicalPath) {
-		*this = FileReader();
+#ifdef _WIN32
+	namespace {
+		DWORD ShareModeOf(FileSharing sharing) {
+			return sharing == FileSharing::ReadDelete ? FILE_SHARE_READ | FILE_SHARE_DELETE : FILE_SHARE_READ;
+		}
+	} // anonymous namespace
+#endif
+
+	bool FileReader::Open(const Path& physicalPath, FileSharing sharing) {
 #ifdef _WIN32
 		const std::wstring wide = StringUtil::UTF8ToWide(physicalPath.ToString());
-		HANDLE handle = CreateFileW(wide.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		return Adopt(CreateFileW(wide.c_str(), GENERIC_READ, ShareModeOf(sharing), nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), sharing);
+#else
+		(void)physicalPath;
+		return Adopt(nullptr, sharing);
+#endif
+	}
+
+	bool FileReader::Open(const FileReader& reader) {
+		const FileSharing sharing = reader._sharing;
+#ifdef _WIN32
+		if (!reader._handle) {
+			return Adopt(INVALID_HANDLE_VALUE, sharing);
+		}
+		return Adopt(::ReOpenFile(static_cast<HANDLE>(reader._handle), GENERIC_READ, ShareModeOf(sharing), 0), sharing);
+#else
+		return Adopt(nullptr, sharing);
+#endif
+	}
+
+	bool FileReader::Adopt(void* handle, FileSharing sharing) {
+		*this = FileReader();
+#ifdef _WIN32
 		if (handle == INVALID_HANDLE_VALUE) {
 			return false;
 		}
 		LARGE_INTEGER size{};
-		if (!GetFileSizeEx(handle, &size) || size.QuadPart < 0) {
-			CloseHandle(handle);
+		if (!GetFileSizeEx(static_cast<HANDLE>(handle), &size) || size.QuadPart < 0) {
+			CloseHandle(static_cast<HANDLE>(handle));
 			return false;
 		}
 		_handle = handle;
 		_size = static_cast<u64>(size.QuadPart);
+		_sharing = sharing;
 		return true;
 #else
-		(void)physicalPath;
+		(void)handle;
+		(void)sharing;
 		return false;
 #endif
 	}

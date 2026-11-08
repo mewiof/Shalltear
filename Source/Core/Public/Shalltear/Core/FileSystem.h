@@ -101,6 +101,11 @@ namespace Shalltear {
 		static Path GetUserHomeDirectory();
 	};
 
+	enum class FileSharing : u8 {
+		Read,
+		ReadDelete,
+	};
+
 	class SHALLTEAR_CORE_API FileReader {
 	public:
 		FileReader() = default;
@@ -111,15 +116,20 @@ namespace Shalltear {
 		FileReader(FileReader&& other) noexcept;
 		FileReader& operator=(FileReader&& other) noexcept;
 
-		bool Open(const Path& physicalPath);
+		bool Open(const Path& physicalPath, FileSharing sharing = FileSharing::Read);
+		// same file + sharing as reader, even after path renamed/deleted
+		bool Open(const FileReader& reader);
 		bool IsOpen() const { return _handle != nullptr; }
 
 		u64 GetSize() const { return _size; }
 
 		bool ReadAt(u64 offset, std::span<u8> out) const;
 	private:
+		bool Adopt(void* handle, FileSharing sharing);
+
 		void* _handle = nullptr;
 		u64 _size = 0;
+		FileSharing _sharing = FileSharing::Read;
 	};
 
 	class SHALLTEAR_CORE_API FileWatcher {

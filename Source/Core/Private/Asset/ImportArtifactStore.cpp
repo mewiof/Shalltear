@@ -125,6 +125,7 @@ namespace Shalltear {
 		}
 
 		struct OpenArtifact {
+			FileReader file;
 			Buffer bytes;
 			ImportArtifactView view;
 			Path path;
@@ -143,9 +144,15 @@ namespace Shalltear {
 				return false;
 			}
 
-			out.bytes = FileSystem::ReadFile(out.path, MemTag::Asset);
+			if (out.file.Open(FileSystem::Resolve(out.path))) {
+				out.bytes.Allocate(static_cast<size_t>(out.file.GetSize()), MemTag::Asset);
+				if (!out.file.ReadAt(0, std::span<u8>(out.bytes.data, out.bytes.size))) {
+					out.bytes.Release();
+				}
+			}
 			if (!ImportArtifactRead(out.bytes.data, out.bytes.size, out.view)) {
 				SLT_LOG_WARN("Asset", "discarding an unreadable import artifact for '{}'. Re-importing", *request.virtualKey);
+				out.file = FileReader();
 				std::error_code ec;
 				std::filesystem::remove(std::filesystem::path(out.path.ToString()), ec);
 				return false;
@@ -172,18 +179,20 @@ namespace Shalltear {
 
 		PakPayloadLocator LocatorOf(const OpenArtifact& open, const u8* payload, size_t size) {
 			PakPayloadLocator locator;
-			locator.physicalPath = FileSystem::Resolve(open.path).ToString();
+			locator.file = &open.file;
 			locator.offset = payload ? static_cast<u64>(payload - open.bytes.data) : 0;
 			locator.size = size;
 			return locator;
 		}
 
 		void RecordUse(OpenArtifact& open) {
-			bool rewrote = open.stampMoved || !open.refresh.empty();
-			RefreshStamps(open.path, open.bytes, open.stampMoved ? &open.stamp : nullptr, open.refresh);
-			if (!rewrote) {
+			if (!open.stampMoved && open.refresh.empty()) {
 				ImportArtifactMarkUsed(open.path);
+				return;
 			}
+			open.file = FileReader();
+			RefreshStamps(open.path, open.bytes, open.stampMoved ? &open.stamp : nullptr, open.refresh);
+			open.file.Open(FileSystem::Resolve(open.path));
 		}
 
 		Asset* Reconstruct(u64 typeNameHash, const Guid& identity, const str& virtualPath, CookReader descriptor,

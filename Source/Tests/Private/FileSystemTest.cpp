@@ -343,3 +343,59 @@ TEST(FileReader, OpenFileRefusesWriterAndDelete) {
 	EXPECT_TRUE(FileSystem::WriteFile(file, replacement));
 	std::filesystem::remove(path);
 }
+
+TEST(FileReader, ReadDeleteAllowsRename) {
+	const std::filesystem::path path = WritePatternFile("shalltear_filereader_rename.bin", 4096);
+	const std::filesystem::path aside = std::filesystem::temp_directory_path() / "shalltear_filereader_rename.old";
+	std::error_code ec;
+	std::filesystem::remove(aside, ec);
+	Buffer replacement(16, MemTag::Unknown);
+	std::memset(replacement.data, 0xAB, replacement.size);
+	{
+		FileReader reader;
+		ASSERT_TRUE(reader.Open(Path(path.generic_string()), FileSharing::ReadDelete));
+		std::filesystem::rename(path, aside, ec);
+		ASSERT_FALSE(ec);
+		EXPECT_TRUE(FileSystem::WriteFile(Path(path.generic_string()), replacement));
+		EXPECT_FALSE(FileSystem::WriteFile(Path(aside.generic_string()), replacement));
+
+		FileReader reopened;
+		ASSERT_TRUE(reopened.Open(reader));
+		EXPECT_EQ(reopened.GetSize(), 4096u);
+		EXPECT_TRUE(std::filesystem::remove(aside, ec));
+		FileReader afterDelete;
+		ASSERT_TRUE(afterDelete.Open(reopened));
+
+		std::vector<u8> bytes;
+		for (const FileReader* each : {&reader, &reopened, &afterDelete}) {
+			bytes.assign(64, 0);
+			EXPECT_TRUE(each->ReadAt(100, std::span<u8>(bytes)));
+			EXPECT_TRUE(MatchesPattern(bytes, 100));
+		}
+	}
+	EXPECT_FALSE(std::filesystem::exists(aside, ec));
+	EXPECT_EQ(FileSystem::GetFileSize(Path(path.generic_string())), 16u);
+	std::filesystem::remove(path, ec);
+}
+
+TEST(FileReader, ReopenInheritsSharing) {
+	const std::filesystem::path path = WritePatternFile("shalltear_filereader_reopen.bin", 4096);
+	std::error_code ec;
+	{
+		FileReader reopened;
+		{
+			FileReader reader;
+			ASSERT_TRUE(reader.Open(Path(path.generic_string())));
+			ASSERT_TRUE(reopened.Open(reader));
+		}
+		EXPECT_FALSE(std::filesystem::remove(path, ec));
+		std::vector<u8> bytes(96, 0);
+		EXPECT_TRUE(reopened.ReadAt(4000, std::span<u8>(bytes)));
+		EXPECT_TRUE(MatchesPattern(bytes, 4000));
+
+		FileReader closed;
+		EXPECT_FALSE(reopened.Open(closed));
+		EXPECT_FALSE(reopened.IsOpen());
+	}
+	EXPECT_TRUE(std::filesystem::remove(path, ec));
+}

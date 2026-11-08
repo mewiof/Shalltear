@@ -5,6 +5,7 @@
 
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Input/InputEvent.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Serialization/JSON.h"
 #include "Shalltear/Core/UI/UISystem.h"
@@ -200,6 +201,49 @@ TEST_F(TextureInspectorFixture, AnisoLevelRevertsThenApplies) {
 	EXPECT_EQ(SavedNumber("anisoLevel"), 0);
 	EXPECT_EQ(Texture().settings.anisoLevel, 0);
 	EXPECT_EQ(Saved("filter"), "trilinear");
+}
+
+TEST_F(TextureInspectorFixture, PixelsPerUnitAppliesThroughMeta) {
+	UITest::MockFontSystem fonts;
+	UI::ContextDesc desc;
+	desc.sizePx = {500, 1200};
+	UI::Context context(desc, &fonts);
+	UI::ElementHandle root;
+	Build(context, root);
+
+	UI::ElementHandle field = UITest::FindByClass(context, Row(context, root, "Pixels Per Unit"), StringHash("slt-number-input"), 0);
+	ASSERT_TRUE(context.IsAlive(field));
+	UITest::ClickElement(context, field);
+	ASSERT_EQ(context.GetFocused(), field);
+	InputEvent selectAll{};
+	selectAll.type = InputEventType::KeyDown;
+	selectAll.key = Key::A;
+	selectAll.mods = KeyMod::Ctrl;
+	context.InjectInput(selectAll);
+	for (char c : std::string_view("200")) {
+		InputEvent typed{};
+		typed.type = InputEventType::Text;
+		typed.codepoint = static_cast<char32_t>(c);
+		context.InjectInput(typed);
+	}
+	InputEvent commit{};
+	commit.type = InputEventType::KeyDown;
+	commit.key = Key::Enter;
+	context.InjectInput(commit);
+	context.Update();
+	EXPECT_FALSE(context.HasClass(Button(context, root, "Apply"), EditorTheme::Class::Disabled));
+	EXPECT_EQ(SavedNumber("pixelsPerUnit"), -1);
+
+	UITest::ClickElement(context, Button(context, root, "Apply"));
+	Rebuild(context, root);
+	EXPECT_EQ(SavedNumber("pixelsPerUnit"), 200);
+	EXPECT_EQ(Texture().settings.pixelsPerUnit, 200.0f);
+	EXPECT_EQ(Saved("sprites"), "array");
+	EXPECT_EQ(Texture().sprites.size(), 1u);
+
+	Pick(context, root, "Texture Shape", 3);
+	Rebuild(context, root);
+	EXPECT_FALSE(Row(context, root, "Pixels Per Unit").IsValid());
 }
 
 TEST_F(TextureInspectorFixture, ReimportElsewhereRefreshesDraft) {

@@ -11,6 +11,7 @@
 #include "UI/UIInternal.h"
 
 #include <charconv>
+#include <cmath>
 #include <vector>
 
 namespace Shalltear::UI {
@@ -107,6 +108,7 @@ namespace Shalltear::UI {
 			{"fill-origin", WidgetAttributeType::Choice, FillOrigins, {}, "bottom"},
 			{"fill-amount", WidgetAttributeType::Number, {}, {}, "1"},
 			{"fill-clockwise", WidgetAttributeType::Bool, {}, {}, "true"},
+			{"slice-scale", WidgetAttributeType::Number, {}, {}, "1"},
 		};
 
 		template <typename T, size_t N>
@@ -155,6 +157,11 @@ namespace Shalltear::UI {
 				error = str("fill-origin '") + str(args.Get("fill-origin")) + str("' doesn't fit fill-method '") + str(args.Get("fill-method")) + str("'");
 				return false;
 			}
+			const f64 sliceScale = args.GetNumber("slice-scale", 1.0);
+			if (!std::isfinite(sliceScale) || sliceScale < 0.0) {
+				error = str("attribute 'slice-scale' wants 0 or more, not '") + str(args.Get("slice-scale")) + str("'");
+				return false;
+			}
 			return true;
 		}
 
@@ -171,6 +178,7 @@ namespace Shalltear::UI {
 			}
 			image.scaleMode = Choose(ScaleModes, ScaleModeValues, args.Get("scale-mode"), ImageScaleMode::ScaleToFit);
 			image.fill = ReadFill(args.attributes);
+			image.sliceScale = static_cast<f32>(args.GetNumber("slice-scale", 1.0));
 			context.SetImage(element, image);
 			context.SetTint(element, args.GetColor("tint", Color::White()));
 			return {element, {}};

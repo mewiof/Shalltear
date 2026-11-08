@@ -35,11 +35,13 @@ TEST(TextureSamplingTest, SettingsRoundTripThroughMeta) {
 	written.rows = 2;
 	written.type = TextureType::NormalMap;
 	written.compression = TextureCompression::None;
+	written.pixelsPerUnit = 32.5f;
 
 	JSONValue meta = JSONValue::MakeObject();
 	TextureAssetImporter::WriteSettings(written, meta);
 	EXPECT_EQ(meta["filter"].AsString(), "bilinear");
 	EXPECT_EQ(meta["anisoLevel"].AsInt(), 5);
+	EXPECT_EQ(meta["pixelsPerUnit"].AsNumber(), 32.5);
 
 	TextureAsset::Settings read;
 	TextureAssetImporter::ReadSettings(meta, read);
@@ -85,6 +87,26 @@ TEST(TextureSamplingTest, UnknownValueChangesNothing) {
 	meta.AddMember("anisoLevel", JSONValue::MakeNumber(40.0));
 	TextureAssetImporter::ReadSettings(meta, read);
 	EXPECT_EQ(read.anisoLevel, 16);
+}
+
+TEST(TextureSamplingTest, PixelsPerUnitMustBePositive) {
+	auto read = [](JSONValue value) {
+		JSONValue meta = JSONValue::MakeObject();
+		meta.AddMember("pixelsPerUnit", std::move(value));
+		TextureAsset::Settings settings;
+		settings.pixelsPerUnit = 64.0f;
+		TextureAssetImporter::ReadSettings(meta, settings);
+		return settings.pixelsPerUnit;
+	};
+	EXPECT_EQ(read(JSONValue::MakeNumber(200.0)), 200.0f);
+	EXPECT_EQ(read(JSONValue::MakeNumber(0.001)), 0.01f);
+	EXPECT_EQ(read(JSONValue::MakeNumber(0.0)), 64.0f);
+	EXPECT_EQ(read(JSONValue::MakeNumber(-16.0)), 64.0f);
+	EXPECT_EQ(read(JSONValue::MakeString("200")), 64.0f);
+
+	JSONValue defaults = JSONValue::MakeObject();
+	TextureAssetImporter::WriteSettings(TextureAsset::Settings{}, defaults);
+	EXPECT_EQ(defaults["pixelsPerUnit"].AsNumber(), 100.0);
 }
 
 TEST(TextureSamplingTest, ProfileModeCapsTextureLevel) {

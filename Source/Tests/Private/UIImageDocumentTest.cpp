@@ -156,6 +156,28 @@ TEST(UIImageDocumentTest, FillAmountOutsideRangeRefused) {
 	EXPECT_FALSE(Parses(R"(<ui version="1"><image fill-amount="-0.1"/></ui>)", error));
 }
 
+TEST(UIImageDocumentTest, SliceScaleMustBeNonNegative) {
+	str error;
+	EXPECT_FALSE(Parses(R"(<ui version="1"><image slice-scale="-0.5"/></ui>)", error));
+	EXPECT_NE(error.find("slice-scale"), str::npos);
+	EXPECT_FALSE(Parses(R"(<ui version="1"><image slice-scale="inf"/></ui>)", error));
+	EXPECT_NE(error.find("slice-scale"), str::npos);
+	EXPECT_FALSE(Parses(R"(<ui version="1"><image slice-scale="thick"/></ui>)", error));
+	EXPECT_TRUE(Parses(R"(<ui version="1"><image slice-scale="0"/></ui>)", error)) << error;
+	EXPECT_TRUE(Parses(R"(<ui version="1"><image slice-scale="2.5"/></ui>)", error)) << error;
+}
+
+TEST(UIImageDocumentTest, BuilderSeedsUnitSliceScale) {
+	const UIDocumentNode image = UIDocumentOps::MakeElement("image");
+	str seeded;
+	for (const UIDocumentAttribute& attribute : image.attributes) {
+		if (attribute.name == "slice-scale") {
+			seeded = attribute.value;
+		}
+	}
+	EXPECT_EQ(seeded, "1");
+}
+
 TEST(UIImageDocumentTest, ImageRefusesChildren) {
 	str error;
 	EXPECT_FALSE(Parses(R"(<ui version="1"><panel><image><panel/></image></panel></ui>)", error));
@@ -199,6 +221,42 @@ TEST_F(UIImageDocumentFixture, SpriteResolvesByName) {
 	EXPECT_EQ(image->fill.method, UI::ImageFillMethod::Horizontal);
 	EXPECT_EQ(image->fill.origin, UI::ImageFillOrigin::Left);
 	EXPECT_FLOAT_EQ(image->fill.amount, 0.5f);
+}
+
+TEST_F(UIImageDocumentFixture, SliceScaleReachesImage) {
+	Write("Hud.slxml", R"(<ui version="1"><panel><image id="thin" src="project://Atlas.tga#Frame" scale-mode="sliced" slice-scale="0.5"/><image id="plain" src="project://Atlas.tga#Frame" scale-mode="sliced"/></panel></ui>)");
+	UIDocumentAsset* document = Load("Hud.slxml");
+	ASSERT_NE(document, nullptr);
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	const UI::ImageDesc* thin = ImageOf(ctx, *document, "thin");
+	ASSERT_NE(thin, nullptr);
+	EXPECT_FLOAT_EQ(thin->sliceScale, 0.5f);
+	UI::Context other(Desc(), nullptr, nullptr);
+	const UI::ImageDesc* plain = ImageOf(other, *document, "plain");
+	ASSERT_NE(plain, nullptr);
+	EXPECT_FLOAT_EQ(plain->sliceScale, 1.0f);
+}
+
+TEST_F(UIImageDocumentFixture, ContentVersionFollowsPixelsPerUnit) {
+	Write("Hud.slxml", R"(<ui version="1"><panel><image src="project://Atlas.tga#Star"/></panel></ui>)");
+	UIDocumentAsset* document = Load("Hud.slxml");
+	ASSERT_NE(document, nullptr);
+	const u64 before = document->GetContentVersion();
+
+	JSONValue list = JSONValue::MakeArray();
+	AddSprite(list, "frame", "Frame", {0.0, 0.0, 16.0, 16.0});
+	AddSprite(list, "star", "Star", {16.0, 0.0, 16.0, 16.0});
+	JSONValue settings = JSONValue::MakeObject();
+	settings.AddMember("compression", JSONValue::MakeString("none"));
+	settings.AddMember("sprites", list);
+	settings.AddMember("pixelsPerUnit", JSONValue::MakeNumber(200.0));
+	ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), settings));
+	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Atlas.tga")));
+
+	EXPECT_NE(document->GetContentVersion(), before);
+	const SpriteAsset* star = static_cast<const SpriteAsset*>(document->assets[0].asset.Get());
+	ASSERT_NE(star->GetTexture(), nullptr);
+	EXPECT_EQ(star->GetTexture()->settings.pixelsPerUnit, 200.0f);
 }
 
 TEST_F(UIImageDocumentFixture, PathWithoutNameIsWholeTexture) {

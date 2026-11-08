@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstring>
 #include <format>
 
@@ -179,6 +180,7 @@ namespace Shalltear {
 		descriptor.Write(static_cast<u8>(settings.filter));
 		descriptor.Write(static_cast<u8>(settings.addressMode));
 		descriptor.Write(settings.anisoLevel);
+		descriptor.Write(settings.pixelsPerUnit);
 		descriptor.Write(static_cast<u8>(isCube ? 1 : 0));
 		descriptor.Write(static_cast<u8>(settings.convolveIBL ? 1 : 0));
 		descriptor.Write(storedMipLevels);
@@ -212,6 +214,7 @@ namespace Shalltear {
 		u8 filter = 0;
 		u8 addressMode = 0;
 		u8 anisoLevel = 0;
+		f32 pixelsPerUnit = 0.0f;
 		descriptor.Read(width);
 		descriptor.Read(height);
 		descriptor.Read(readFormat);
@@ -221,6 +224,7 @@ namespace Shalltear {
 		descriptor.Read(filter);
 		descriptor.Read(addressMode);
 		descriptor.Read(anisoLevel);
+		descriptor.Read(pixelsPerUnit);
 		u8 cube = 0;
 		u8 convolve = 0;
 		u32 storedMips = 1;
@@ -272,6 +276,7 @@ namespace Shalltear {
 		settings.filter = static_cast<TextureFilter>(filter);
 		settings.addressMode = static_cast<RHI::AddressMode>(addressMode);
 		settings.anisoLevel = anisoLevel;
+		settings.pixelsPerUnit = pixelsPerUnit;
 		settings.convolveIBL = convolve != 0;
 		settings.shape = cube != 0 ? TextureShape::Cube : TextureShape::Texture2D;
 		if (dimension == static_cast<u8>(RHI::TextureDimension::Texture2DArray)) {
@@ -488,6 +493,10 @@ namespace Shalltear {
 		out.convolveIBL = settings["convolveIBL"].AsBool(out.convolveIBL);
 		ReadName(settings["textureType"], TYPE_NAMES, out.type);
 		ReadName(settings["compression"], COMPRESSION_NAMES, out.compression);
+		const f64 pixelsPerUnit = settings["pixelsPerUnit"].AsNumber(out.pixelsPerUnit);
+		if (std::isfinite(pixelsPerUnit) && pixelsPerUnit > 0.0) {
+			out.pixelsPerUnit = static_cast<f32>(Math::Max(pixelsPerUnit, 0.01));
+		}
 	}
 
 	void TextureAssetImporter::WriteSettings(const TextureAsset::Settings& settings, JSONValue& out) {
@@ -503,6 +512,7 @@ namespace Shalltear {
 		out.AddMember("rows", JSONValue::MakeNumber(settings.rows));
 		out.AddMember("textureType", WriteName(TYPE_NAMES, settings.type));
 		out.AddMember("compression", WriteName(COMPRESSION_NAMES, settings.compression));
+		out.AddMember("pixelsPerUnit", JSONValue::MakeNumber(settings.pixelsPerUnit));
 	}
 
 } // namespace Shalltear

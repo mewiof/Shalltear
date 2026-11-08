@@ -155,6 +155,12 @@
 		</xs:restriction>
 	</xs:simpleType>
 
+	<xs:simpleType name="nonNegativeDecimal">
+		<xs:restriction base="xs:decimal">
+			<xs:minInclusive value="0"/>
+		</xs:restriction>
+	</xs:simpleType>
+
 	<xs:element name="image">
 		<xs:complexType>
 			<xs:attribute name="src" type="assetReference"/>
@@ -164,6 +170,7 @@
 			<xs:attribute name="fill-origin" type="imageFillOrigin"/>
 			<xs:attribute name="fill-amount" type="unitInterval"/>
 			<xs:attribute name="fill-clockwise" type="widgetBool"/>
+			<xs:attribute name="slice-scale" type="nonNegativeDecimal"/>
 			<xs:attributeGroup ref="elementIdentity"/>
 		</xs:complexType>
 	</xs:element>

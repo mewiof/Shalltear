@@ -267,6 +267,7 @@ TEST_F(AssetCookFixture, TextureAssetRoundTripsPixelsAndSettings) {
 	original.settings.filter = TextureFilter::Bilinear;
 	original.settings.addressMode = RHI::AddressMode::MirroredRepeat;
 	original.settings.anisoLevel = 3;
+	original.settings.pixelsPerUnit = 32.0f;
 	for (u32 i = 0; i < 8 * 4 * 4; ++i) {
 		original.pixels.push_back(static_cast<u8>(i * 7));
 	}
@@ -282,6 +283,7 @@ TEST_F(AssetCookFixture, TextureAssetRoundTripsPixelsAndSettings) {
 	EXPECT_EQ(restored.settings.filter, original.settings.filter);
 	EXPECT_EQ(restored.settings.addressMode, original.settings.addressMode);
 	EXPECT_EQ(restored.settings.anisoLevel, 3);
+	EXPECT_EQ(restored.settings.pixelsPerUnit, 32.0f);
 	ASSERT_EQ(restored.pixels.size(), original.pixels.size());
 	EXPECT_EQ(std::memcmp(restored.pixels.data(), original.pixels.data(), original.pixels.size()), 0);
 

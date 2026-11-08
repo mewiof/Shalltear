@@ -560,6 +560,17 @@ namespace Shalltear {
 						change([](Settings& s, u32 value) { s.type = static_cast<TextureType>(std::min<u32>(value, 1)); }));
 			AddDropdown(context, labeled("Texture Shape"), TEXTURE_SHAPES, static_cast<u32>(shown.shape),
 						change([](Settings& s, u32 value) { s.shape = static_cast<TextureShape>(std::min<u32>(value, 4)); }));
+			if (shown.shape == TextureShape::Texture2D ||
+				(shown.shape == TextureShape::Auto && texture.GetDimension() == RHI::TextureDimension::Texture2D)) {
+				Widgets::NumberFieldDesc density;
+				density.value = static_cast<f64>(shown.pixelsPerUnit);
+				density.minValue = 0.01;
+				density.decimals = 2;
+				density.font = UISystem::GetDefaultFont();
+				density.fontSizePx = BodyPx();
+				density.onChange = tweak([](Settings& s, f64 value) { s.pixelsPerUnit = static_cast<f32>(std::max(value, 0.01)); });
+				Grow(context, Widgets::NumberField(context, labeled("Pixels Per Unit"), density).root);
+			}
 			if (shown.shape == TextureShape::Texture2DArray || shown.shape == TextureShape::Texture3D) {
 				AddInts(context, labeled("Columns & Rows"), {static_cast<i32>(shown.columns), static_cast<i32>(shown.rows)}, {"C", "R", "", ""},
 						[actions, contextPtr](u32 component, i32 value) {

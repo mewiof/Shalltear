@@ -849,7 +849,7 @@ namespace Shalltear::UI {
 				return;
 			}
 
-			const f32 scale = ctx.desc.contentScale;
+			const f32 scale = ctx.desc.contentScale * source.pxPerTexel;
 			const Rect content = ctx.L(index).content;
 			const Vec2 native{source.texels.w * scale, source.texels.h * scale};
 			if (content.w <= 0.0f || content.h <= 0.0f || native.x <= 0.0f || native.y <= 0.0f) {
@@ -903,15 +903,16 @@ namespace Shalltear::UI {
 				return;
 			}
 
+			const f32 sliceScale = scale * image.sliceScale;
 			const f32 centerTexelsW = texels.w - static_cast<f32>(border.left + border.right);
 			const f32 centerTexelsH = texels.h - static_cast<f32>(border.top + border.bottom);
 			f32 tileW = 0.0f;
 			f32 tileH = 0.0f;
 			if (image.scaleMode == ImageScaleMode::Tiled) {
-				tileW = centerTexelsW * scale;
-				tileH = centerTexelsH * scale;
-				const f32 spanW = std::max(0.0f, drawn.w - static_cast<f32>(border.left + border.right) * scale);
-				const f32 spanH = std::max(0.0f, drawn.h - static_cast<f32>(border.top + border.bottom) * scale);
+				tileW = centerTexelsW * sliceScale;
+				tileH = centerTexelsH * sliceScale;
+				const f32 spanW = std::max(0.0f, drawn.w - static_cast<f32>(border.left + border.right) * sliceScale);
+				const f32 spanH = std::max(0.0f, drawn.h - static_cast<f32>(border.top + border.bottom) * sliceScale);
 				while (TileCount(spanW, tileW) * TileCount(spanH, tileH) > static_cast<f32>(MAX_IMAGE_TILES)) {
 					tileW *= 1.25f;
 					tileH *= 1.25f;
@@ -921,9 +922,9 @@ namespace Shalltear::UI {
 			Vector<ImageSpan> columns{GetMemoryResource(MemTag::UI)};
 			Vector<ImageSpan> rows{GetMemoryResource(MemTag::UI)};
 			SplitBands(drawn.x, drawn.x + drawn.w, texels.x, texels.x + texels.w, static_cast<f32>(border.left), static_cast<f32>(border.right),
-					   scale, tileW, columns);
+					   sliceScale, tileW, columns);
 			SplitBands(drawn.y, drawn.y + drawn.h, texels.y, texels.y + texels.h, static_cast<f32>(border.top), static_cast<f32>(border.bottom),
-					   scale, tileH, rows);
+					   sliceScale, tileH, rows);
 			paint.EmitGrid(columns, rows);
 		}
 

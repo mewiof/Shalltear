@@ -198,6 +198,7 @@ namespace Shalltear::UI {
 		const TextureAsset* texture = nullptr;
 		Rect texels{};
 		SpriteBorder border{};
+		f32 pxPerTexel = 1.0f;
 	};
 
 	bool ResolveImageSource(const ImageDesc& image, ImageSource& out);

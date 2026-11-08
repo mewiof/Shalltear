@@ -135,6 +135,8 @@ namespace Shalltear::UI {
 		Handle<SpriteAsset> sprite;
 		ImageScaleMode scaleMode = ImageScaleMode::ScaleToFit;
 		ImageFill fill;
+		// border + tile size multiplier (Sliced/Tiled only)
+		f32 sliceScale = 1.0f;
 
 		bool operator==(const ImageDesc&) const = default;
 	};

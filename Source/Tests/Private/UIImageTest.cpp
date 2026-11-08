@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -92,7 +93,15 @@ namespace {
 			std::vector<u8> pixels(32 * 16 * 4, 255);
 			TestImages::WriteTga(_root / "Atlas.tga", 32, 16, pixels.data());
 			ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(Path("project://Atlas.tga")).IsValid());
+			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), Settings(0.0)));
 
+			Asset* loaded = AssetDatabase::LoadAsset(Path("project://Atlas.tga"));
+			ASSERT_NE(loaded, nullptr);
+			_atlas = static_cast<TextureAsset*>(loaded);
+			_atlas->texture = FAKE_GPU_TEXTURE;
+		}
+
+		static JSONValue Settings(f64 pixelsPerUnit) {
 			JSONValue frame = JSONValue::MakeObject();
 			frame.AddMember("id", JSONValue::MakeString("frame"));
 			frame.AddMember("name", JSONValue::MakeString("Frame"));
@@ -111,11 +120,16 @@ namespace {
 			JSONValue settings = JSONValue::MakeObject();
 			settings.AddMember("compression", JSONValue::MakeString("none"));
 			settings.AddMember("sprites", list);
-			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), settings));
+			if (pixelsPerUnit > 0.0) {
+				settings.AddMember("pixelsPerUnit", JSONValue::MakeNumber(pixelsPerUnit));
+			}
+			return settings;
+		}
 
-			Asset* loaded = AssetDatabase::LoadAsset(Path("project://Atlas.tga"));
-			ASSERT_NE(loaded, nullptr);
-			_atlas = static_cast<TextureAsset*>(loaded);
+		void Reimport(f64 pixelsPerUnit) {
+			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), Settings(pixelsPerUnit)));
+			ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Atlas.tga")));
+			ASSERT_EQ(_atlas->settings.pixelsPerUnit, static_cast<f32>(pixelsPerUnit));
 			_atlas->texture = FAKE_GPU_TEXTURE;
 		}
 
@@ -365,6 +379,65 @@ TEST(UIImageTest, GetImageAnswersBoxFillingImage) {
 	EXPECT_FALSE(ctx.HasImage(element));
 }
 
+TEST(UIImageTest, PixelsPerUnitSizesAutoBox) {
+	TextureAsset texture;
+	MakeTexture(texture, {32, 16});
+	texture.settings.pixelsPerUnit = 200.0f;
+	UI::ImageDesc image;
+	image.texture = Handle<TextureAsset>(&texture);
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	UI::ElementHandle element = AddImage(ctx, image);
+	EXPECT_TRUE(RectNear(ctx.GetLayout(element).borderBox, {0.0f, 0.0f, 16.0f, 8.0f}));
+
+	UI::Context scaled(Desc(1.25f), nullptr, nullptr);
+	UI::ElementHandle big = AddImage(scaled, image);
+	EXPECT_TRUE(RectNear(scaled.GetLayout(big).borderBox, {0.0f, 0.0f, 20.0f, 10.0f}));
+
+	texture.settings.pixelsPerUnit = 50.0f;
+	UI::Context coarse(Desc(), nullptr, nullptr);
+	UI::ElementHandle doubled = AddImage(coarse, image);
+	EXPECT_TRUE(RectNear(coarse.GetLayout(doubled).borderBox, {0.0f, 0.0f, 64.0f, 32.0f}));
+}
+
+TEST(UIImageTest, PixelsPerUnitSizesTiles) {
+	TextureAsset texture;
+	MakeTexture(texture, {16, 16});
+	texture.settings.pixelsPerUnit = 200.0f;
+	UI::ImageDesc image;
+	image.texture = Handle<TextureAsset>(&texture);
+	image.scaleMode = UI::ImageScaleMode::Tiled;
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	AddImage(ctx, image, 20.0f, 8.0f);
+	const std::vector<UI::UIQuad> quads = ImageQuads(ctx);
+	ASSERT_EQ(quads.size(), 3u);
+	EXPECT_TRUE(RectNear(quads[0].rect, {0.0f, 0.0f, 8.0f, 8.0f}));
+	EXPECT_TRUE(RectNear(quads[1].rect, {8.0f, 0.0f, 8.0f, 8.0f}));
+	EXPECT_TRUE(RectNear(quads[2].rect, {16.0f, 0.0f, 4.0f, 8.0f}));
+	EXPECT_TRUE(RectNear(quads[2].uv, {0.0f, 0.0f, 0.5f, 1.0f}, 0.001f));
+}
+
+TEST(UIImageTest, SetImageSanitizesSliceScale) {
+	TextureAsset texture;
+	MakeTexture(texture, {16, 16});
+	UI::ImageDesc image;
+	image.texture = Handle<TextureAsset>(&texture);
+	image.sliceScale = -2.0f;
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	UI::ElementHandle element = AddImage(ctx, image);
+	ASSERT_NE(ctx.GetImage(element), nullptr);
+	EXPECT_EQ(ctx.GetImage(element)->sliceScale, 0.0f);
+
+	image.sliceScale = std::numeric_limits<f32>::quiet_NaN();
+	ctx.SetImage(element, image);
+	EXPECT_EQ(ctx.GetImage(element)->sliceScale, 1.0f);
+	image.sliceScale = 2.5f;
+	ctx.SetImage(element, image);
+	EXPECT_EQ(ctx.GetImage(element)->sliceScale, 2.5f);
+}
+
 TEST_F(UIImageSpriteFixture, SpriteSizesBoxByRect) {
 	SpriteAsset* frame = Frame();
 	ASSERT_NE(frame, nullptr);
@@ -447,4 +520,93 @@ TEST_F(UIImageSpriteFixture, EditedSpriteRedrawsNewRect) {
 
 	_atlas->sprites.clear();
 	EXPECT_TRUE(ImageQuads(ctx).empty());
+}
+
+TEST_F(UIImageSpriteFixture, PixelsPerUnitScalesSprite) {
+	ASSERT_NO_FATAL_FAILURE(Reimport(200.0));
+	SpriteAsset* frame = Frame();
+	ASSERT_NE(frame, nullptr);
+	UI::ImageDesc image;
+	image.sprite = Handle<SpriteAsset>(frame);
+	image.scaleMode = UI::ImageScaleMode::Sliced;
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	UI::ElementHandle native = AddImage(ctx, image);
+	EXPECT_TRUE(RectNear(ctx.GetLayout(native).borderBox, {0.0f, 0.0f, 8.0f, 8.0f}));
+
+	UI::Context sized(Desc(1.5f), nullptr, nullptr);
+	AddImage(sized, image, 64.0f, 48.0f);
+	const std::vector<UI::UIQuad> quads = ImageQuads(sized);
+	ASSERT_EQ(quads.size(), 9u);
+	EXPECT_TRUE(RectNear(quads[0].rect, {0.0f, 0.0f, 3.0f, 3.0f}));
+	EXPECT_TRUE(RectNear(quads[0].uv, {0.0f, 0.0f, 4.0f / 32.0f, 4.0f / 16.0f}, 0.001f));
+	EXPECT_TRUE(RectNear(quads[4].rect, {3.0f, 3.0f, 90.0f, 66.0f}));
+	EXPECT_TRUE(RectNear(quads[8].rect, {93.0f, 69.0f, 3.0f, 3.0f}));
+}
+
+TEST_F(UIImageSpriteFixture, SliceScaleMultipliesBorder) {
+	ASSERT_NO_FATAL_FAILURE(Reimport(200.0));
+	SpriteAsset* frame = Frame();
+	ASSERT_NE(frame, nullptr);
+	UI::ImageDesc image;
+	image.sprite = Handle<SpriteAsset>(frame);
+	image.scaleMode = UI::ImageScaleMode::Sliced;
+	image.sliceScale = 3.0f;
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	UI::ElementHandle native = AddImage(ctx, image);
+	EXPECT_TRUE(RectNear(ctx.GetLayout(native).borderBox, {0.0f, 0.0f, 8.0f, 8.0f}));
+
+	UI::Context sized(Desc(), nullptr, nullptr);
+	UI::ElementHandle element = AddImage(sized, image, 64.0f, 48.0f);
+	std::vector<UI::UIQuad> quads = ImageQuads(sized);
+	ASSERT_EQ(quads.size(), 9u);
+	EXPECT_TRUE(RectNear(quads[0].rect, {0.0f, 0.0f, 6.0f, 6.0f}));
+	EXPECT_TRUE(RectNear(quads[4].rect, {6.0f, 6.0f, 52.0f, 36.0f}));
+
+	image.sliceScale = 0.0f;
+	sized.SetImage(element, image);
+	sized.Update();
+	quads = ImageQuads(sized);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_TRUE(RectNear(quads[0].rect, {0.0f, 0.0f, 64.0f, 48.0f}));
+	EXPECT_TRUE(RectNear(quads[0].uv, {4.0f / 32.0f, 4.0f / 16.0f, 8.0f / 32.0f, 8.0f / 16.0f}, 0.001f));
+}
+
+TEST_F(UIImageSpriteFixture, SliceScaleSizesTiles) {
+	SpriteAsset* frame = Frame();
+	ASSERT_NE(frame, nullptr);
+	UI::ImageDesc image;
+	image.sprite = Handle<SpriteAsset>(frame);
+	image.scaleMode = UI::ImageScaleMode::Tiled;
+	image.sliceScale = 0.5f;
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	AddImage(ctx, image, 28.0f, 16.0f);
+	const std::vector<UI::UIQuad> quads = ImageQuads(ctx);
+	ASSERT_EQ(quads.size(), 8u * 5u);
+	EXPECT_TRUE(RectNear(quads[0].rect, {0.0f, 0.0f, 2.0f, 2.0f}));
+	EXPECT_TRUE(RectNear(quads[1].rect, {2.0f, 0.0f, 4.0f, 2.0f}));
+	EXPECT_TRUE(RectNear(quads[1].uv, {4.0f / 32.0f, 0.0f, 8.0f / 32.0f, 4.0f / 16.0f}, 0.001f));
+	EXPECT_TRUE(RectNear(quads[7].rect, {26.0f, 0.0f, 2.0f, 2.0f}));
+}
+
+TEST_F(UIImageSpriteFixture, HeldSpriteReadsNewPixelsPerUnit) {
+	SpriteAsset* frame = Frame();
+	ASSERT_NE(frame, nullptr);
+	UI::ImageDesc image;
+	image.sprite = Handle<SpriteAsset>(frame);
+
+	UI::Context ctx(Desc(), nullptr, nullptr);
+	UI::ElementHandle element = AddImage(ctx, image);
+	ASSERT_TRUE(RectNear(ctx.GetLayout(element).borderBox, {0.0f, 0.0f, 16.0f, 16.0f}));
+
+	const u32 version = _atlas->version;
+	ASSERT_NO_FATAL_FAILURE(Reimport(400.0));
+	EXPECT_NE(_atlas->version, version);
+	EXPECT_EQ(frame->GetTexture(), _atlas);
+	ctx.ClearImage(element);
+	ctx.SetImage(element, image);
+	ctx.Update();
+	EXPECT_TRUE(RectNear(ctx.GetLayout(element).borderBox, {0.0f, 0.0f, 4.0f, 4.0f}));
 }

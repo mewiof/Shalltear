@@ -9,6 +9,7 @@
 #include "Shalltear/Core/UI/VectorAsset.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace Shalltear::UI {
 
@@ -988,6 +989,16 @@ namespace Shalltear::UI {
 		return {w * scale, h * scale};
 	}
 
+	namespace {
+
+		f32 PxPerTexel(const TextureAsset& texture) {
+			constexpr f32 REFERENCE = TextureAsset::Settings{}.pixelsPerUnit;
+			const f32 pixelsPerUnit = texture.settings.pixelsPerUnit;
+			return pixelsPerUnit > 0.0f ? REFERENCE / pixelsPerUnit : 1.0f;
+		}
+
+	} // anonymous namespace
+
 	bool ResolveImageSource(const ImageDesc& image, ImageSource& out) {
 		out = {};
 		if (image.sprite.IsValid()) {
@@ -1000,7 +1011,11 @@ namespace Shalltear::UI {
 			out.texels = {static_cast<f32>(definition->rect.position.x), static_cast<f32>(definition->rect.position.y),
 						  static_cast<f32>(definition->rect.size.x), static_cast<f32>(definition->rect.size.y)};
 			out.border = definition->border;
-			return out.texture != nullptr;
+			if (!out.texture) {
+				return false;
+			}
+			out.pxPerTexel = PxPerTexel(*out.texture);
+			return true;
 		}
 		const TextureAsset* texture = image.texture.Get();
 		if (!texture || texture->size.x <= 0 || texture->size.y <= 0) {
@@ -1008,6 +1023,7 @@ namespace Shalltear::UI {
 		}
 		out.texture = texture;
 		out.texels = {0.0f, 0.0f, static_cast<f32>(texture->size.x), static_cast<f32>(texture->size.y)};
+		out.pxPerTexel = PxPerTexel(*texture);
 		return true;
 	}
 
@@ -1040,7 +1056,8 @@ namespace Shalltear::UI {
 			if (!ResolveImageSource(icon->image, source)) {
 				return {};
 			}
-			return {source.texels.w * desc.contentScale, source.texels.h * desc.contentScale};
+			const f32 scale = desc.contentScale * source.pxPerTexel;
+			return {source.texels.w * scale, source.texels.h * scale};
 		}
 		const f32 sizePhysical = icon->sizePx * desc.contentScale;
 		if (icon->cachedSizePhysical == sizePhysical) {
@@ -1833,6 +1850,7 @@ namespace Shalltear::UI {
 		IconComponent& picture = _impl->icons[index];
 		ImageDesc wanted = image;
 		wanted.fill.amount = std::clamp(image.fill.amount, 0.0f, 1.0f);
+		wanted.sliceScale = std::isfinite(image.sliceScale) ? std::max(image.sliceScale, 0.0f) : 1.0f;
 		const bool had = HasFlag(element.flags, ElementFlags::HasImage) && picture.fillsContentBox;
 		if (had && picture.image == wanted) {
 			return;

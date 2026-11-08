@@ -81,6 +81,8 @@ namespace Shalltear {
 			u32 rows = 1;
 			TextureType type = TextureType::Default;
 			TextureCompression compression = TextureCompression::HighQuality;
+			// 100/pixelsPerUnit logical px per texel in UI
+			f32 pixelsPerUnit = 100.0f;
 
 			bool operator==(const Settings&) const = default;
 		};
@@ -137,7 +139,7 @@ namespace Shalltear {
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings, AssetImportContext& context) override;
 		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
 		// bump when the cooked record changes shape
-		u32 GetImporterVersion() const override { return 7; }
+		u32 GetImporterVersion() const override { return 8; }
 
 		// field untouched for a missing/unknown key
 		static void ReadSettings(const JSONValue& settings, TextureAsset::Settings& out);

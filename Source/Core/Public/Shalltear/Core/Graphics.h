@@ -18,5 +18,6 @@
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/GraphicsProfile.h"
 #include "Shalltear/Core/Graphics/Graphics.h"
+#include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 // IWYU pragma: end_exports

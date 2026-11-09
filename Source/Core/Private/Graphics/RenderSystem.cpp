@@ -10,6 +10,7 @@
 #include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/FramePass.h"
+#include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Graphics/GraphicsProfile.h"
 #include "Shalltear/Core/Graphics/Light.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
@@ -33,6 +34,7 @@
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Profiler.h"
 #include "Shalltear/Core/Reflection/TypeInfo.h"
+#include "Shalltear/Core/Reflection/TypeRegistry.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Time.h"
 #include "Shalltear/Core/Scene/Scene.h"
@@ -45,6 +47,7 @@
 #include "Graphics/Exposure.h"
 #include "Shalltear/Core/Graphics/CubeFace.h"
 #include "Graphics/CameraViewport.h"
+#include "Graphics/DeviceContent.h"
 #include "Graphics/FramePassInternal.h"
 #include "Graphics/GraphicsSettings.h"
 #include "Graphics/LightCulling.h"
@@ -504,6 +507,9 @@ namespace Shalltear {
 				RHI::TextureHandle color;
 				Vec2I size{};
 				bool colorSampleable = false;
+				bool drawn = false;
+				bool colorLost = false;
+				bool radianceLost = false;
 				Vector<GraphicsInternal::CascadeView> cascadeFit{GetMemoryResource(MemTag::Graphics)};
 				Vector<PickAnswer> pickAnswers{GetMemoryResource(MemTag::Graphics)};
 				RHI::TextureHandle radiance;
@@ -1644,10 +1650,17 @@ namespace Shalltear {
 			entry.materialBlockSize = layout->sizeBytes;
 		}
 
-		RHI::TextureHandle CreateFallbackTexture(RHI::Device& device, RHI::TextureDimension dimension, ShaderTextureFallback fallback,
-												 const char* debugName) {
+		void FillFallbackTexture(RHI::Device& device, RHI::TextureHandle texture, RHI::TextureDimension dimension, ShaderTextureFallback fallback) {
 			static constexpr u8 FALLBACK_RGBA[][4] = {{255, 255, 255, 255}, {0, 0, 0, 255}, {128, 128, 255, 255}, {0, 0, 0, 0}, {128, 128, 128, 255}};
 			static_assert(std::size(FALLBACK_RGBA) == static_cast<size_t>(ShaderTextureFallback::Gray) + 1);
+			const u32 layers = dimension == RHI::TextureDimension::Cube || dimension == RHI::TextureDimension::CubeArray ? 6u : 1u;
+			for (u32 layer = 0; layer < layers; ++layer) {
+				device.UploadTexture(texture, FALLBACK_RGBA[static_cast<u32>(fallback)], 0, layer);
+			}
+		}
+
+		RHI::TextureHandle CreateFallbackTexture(RHI::Device& device, RHI::TextureDimension dimension, ShaderTextureFallback fallback,
+												 const char* debugName) {
 			RHI::TextureDesc desc;
 			desc.size = {1, 1};
 			desc.format = RHI::Format::RGBA8Unorm;
@@ -1656,10 +1669,7 @@ namespace Shalltear {
 			desc.debugName = debugName;
 			RHI::TextureHandle texture = device.CreateTextureResource(desc);
 			if (texture.IsValid()) {
-				const u32 layers = dimension == RHI::TextureDimension::Cube || dimension == RHI::TextureDimension::CubeArray ? 6u : 1u;
-				for (u32 layer = 0; layer < layers; ++layer) {
-					device.UploadTexture(texture, FALLBACK_RGBA[static_cast<u32>(fallback)], 0, layer);
-				}
+				FillFallbackTexture(device, texture, dimension, fallback);
 			}
 			return texture;
 		}
@@ -7058,6 +7068,9 @@ namespace Shalltear {
 					continue;
 				}
 				RenderState::ViewTarget& target = targetIt->second;
+				target.drawn = true;
+				target.colorLost = false;
+				target.radianceLost = target.radianceLost && !pending.radianceCapture;
 
 				const bool multisampled = state.msaaSamples > 1;
 				RHI::TextureDesc hdrDesc;
@@ -7395,6 +7408,8 @@ namespace Shalltear {
 					continue;
 				}
 				const Vec2I renderSize = state.ScaledSize(targetIt->second.size);
+				targetIt->second.drawn = targetIt->second.drawn || !targetWork.cameras.empty();
+				targetIt->second.colorLost = targetIt->second.colorLost && targetWork.cameras.empty();
 				PrepareCameraWork(targetWork, renderSize);
 				GraphResourceId result = graph.Import(targetIt->second.color, true, RHI::ResourceState::ShaderResource);
 				PassWork work;
@@ -8191,6 +8206,105 @@ namespace Shalltear {
 		return true;
 	}
 
+	namespace {
+
+		void FillDefaultTextures(RenderState& state) {
+			RHI::Device& device = *state.device;
+			const u16 ambient[4] = {Math::FloatToHalf(DEFAULT_AMBIENT.x),
+									Math::FloatToHalf(DEFAULT_AMBIENT.y),
+									Math::FloatToHalf(DEFAULT_AMBIENT.z),
+									Math::FloatToHalf(1.0f)};
+			for (RHI::TextureHandle cube : {state.defaultEnvironmentCube, state.defaultReflectionProbeArray}) {
+				for (u32 face = 0; cube.IsValid() && face < GraphicsInternal::CUBE_FACE_COUNT; ++face) {
+					device.UploadTexture(cube, {reinterpret_cast<const u8*>(ambient), sizeof(ambient)}, 0, face);
+				}
+			}
+			if (state.defaultAmbientOcclusion.IsValid()) {
+				const u8 unoccluded = 0xFF;
+				device.UploadTexture(state.defaultAmbientOcclusion, {&unoccluded, sizeof(unoccluded)}, 0, 0);
+			}
+		}
+
+		void DropFrameSubmissions(RenderState& state) {
+			state.pendingViews.clear();
+			state.viewLines.clear();
+			state.viewPassRows.clear();
+			state.viewScenes.clear();
+			state.viewSkippedTypes.clear();
+			state.viewOutlines.clear();
+			state.passScopes.clear();
+			state.cameraSubmissions.clear();
+			state.submittedCameras.clear();
+		}
+
+		void RestoreDeviceContent(RenderState& state) {
+			RHI::Device& device = *state.device;
+			for (auto& [key, entry] : state.pipelineCache) {
+				device.DestroyResource(entry.pipeline);
+			}
+			state.pipelineCache.clear();
+			state.pipelineCacheSwept = 0;
+
+			for (u32 dimension = 0; dimension < RenderState::FALLBACK_DIMENSIONS; ++dimension) {
+				for (u32 kind = 0; kind < RenderState::FALLBACK_KINDS; ++kind) {
+					if (state.fallbackTextures[dimension][kind].IsValid()) {
+						FillFallbackTexture(device, state.fallbackTextures[dimension][kind], static_cast<RHI::TextureDimension>(dimension),
+											static_cast<ShaderTextureFallback>(kind));
+					}
+				}
+			}
+			FillDefaultTextures(state);
+
+			state.reflectionProbeArrayFace = 0;
+			for (RenderState::BakedSky& baked : state.bakedSkies) {
+				baked.key = 0;
+			}
+			for (RenderState::SkyCapture& capture : state.skyCaptures) {
+				ReleaseSkyCapture(device, capture);
+			}
+			for (auto& [row, volume] : state.rowVolumes) {
+				volume.uploaded = false;
+			}
+			for (RenderState::CameraDepthRecord& record : state.cameraDepths) {
+				record.drawn = false;
+			}
+			for (RenderState::PickSlot& slot : state.pickSlots) {
+				slot.inUse = false;
+				slot.objects.clear();
+			}
+			for (auto& [id, target] : state.viewTargets) {
+				target.colorSampleable = false;
+				target.drawn = false;
+				target.colorLost = true;
+				target.radianceLost = target.radiance.IsValid();
+			}
+
+			ObjectRegistry::ForEachLiveObject(
+				+[](Object* object, u64, void*) {
+					const TypeInfo* type = object->GetType();
+					if (TypeRegistry::IsDerivedFrom(type, TextureAsset::GetReflectType())) {
+						GraphicsInternal::RestoreDeviceContent(static_cast<TextureAsset&>(*object));
+					} else if (TypeRegistry::IsDerivedFrom(type, MeshAsset::GetReflectType())) {
+						GraphicsInternal::RestoreDeviceContent(static_cast<MeshAsset&>(*object));
+					}
+				},
+				nullptr);
+		}
+
+		bool RecoverDevice(RenderState& state) {
+			if (!state.device->Recover()) {
+				return false;
+			}
+			RestoreDeviceContent(state);
+			if (state.device->IsLost()) {
+				return false;
+			}
+			GraphicsEvents::DeviceRestored.Publish(EventBus::GetGlobal(), GraphicsDeviceRestoredEvent{});
+			return !state.device->IsLost();
+		}
+
+	} // anonymous namespace
+
 	void RenderSystem::Initialize() {
 		if (_state) {
 			return;
@@ -8201,6 +8315,14 @@ namespace Shalltear {
 		FrameStages::Register(
 			FrameStage::Render, FrameStagePosition::Normal,
 			[](const FrameStageArgs&, void*) { RenderSystem::RenderAll(); },
+			nullptr, &_FRAME_STAGE_OWNER);
+		FrameStages::Register(
+			FrameStage::UIUpdate, FrameStagePosition::Early,
+			[](const FrameStageArgs&, void*) {
+				if (_state && _state->device && _state->device->IsLost()) {
+					RecoverDevice(*_state);
+				}
+			},
 			nullptr, &_FRAME_STAGE_OWNER);
 
 		SLT_RENDER_SYSTEM_ANCHORS(SLT_ANCHOR_TYPE)
@@ -8292,16 +8414,6 @@ namespace Shalltear {
 			environmentDesc.cube = true;
 			environmentDesc.debugName = "DefaultEnvironment";
 			state.defaultEnvironmentCube = state.device->CreateTextureResource(environmentDesc);
-			if (state.defaultEnvironmentCube.IsValid()) {
-				const u16 texel[4] = {Math::FloatToHalf(DEFAULT_AMBIENT.x),
-									  Math::FloatToHalf(DEFAULT_AMBIENT.y),
-									  Math::FloatToHalf(DEFAULT_AMBIENT.z),
-									  Math::FloatToHalf(1.0f)};
-				for (u32 face = 0; face < GraphicsInternal::CUBE_FACE_COUNT; ++face) {
-					state.device->UploadTexture(state.defaultEnvironmentCube,
-												{reinterpret_cast<const u8*>(texel), sizeof(texel)}, 0, face);
-				}
-			}
 
 			RHI::TextureDesc probeArrayDesc;
 			probeArrayDesc.size = {1, 1};
@@ -8312,16 +8424,6 @@ namespace Shalltear {
 			probeArrayDesc.cubeArray = true;
 			probeArrayDesc.debugName = "DefaultReflectionProbes";
 			state.defaultReflectionProbeArray = state.device->CreateTextureResource(probeArrayDesc);
-			if (state.defaultReflectionProbeArray.IsValid()) {
-				const u16 texel[4] = {Math::FloatToHalf(DEFAULT_AMBIENT.x),
-									  Math::FloatToHalf(DEFAULT_AMBIENT.y),
-									  Math::FloatToHalf(DEFAULT_AMBIENT.z),
-									  Math::FloatToHalf(1.0f)};
-				for (u32 face = 0; face < GraphicsInternal::CUBE_FACE_COUNT; ++face) {
-					state.device->UploadTexture(state.defaultReflectionProbeArray,
-												{reinterpret_cast<const u8*>(texel), sizeof(texel)}, 0, face);
-				}
-			}
 
 			RHI::TextureDesc occlusionDesc;
 			occlusionDesc.size = {1, 1};
@@ -8329,10 +8431,7 @@ namespace Shalltear {
 			occlusionDesc.usage = RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferDst;
 			occlusionDesc.debugName = "DefaultAmbientOcclusion";
 			state.defaultAmbientOcclusion = state.device->CreateTextureResource(occlusionDesc);
-			if (state.defaultAmbientOcclusion.IsValid()) {
-				const u8 unoccluded = 0xFF;
-				state.device->UploadTexture(state.defaultAmbientOcclusion, {&unoccluded, sizeof(unoccluded)}, 0, 0);
-			}
+			FillDefaultTextures(state);
 
 			RHI::SamplerDesc linearClampDesc;
 			linearClampDesc.filter = RHI::FilterMode::Linear;
@@ -8597,6 +8696,9 @@ namespace Shalltear {
 
 			target.size = size;
 			target.colorSampleable = false;
+			target.drawn = false;
+			target.colorLost = false;
+			target.radianceLost = false;
 		}
 
 	} // anonymous namespace
@@ -8656,6 +8758,14 @@ namespace Shalltear {
 		}
 		auto it = _state->viewTargets.find(target);
 		return it == _state->viewTargets.end() ? Vec2I{} : it->second.size;
+	}
+
+	bool RenderSystem::IsViewTargetDrawn(ViewTargetId target) {
+		if (!_state) {
+			return false;
+		}
+		auto it = _state->viewTargets.find(target);
+		return it != _state->viewTargets.end() && it->second.drawn;
 	}
 
 	u32 RenderSystem::GetCascadeFit(ViewTargetId target, std::span<CascadeFit> out) {
@@ -8861,13 +8971,13 @@ namespace Shalltear {
 			return false;
 		}
 		auto it = _state->viewTargets.find(target);
-		if (it == _state->viewTargets.end() || !it->second.color.IsValid()) {
+		if (it == _state->viewTargets.end() || !it->second.color.IsValid() || it->second.colorLost) {
 			return false;
 		}
 		outSize = it->second.size;
 		outRGBA8.resize(static_cast<size_t>(outSize.x) * outSize.y * 4);
 		_state->device->ReadbackTexture(it->second.color, {outRGBA8.data(), outRGBA8.size()});
-		return true;
+		return !_state->device->IsLost();
 	}
 
 	bool RenderSystem::ReadbackViewTargetRadiance(ViewTargetId target, Vector<u8>& outRGBA16F, Vec2I& outSize) {
@@ -8875,13 +8985,13 @@ namespace Shalltear {
 			return false;
 		}
 		auto it = _state->viewTargets.find(target);
-		if (it == _state->viewTargets.end() || !it->second.radiance.IsValid()) {
+		if (it == _state->viewTargets.end() || !it->second.radiance.IsValid() || it->second.radianceLost) {
 			return false;
 		}
 		outSize = _state->device->GetTextureSize(it->second.radiance);
 		outRGBA16F.resize(static_cast<size_t>(outSize.x) * outSize.y * 8);
 		_state->device->ReadbackTexture(it->second.radiance, {outRGBA16F.data(), outRGBA16F.size()});
-		return true;
+		return !_state->device->IsLost();
 	}
 
 	namespace {
@@ -9072,7 +9182,7 @@ namespace Shalltear {
 		outSize = state.device->GetTextureSize(it->second.sceneColor);
 		outRGBA16F.resize(static_cast<size_t>(outSize.x) * outSize.y * 8);
 		state.device->ReadbackTexture(it->second.sceneColor, {outRGBA16F.data(), outRGBA16F.size()});
-		return true;
+		return !state.device->IsLost();
 	}
 
 	void RenderSystem::NotifyShaderFileChanged(const str& physicalPath) {
@@ -9091,6 +9201,11 @@ namespace Shalltear {
 		RenderState& state = *_state;
 		RHI::Device& device = *state.device;
 		state.lastPresents = {};
+
+		if (device.IsLost() && !RecoverDevice(state)) {
+			DropFrameSubmissions(state);
+			return;
+		}
 
 		ReconcileGraphicsConfig(state);
 
@@ -9227,14 +9342,7 @@ namespace Shalltear {
 			state.lastProceduralCulled = 0;
 			state.lastDrawCallsSaved = 0;
 			state.lastExtractionLanes = 0;
-			state.viewLines.clear();
-			state.viewPassRows.clear();
-			state.viewScenes.clear();
-			state.viewSkippedTypes.clear();
-			state.viewOutlines.clear();
-			state.passScopes.clear();
-			state.cameraSubmissions.clear();
-			state.submittedCameras.clear();
+			DropFrameSubmissions(state);
 			return;
 		}
 
@@ -9248,15 +9356,7 @@ namespace Shalltear {
 		}
 		if (anyCameraWork && !presentShader) {
 			SLT_LOG_WARN("Graphics", "present shader unavailable. Skipping the frame");
-			state.pendingViews.clear();
-			state.viewLines.clear();
-			state.viewPassRows.clear();
-			state.viewScenes.clear();
-			state.viewSkippedTypes.clear();
-			state.viewOutlines.clear();
-			state.passScopes.clear();
-			state.cameraSubmissions.clear();
-			state.submittedCameras.clear();
+			DropFrameSubmissions(state);
 			return;
 		}
 
@@ -9287,15 +9387,7 @@ namespace Shalltear {
 
 		SweepRowVolumes(state);
 
-		state.pendingViews.clear();
-		state.viewLines.clear();
-		state.viewPassRows.clear();
-		state.viewScenes.clear();
-		state.viewSkippedTypes.clear();
-		state.viewOutlines.clear();
-		state.passScopes.clear();
-		state.cameraSubmissions.clear();
-		state.submittedCameras.clear();
+		DropFrameSubmissions(state);
 
 		device.EndFrame();
 

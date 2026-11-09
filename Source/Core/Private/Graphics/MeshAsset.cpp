@@ -4,6 +4,7 @@
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
 
+#include "Graphics/DeviceContent.h"
 #include "Graphics/Skinning.h"
 
 namespace Shalltear {
@@ -19,6 +20,31 @@ namespace Shalltear {
 		GraphicsInternal::MeshDeform::Release(*this, nullptr);
 	}
 
+	namespace {
+
+		void UploadBuffers(MeshAsset& mesh, RHI::Device& device) {
+			if (mesh.vertexBuffer.IsValid()) {
+				device.UploadBuffer(mesh.vertexBuffer, {reinterpret_cast<const u8*>(mesh.vertices.data()), mesh.vertices.size() * sizeof(MeshVertex)});
+				mesh.vertexBufferAddress = device.GetBufferDeviceAddress(mesh.vertexBuffer);
+			}
+			if (mesh.indexBuffer.IsValid()) {
+				device.UploadBuffer(mesh.indexBuffer, {reinterpret_cast<const u8*>(mesh.indices.data()), mesh.indices.size() * sizeof(u32)});
+				mesh.indexBufferAddress = device.GetBufferDeviceAddress(mesh.indexBuffer);
+			}
+		}
+
+	} // anonymous namespace
+
+	bool GraphicsInternal::RestoreDeviceContent(MeshAsset& mesh) {
+		if (!RenderSystem::IsRenderingAvailable() || (!mesh.vertexBuffer.IsValid() && !mesh.indexBuffer.IsValid())) {
+			return false;
+		}
+		RHI::Device* device = RenderSystem::GetDevice();
+		UploadBuffers(mesh, *device);
+		MeshDeform::Restore(mesh, *device);
+		return true;
+	}
+
 	void MeshAsset::OnLoad() {
 		if (!RenderSystem::IsRenderingAvailable() || vertices.empty()) {
 			return;
@@ -30,20 +56,14 @@ namespace Shalltear {
 		vertexDesc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress | RHI::BufferUsage::TransferDst;
 		vertexDesc.debugName = virtualPath.c_str();
 		vertexBuffer = device->CreateBufferResource(vertexDesc);
-		if (vertexBuffer.IsValid()) {
-			device->UploadBuffer(vertexBuffer, {reinterpret_cast<const u8*>(vertices.data()), vertexDesc.size});
-			vertexBufferAddress = device->GetBufferDeviceAddress(vertexBuffer);
-		}
 
 		RHI::BufferDesc indexDesc;
 		indexDesc.size = indices.size() * sizeof(u32);
 		indexDesc.usage = RHI::BufferUsage::Index | RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress | RHI::BufferUsage::TransferDst;
 		indexDesc.debugName = virtualPath.c_str();
 		indexBuffer = device->CreateBufferResource(indexDesc);
-		if (indexBuffer.IsValid()) {
-			device->UploadBuffer(indexBuffer, {reinterpret_cast<const u8*>(indices.data()), indexDesc.size});
-			indexBufferAddress = device->GetBufferDeviceAddress(indexBuffer);
-		}
+
+		UploadBuffers(*this, *device);
 		GraphicsInternal::MeshDeform::Build(*this, device);
 	}
 

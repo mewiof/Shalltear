@@ -88,12 +88,26 @@ namespace Shalltear::RHI {
 			return {};
 		}
 
+		BufferResource created;
+		created.size = desc.size;
+		created.usage = desc.usage;
+		created.access = desc.access;
+		if (!impl->lost && !impl->CreateBufferObject(created, desc.debugName) && !impl->lost) {
+			return {};
+		}
+
+		auto [index, generation] = impl->buffers.Acquire();
+		impl->buffers.slots[index].resource = created;
+		return BufferHandle{index, generation};
+	}
+
+	bool DeviceImpl::CreateBufferObject(BufferResource& resource, const char* debugName) {
 		VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-		bufferInfo.size = desc.size;
-		bufferInfo.usage = ToVkBufferUsage(desc.usage);
+		bufferInfo.size = resource.size;
+		bufferInfo.usage = ToVkBufferUsage(resource.usage);
 
 		VmaAllocationCreateInfo allocInfo{};
-		switch (desc.access) {
+		switch (resource.access) {
 		case MemoryAccess::GPUOnly:
 			allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 			break;
@@ -111,28 +125,25 @@ namespace Shalltear::RHI {
 		VkBuffer buffer = VK_NULL_HANDLE;
 		VmaAllocation allocation = VK_NULL_HANDLE;
 		VmaAllocationInfo resultInfo{};
-		VkResult result = vmaCreateBuffer(impl->allocator, &bufferInfo, &allocInfo, &buffer, &allocation, &resultInfo);
+		VkResult result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer, &allocation, &resultInfo);
 		if (result != VK_SUCCESS) {
-			SLT_LOG_ERROR("Graphics", "CreateBufferResource failed ({}): {}", desc.debugName ? desc.debugName : "<unnamed>", VkResultName(result));
-			return {};
+			if (!NoteLoss(result, "vmaCreateBuffer")) {
+				SLT_LOG_ERROR("Graphics", "CreateBufferResource failed ({}): {}", debugName ? debugName : "<unnamed>", VkResultName(result));
+			}
+			return false;
 		}
 
-		auto [index, generation] = impl->buffers.Acquire();
-		BufferResource& resource = impl->buffers.slots[index].resource;
 		resource.buffer = buffer;
 		resource.allocation = allocation;
-		resource.size = desc.size;
-		resource.usage = desc.usage;
-		resource.access = desc.access;
 		resource.mapped = resultInfo.pMappedData;
-		if (HasFlag(desc.usage, BufferUsage::DeviceAddress)) {
+		if (HasFlag(resource.usage, BufferUsage::DeviceAddress)) {
 			VkBufferDeviceAddressInfo addressInfo{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
 			addressInfo.buffer = buffer;
-			resource.deviceAddress = impl->fd.vkGetBufferDeviceAddress(impl->device, &addressInfo);
+			resource.deviceAddress = fd.vkGetBufferDeviceAddress(device, &addressInfo);
 		}
 
-		impl->SetDebugName(reinterpret_cast<u64>(buffer), VK_OBJECT_TYPE_BUFFER, desc.debugName);
-		return BufferHandle{index, generation};
+		SetDebugName(reinterpret_cast<u64>(buffer), VK_OBJECT_TYPE_BUFFER, debugName);
+		return true;
 	}
 
 	void Device::DestroyResource(BufferHandle handle) {
@@ -159,7 +170,9 @@ namespace Shalltear::RHI {
 	u64 Device::GetBufferDeviceAddress(BufferHandle buffer) const {
 		BufferResource* resource = _impl->buffers.Resolve(buffer);
 		if (!resource || resource->deviceAddress == 0) {
-			SLT_LOG_WARN("Graphics", "GetBufferDeviceAddress: invalid handle or missing DeviceAddress usage");
+			if (!_impl->lost) {
+				SLT_LOG_WARN("Graphics", "GetBufferDeviceAddress: invalid handle or missing DeviceAddress usage");
+			}
 			return 0;
 		}
 		return resource->deviceAddress;
@@ -265,16 +278,39 @@ namespace Shalltear::RHI {
 			return {};
 		}
 
-		bool isDepth = IsDepthFormat(desc.format);
+		TextureResource created;
+		created.size = desc.size;
+		created.format = desc.format;
+		created.usage = desc.usage;
+		created.mipLevels = desc.mipLevels;
+		created.samples = samples;
+		created.arrayLayers = arrayLayers;
+		created.depth = depth;
+		created.dimension = dimension;
+		if (!impl->lost && !impl->CreateTextureObjects(created, desc.debugName) && !impl->lost) {
+			return {};
+		}
+
+		auto [index, generation] = impl->textures.Acquire();
+		impl->textures.slots[index].resource = std::move(created);
+		return TextureHandle{index, generation};
+	}
+
+	bool DeviceImpl::CreateTextureObjects(TextureResource& resource, const char* debugName) {
+		const TextureDimension dimension = resource.dimension;
+		const bool cube = dimension == TextureDimension::Cube || dimension == TextureDimension::CubeArray;
+		const u32 arrayLayers = resource.arrayLayers;
+
+		bool isDepth = IsDepthFormat(resource.format);
 		VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-		imageInfo.imageType = volume ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
-		imageInfo.format = ToVkFormat(desc.format);
-		imageInfo.extent = {static_cast<u32>(desc.size.x), static_cast<u32>(desc.size.y), depth};
-		imageInfo.mipLevels = desc.mipLevels;
+		imageInfo.imageType = dimension == TextureDimension::Texture3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+		imageInfo.format = ToVkFormat(resource.format);
+		imageInfo.extent = {static_cast<u32>(resource.size.x), static_cast<u32>(resource.size.y), resource.depth};
+		imageInfo.mipLevels = resource.mipLevels;
 		imageInfo.arrayLayers = arrayLayers;
-		imageInfo.samples = ToVkSampleCount(samples);
+		imageInfo.samples = ToVkSampleCount(resource.samples);
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageInfo.usage = ToVkImageUsage(desc.usage);
+		imageInfo.usage = ToVkImageUsage(resource.usage);
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		if (cube) {
 			imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
@@ -285,12 +321,15 @@ namespace Shalltear::RHI {
 
 		VkImage image = VK_NULL_HANDLE;
 		VmaAllocation allocation = VK_NULL_HANDLE;
-		VkResult result = vmaCreateImage(impl->allocator, &imageInfo, &allocInfo, &image, &allocation, nullptr);
+		VkResult result = vmaCreateImage(allocator, &imageInfo, &allocInfo, &image, &allocation, nullptr);
 		if (result != VK_SUCCESS) {
-			SLT_LOG_ERROR("Graphics", "CreateTextureResource failed ({}): {}", desc.debugName ? desc.debugName : "<unnamed>", VkResultName(result));
-			return {};
+			if (!NoteLoss(result, "vmaCreateImage")) {
+				SLT_LOG_ERROR("Graphics", "CreateTextureResource failed ({}): {}", debugName ? debugName : "<unnamed>", VkResultName(result));
+			}
+			return false;
 		}
 
+		DeviceImpl* impl = this;
 		VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
 		viewInfo.image = image;
 		switch (dimension) {
@@ -313,18 +352,20 @@ namespace Shalltear::RHI {
 		}
 		viewInfo.format = imageInfo.format;
 		viewInfo.subresourceRange.aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.levelCount = desc.mipLevels;
+		viewInfo.subresourceRange.levelCount = resource.mipLevels;
 		viewInfo.subresourceRange.layerCount = arrayLayers;
 		VkImageView view = VK_NULL_HANDLE;
 		result = impl->fd.vkCreateImageView(impl->device, &viewInfo, nullptr, &view);
 		if (result != VK_SUCCESS) {
 			vmaDestroyImage(impl->allocator, image, allocation);
-			SLT_LOG_ERROR("Graphics", "CreateTextureResource: view creation failed: {}", VkResultName(result));
-			return {};
+			if (!NoteLoss(result, "vkCreateImageView")) {
+				SLT_LOG_ERROR("Graphics", "CreateTextureResource: view creation failed: {}", VkResultName(result));
+			}
+			return false;
 		}
 
-		const bool drawnIntoLevels = desc.mipLevels > 1 && HasFlag(desc.usage, TextureUsage::RenderTarget);
-		const u32 viewLevels = drawnIntoLevels ? desc.mipLevels : 1u;
+		const bool drawnIntoLevels = resource.mipLevels > 1 && HasFlag(resource.usage, TextureUsage::RenderTarget);
+		const u32 viewLevels = drawnIntoLevels ? resource.mipLevels : 1u;
 		Vector<VkImageView> layerViews{GetMemoryResource(MemTag::Graphics)};
 		if (arrayLayers > 1 || drawnIntoLevels) {
 			layerViews.reserve(static_cast<size_t>(arrayLayers) * viewLevels);
@@ -349,29 +390,20 @@ namespace Shalltear::RHI {
 				}
 				impl->fd.vkDestroyImageView(impl->device, view, nullptr);
 				vmaDestroyImage(impl->allocator, image, allocation);
-				SLT_LOG_ERROR("Graphics", "CreateTextureResource: layer view creation failed: {}", VkResultName(result));
-				return {};
+				if (!NoteLoss(result, "vkCreateImageView")) {
+					SLT_LOG_ERROR("Graphics", "CreateTextureResource: layer view creation failed: {}", VkResultName(result));
+				}
+				return false;
 			}
 		}
 
-		auto [index, generation] = impl->textures.Acquire();
-		TextureResource& resource = impl->textures.slots[index].resource;
 		resource.layerViews.assign(layerViews.begin(), layerViews.end());
 		resource.image = image;
 		resource.view = view;
 		resource.allocation = allocation;
-		resource.size = desc.size;
-		resource.format = desc.format;
-		resource.usage = desc.usage;
-		resource.mipLevels = desc.mipLevels;
-		resource.samples = samples;
-		resource.arrayLayers = arrayLayers;
-		resource.depth = depth;
-		resource.dimension = dimension;
-		resource.state = ResourceState::Undefined;
 
-		impl->SetDebugName(reinterpret_cast<u64>(image), VK_OBJECT_TYPE_IMAGE, desc.debugName);
-		return TextureHandle{index, generation};
+		impl->SetDebugName(reinterpret_cast<u64>(image), VK_OBJECT_TYPE_IMAGE, debugName);
+		return true;
 	}
 
 	void Device::DestroyResource(TextureHandle handle) {
@@ -420,6 +452,23 @@ namespace Shalltear::RHI {
 		DeviceImpl* impl = _impl;
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
 
+		SamplerResource created;
+		created.desc = desc;
+		created.desc.debugName = nullptr;
+		if (!impl->lost && !impl->CreateSamplerObject(created) && !impl->lost) {
+			return {};
+		}
+
+		auto [index, generation] = impl->samplers.Acquire();
+		impl->samplers.slots[index].resource = created;
+		impl->SetDebugName(reinterpret_cast<u64>(created.sampler), VK_OBJECT_TYPE_SAMPLER, desc.debugName);
+		return SamplerHandle{index, generation};
+	}
+
+	bool DeviceImpl::CreateSamplerObject(SamplerResource& resource) {
+		DeviceImpl* impl = this;
+		const SamplerDesc& desc = resource.desc;
+
 		VkFilter filter = desc.filter == FilterMode::Linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
 		VkSamplerAddressMode address = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		switch (desc.addressMode) {
@@ -454,14 +503,13 @@ namespace Shalltear::RHI {
 		VkSampler sampler = VK_NULL_HANDLE;
 		VkResult result = impl->fd.vkCreateSampler(impl->device, &samplerInfo, nullptr, &sampler);
 		if (result != VK_SUCCESS) {
-			SLT_LOG_ERROR("Graphics", "CreateSamplerResource failed: {}", VkResultName(result));
-			return {};
+			if (!NoteLoss(result, "vkCreateSampler")) {
+				SLT_LOG_ERROR("Graphics", "CreateSamplerResource failed: {}", VkResultName(result));
+			}
+			return false;
 		}
-
-		auto [index, generation] = impl->samplers.Acquire();
-		impl->samplers.slots[index].resource.sampler = sampler;
-		impl->SetDebugName(reinterpret_cast<u64>(sampler), VK_OBJECT_TYPE_SAMPLER, desc.debugName);
-		return SamplerHandle{index, generation};
+		resource.sampler = sampler;
+		return true;
 	}
 
 	void Device::DestroyResource(SamplerHandle handle) {
@@ -519,7 +567,7 @@ namespace Shalltear::RHI {
 										: VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
 							  VMA_ALLOCATION_CREATE_MAPPED_BIT;
 			VmaAllocationInfo resultInfo{};
-			SLT_VK_CHECK(vmaCreateBuffer(impl.allocator, &bufferInfo, &allocInfo, &staging.buffer, &staging.allocation, &resultInfo));
+			SLT_VK_CHECK(impl, vmaCreateBuffer(impl.allocator, &bufferInfo, &allocInfo, &staging.buffer, &staging.allocation, &resultInfo));
 			staging.mapped = resultInfo.pMappedData;
 			return staging;
 		}
@@ -527,12 +575,12 @@ namespace Shalltear::RHI {
 	} // anonymous namespace
 
 	VkCommandBuffer DeviceImpl::BeginImmediate() {
-		SLT_VK_CHECK(fd.vkResetFences(device, 1, &immediateFence));
-		SLT_VK_CHECK(fd.vkResetCommandPool(device, immediatePool, 0));
+		SLT_VK_CHECK(*this, fd.vkResetFences(device, 1, &immediateFence));
+		SLT_VK_CHECK(*this, fd.vkResetCommandPool(device, immediatePool, 0));
 
 		VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 		begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		SLT_VK_CHECK(fd.vkBeginCommandBuffer(immediateBuffer, &begin));
+		SLT_VK_CHECK(*this, fd.vkBeginCommandBuffer(immediateBuffer, &begin));
 
 		// queued work first (device operations must stay in order)
 		RecordPendingUploads(immediateBuffer, immediateDeletions);
@@ -541,15 +589,17 @@ namespace Shalltear::RHI {
 
 	void DeviceImpl::EndImmediate() {
 		SLT_PROFILE_ZONE("RHI.ImmediateSubmit");
-		SLT_VK_CHECK(fd.vkEndCommandBuffer(immediateBuffer));
+		SLT_VK_CHECK(*this, fd.vkEndCommandBuffer(immediateBuffer));
 
 		VkCommandBufferSubmitInfo cmdInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
 		cmdInfo.commandBuffer = immediateBuffer;
 		VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
 		submit.commandBufferInfoCount = 1;
 		submit.pCommandBufferInfos = &cmdInfo;
-		SLT_VK_CHECK(fd.vkQueueSubmit2(queue, 1, &submit, immediateFence));
-		SLT_VK_CHECK(fd.vkWaitForFences(device, 1, &immediateFence, VK_TRUE, UINT64_MAX));
+		SLT_VK_CHECK(*this, fd.vkQueueSubmit2(queue, 1, &submit, immediateFence));
+		if (!lost) {
+			SLT_VK_CHECK(*this, fd.vkWaitForFences(device, 1, &immediateFence, VK_TRUE, UINT64_MAX));
+		}
 		FlushDeletionQueue(immediateDeletions);
 	}
 
@@ -565,6 +615,9 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "UploadBuffer: range {}..{} exceeds buffer size {}", offset, offset + data.size(), resource->size);
 			return;
 		}
+		if (impl->lost) {
+			return;
+		}
 
 		if (resource->mapped) {
 			std::memcpy(static_cast<u8*>(resource->mapped) + offset, data.data(), data.size());
@@ -572,6 +625,9 @@ namespace Shalltear::RHI {
 		}
 
 		StagingBuffer staging = CreateStaging(*impl, data.size(), false);
+		if (impl->lost) {
+			return;
+		}
 		std::memcpy(staging.mapped, data.data(), data.size());
 
 		impl->pendingUploads.push_back({staging.buffer, staging.allocation, resource->buffer, offset, data.size()});
@@ -721,8 +777,11 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "UploadTexture: {} bytes provided, mip {} expects {}", data.size(), mipLevel, expected);
 			return;
 		}
-
-		StagingBuffer staging = CreateStaging(*impl, data.size(), false);
+		StagingBuffer staging = impl->lost ? StagingBuffer{} : CreateStaging(*impl, data.size(), false);
+		if (impl->lost) {
+			resource->state = ResourceState::ShaderResource;
+			return;
+		}
 		std::memcpy(staging.mapped, data.data(), data.size());
 
 		bool isDepth = IsDepthFormat(resource->format);
@@ -786,8 +845,11 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "UploadTextureRegion: {} bytes provided, region expects {}", data.size(), expected);
 			return;
 		}
-
-		StagingBuffer staging = CreateStaging(*impl, data.size(), false);
+		StagingBuffer staging = impl->lost ? StagingBuffer{} : CreateStaging(*impl, data.size(), false);
+		if (impl->lost) {
+			resource->state = ResourceState::ShaderResource;
+			return;
+		}
 		std::memcpy(staging.mapped, data.data(), data.size());
 
 		impl->pendingTextureUploads.push_back({staging.buffer, staging.allocation, target, resource->state, region, mipLevel});
@@ -798,7 +860,7 @@ namespace Shalltear::RHI {
 		DeviceImpl* impl = &d;
 		TextureResource* resource = &texture;
 		const ResourceState previous = resource->state;
-		{
+		if (!d.lost) {
 			CmdTransitionImage(*impl, cmd, resource->image, previous, ResourceState::TransferDst, false);
 
 			i32 width = resource->size.x;
@@ -890,6 +952,7 @@ namespace Shalltear::RHI {
 			return;
 		}
 		impl->ImmediateSubmit([&](VkCommandBuffer cmd) { CmdGenerateMips(*impl, cmd, *resource); });
+		resource->state = ResourceState::ShaderResource;
 	}
 
 	void Device::ReadbackTexture(TextureHandle source, std::span<u8> out, u32 mipLevel, u32 layer) {
@@ -913,8 +976,13 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "ReadbackTexture: {} bytes provided, need {}", out.size(), expected);
 			return;
 		}
-
-		StagingBuffer staging = CreateStaging(*impl, expected, true);
+		const ResourceState after = HasFlag(resource->usage, TextureUsage::Sampled) ? ResourceState::ShaderResource : ResourceState::TransferSrc;
+		StagingBuffer staging = impl->lost ? StagingBuffer{} : CreateStaging(*impl, expected, true);
+		if (impl->lost) {
+			std::memset(out.data(), 0, expected);
+			resource->state = after;
+			return;
+		}
 
 		bool isDepth = IsDepthFormat(resource->format);
 		ResourceState previous = resource->state;
@@ -939,10 +1007,14 @@ namespace Shalltear::RHI {
 				CmdTransitionImage(*impl, cmd, resource->image, ResourceState::TransferSrc, ResourceState::ShaderResource, isDepth);
 			}
 		});
-		resource->state = HasFlag(resource->usage, TextureUsage::Sampled) ? ResourceState::ShaderResource : ResourceState::TransferSrc;
+		resource->state = after;
 
-		vmaInvalidateAllocation(impl->allocator, staging.allocation, 0, VK_WHOLE_SIZE);
-		std::memcpy(out.data(), staging.mapped, expected);
+		if (impl->lost) {
+			std::memset(out.data(), 0, expected);
+		} else {
+			vmaInvalidateAllocation(impl->allocator, staging.allocation, 0, VK_WHOLE_SIZE);
+			std::memcpy(out.data(), staging.mapped, expected);
+		}
 		vmaDestroyBuffer(impl->allocator, staging.buffer, staging.allocation);
 	}
 
@@ -965,8 +1037,12 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "ReadbackBuffer: the buffer wasn't created with TransferSrc usage");
 			return;
 		}
-
-		StagingBuffer staging = CreateStaging(*impl, out.size(), true);
+		StagingBuffer staging = impl->lost ? StagingBuffer{} : CreateStaging(*impl, out.size(), true);
+		if (impl->lost) {
+			std::memset(out.data(), 0, out.size());
+			resource->state = ResourceState::TransferSrc;
+			return;
+		}
 		ResourceState previous = resource->state;
 		impl->ImmediateSubmit([&](VkCommandBuffer cmd) {
 			StateMasks src = ToStateMasks(previous, false);
@@ -998,8 +1074,12 @@ namespace Shalltear::RHI {
 		});
 		resource->state = ResourceState::TransferSrc;
 
-		vmaInvalidateAllocation(impl->allocator, staging.allocation, 0, VK_WHOLE_SIZE);
-		std::memcpy(out.data(), staging.mapped, out.size());
+		if (impl->lost) {
+			std::memset(out.data(), 0, out.size());
+		} else {
+			vmaInvalidateAllocation(impl->allocator, staging.allocation, 0, VK_WHOLE_SIZE);
+			std::memcpy(out.data(), staging.mapped, out.size());
+		}
 		vmaDestroyBuffer(impl->allocator, staging.buffer, staging.allocation);
 	}
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/DeviceLossPolicy.h"
 #include "Graphics/Vulkan/VulkanLoader.h"
 
 #include "Shalltear/Core/Assert.h"
@@ -15,6 +16,7 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #include <vk_mem_alloc.h>
 
+#include <chrono>
 #include <thread>
 
 namespace Shalltear::RHI {
@@ -111,6 +113,7 @@ namespace Shalltear::RHI {
 	struct SamplerResource {
 		VkSampler sampler = VK_NULL_HANDLE;
 		u32 tableIndex = TABLE_NONE;
+		SamplerDesc desc;
 	};
 
 	struct PipelineResource {
@@ -157,6 +160,8 @@ namespace Shalltear::RHI {
 	};
 
 	inline constexpr u32 TABLE_BINDING_COUNT = 4;
+	inline constexpr u32 MARK_COUNT = 1024;
+	inline constexpr u32 MARK_LENGTH = 32;
 
 	inline u32 TableBindingOf(TextureDimension dimension) {
 		switch (dimension) {
@@ -237,6 +242,7 @@ namespace Shalltear::RHI {
 		VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 		u32 boundPipelineIndex = 0;
 		bool inRenderPass = false;
+		bool pipelineRefused = false;
 		bool frontFaceSet = false;
 		FrontFace frontFace = FrontFace::Clockwise;
 		RectI passArea{};
@@ -264,6 +270,8 @@ namespace Shalltear::RHI {
 
 	struct SwapChainImpl {
 		DeviceImpl* device = nullptr;
+		void* hwnd = nullptr;
+		void* hinstance = nullptr;
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 		Format format = Format::Unknown;
@@ -294,8 +302,26 @@ namespace Shalltear::RHI {
 
 		Vector<AdapterInfo> adapters{GetMemoryResource(MemTag::Graphics)};
 		i32 selectedAdapter = -1;
+		DeviceDesc desc;
+		u32 adapterVendor = 0;
+		u32 adapterDevice = 0;
 		bool validation = false;
 		bool headless = false;
+		bool tableFeatures = false;
+		bool tableSupported = false;
+		bool faultInfo = false;
+		bool checkpoints = false;
+		Vector<char> marks{GetMemoryResource(MemTag::Graphics)};
+		u32 nextMark = 0;
+
+		bool lost = false;
+		bool lossSimulated = false;
+		bool rebuildFailureLogged = false;
+		bool deadPipelineWarned = false;
+		const char* rebuildFailure = nullptr;
+		LossHistory losses;
+		std::chrono::steady_clock::time_point created = std::chrono::steady_clock::now();
+		std::chrono::steady_clock::time_point nextRebuild{};
 		f32 maxAnisotropy = 1.0f;
 		bool fillModeNonSolid = false;
 		bool warnedNoFillModeNonSolid = false;
@@ -348,6 +374,17 @@ namespace Shalltear::RHI {
 
 		std::thread::id mainThread;
 
+		bool NoteLoss(VkResult result, const char* call);
+		void MarkLost(const char* call);
+		void LogLossCause();
+		bool CreateCore(bool rebuild);
+		void DestroyCore();
+		bool CreateObjects();
+		void ReleaseObjects();
+		bool RestoreObjects();
+		bool CreateBufferObject(BufferResource& resource, const char* debugName);
+		bool CreateTextureObjects(TextureResource& resource, const char* debugName);
+		bool CreateSamplerObject(SamplerResource& resource);
 		void SetDebugName(u64 objectHandle, u32 objectType, const char* name);
 		void DestroyDeferred(BufferResource& resource);
 		void DestroyDeferred(TextureResource& resource);
@@ -396,12 +433,15 @@ namespace Shalltear::RHI {
 
 	void CmdGenerateMips(DeviceImpl& d, VkCommandBuffer cmd, TextureResource& resource);
 
+	void ReleaseSwapChainObjects(SwapChainImpl& impl);
+	void RestoreSwapChainObjects(SwapChainImpl& impl);
+
 	const char* VkResultName(VkResult result);
 
-#define SLT_VK_CHECK(expr)                                                                 \
+#define SLT_VK_CHECK(impl, expr)                                                           \
 	do {                                                                                   \
 		VkResult _sltVkResult = (expr);                                                    \
-		if (_sltVkResult != VK_SUCCESS) {                                                  \
+		if (_sltVkResult != VK_SUCCESS && !(impl).NoteLoss(_sltVkResult, #expr)) {         \
 			SLT_LOG_ERROR("Graphics", "{} failed: {}", #expr, VkResultName(_sltVkResult)); \
 			SLT_CORE_ASSERT_MSG(false, "Vulkan call failed: {}", #expr);                   \
 		}                                                                                  \
@@ -409,6 +449,9 @@ namespace Shalltear::RHI {
 
 	template <typename TRecord>
 	void DeviceImpl::ImmediateSubmit(TRecord&& record) {
+		if (lost) {
+			return;
+		}
 		record(BeginImmediate());
 		EndImmediate();
 	}

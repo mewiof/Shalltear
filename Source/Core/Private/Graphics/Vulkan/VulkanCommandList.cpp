@@ -34,6 +34,10 @@ namespace Shalltear::RHI {
 		if (resource->state == newState) {
 			return;
 		}
+		if (d.lost) {
+			resource->state = newState;
+			return;
+		}
 		StateMasks src = ToStateMasks(resource->state, false);
 		StateMasks dst = ToStateMasks(newState, false);
 
@@ -64,6 +68,9 @@ namespace Shalltear::RHI {
 		}
 		SLT_CORE_ASSERT_MSG(resource->state == ResourceState::UnorderedAccess,
 							"an unordered access barrier on a buffer in another state. Transition it");
+		if (d.lost) {
+			return;
+		}
 		StateMasks masks = ToStateMasks(ResourceState::UnorderedAccess, false);
 		VkBufferMemoryBarrier2 barrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2};
 		barrier.srcStageMask = masks.stages;
@@ -147,7 +154,9 @@ namespace Shalltear::RHI {
 		rendering.colorAttachmentCount = colorCount;
 		rendering.pColorAttachments = colorInfos;
 		rendering.pDepthAttachment = hasDepth ? &depthInfo : nullptr;
-		d.fd.vkCmdBeginRendering(_impl->commandBuffer, &rendering);
+		if (!d.lost) {
+			d.fd.vkCmdBeginRendering(_impl->commandBuffer, &rendering);
+		}
 
 		_impl->inRenderPass = true;
 		_impl->passArea = RectI{0, 0, area.x, area.y};
@@ -158,7 +167,9 @@ namespace Shalltear::RHI {
 	void CommandList::EndRenderPass() {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(_impl->inRenderPass, "EndRenderPass without a pass open");
-		d.fd.vkCmdEndRendering(_impl->commandBuffer);
+		if (!d.lost) {
+			d.fd.vkCmdEndRendering(_impl->commandBuffer);
+		}
 		_impl->inRenderPass = false;
 	}
 
@@ -167,6 +178,15 @@ namespace Shalltear::RHI {
 		PipelineResource* resource = d.pipelines.Resolve(pipeline);
 		if (!resource) {
 			SLT_LOG_WARN("Graphics", "SetPipeline: stale handle");
+			return;
+		}
+		if (!resource->pipeline) {
+			if (!d.lost && !d.deadPipelineWarned) {
+				d.deadPipelineWarned = true;
+				SLT_LOG_WARN("Graphics", "SetPipeline: pipeline is from before device rebuild. Recreate it");
+			}
+			_impl->boundPipelineIndex = 0;
+			_impl->pipelineRefused = true;
 			return;
 		}
 		const bool compute = resource->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE;
@@ -181,21 +201,24 @@ namespace Shalltear::RHI {
 			SLT_CORE_ASSERT_MSG(resource->samples == _impl->passSamples, "pipeline sample count differs from the pass attachments");
 		}
 #endif
-		d.fd.vkCmdBindPipeline(_impl->commandBuffer, resource->bindPoint, resource->pipeline);
-		if (resource->bindsTable) {
-			d.fd.vkCmdBindDescriptorSets(_impl->commandBuffer, resource->bindPoint, resource->layout, TABLE_SET, 1, &d.table.set, 0, nullptr);
+		if (!d.lost) {
+			d.fd.vkCmdBindPipeline(_impl->commandBuffer, resource->bindPoint, resource->pipeline);
+			if (resource->bindsTable) {
+				d.fd.vkCmdBindDescriptorSets(_impl->commandBuffer, resource->bindPoint, resource->layout, TABLE_SET, 1, &d.table.set, 0, nullptr);
+			}
 		}
 		_impl->boundPipelineIndex = pipeline.index;
+		_impl->pipelineRefused = false;
 		if (!compute) {
 			SetFrontFace(FrontFace::Clockwise);
 		}
 	}
 
 	void CommandList::SetFrontFace(FrontFace face) {
-		if (_impl->frontFaceSet && _impl->frontFace == face) {
+		DeviceImpl& d = *_impl->device;
+		if (d.lost || (_impl->frontFaceSet && _impl->frontFace == face)) {
 			return;
 		}
-		DeviceImpl& d = *_impl->device;
 		d.fd.vkCmdSetFrontFace(_impl->commandBuffer, face == FrontFace::CounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
 		_impl->frontFace = face;
 		_impl->frontFaceSet = true;
@@ -203,6 +226,9 @@ namespace Shalltear::RHI {
 
 	void CommandList::SetViewportScissor(RectI rect) {
 		DeviceImpl& d = *_impl->device;
+		if (d.lost) {
+			return;
+		}
 
 		VkViewport viewport{};
 		viewport.x = static_cast<f32>(rect.position.x);
@@ -218,6 +244,9 @@ namespace Shalltear::RHI {
 
 	void CommandList::SetScissor(RectI rect) {
 		DeviceImpl& d = *_impl->device;
+		if (d.lost) {
+			return;
+		}
 		VkRect2D scissor{};
 		scissor.offset = {rect.position.x, rect.position.y};
 		scissor.extent = {static_cast<u32>(std::max(0, rect.size.x)), static_cast<u32>(std::max(0, rect.size.y))};
@@ -226,6 +255,9 @@ namespace Shalltear::RHI {
 
 	void CommandList::BindTransientSet(u32 setIndex, TransientSet set) {
 		DeviceImpl& d = *_impl->device;
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		if (!set.IsValid() || _impl->boundPipelineIndex == 0) {
 			SLT_LOG_WARN("Graphics", "BindTransientSet: invalid set or no pipeline bound");
 			return;
@@ -237,6 +269,9 @@ namespace Shalltear::RHI {
 
 	void CommandList::PushConstants(std::span<const u8> data) {
 		DeviceImpl& d = *_impl->device;
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		if (_impl->boundPipelineIndex == 0) {
 			SLT_LOG_WARN("Graphics", "PushConstants: no pipeline bound");
 			return;
@@ -254,24 +289,36 @@ namespace Shalltear::RHI {
 			SLT_LOG_WARN("Graphics", "BindIndexBuffer: stale handle");
 			return;
 		}
+		if (d.lost) {
+			return;
+		}
 		d.fd.vkCmdBindIndexBuffer(_impl->commandBuffer, resource->buffer, 0, sixteenBit ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 	}
 
 	void CommandList::Draw(u32 vertexCount, u32 instanceCount) {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(_impl->inRenderPass, "Draw outside a render pass");
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		d.fd.vkCmdDraw(_impl->commandBuffer, vertexCount, instanceCount, 0, 0);
 	}
 
 	void CommandList::DrawIndexed(u32 indexCount, u32 firstIndex, u32 instanceCount) {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(_impl->inRenderPass, "DrawIndexed outside a render pass");
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		d.fd.vkCmdDrawIndexed(_impl->commandBuffer, indexCount, instanceCount, firstIndex, 0, 0);
 	}
 
 	void CommandList::DrawIndirect(BufferHandle arguments, u64 offset) {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(_impl->inRenderPass, "DrawIndirect outside a render pass");
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		BufferResource* resource = d.buffers.Resolve(arguments);
 		if (!resource) {
 			SLT_LOG_WARN("Graphics", "DrawIndirect: stale handle");
@@ -295,6 +342,9 @@ namespace Shalltear::RHI {
 	void CommandList::Dispatch(u32 groupsX, u32 groupsY, u32 groupsZ) {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(!_impl->inRenderPass, "a dispatch inside a render pass");
+		if (d.lost || _impl->pipelineRefused) {
+			return;
+		}
 		if (!BoundForCompute(d, *_impl)) {
 			SLT_LOG_WARN("Graphics", "Dispatch: no compute pipeline bound");
 			return;
@@ -308,6 +358,9 @@ namespace Shalltear::RHI {
 		BufferResource* resource = d.buffers.Resolve(arguments);
 		if (!resource) {
 			SLT_LOG_WARN("Graphics", "DispatchIndirect: stale handle");
+			return;
+		}
+		if (d.lost || _impl->pipelineRefused) {
 			return;
 		}
 		if (!BoundForCompute(d, *_impl)) {
@@ -327,6 +380,9 @@ namespace Shalltear::RHI {
 		BufferResource* dstResource = d.buffers.Resolve(dst);
 		if (!srcResource || !dstResource) {
 			SLT_LOG_WARN("Graphics", "CopyBufferRegion: stale handle");
+			return;
+		}
+		if (d.lost) {
 			return;
 		}
 		VkBufferCopy2 region{VK_STRUCTURE_TYPE_BUFFER_COPY_2};
@@ -367,6 +423,9 @@ namespace Shalltear::RHI {
 			return;
 		}
 		SLT_CORE_ASSERT_MSG(dstResource->state == ResourceState::TransferDst, "destination must be in TransferDst state");
+		if (d.lost) {
+			return;
+		}
 
 		bool isDepth = IsDepthFormat(dstResource->format);
 		VkBufferImageCopy2 region{VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2};
@@ -394,6 +453,9 @@ namespace Shalltear::RHI {
 			return;
 		}
 		SLT_CORE_ASSERT_MSG(srcResource->state == ResourceState::TransferSrc, "source must be in TransferSrc state");
+		if (d.lost) {
+			return;
+		}
 		if (mipLevel >= srcResource->mipLevels || layer >= srcResource->arrayLayers) {
 			SLT_LOG_ERROR("Graphics", "CopyTextureToBuffer: mip {} layer {} out of range ({} mip(s), {} layer(s))", mipLevel, layer,
 						  srcResource->mipLevels, srcResource->arrayLayers);
@@ -452,6 +514,21 @@ namespace Shalltear::RHI {
 		CmdGenerateMips(d, _impl->commandBuffer, *resource);
 	}
 
+	void CommandList::Breadcrumb(const char* name) {
+		DeviceImpl& d = *_impl->device;
+		if (d.lost || d.marks.empty() || !d.fd.vkCmdSetCheckpointNV || !name) {
+			return;
+		}
+		char* slot = d.marks.data() + static_cast<size_t>(d.nextMark) * MARK_LENGTH;
+		d.nextMark = (d.nextMark + 1) % MARK_COUNT;
+		size_t length = 0;
+		for (; length + 1 < MARK_LENGTH && name[length] != '\0'; ++length) {
+			slot[length] = name[length];
+		}
+		slot[length] = '\0';
+		d.fd.vkCmdSetCheckpointNV(_impl->commandBuffer, slot);
+	}
+
 	void CommandList::ResolveTexture(TextureHandle src, TextureHandle dst) {
 		DeviceImpl& d = *_impl->device;
 		SLT_CORE_ASSERT_MSG(!_impl->inRenderPass, "a resolve is illegal inside a render pass");
@@ -470,6 +547,9 @@ namespace Shalltear::RHI {
 		}
 		SLT_CORE_ASSERT_MSG(srcResource->state == ResourceState::TransferSrc, "resolve source must be in TransferSrc state");
 		SLT_CORE_ASSERT_MSG(dstResource->state == ResourceState::TransferDst, "resolve destination must be in TransferDst state");
+		if (d.lost) {
+			return;
+		}
 
 		VkImageResolve2 region{VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2};
 		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

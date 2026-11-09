@@ -113,6 +113,7 @@ namespace Shalltear {
 			bool Make(u64 size, const char* debugName);
 			static u32 SlotOf(u64 frame) { return static_cast<u32>(frame % SLOTS); }
 			const u8* TakeNewest(u64 frame);
+			void Forget();
 			void Release();
 		};
 
@@ -272,6 +273,7 @@ namespace Shalltear {
 
 			void ReleaseKernels();
 			void FreeBatches();
+			void RestoreDeviceContent();
 		private:
 			friend class ParticleSystem;
 			bool Claim(ParticleSystem& system, const ParticleSystemDesc& desc);

@@ -349,6 +349,7 @@ namespace Shalltear::GraphicsInternal {
 			}
 			{
 				SLT_GRAPH_PASS_ZONE(pass.zoneSite);
+				cmd.Breadcrumb(pass.name);
 				for (u16 i = 0; i < pass.accessCount; ++i) {
 					const GraphAccess& access = _accesses[pass.firstAccess + i];
 					const GraphResource& resource = _resources[access.resource];

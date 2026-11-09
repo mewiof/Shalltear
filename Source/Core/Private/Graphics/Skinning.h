@@ -71,6 +71,7 @@ namespace Shalltear::GraphicsInternal {
 		u32 frameCount = 0;
 
 		SHALLTEAR_CORE_API static void Build(MeshAsset& mesh, RHI::Device* device);
+		static void Restore(MeshAsset& mesh, RHI::Device& device);
 		SHALLTEAR_CORE_API static void Release(MeshAsset& mesh, RHI::Device* device);
 
 		static const MeshDeform* Of(const MeshAsset& mesh) { return mesh._deform; }

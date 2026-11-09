@@ -693,6 +693,89 @@ TEST_F(VisualEffectComponentFixture, FrameDispatchesNeededOnly) {
 	EXPECT_EQ(counts.copies, 0u);
 }
 
+TEST_F(VisualEffectComponentFixture, GpuParticlesRestartAfterDeviceRebuild) {
+	if (!_ready) {
+		GTEST_SKIP() << "no Vulkan device";
+	}
+	RHI::Device* device = RenderSystem::GetDevice();
+	RHI::BufferDesc ballastDesc;
+	ballastDesc.size = 3ull * 1024 * 1024 + 4096;
+	ballastDesc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::DeviceAddress;
+	RHI::BufferHandle ballast = device->CreateBufferResource(ballastDesc);
+	ASSERT_TRUE(ballast.IsValid());
+	VisualEffectAsset* asset = MakeAsset(EffectSpawnKind::ConstantRate, Rate(8.0f));
+	if (!asset) {
+		device->DestroyResource(ballast);
+		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
+	}
+	Handle<VisualEffect> effect = AddEffect(asset);
+	Handle<VisualEffect> shared = AddEffect(asset);
+	Frame(1.0f);
+	Frame(1.0f);
+	ASSERT_EQ(Alive(effect), 16u);
+	ASSERT_EQ(Alive(shared), 16u);
+	const ParticleBatch* batch = EffectComponentAccess::Instance(*effect.Get())->GetSystem(0).GetBatch();
+	ASSERT_NE(batch, nullptr);
+	const u64 listsBefore = batch->listsAddress;
+
+	for (u32 round = 0; round < 2; ++round) {
+		device->SimulateLoss();
+		if (ballast.IsValid()) {
+			device->DestroyResource(ballast);
+			ballast = {};
+		}
+		Frame(1.0f);
+		if (round == 0) {
+			ASSERT_NE(batch->listsAddress, listsBefore);
+		}
+		ASSERT_FALSE(device->IsLost());
+		EXPECT_EQ(Alive(effect), 8u) << round;
+		EXPECT_EQ(Alive(shared), 8u) << round;
+		Frame(1.0f);
+		EXPECT_EQ(Alive(effect), 16u) << round;
+		for (f32 lifetime : Attribute(effect, 1)) {
+			EXPECT_EQ(lifetime, 100.0f);
+		}
+	}
+
+	device->SimulateLoss();
+	Handle<VisualEffect> late = AddEffect(asset);
+	Frame(1.0f);
+	Frame(1.0f);
+	EXPECT_EQ(Alive(late), 16u);
+	EXPECT_EQ(Alive(effect), 16u);
+}
+
+TEST_F(VisualEffectComponentFixture, CpuParticlesReturnWhilePaused) {
+	if (!_ready) {
+		GTEST_SKIP() << "no Vulkan device";
+	}
+	VisualEffectAsset* asset = MakeReadAsset(4.0f);
+	if (!asset) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
+	}
+	Handle<VisualEffect> effect = AddEffect(asset);
+	Frame(0.25f);
+	Frame(0.25f);
+	EffectInstance* instance = EffectComponentAccess::Instance(*effect.Get());
+	ASSERT_NE(instance, nullptr);
+	ASSERT_EQ(effect->GetParticleCount("Sparks"), 4u);
+	ASSERT_EQ(Alive(instance->GetSystem(0)), 4u);
+	ASSERT_EQ(Alive(instance->GetSystem(1)), 4u);
+
+	instance->SetPaused(true);
+	RenderSystem::GetDevice()->SimulateLoss();
+	Frame(0.25f);
+	ASSERT_FALSE(RenderSystem::GetDevice()->IsLost());
+	EXPECT_EQ(effect->GetParticleCount("Sparks"), 4u);
+	EXPECT_EQ(Alive(instance->GetSystem(0)), 4u);
+	EXPECT_EQ(Alive(instance->GetSystem(1)), 0u);
+
+	instance->SetPaused(false);
+	Frame(0.25f);
+	EXPECT_EQ(Alive(instance->GetSystem(0)), 4u);
+}
+
 TEST_F(VisualEffectComponentFixture, PausedEffectRecordsNothing) {
 	if (!_ready) {
 		GTEST_SKIP() << "no Vulkan device";

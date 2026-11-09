@@ -20,6 +20,7 @@
 #include <cstring>
 #include <format>
 
+#include "Graphics/DeviceContent.h"
 #include "Graphics/EnvironmentIBL.h"
 #include "Shalltear/Core/Graphics/TextureCodecs.h"
 
@@ -70,6 +71,61 @@ namespace Shalltear {
 		return total;
 	}
 
+	namespace {
+
+		bool CarriesMipChain(const TextureAsset& asset) {
+			return asset.isCube || RHI::IsBlockCompressed(asset.format);
+		}
+
+		u32 DeviceMipLevels(const TextureAsset& asset) {
+			if (CarriesMipChain(asset)) {
+				return Math::Max(asset.storedMipLevels, 1u);
+			}
+			const bool volume = asset.GetDimension() == RHI::TextureDimension::Texture3D;
+			return asset.settings.generateMips && !volume ? GraphicsInternal::TextureMipCount(asset.size) : 1;
+		}
+
+		bool UploadPixels(const TextureAsset& asset, RHI::Device& device) {
+			const Vector<u8>& pixels = asset.pixels;
+			const u32 mipLevels = DeviceMipLevels(asset);
+			if (CarriesMipChain(asset)) {
+				const u32 layers = asset.isCube ? GraphicsInternal::CUBE_FACE_COUNT : asset.slices;
+				size_t offset = 0;
+				for (u32 mip = 0; mip < mipLevels; ++mip) {
+					const Vec2I level(Math::Max(1, asset.size.x >> mip), Math::Max(1, asset.size.y >> mip));
+					const size_t levelBytes = static_cast<size_t>(RHI::FormatLevelBytes(asset.format, level));
+					for (u32 layer = 0; layer < layers; ++layer) {
+						if (offset + levelBytes > pixels.size()) {
+							SLT_LOG_ERROR("Graphics", "TextureAsset: '{}' has {} bytes, short of its chain", asset.virtualPath, pixels.size());
+							return false;
+						}
+						device.UploadTexture(asset.texture, {pixels.data() + offset, levelBytes}, mip, layer);
+						offset += levelBytes;
+					}
+				}
+			} else if (asset.GetDimension() == RHI::TextureDimension::Texture2DArray) {
+				const size_t sliceBytes = pixels.size() / asset.slices;
+				for (u32 layer = 0; layer < asset.slices; ++layer) {
+					device.UploadTexture(asset.texture, {pixels.data() + layer * sliceBytes, sliceBytes}, 0, layer);
+				}
+				if (mipLevels > 1) {
+					device.GenerateMips(asset.texture);
+				}
+			} else {
+				device.UploadTexture(asset.texture, {pixels.data(), pixels.size()});
+				if (mipLevels > 1) {
+					device.GenerateMips(asset.texture);
+				}
+			}
+			return true;
+		}
+
+	} // anonymous namespace
+
+	bool GraphicsInternal::RestoreDeviceContent(TextureAsset& texture) {
+		return texture.texture.IsValid() && RenderSystem::IsRenderingAvailable() && UploadPixels(texture, *RenderSystem::GetDevice());
+	}
+
 	void TextureAsset::OnLoad() {
 		if (!RenderSystem::IsRenderingAvailable()) {
 			return;
@@ -78,8 +134,7 @@ namespace Shalltear {
 
 		const RHI::TextureDimension dimension = GetDimension();
 		const bool volume = dimension == RHI::TextureDimension::Texture3D;
-		const bool carried = isCube || RHI::IsBlockCompressed(format);
-		u32 mipLevels = carried ? Math::Max(storedMipLevels, 1u) : (settings.generateMips && !volume ? GraphicsInternal::TextureMipCount(size) : 1);
+		u32 mipLevels = DeviceMipLevels(*this);
 		RHI::TextureDesc desc;
 		desc.size = size;
 		desc.format = format;
@@ -97,39 +152,9 @@ namespace Shalltear {
 			desc.depth = slices;
 		}
 		texture = device->CreateTextureResource(desc);
-		if (!texture.IsValid()) {
-			return;
-		}
-		if (carried) {
-			const u32 layers = isCube ? GraphicsInternal::CUBE_FACE_COUNT : slices;
-			size_t offset = 0;
-			for (u32 mip = 0; mip < mipLevels; ++mip) {
-				const Vec2I level(Math::Max(1, size.x >> mip), Math::Max(1, size.y >> mip));
-				const size_t levelBytes = static_cast<size_t>(RHI::FormatLevelBytes(format, level));
-				for (u32 layer = 0; layer < layers; ++layer) {
-					if (offset + levelBytes > pixels.size()) {
-						SLT_LOG_ERROR("Graphics", "TextureAsset: '{}' has {} bytes, short of its chain", virtualPath, pixels.size());
-						device->DestroyResource(texture);
-						texture = {};
-						return;
-					}
-					device->UploadTexture(texture, {pixels.data() + offset, levelBytes}, mip, layer);
-					offset += levelBytes;
-				}
-			}
-		} else if (dimension == RHI::TextureDimension::Texture2DArray) {
-			const size_t sliceBytes = pixels.size() / slices;
-			for (u32 layer = 0; layer < slices; ++layer) {
-				device->UploadTexture(texture, {pixels.data() + layer * sliceBytes, sliceBytes}, 0, layer);
-			}
-			if (mipLevels > 1) {
-				device->GenerateMips(texture);
-			}
-		} else {
-			device->UploadTexture(texture, {pixels.data(), pixels.size()});
-			if (mipLevels > 1) {
-				device->GenerateMips(texture);
-			}
+		if (texture.IsValid() && !UploadPixels(*this, *device)) {
+			device->DestroyResource(texture);
+			texture = {};
 		}
 	}
 

@@ -26,10 +26,14 @@ namespace Shalltear::UI {
 		RHI::TextureHandle CreateAtlas(Vec2I size, AtlasFormat format) override;
 		void UpdateAtlas(RHI::TextureHandle atlas, RectI region, std::span<const u8> pixels) override;
 
+		void RestoreDeviceContent();
+
 		u32 GetLastDrawCalls() const { return _lastDrawCalls; }
 		u32 GetLastQuads() const { return _lastQuads; }
 	private:
 		RHI::PipelineHandle GetOrCreatePipeline(RHI::Format targetFormat);
+		void ClearAtlas(RHI::TextureHandle atlas);
+		void FillWhiteTexture();
 		RHI::TextureHandle AcquireTarget(Vec2I size, RHI::Format format, const char* debugName);
 		RHI::TextureHandle DrawShadowMasks(RHI::CommandList& cmd, const RenderList& list, u64 quadsAddress,
 										   u64 blurQuadsAddress, u32 blurQuadCount);

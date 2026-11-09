@@ -235,6 +235,8 @@ namespace Shalltear {
 		if (clockMoved) {
 			_time = time;
 		}
+		_atlasDirty = _atlasDirty || !RenderSystem::IsViewTargetDrawn(_atlas.GetTarget());
+		_mainDirty = _mainDirty || !RenderSystem::IsViewTargetDrawn(_mainTarget);
 		if (_atlas.HasProgram() && (_atlasDirty || (clockMoved && _atlasTimed))) {
 			_atlas.Submit(_time, atlasClear);
 			_atlasDirty = false;

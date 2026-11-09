@@ -530,15 +530,19 @@ namespace Shalltear::VisualEffectsImpl {
 		return mapped + newest * bytes;
 	}
 
+	void ParticleReadback::Forget() {
+		frames.fill(NO_FRAME);
+		read = 0;
+		any = false;
+	}
+
 	void ParticleReadback::Release() {
 		if (RHI::Device* device = RenderSystem::GetDevice(); device && ring.IsValid()) {
 			device->DestroyResource(ring);
 		}
 		ring = {};
 		bytes = 0;
-		frames.fill(NO_FRAME);
-		read = 0;
-		any = false;
+		Forget();
 	}
 
 	void ParticleSystem::WatchCounts(bool watch) {
@@ -823,6 +827,39 @@ namespace Shalltear::VisualEffectsImpl {
 			}
 		}
 		_batches.clear();
+	}
+
+	void ParticleSimulation::RestoreDeviceContent() {
+		RHI::Device* device = RenderSystem::GetDevice();
+		if (!device) {
+			return;
+		}
+		const auto restart = [device](ParticleBatch& batch) {
+			batch.listsAddress = device->GetBufferDeviceAddress(batch.lists);
+			batch.attributesAddress = device->GetBufferDeviceAddress(batch.attributes);
+			batch.boundsRing.Forget();
+			batch.fresh = true;
+		};
+		for (ParticleBatch* batch : _batches) {
+			restart(*batch);
+		}
+		for (ParticleSystem* system : _systems) {
+			if (!system->_batch) {
+				continue;
+			}
+			restart(*system->_batch);
+			system->_orderAddress = system->_order.IsValid() ? device->GetBufferDeviceAddress(system->_order) : 0;
+			std::fill(system->_ordered.begin(), system->_ordered.end(), u8{0});
+			system->_listsReady = false;
+			system->_countRing.Forget();
+			system->_counts = {};
+			system->_bounds = {};
+			system->_boundsFrom = ParticleReadback::NO_FRAME;
+			system->_fed = false;
+			system->_frame = 0;
+			system->_parity = 0;
+			system->_fresh = true;
+		}
 	}
 
 	bool ParticleSimulation::AcquireKernels() {

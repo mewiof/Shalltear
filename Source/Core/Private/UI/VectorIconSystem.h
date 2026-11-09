@@ -89,6 +89,14 @@ namespace Shalltear::UI {
 			++_frame;
 		}
 
+		void ReuploadAtlas() {
+			for (auto& [key, entry] : _entries) {
+				if (entry.packed && _atlas.IsValid()) {
+					_config.backend->UpdateAtlas(_atlas, AtlasRectOf(entry), {entry.pixels.data(), entry.pixels.size()});
+				}
+			}
+		}
+
 		[[nodiscard]] Stats GetStats() const override { return _stats; }
 
 		bool GetAtlasPage(AtlasPage& out) const override {
@@ -181,6 +189,11 @@ namespace Shalltear::UI {
 			_shelfX = _config.padding;
 			_shelfY = _config.padding;
 			_shelfHeight = 0;
+		}
+
+		RectI AtlasRectOf(const IconEntry& entry) const {
+			return RectI{static_cast<i32>(std::lround(entry.uv.x * static_cast<f32>(_atlasSize.x))),
+						 static_cast<i32>(std::lround(entry.uv.y * static_cast<f32>(_atlasSize.y))), entry.size.x, entry.size.y};
 		}
 
 		bool Upload(IconEntry& entry) {

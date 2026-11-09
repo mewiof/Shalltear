@@ -3,6 +3,7 @@
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
+#include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Graphics/RHICommandList.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
@@ -248,6 +249,12 @@ namespace Shalltear {
 					const Window* window = event.window.Get();
 					entry->context->SetContentScale(event.scale * (window ? WindowInternal::RenderScaleOf(*window) : 1.0f));
 				}
+			}
+
+			void OnDeviceRestored(const GraphicsDeviceRestoredEvent&) {
+				renderer->RestoreDeviceContent();
+				fontSystem->ForgetAtlasContents();
+				iconSystem->ReuploadAtlas();
 			}
 
 			void SyncWindowContext(WindowUI& entry, const Window& window) {
@@ -534,6 +541,7 @@ namespace Shalltear {
 		WindowEvents::DragBegan.Subscribe(bus, self, &UIState::OnDragBegan);
 		WindowEvents::DragMoved.Subscribe(bus, self, &UIState::OnDragMoved);
 		WindowEvents::DragEnded.Subscribe(bus, self, &UIState::OnDragEnded);
+		GraphicsEvents::DeviceRestored.Subscribe(bus, self, &UIState::OnDeviceRestored);
 
 		if (RenderSystem::IsInitialized()) {
 			RenderSystem::SetWindowOverlay(&state);

@@ -242,6 +242,14 @@ namespace Shalltear::VisualEffectsImpl {
 		_events.clear();
 	}
 
+	void EffectInstance::Refeed() {
+		for (u32 s = 0; s < _systems.size(); ++s) {
+			if (const ParticleCpuSystem* cpu = _cpu[s]; cpu && _systems[s]->IsCreated()) {
+				_systems[s]->Feed(cpu->GetAlive(), cpu->GetAttributes(), cpu->GetDropped());
+			}
+		}
+	}
+
 	void EffectInstance::Step() {
 		_paused = true;
 		++_steps;

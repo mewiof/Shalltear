@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
+#include "Shalltear/Core/Graphics/RHIDevice.h"
 #include "Shalltear/Core/Graphics/RenderSystem.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Log.h"
@@ -42,6 +43,7 @@ namespace Shalltear {
 
 		struct PlayerOptions {
 			i32 frames = -1;
+			i32 loseDeviceFrame = -1;
 			bool console = false;
 			ScreenLaunch screen;
 		};
@@ -55,6 +57,8 @@ namespace Shalltear {
 					options.frames = parsed > 0 ? static_cast<i32>(parsed) : 0;
 				} else if (std::strcmp(argv[i], "--console") == 0) {
 					options.console = true;
+				} else if (std::strcmp(argv[i], "--lose-device") == 0 && i + 1 < argc) {
+					options.loseDeviceFrame = number(argv[++i]);
 				} else if (std::strcmp(argv[i], "--screen-width") == 0 && i + 1 < argc) {
 					options.screen.width = number(argv[++i]);
 				} else if (std::strcmp(argv[i], "--screen-height") == 0 && i + 1 < argc) {
@@ -155,9 +159,13 @@ namespace Shalltear {
 		FramePacer pacer(options.frames > 0);
 		FixedTimestep fixed(Time::GetFrame().fixedDeltaTime, Time::GetFrame().maximumDeltaTime);
 		i32 framesRemaining = options.frames;
+		i32 frameIndex = 0;
 		while (WindowSystem::GetWindowCount() > 0 && framesRemaining != 0) {
 			if (!pacer.BeginFrame()) {
 				continue;
+			}
+			if (frameIndex++ == options.loseDeviceFrame && RenderSystem::IsRenderingAvailable()) {
+				RenderSystem::GetDevice()->SimulateLoss();
 			}
 			Time::BeginFrame(pacer.GetUnscaledDeltaTime());
 

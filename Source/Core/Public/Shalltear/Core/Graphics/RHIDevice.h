@@ -103,6 +103,12 @@ namespace Shalltear::RHI {
 		u32 GetLivePipelineCount() const;
 
 		void WaitIdle();
+
+		// while lost handles stay valid + calls ignored
+		bool IsLost() const;
+		// on success re-upload contents, re-read device addresses + recreate pipelines
+		bool Recover();
+		void SimulateLoss();
 	private:
 		Device() = default;
 		~Device() = default;

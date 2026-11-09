@@ -93,6 +93,9 @@ namespace Shalltear::RHI {
 	}
 
 	void CmdTransitionImage(DeviceImpl& d, VkCommandBuffer cmd, VkImage image, ResourceState from, ResourceState to, bool isDepth) {
+		if (d.lost) {
+			return;
+		}
 		StateMasks src = ToStateMasks(from, isDepth);
 		StateMasks dst = ToStateMasks(to, isDepth);
 
@@ -232,6 +235,8 @@ namespace Shalltear::RHI {
 			VkPhysicalDevice physical = VK_NULL_HANDLE;
 			AdapterInfo info;
 			u32 graphicsFamily = 0;
+			u32 vendor = 0;
+			u32 device = 0;
 			bool usable = false;
 			str rejection;
 		};
@@ -254,6 +259,8 @@ namespace Shalltear::RHI {
 			candidate.info.name = props.properties.deviceName;
 			candidate.info.discrete = props.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 			candidate.info.apiVersion = props.properties.apiVersion;
+			candidate.vendor = props.properties.vendorID;
+			candidate.device = props.properties.deviceID;
 
 			VkPhysicalDeviceMemoryProperties2 memory{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 			fi.vkGetPhysicalDeviceMemoryProperties2(physical, &memory);
@@ -345,7 +352,7 @@ namespace Shalltear::RHI {
 	} // anonymous namespace
 
 	void DeviceImpl::SetDebugName(u64 objectHandle, u32 objectType, const char* name) {
-		if (!fd.vkSetDebugUtilsObjectNameEXT || !name) {
+		if (!fd.vkSetDebugUtilsObjectNameEXT || !name || lost) {
 			return;
 		}
 		VkDebugUtilsObjectNameInfoEXT info{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
@@ -410,6 +417,8 @@ namespace Shalltear::RHI {
 		u64 capacity = std::max(DEFAULT_BLOCK, size + alignment);
 
 		UploadRingBlock block;
+		block.capacity = capacity;
+		block.used = 0;
 		VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
 		bufferInfo.size = capacity;
 		bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -417,10 +426,17 @@ namespace Shalltear::RHI {
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
 		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 		VmaAllocationInfo resultInfo{};
-		SLT_VK_CHECK(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &block.buffer, &block.allocation, &resultInfo));
+		if (!lost) {
+			SLT_VK_CHECK(*this, vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &block.buffer, &block.allocation, &resultInfo));
+		}
+		if (lost) {
+			block.buffer = VK_NULL_HANDLE;
+			block.mapped = static_cast<u8*>(Allocate(capacity, MemTag::Graphics, 16));
+			frame.uploadRing.push_back(block);
+			frame.uploadRingActiveBlock = static_cast<u32>(frame.uploadRing.size() - 1);
+			return frame.uploadRing.back();
+		}
 		block.mapped = static_cast<u8*>(resultInfo.pMappedData);
-		block.capacity = capacity;
-		block.used = 0;
 
 		auto [index, generation] = buffers.Acquire();
 		BufferResource& resource = buffers.slots[index].resource;
@@ -444,30 +460,38 @@ namespace Shalltear::RHI {
 		return frame.uploadRing.back();
 	}
 
-	Device* Device::Create(const DeviceDesc& desc) {
-		if (!VulkanLoader::EnsureLoaded()) {
-			SLT_LOG_INFO("Graphics", "Device::Create failed: Vulkan loader unavailable");
-			return nullptr;
+	void DeviceImpl::DestroyCore() {
+		if (device && fd.vkDestroyDevice) {
+			fd.vkDestroyDevice(device, nullptr);
 		}
+		if (debugMessenger && fi.vkDestroyDebugUtilsMessengerEXT) {
+			reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(fi.vkDestroyDebugUtilsMessengerEXT)(instance, debugMessenger, nullptr);
+		}
+		if (instance && fi.vkDestroyInstance) {
+			fi.vkDestroyInstance(instance, nullptr);
+		}
+		device = VK_NULL_HANDLE;
+		queue = VK_NULL_HANDLE;
+		physicalDevice = VK_NULL_HANDLE;
+		debugMessenger = VK_NULL_HANDLE;
+		instance = VK_NULL_HANDLE;
+		fd = {};
+		fi = {};
+	}
 
-		DeviceImpl* impl = New<DeviceImpl>(MemTag::Graphics);
+	bool DeviceImpl::CreateCore(bool rebuild) {
+		DeviceImpl* impl = this;
 		impl->validation = desc.enableValidation;
 		impl->headless = desc.headless;
-		impl->mainThread = std::this_thread::get_id();
 
-		auto fail = [&](const char* reason) -> Device* {
-			SLT_LOG_ERROR("Graphics", "Device::Create failed: {}", reason);
-			if (impl->device) {
-				impl->fd.vkDestroyDevice(impl->device, nullptr);
+		auto fail = [&](const char* reason) {
+			if (rebuild) {
+				rebuildFailure = reason;
+			} else {
+				SLT_LOG_ERROR("Graphics", "Device::Create failed: {}", reason);
 			}
-			if (impl->debugMessenger && impl->fi.vkDestroyDebugUtilsMessengerEXT) {
-				reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(impl->fi.vkDestroyDebugUtilsMessengerEXT)(impl->instance, impl->debugMessenger, nullptr);
-			}
-			if (impl->instance && impl->fi.vkDestroyInstance) {
-				impl->fi.vkDestroyInstance(impl->instance, nullptr);
-			}
-			Delete(impl);
-			return nullptr;
+			DestroyCore();
+			return false;
 		};
 
 		u32 layerCount = 0;
@@ -551,13 +575,23 @@ namespace Shalltear::RHI {
 		impl->fi.vkEnumeratePhysicalDevices(impl->instance, &physicalCount, physicals.data());
 
 		Vector<CandidateInfo> candidates{GetMemoryResource(MemTag::Graphics)};
+		impl->adapters.clear();
 		for (VkPhysicalDevice physical : physicals) {
 			candidates.push_back(EvaluateAdapter(impl->fi, physical, impl->headless));
 			impl->adapters.push_back(candidates.back().info);
 		}
 
 		i32 selected = -1;
-		if (desc.forceAdapterIndex >= 0) {
+		if (rebuild) {
+			for (size_t i = 0; i < candidates.size() && selected < 0; ++i) {
+				if (candidates[i].usable && candidates[i].vendor == impl->adapterVendor && candidates[i].device == impl->adapterDevice) {
+					selected = static_cast<i32>(i);
+				}
+			}
+			if (selected < 0) {
+				return fail("adapter unavailable");
+			}
+		} else if (desc.forceAdapterIndex >= 0) {
 			if (desc.forceAdapterIndex < static_cast<i32>(candidates.size()) && candidates[desc.forceAdapterIndex].usable) {
 				selected = desc.forceAdapterIndex;
 			} else {
@@ -587,14 +621,18 @@ namespace Shalltear::RHI {
 		impl->selectedAdapter = selected;
 		impl->physicalDevice = candidates[selected].physical;
 		impl->queueFamily = candidates[selected].graphicsFamily;
-		SLT_LOG_INFO("Graphics", "Selected adapter: '{}' ({} MiB VRAM, api {}.{}.{})",
-					 impl->adapters[selected].name,
-					 impl->adapters[selected].dedicatedVideoMemory >> 20,
-					 VK_API_VERSION_MAJOR(impl->adapters[selected].apiVersion),
-					 VK_API_VERSION_MINOR(impl->adapters[selected].apiVersion),
-					 VK_API_VERSION_PATCH(impl->adapters[selected].apiVersion));
-		if (impl->validation) {
-			SLT_LOG_INFO("Graphics", "Vulkan validation layer on (slower frames). Set [Graphics] validation = false to disable");
+		impl->adapterVendor = candidates[selected].vendor;
+		impl->adapterDevice = candidates[selected].device;
+		if (!rebuild) {
+			SLT_LOG_INFO("Graphics", "Selected adapter: '{}' ({} MiB VRAM, api {}.{}.{})",
+						 impl->adapters[selected].name,
+						 impl->adapters[selected].dedicatedVideoMemory >> 20,
+						 VK_API_VERSION_MAJOR(impl->adapters[selected].apiVersion),
+						 VK_API_VERSION_MINOR(impl->adapters[selected].apiVersion),
+						 VK_API_VERSION_PATCH(impl->adapters[selected].apiVersion));
+			if (impl->validation) {
+				SLT_LOG_INFO("Graphics", "Vulkan validation layer on (slower frames). Set [Graphics] validation = false to disable");
+			}
 		}
 
 		{
@@ -624,18 +662,44 @@ namespace Shalltear::RHI {
 		features.pNext = &features12;
 		features.features.samplerAnisotropy = VK_TRUE;
 		features.features.shaderInt64 = VK_TRUE;
+		Vector<VkExtensionProperties> available{GetMemoryResource(MemTag::Graphics)};
+		{
+			u32 count = 0;
+			impl->fi.vkEnumerateDeviceExtensionProperties(impl->physicalDevice, nullptr, &count, nullptr);
+			available.resize(count);
+			impl->fi.vkEnumerateDeviceExtensionProperties(impl->physicalDevice, nullptr, &count, available.data());
+		}
+		const bool haveFaultExtension = HasExtension(available, VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+
 		bool tableFeatures = false;
+		VkPhysicalDeviceFaultFeaturesEXT faultFeatures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT};
 		{
 			VkPhysicalDeviceVulkan12Features supported12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 			VkPhysicalDeviceFeatures2 supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
 			supported.pNext = &supported12;
+			if (haveFaultExtension) {
+				supported12.pNext = &faultFeatures;
+			}
 			impl->fi.vkGetPhysicalDeviceFeatures2(impl->physicalDevice, &supported);
 			tableFeatures = supported12.runtimeDescriptorArray && supported12.shaderSampledImageArrayNonUniformIndexing &&
 							supported12.descriptorBindingPartiallyBound && supported12.descriptorBindingSampledImageUpdateAfterBind &&
 							supported12.descriptorBindingUpdateUnusedWhilePending;
-			impl->fillModeNonSolid = supported.features.fillModeNonSolid == VK_TRUE;
-			impl->imageCubeArray = supported.features.imageCubeArray == VK_TRUE;
-			impl->textureCompressionBC = supported.features.textureCompressionBC == VK_TRUE;
+			const bool fillModeNonSolid = supported.features.fillModeNonSolid == VK_TRUE;
+			const bool imageCubeArray = supported.features.imageCubeArray == VK_TRUE;
+			const bool textureCompressionBC = supported.features.textureCompressionBC == VK_TRUE;
+			if (rebuild && ((impl->tableSupported && !tableFeatures) || (impl->fillModeNonSolid && !fillModeNonSolid) ||
+							(impl->imageCubeArray && !imageCubeArray) || (impl->textureCompressionBC && !textureCompressionBC))) {
+				return fail("adapter lost feature in use");
+			}
+			impl->fillModeNonSolid = fillModeNonSolid;
+			impl->imageCubeArray = imageCubeArray;
+			impl->textureCompressionBC = textureCompressionBC;
+		}
+		impl->tableFeatures = tableFeatures;
+		impl->faultInfo = haveFaultExtension && faultFeatures.deviceFault == VK_TRUE;
+		impl->checkpoints = HasExtension(available, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+		if (impl->checkpoints) {
+			impl->marks.resize(static_cast<size_t>(MARK_COUNT) * MARK_LENGTH, '\0');
 		}
 		features.features.fillModeNonSolid = impl->fillModeNonSolid ? VK_TRUE : VK_FALSE;
 		features.features.imageCubeArray = impl->imageCubeArray ? VK_TRUE : VK_FALSE;
@@ -647,15 +711,17 @@ namespace Shalltear::RHI {
 		features12.descriptorBindingUpdateUnusedWhilePending = tableFeatures ? VK_TRUE : VK_FALSE;
 
 		Vector<const char*> deviceExtensions{GetMemoryResource(MemTag::Graphics)};
-		if (!impl->headless || haveSurfaceExtensions) {
-			u32 count = 0;
-			impl->fi.vkEnumerateDeviceExtensionProperties(impl->physicalDevice, nullptr, &count, nullptr);
-			Vector<VkExtensionProperties> available{GetMemoryResource(MemTag::Graphics)};
-			available.resize(count);
-			impl->fi.vkEnumerateDeviceExtensionProperties(impl->physicalDevice, nullptr, &count, available.data());
-			if (HasExtension(available, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
-				deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-			}
+		if ((!impl->headless || haveSurfaceExtensions) && HasExtension(available, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+			deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		}
+		if (impl->faultInfo) {
+			deviceExtensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+			faultFeatures.pNext = nullptr;
+			faultFeatures.deviceFaultVendorBinary = VK_FALSE;
+			features13.pNext = &faultFeatures;
+		}
+		if (impl->checkpoints) {
+			deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 		}
 
 		VkDeviceCreateInfo deviceInfo{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -673,11 +739,18 @@ namespace Shalltear::RHI {
 			return fail("device function table incomplete");
 		}
 		impl->fd.vkGetDeviceQueue(impl->device, impl->queueFamily, 0, &impl->queue);
-		if (!tableFeatures) {
+		if (!tableFeatures && !rebuild) {
 			SLT_LOG_WARN("Graphics", "Adapter lacks descriptor indexing features for texture table");
-		} else {
+		}
+		return true;
+	}
+
+	bool DeviceImpl::CreateObjects() {
+		DeviceImpl* impl = this;
+		if (tableFeatures) {
 			impl->CreateTable();
 		}
+		tableSupported = table.set != VK_NULL_HANDLE;
 
 		VmaVulkanFunctions vmaFunctions{};
 		vmaFunctions.vkGetInstanceProcAddr = VulkanLoader::GetInstanceProcAddrFn();
@@ -691,28 +764,28 @@ namespace Shalltear::RHI {
 		allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 		allocatorInfo.pVulkanFunctions = &vmaFunctions;
 		allocatorInfo.pAllocationCallbacks = GetVmaHostCallbacks();
-		result = vmaCreateAllocator(&allocatorInfo, &impl->allocator);
-		if (result != VK_SUCCESS) {
-			return fail("vmaCreateAllocator failed");
+		if (vmaCreateAllocator(&allocatorInfo, &impl->allocator) != VK_SUCCESS) {
+			impl->allocator = VK_NULL_HANDLE;
+			return false;
 		}
 
 		VkSemaphoreTypeCreateInfo timelineType{VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO};
 		timelineType.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
 		VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 		semaphoreInfo.pNext = &timelineType;
-		SLT_VK_CHECK(impl->fd.vkCreateSemaphore(impl->device, &semaphoreInfo, nullptr, &impl->timeline));
+		SLT_VK_CHECK(*impl, impl->fd.vkCreateSemaphore(impl->device, &semaphoreInfo, nullptr, &impl->timeline));
 
 		for (FrameContext& frame : impl->frames) {
 			VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
 			poolInfo.queueFamilyIndex = impl->queueFamily;
-			SLT_VK_CHECK(impl->fd.vkCreateCommandPool(impl->device, &poolInfo, nullptr, &frame.commandPool));
+			SLT_VK_CHECK(*impl, impl->fd.vkCreateCommandPool(impl->device, &poolInfo, nullptr, &frame.commandPool));
 
 			VkCommandBufferAllocateInfo allocInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 			allocInfo.commandPool = frame.commandPool;
 			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 			allocInfo.commandBufferCount = 1;
-			SLT_VK_CHECK(impl->fd.vkAllocateCommandBuffers(impl->device, &allocInfo, &frame.commandBuffer));
-			SLT_VK_CHECK(impl->fd.vkAllocateCommandBuffers(impl->device, &allocInfo, &frame.uploadCommandBuffer));
+			SLT_VK_CHECK(*impl, impl->fd.vkAllocateCommandBuffers(impl->device, &allocInfo, &frame.commandBuffer));
+			SLT_VK_CHECK(*impl, impl->fd.vkAllocateCommandBuffers(impl->device, &allocInfo, &frame.uploadCommandBuffer));
 
 			frame.commandListImpl.device = impl;
 			frame.commandListImpl.commandBuffer = frame.commandBuffer;
@@ -721,17 +794,218 @@ namespace Shalltear::RHI {
 
 		VkCommandPoolCreateInfo immediatePoolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
 		immediatePoolInfo.queueFamilyIndex = impl->queueFamily;
-		SLT_VK_CHECK(impl->fd.vkCreateCommandPool(impl->device, &immediatePoolInfo, nullptr, &impl->immediatePool));
+		SLT_VK_CHECK(*impl, impl->fd.vkCreateCommandPool(impl->device, &immediatePoolInfo, nullptr, &impl->immediatePool));
 		VkCommandBufferAllocateInfo immediateAlloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 		immediateAlloc.commandPool = impl->immediatePool;
 		immediateAlloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		immediateAlloc.commandBufferCount = 1;
-		SLT_VK_CHECK(impl->fd.vkAllocateCommandBuffers(impl->device, &immediateAlloc, &impl->immediateBuffer));
+		SLT_VK_CHECK(*impl, impl->fd.vkAllocateCommandBuffers(impl->device, &immediateAlloc, &impl->immediateBuffer));
 		VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-		SLT_VK_CHECK(impl->fd.vkCreateFence(impl->device, &fenceInfo, nullptr, &impl->immediateFence));
+		SLT_VK_CHECK(*impl, impl->fd.vkCreateFence(impl->device, &fenceInfo, nullptr, &impl->immediateFence));
 
 		VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
-		SLT_VK_CHECK(impl->fd.vkCreatePipelineCache(impl->device, &cacheInfo, nullptr, &impl->pipelineCache));
+		SLT_VK_CHECK(*impl, impl->fd.vkCreatePipelineCache(impl->device, &cacheInfo, nullptr, &impl->pipelineCache));
+		return impl->timeline && impl->immediatePool && impl->immediateFence && impl->pipelineCache;
+	}
+
+	void DeviceImpl::ReleaseObjects() {
+		if (device) {
+			fd.vkDeviceWaitIdle(device);
+		}
+		for (FrameContext& frame : frames) {
+			for (UploadRingBlock& block : frame.uploadRing) {
+				if (block.buffer) {
+					buffers.Release(block.handle.index);
+					vmaDestroyBuffer(allocator, block.buffer, block.allocation);
+				} else {
+					Free(block.mapped);
+				}
+			}
+			frame.uploadRing.clear();
+			frame.uploadRingActiveBlock = 0;
+		}
+		if (!device) {
+			return;
+		}
+
+		DiscardPendingUploads();
+		for (SwapChain* swapChain : swapChains) {
+			ReleaseSwapChainObjects(*swapChain->_impl);
+		}
+
+		for (FrameContext& frame : frames) {
+			FlushDeletionQueue(frame.deletionQueue);
+			DestroyFrameDescriptors(frame);
+			if (frame.commandPool) {
+				fd.vkDestroyCommandPool(device, frame.commandPool, nullptr);
+			}
+			frame.commandPool = VK_NULL_HANDLE;
+			frame.commandBuffer = VK_NULL_HANDLE;
+			frame.uploadCommandBuffer = VK_NULL_HANDLE;
+			frame.commandListImpl.commandBuffer = VK_NULL_HANDLE;
+			frame.waitSemaphores.clear();
+			frame.signalSemaphores.clear();
+			frame.timelineValue = 0;
+		}
+		FlushDeletionQueue(immediateDeletions);
+
+		for (auto& slot : buffers.slots) {
+			BufferResource& resource = slot.resource;
+			if (slot.alive && resource.buffer) {
+				vmaDestroyBuffer(allocator, resource.buffer, resource.allocation);
+			}
+			resource.buffer = VK_NULL_HANDLE;
+			resource.allocation = VK_NULL_HANDLE;
+			resource.mapped = nullptr;
+			resource.deviceAddress = 0;
+		}
+		for (auto& slot : textures.slots) {
+			TextureResource& resource = slot.resource;
+			if (slot.alive) {
+				for (VkImageView layerView : resource.layerViews) {
+					fd.vkDestroyImageView(device, layerView, nullptr);
+				}
+				if (resource.view) {
+					fd.vkDestroyImageView(device, resource.view, nullptr);
+				}
+				if (resource.allocation) {
+					vmaDestroyImage(allocator, resource.image, resource.allocation);
+				}
+			}
+			resource.layerViews.clear();
+			resource.view = VK_NULL_HANDLE;
+			resource.image = VK_NULL_HANDLE;
+			resource.allocation = VK_NULL_HANDLE;
+		}
+		for (auto& slot : samplers.slots) {
+			if (slot.alive && slot.resource.sampler) {
+				fd.vkDestroySampler(device, slot.resource.sampler, nullptr);
+			}
+			slot.resource.sampler = VK_NULL_HANDLE;
+		}
+		for (auto& slot : pipelines.slots) {
+			PipelineResource& resource = slot.resource;
+			if (slot.alive && resource.pipeline) {
+				fd.vkDestroyPipeline(device, resource.pipeline, nullptr);
+			}
+			if (slot.alive && resource.layout) {
+				fd.vkDestroyPipelineLayout(device, resource.layout, nullptr);
+			}
+			resource.pipeline = VK_NULL_HANDLE;
+			resource.layout = VK_NULL_HANDLE;
+			for (VkDescriptorSetLayout& setLayout : resource.setLayouts) {
+				setLayout = VK_NULL_HANDLE;
+			}
+		}
+
+		for (auto& [hash, layout] : setLayoutCache) {
+			fd.vkDestroyDescriptorSetLayout(device, layout, nullptr);
+		}
+		setLayoutCache.clear();
+		DestroyTable();
+
+		if (pipelineCache) {
+			fd.vkDestroyPipelineCache(device, pipelineCache, nullptr);
+		}
+		if (immediateFence) {
+			fd.vkDestroyFence(device, immediateFence, nullptr);
+		}
+		if (immediatePool) {
+			fd.vkDestroyCommandPool(device, immediatePool, nullptr);
+		}
+		if (timeline) {
+			fd.vkDestroySemaphore(device, timeline, nullptr);
+		}
+		pipelineCache = VK_NULL_HANDLE;
+		immediateFence = VK_NULL_HANDLE;
+		immediatePool = VK_NULL_HANDLE;
+		immediateBuffer = VK_NULL_HANDLE;
+		timeline = VK_NULL_HANDLE;
+		timelineCounter = 0;
+		frameIndex = 0;
+
+		if (allocator) {
+			vmaDestroyAllocator(allocator);
+		}
+		allocator = VK_NULL_HANDLE;
+	}
+
+	bool DeviceImpl::RestoreObjects() {
+		const bool hadTable = tableSupported;
+		if (!CreateObjects() || (hadTable && !tableSupported)) {
+			rebuildFailure = "object creation failed";
+			return false;
+		}
+		for (u32 binding = 0; binding < TABLE_BINDING_COUNT; ++binding) {
+			if (table.used[binding] > table.capacity[binding]) {
+				rebuildFailure = "texture table shrank";
+				return false;
+			}
+		}
+		for (auto& slot : buffers.slots) {
+			if (slot.alive && !CreateBufferObject(slot.resource, nullptr)) {
+				rebuildFailure = "buffer creation failed";
+				return false;
+			}
+		}
+		for (auto& slot : textures.slots) {
+			if (slot.alive && !CreateTextureObjects(slot.resource, nullptr)) {
+				rebuildFailure = "texture creation failed";
+				return false;
+			}
+			if (slot.alive && slot.resource.tableIndex != TABLE_NONE) {
+				WriteTableEntry(TableBindingOf(slot.resource.dimension), slot.resource.tableIndex, slot.resource.view, VK_NULL_HANDLE);
+			}
+		}
+		for (auto& slot : samplers.slots) {
+			if (slot.alive && !CreateSamplerObject(slot.resource)) {
+				rebuildFailure = "sampler creation failed";
+				return false;
+			}
+			if (slot.alive && slot.resource.tableIndex != TABLE_NONE) {
+				WriteTableEntry(TABLE_SAMPLERS_BINDING, slot.resource.tableIndex, VK_NULL_HANDLE, slot.resource.sampler);
+			}
+		}
+
+		ImmediateSubmit([&](VkCommandBuffer cmd) {
+			for (auto& slot : textures.slots) {
+				const TextureResource& resource = slot.resource;
+				if (slot.alive && resource.state != ResourceState::Undefined) {
+					CmdTransitionImage(*this, cmd, resource.image, ResourceState::Undefined, resource.state, IsDepthFormat(resource.format));
+				}
+			}
+		});
+		if (lost) {
+			rebuildFailure = "lost again";
+			return false;
+		}
+
+		for (SwapChain* swapChain : swapChains) {
+			RestoreSwapChainObjects(*swapChain->_impl);
+		}
+		return true;
+	}
+
+	Device* Device::Create(const DeviceDesc& desc) {
+		if (!VulkanLoader::EnsureLoaded()) {
+			SLT_LOG_INFO("Graphics", "Device::Create failed: Vulkan loader unavailable");
+			return nullptr;
+		}
+
+		DeviceImpl* impl = New<DeviceImpl>(MemTag::Graphics);
+		impl->desc = desc;
+		impl->mainThread = std::this_thread::get_id();
+		if (!impl->CreateCore(false)) {
+			Delete(impl);
+			return nullptr;
+		}
+		if (!impl->CreateObjects()) {
+			SLT_LOG_ERROR("Graphics", "Device::Create failed: object creation failed");
+			impl->ReleaseObjects();
+			impl->DestroyCore();
+			Delete(impl);
+			return nullptr;
+		}
 
 		Device* device = New<Device>(MemTag::Graphics);
 		device->_impl = impl;
@@ -746,10 +1020,6 @@ namespace Shalltear::RHI {
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
 		SLT_CORE_ASSERT_MSG(!impl->inFrame, "Device::Destroy called inside a frame");
 
-		impl->fd.vkDeviceWaitIdle(impl->device);
-
-		impl->DiscardPendingUploads();
-
 		if (!impl->swapChains.empty()) {
 			SLT_LOG_ERROR("Graphics", "{} swapchain(s) still alive at device teardown. Destroying", impl->swapChains.size());
 			while (!impl->swapChains.empty()) {
@@ -757,16 +1027,7 @@ namespace Shalltear::RHI {
 			}
 		}
 
-		for (FrameContext& frame : impl->frames) {
-			impl->FlushDeletionQueue(frame.deletionQueue);
-			impl->DestroyFrameDescriptors(frame);
-			for (UploadRingBlock& block : frame.uploadRing) {
-				impl->buffers.Release(block.handle.index);
-				vmaDestroyBuffer(impl->allocator, block.buffer, block.allocation);
-			}
-			frame.uploadRing.clear();
-			impl->fd.vkDestroyCommandPool(impl->device, frame.commandPool, nullptr);
-		}
+		impl->ReleaseObjects();
 
 		auto reportLeaks = [](const char* kind, u32 count) {
 			if (count > 0) {
@@ -782,54 +1043,168 @@ namespace Shalltear::RHI {
 				impl->samplers.liveCount == 0 && impl->pipelines.liveCount == 0,
 			"GPU resources leaked at device teardown (see log)");
 
-		for (auto& slot : impl->buffers.slots) {
-			if (slot.alive && slot.resource.buffer) {
-				vmaDestroyBuffer(impl->allocator, slot.resource.buffer, slot.resource.allocation);
-			}
-		}
-		for (auto& slot : impl->textures.slots) {
-			if (slot.alive) {
-				if (slot.resource.view) {
-					impl->fd.vkDestroyImageView(impl->device, slot.resource.view, nullptr);
-				}
-				if (slot.resource.allocation) {
-					vmaDestroyImage(impl->allocator, slot.resource.image, slot.resource.allocation);
-				}
-			}
-		}
-		for (auto& slot : impl->samplers.slots) {
-			if (slot.alive && slot.resource.sampler) {
-				impl->fd.vkDestroySampler(impl->device, slot.resource.sampler, nullptr);
-			}
-		}
-		for (auto& slot : impl->pipelines.slots) {
-			if (slot.alive && slot.resource.pipeline) {
-				impl->fd.vkDestroyPipeline(impl->device, slot.resource.pipeline, nullptr);
-			}
-			if (slot.alive && slot.resource.layout) {
-				impl->fd.vkDestroyPipelineLayout(impl->device, slot.resource.layout, nullptr);
-			}
-		}
-
-		for (auto& [hash, layout] : impl->setLayoutCache) {
-			impl->fd.vkDestroyDescriptorSetLayout(impl->device, layout, nullptr);
-		}
-		impl->DestroyTable();
-
-		impl->fd.vkDestroyPipelineCache(impl->device, impl->pipelineCache, nullptr);
-		impl->fd.vkDestroyFence(impl->device, impl->immediateFence, nullptr);
-		impl->fd.vkDestroyCommandPool(impl->device, impl->immediatePool, nullptr);
-		impl->fd.vkDestroySemaphore(impl->device, impl->timeline, nullptr);
-
-		vmaDestroyAllocator(impl->allocator);
-		impl->fd.vkDestroyDevice(impl->device, nullptr);
-		if (impl->debugMessenger && impl->fi.vkDestroyDebugUtilsMessengerEXT) {
-			reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(impl->fi.vkDestroyDebugUtilsMessengerEXT)(impl->instance, impl->debugMessenger, nullptr);
-		}
-		impl->fi.vkDestroyInstance(impl->instance, nullptr);
+		impl->DestroyCore();
 
 		Delete(impl);
 		Delete(device);
+	}
+
+	bool Device::IsLost() const {
+		return _impl->lost;
+	}
+
+	void Device::SimulateLoss() {
+		SLT_RHI_ASSERT_MAIN_THREAD(_impl);
+		_impl->MarkLost(nullptr);
+	}
+
+	bool Device::Recover() {
+		DeviceImpl* impl = _impl;
+		SLT_RHI_ASSERT_MAIN_THREAD(impl);
+		SLT_CORE_ASSERT_MSG(!impl->inFrame, "Recover called inside a frame");
+		if (!impl->lost) {
+			return true;
+		}
+		const auto started = std::chrono::steady_clock::now();
+		if (started < impl->nextRebuild) {
+			return false;
+		}
+
+		impl->ReleaseObjects();
+		impl->DestroyCore();
+		impl->lost = false;
+		if (!impl->CreateCore(true) || !impl->RestoreObjects()) {
+			impl->ReleaseObjects();
+			impl->DestroyCore();
+			const bool lostAgain = impl->lost;
+			impl->lost = true;
+			if (!lostAgain) {
+				impl->nextRebuild = started + std::chrono::milliseconds(REBUILD_RETRY_MS);
+			}
+			if (!impl->rebuildFailureLogged) {
+				impl->rebuildFailureLogged = true;
+				SLT_LOG_WARN("Graphics", "couldn't rebuild device ({}). Retrying", impl->rebuildFailure ? impl->rebuildFailure : "unknown");
+			}
+			return false;
+		}
+
+		impl->deadPipelineWarned = false;
+		const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
+		SLT_LOG_INFO("Graphics", "device rebuilt in {} ms ({} buffer(s), {} texture(s), {} sampler(s), {} swapchain(s))", elapsed.count(),
+					 impl->buffers.liveCount, impl->textures.liveCount, impl->samplers.liveCount, impl->swapChains.size());
+		return true;
+	}
+
+	bool DeviceImpl::NoteLoss(VkResult result, const char* call) {
+		if (result == VK_ERROR_DEVICE_LOST) {
+			MarkLost(call);
+		}
+		return lost;
+	}
+
+	void DeviceImpl::MarkLost(const char* call) {
+		if (lost) {
+			return;
+		}
+		lost = true;
+		lossSimulated = call == nullptr;
+		rebuildFailureLogged = false;
+		const auto now = std::chrono::steady_clock::now();
+		if (lossSimulated) {
+			nextRebuild = now;
+			SLT_LOG_WARN("Graphics", "device loss simulated");
+			return;
+		}
+
+		const u32 inWindow = losses.Note(static_cast<u64>(std::chrono::duration_cast<std::chrono::milliseconds>(now - created).count()));
+		const u64 delayMs = RebuildDelayMs(inWindow);
+		nextRebuild = now + std::chrono::milliseconds(delayMs);
+		SLT_LOG_ERROR("Graphics", "device lost ({} returned VK_ERROR_DEVICE_LOST, {} loss(es) in last {} s). Rebuilding in {} s", call, inWindow,
+					  LOSS_WINDOW_MS / 1000, delayMs / 1000);
+		LogLossCause();
+	}
+
+	namespace {
+
+		const char* FaultAddressName(VkDeviceFaultAddressTypeEXT type) {
+			switch (type) {
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
+				return "invalid read";
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
+				return "invalid write";
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
+				return "invalid execute";
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
+			case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
+				return "instruction pointer";
+			default:
+				return "address";
+			}
+		}
+
+	} // anonymous namespace
+
+	void DeviceImpl::LogLossCause() {
+		if (checkpoints && fd.vkGetQueueCheckpointDataNV) {
+			u32 count = 0;
+			fd.vkGetQueueCheckpointDataNV(queue, &count, nullptr);
+			Vector<VkCheckpointDataNV> reached{GetMemoryResource(MemTag::Graphics)};
+			reached.resize(count, VkCheckpointDataNV{VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV});
+			fd.vkGetQueueCheckpointDataNV(queue, &count, reached.data());
+			for (u32 i = 0; i < count; ++i) {
+				const char* name = static_cast<const char*>(reached[i].pCheckpointMarker);
+				const bool ours = name >= marks.data() && name < marks.data() + marks.size();
+				SLT_LOG_ERROR("Graphics", "  GPU {} '{}'", reached[i].stage == VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ? "finished" : "started",
+							  ours ? name : "<frame start>");
+			}
+		}
+		if (!faultInfo || !fd.vkGetDeviceFaultInfoEXT) {
+			return;
+		}
+		VkDeviceFaultCountsEXT counts{VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT};
+		if (fd.vkGetDeviceFaultInfoEXT(device, &counts, nullptr) != VK_SUCCESS) {
+			return;
+		}
+		Vector<VkDeviceFaultAddressInfoEXT> addresses{GetMemoryResource(MemTag::Graphics)};
+		Vector<VkDeviceFaultVendorInfoEXT> vendors{GetMemoryResource(MemTag::Graphics)};
+		addresses.resize(counts.addressInfoCount);
+		vendors.resize(counts.vendorInfoCount);
+		counts.vendorBinarySize = 0;
+		VkDeviceFaultInfoEXT info{VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT};
+		info.pAddressInfos = addresses.data();
+		info.pVendorInfos = vendors.data();
+		const VkResult result = fd.vkGetDeviceFaultInfoEXT(device, &counts, &info);
+		if (result != VK_SUCCESS && result != VK_INCOMPLETE) {
+			return;
+		}
+		info.description[VK_MAX_DESCRIPTION_SIZE - 1] = '\0';
+		if (info.description[0] != '\0') {
+			SLT_LOG_ERROR("Graphics", "  driver: {}", info.description);
+		}
+		for (u32 i = 0; i < counts.addressInfoCount && i < addresses.size(); ++i) {
+			const VkDeviceFaultAddressInfoEXT& fault = addresses[i];
+			const u64 precision = fault.addressPrecision > 0 ? fault.addressPrecision : 1;
+			const u64 low = fault.reportedAddress & ~(precision - 1);
+			const u64 high = fault.reportedAddress | (precision - 1);
+			u32 owner = 0;
+			for (u32 index = 1; index < buffers.slots.size() && owner == 0; ++index) {
+				const BufferResource& buffer = buffers.slots[index].resource;
+				if (buffers.slots[index].alive && buffer.deviceAddress != 0 && high >= buffer.deviceAddress && low < buffer.deviceAddress + buffer.size) {
+					owner = index;
+				}
+			}
+			if (owner != 0) {
+				SLT_LOG_ERROR("Graphics", "  {} at 0x{:x} (in live {}-byte buffer)", FaultAddressName(fault.addressType), fault.reportedAddress,
+							  buffers.slots[owner].resource.size);
+			} else {
+				SLT_LOG_ERROR("Graphics", "  {} at 0x{:x} (in no live buffer)", FaultAddressName(fault.addressType), fault.reportedAddress);
+			}
+		}
+		for (u32 i = 0; i < counts.vendorInfoCount && i < vendors.size(); ++i) {
+			vendors[i].description[VK_MAX_DESCRIPTION_SIZE - 1] = '\0';
+			SLT_LOG_ERROR("Graphics", "  driver fault 0x{:x} (data 0x{:x}): {}", vendors[i].vendorFaultCode, vendors[i].vendorFaultData, vendors[i].description);
+		}
 	}
 
 	std::span<const AdapterInfo> Device::GetAdapters() const {
@@ -842,7 +1217,7 @@ namespace Shalltear::RHI {
 
 	u32 Device::GetSupportedSampleCounts(Format format, TextureUsage usage) const {
 		DeviceImpl* impl = _impl;
-		if (format == Format::Unknown) {
+		if (format == Format::Unknown || !impl->physicalDevice) {
 			return 1;
 		}
 
@@ -867,6 +1242,9 @@ namespace Shalltear::RHI {
 	}
 
 	VideoMemoryInfo Device::GetVideoMemoryInfo() const {
+		if (!_impl->allocator) {
+			return {};
+		}
 		VmaBudget budgets[VK_MAX_MEMORY_HEAPS]{};
 		vmaGetHeapBudgets(_impl->allocator, budgets);
 
@@ -891,12 +1269,14 @@ namespace Shalltear::RHI {
 	void Device::WaitIdle() {
 		SLT_RHI_ASSERT_MAIN_THREAD(_impl);
 		_impl->FlushPendingUploads();
-		_impl->fd.vkDeviceWaitIdle(_impl->device);
+		if (!_impl->lost) {
+			_impl->NoteLoss(_impl->fd.vkDeviceWaitIdle(_impl->device), "vkDeviceWaitIdle");
+		}
 	}
 
 	void Device::LoadPipelineCache(std::span<const u8> blob) {
 		SLT_RHI_ASSERT_MAIN_THREAD(_impl);
-		if (blob.empty()) {
+		if (blob.empty() || _impl->lost) {
 			return;
 		}
 		VkPipelineCache replacement = VK_NULL_HANDLE;
@@ -911,6 +1291,9 @@ namespace Shalltear::RHI {
 
 	size_t Device::SavePipelineCache(std::span<u8> out) const {
 		SLT_RHI_ASSERT_MAIN_THREAD(_impl);
+		if (_impl->lost) {
+			return 0;
+		}
 		size_t size = 0;
 		_impl->fd.vkGetPipelineCacheData(_impl->device, _impl->pipelineCache, &size, nullptr);
 		if (out.empty() || size == 0) {
@@ -932,17 +1315,19 @@ namespace Shalltear::RHI {
 
 		FrameContext& frame = impl->frames[impl->frameIndex];
 
-		if (frame.timelineValue != 0) {
+		if (!impl->lost && frame.timelineValue != 0) {
 			VkSemaphoreWaitInfo waitInfo{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
 			waitInfo.semaphoreCount = 1;
 			waitInfo.pSemaphores = &impl->timeline;
 			waitInfo.pValues = &frame.timelineValue;
-			SLT_VK_CHECK(impl->fd.vkWaitSemaphores(impl->device, &waitInfo, UINT64_MAX));
+			SLT_VK_CHECK(*impl, impl->fd.vkWaitSemaphores(impl->device, &waitInfo, UINT64_MAX));
 		}
 
-		impl->FlushDeletionQueue(frame.deletionQueue);
-		SLT_VK_CHECK(impl->fd.vkResetCommandPool(impl->device, frame.commandPool, 0));
-		impl->ResetFrameDescriptors(frame);
+		if (!impl->lost) {
+			impl->FlushDeletionQueue(frame.deletionQueue);
+			SLT_VK_CHECK(*impl, impl->fd.vkResetCommandPool(impl->device, frame.commandPool, 0));
+			impl->ResetFrameDescriptors(frame);
+		}
 		for (UploadRingBlock& block : frame.uploadRing) {
 			block.used = 0;
 		}
@@ -950,12 +1335,15 @@ namespace Shalltear::RHI {
 		frame.waitSemaphores.clear();
 		frame.signalSemaphores.clear();
 
-		VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-		begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		SLT_VK_CHECK(impl->fd.vkBeginCommandBuffer(frame.commandBuffer, &begin));
+		if (!impl->lost) {
+			VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+			begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			SLT_VK_CHECK(*impl, impl->fd.vkBeginCommandBuffer(frame.commandBuffer, &begin));
+		}
 
 		frame.commandListImpl.boundPipelineIndex = 0;
 		frame.commandListImpl.inRenderPass = false;
+		frame.commandListImpl.pipelineRefused = false;
 		frame.commandListImpl.frontFaceSet = false;
 
 		impl->inFrame = true;
@@ -970,15 +1358,20 @@ namespace Shalltear::RHI {
 		FrameContext& frame = impl->frames[impl->frameIndex];
 		SLT_CORE_ASSERT_MSG(!frame.commandListImpl.inRenderPass, "EndFrame inside an open render pass");
 
-		SLT_VK_CHECK(impl->fd.vkEndCommandBuffer(frame.commandBuffer));
+		if (impl->lost) {
+			impl->inFrame = false;
+			return;
+		}
+
+		SLT_VK_CHECK(*impl, impl->fd.vkEndCommandBuffer(frame.commandBuffer));
 
 		const bool prologue = impl->HasPendingUploads();
 		if (prologue) {
 			VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 			begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-			SLT_VK_CHECK(impl->fd.vkBeginCommandBuffer(frame.uploadCommandBuffer, &begin));
+			SLT_VK_CHECK(*impl, impl->fd.vkBeginCommandBuffer(frame.uploadCommandBuffer, &begin));
 			impl->RecordPendingUploads(frame.uploadCommandBuffer, frame.deletionQueue);
-			SLT_VK_CHECK(impl->fd.vkEndCommandBuffer(frame.uploadCommandBuffer));
+			SLT_VK_CHECK(*impl, impl->fd.vkEndCommandBuffer(frame.uploadCommandBuffer));
 		}
 
 		Vector<VkSemaphoreSubmitInfo> waits{GetMemoryResource(MemTag::Graphics)};
@@ -1019,10 +1412,13 @@ namespace Shalltear::RHI {
 		submit.pCommandBufferInfos = cmdInfos;
 		submit.signalSemaphoreInfoCount = static_cast<u32>(signals.size());
 		submit.pSignalSemaphoreInfos = signals.data();
-		SLT_VK_CHECK(impl->fd.vkQueueSubmit2(impl->queue, 1, &submit, VK_NULL_HANDLE));
+		SLT_VK_CHECK(*impl, impl->fd.vkQueueSubmit2(impl->queue, 1, &submit, VK_NULL_HANDLE));
 
-		frame.timelineValue = impl->timelineCounter;
 		impl->inFrame = false;
+		if (impl->lost) {
+			return;
+		}
+		frame.timelineValue = impl->timelineCounter;
 		impl->frameIndex = (impl->frameIndex + 1) % FRAMES_IN_FLIGHT;
 	}
 

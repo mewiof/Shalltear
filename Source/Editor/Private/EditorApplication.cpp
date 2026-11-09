@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Assert.h"
 #include "Shalltear/Core/Event.h"
+#include "Shalltear/Core/Graphics/RHIDevice.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/UI/Font.h"
@@ -136,6 +137,9 @@ namespace Shalltear {
 			}
 			if (std::strcmp(argv[i], "--no-throttle") == 0) {
 				_throttleWhenUnfocused = false;
+			}
+			if (std::strcmp(argv[i], "--lose-device") == 0 && i + 1 < argc) {
+				_loseDeviceFrame = std::atoi(argv[++i]);
 			}
 		}
 	}
@@ -948,6 +952,9 @@ namespace Shalltear {
 		if (_frameDepth == 1) {
 			Profiler::NextFrame();
 			DumpZonesIfDue();
+			if (_frameIndex++ == _loseDeviceFrame && RenderSystem::IsRenderingAvailable()) {
+				RenderSystem::GetDevice()->SimulateLoss();
+			}
 		}
 		SLT_PROFILE_ZONE("Editor.Frame");
 

@@ -96,12 +96,40 @@ namespace Shalltear::UI {
 		desc.debugName = format == AtlasFormat::RGBA8 ? "UIIconAtlas" : "UIGlyphAtlas";
 		RHI::TextureHandle atlas = _device->CreateTextureResource(desc);
 		if (atlas.IsValid()) {
-			Vector<u8> zero{GetMemoryResource(MemTag::UI)};
-			zero.resize(static_cast<size_t>(size.x) * size.y * AtlasBytesPerTexel(format), 0);
-			_device->UploadTexture(atlas, {zero.data(), zero.size()});
+			ClearAtlas(atlas);
 			_atlases.push_back(atlas);
 		}
 		return atlas;
+	}
+
+	void RHIUIRenderer::ClearAtlas(RHI::TextureHandle atlas) {
+		const Vec2I size = _device->GetTextureSize(atlas);
+		Vector<u8> zero{GetMemoryResource(MemTag::UI)};
+		zero.resize(static_cast<size_t>(RHI::FormatLevelBytes(_device->GetTextureFormat(atlas), size)), 0);
+		_device->UploadTexture(atlas, {zero.data(), zero.size()});
+	}
+
+	void RHIUIRenderer::FillWhiteTexture() {
+		const u8 whitePixel[4] = {255, 255, 255, 255};
+		_device->UploadTexture(_whiteTexture, whitePixel);
+	}
+
+	void RHIUIRenderer::RestoreDeviceContent() {
+		if (!_device) {
+			return;
+		}
+		for (PipelineEntry& entry : _pipelines) {
+			if (entry.pipeline.IsValid()) {
+				_device->DestroyResource(entry.pipeline);
+			}
+		}
+		_pipelines.clear();
+		if (_whiteTexture.IsValid()) {
+			FillWhiteTexture();
+		}
+		for (RHI::TextureHandle atlas : _atlases) {
+			ClearAtlas(atlas);
+		}
 	}
 
 	void RHIUIRenderer::UpdateAtlas(RHI::TextureHandle atlas, RectI region, std::span<const u8> pixels) {
@@ -389,8 +417,7 @@ namespace Shalltear::UI {
 			whiteDesc.usage = RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferDst;
 			whiteDesc.debugName = "UIWhite";
 			_whiteTexture = device.CreateTextureResource(whiteDesc);
-			const u8 whitePixel[4] = {255, 255, 255, 255};
-			device.UploadTexture(_whiteTexture, whitePixel);
+			FillWhiteTexture();
 		}
 
 		u32 blurQuadCount = 0;

@@ -251,15 +251,31 @@ namespace Shalltear::GraphicsInternal {
 			deform->frameCount += static_cast<u32>(shape.frames.size());
 		}
 		mesh._deform = deform;
-		if (!device || mesh.vertices.empty()) {
+		if (device) {
+			Restore(mesh, *device);
+		}
+	}
+
+	void MeshDeform::Restore(MeshAsset& mesh, RHI::Device& device) {
+		MeshDeform* deform = mesh._deform;
+		if (!deform || mesh.vertices.empty()) {
 			return;
 		}
+		for (RHI::BufferHandle* buffer : {&deform->influences, &deform->morphRanges, &deform->morphDeltas}) {
+			if (buffer->IsValid()) {
+				device.DestroyResource(*buffer);
+				*buffer = {};
+			}
+		}
+		deform->influencesAddress = 0;
+		deform->morphRangesAddress = 0;
+		deform->morphDeltasAddress = 0;
 
 		if (!mesh.skinInfluences.empty()) {
-			deform->influences = UploadStream(*device, AsBytes(mesh.skinInfluences), mesh.virtualPath.c_str(), deform->influencesAddress);
+			deform->influences = UploadStream(device, AsBytes(mesh.skinInfluences), mesh.virtualPath.c_str(), deform->influencesAddress);
 		}
 		if (deform->frameCount > 0) {
-			UploadMorphStreams(mesh, *deform, *device);
+			UploadMorphStreams(mesh, *deform, device);
 		}
 	}
 
@@ -331,6 +347,7 @@ namespace Shalltear::GraphicsInternal {
 		_used = 0;
 		const u64 bytes = maxVertices * sizeof(MeshVertex);
 		if (bytes <= _capacity) {
+			_outputAddress = _output.IsValid() ? device.GetBufferDeviceAddress(_output) : 0;
 			return;
 		}
 		if (_output.IsValid()) {

@@ -47,6 +47,7 @@ namespace Shalltear::UI {
 		// frame start only, may clear page
 		void SweepFonts();
 		void ReclaimIfFull();
+		void ForgetAtlasContents() { ClearPage(); }
 	private:
 		struct FontFace {
 			FT_Face face = nullptr;

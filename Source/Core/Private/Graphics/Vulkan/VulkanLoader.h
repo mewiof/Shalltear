@@ -104,7 +104,10 @@ namespace Shalltear::RHI {
 	X(vkDestroySampler)
 
 #define SLT_VK_DEVICE_OPTIONAL_FUNCS(X) \
-	X(vkSetDebugUtilsObjectNameEXT)
+	X(vkSetDebugUtilsObjectNameEXT)     \
+	X(vkGetDeviceFaultInfoEXT)          \
+	X(vkCmdSetCheckpointNV)             \
+	X(vkGetQueueCheckpointDataNV)
 
 	struct VulkanInstanceFunctions {
 #define SLT_VK_DECLARE(name) PFN_##name name = nullptr;

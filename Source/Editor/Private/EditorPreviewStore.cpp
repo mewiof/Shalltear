@@ -5,7 +5,9 @@
 #include "Shalltear/Core/Asset/Asset.h"
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Containers.h"
+#include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Graphics/FullScreenPass.h"
+#include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
@@ -50,7 +52,13 @@ namespace Shalltear {
 			Vector<Guid> dependencies{GetMemoryResource(MemTag::Editor)};
 		};
 
+		class DeviceWatcher : public Object {
+		public:
+			void OnDeviceRestored(const GraphicsDeviceRestoredEvent&);
+		};
+
 		struct StoreState {
+			DeviceWatcher watcher;
 			HashMap<Guid, StoreEntry> entries{GetMemoryResource(MemTag::Editor)};
 			Vector<Guid> queue{GetMemoryResource(MemTag::Editor)};
 			HashSet<Guid> queued{GetMemoryResource(MemTag::Editor)};
@@ -99,6 +107,13 @@ namespace Shalltear {
 			_state->bytes -= it->second.bytes;
 			DestroyEntryTexture(it->second);
 			_state->entries.erase(it);
+		}
+
+		void DeviceWatcher::OnDeviceRestored(const GraphicsDeviceRestoredEvent&) {
+			_state->inFlight.superseded = _state->inFlight.active;
+			while (!_state->entries.empty()) {
+				EraseEntry(_state->entries.begin());
+			}
 		}
 
 		void EvictToCapacity() {
@@ -305,6 +320,7 @@ namespace Shalltear {
 	void EditorPreviewStore::Initialize() {
 		if (!_state) {
 			_state = New<StoreState>(MemTag::Editor);
+			GraphicsEvents::DeviceRestored.Subscribe(EventBus::GetGlobal(), Handle<DeviceWatcher>(&_state->watcher), &DeviceWatcher::OnDeviceRestored);
 		}
 	}
 
@@ -312,6 +328,7 @@ namespace Shalltear {
 		if (!_state) {
 			return;
 		}
+		EventBus::GetGlobal().UnsubscribeAll(_state->watcher.GetInstanceId());
 		ReleaseInFlight();
 		for (auto it = _state->entries.begin(); it != _state->entries.end(); ++it) {
 			DestroyEntryTexture(it->second);

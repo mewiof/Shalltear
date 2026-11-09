@@ -49,6 +49,8 @@ namespace Shalltear::RHI {
 		void GenerateMips(TextureHandle target);
 		// same format/size
 		void ResolveTexture(TextureHandle src, TextureHandle dst);
+
+		void Breadcrumb(const char* name);
 	private:
 		friend class Device;
 		friend struct DeviceImpl;

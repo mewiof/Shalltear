@@ -179,6 +179,7 @@ namespace Shalltear {
 		static void DestroyViewTarget(ViewTargetId target);
 		static RHI::TextureHandle GetViewTargetTexture(ViewTargetId target);
 		static Vec2I GetViewTargetSize(ViewTargetId target);
+		static bool IsViewTargetDrawn(ViewTargetId target);
 
 		static void SubmitView(ViewTargetId target, const ViewDesc& desc);
 

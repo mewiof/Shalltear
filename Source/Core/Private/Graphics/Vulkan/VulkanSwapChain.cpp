@@ -143,7 +143,9 @@ namespace Shalltear::RHI {
 
 			VkResult result = d.fd.vkCreateSwapchainKHR(d.device, &createInfo, nullptr, &impl.swapchain);
 			if (result != VK_SUCCESS) {
-				SLT_LOG_ERROR("Graphics", "vkCreateSwapchainKHR failed: {}", VkResultName(result));
+				if (!d.NoteLoss(result, "vkCreateSwapchainKHR")) {
+					SLT_LOG_ERROR("Graphics", "vkCreateSwapchainKHR failed: {}", VkResultName(result));
+				}
 				impl.swapchain = VK_NULL_HANDLE;
 				return false;
 			}
@@ -163,7 +165,7 @@ namespace Shalltear::RHI {
 				viewInfo.subresourceRange.levelCount = 1;
 				viewInfo.subresourceRange.layerCount = 1;
 				VkImageView view = VK_NULL_HANDLE;
-				SLT_VK_CHECK(d.fd.vkCreateImageView(d.device, &viewInfo, nullptr, &view));
+				SLT_VK_CHECK(d, d.fd.vkCreateImageView(d.device, &viewInfo, nullptr, &view));
 
 				auto [index, generation] = d.textures.Acquire();
 				TextureResource& resource = d.textures.slots[index].resource;
@@ -179,7 +181,7 @@ namespace Shalltear::RHI {
 
 				VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 				VkSemaphore semaphore = VK_NULL_HANDLE;
-				SLT_VK_CHECK(d.fd.vkCreateSemaphore(d.device, &semaphoreInfo, nullptr, &semaphore));
+				SLT_VK_CHECK(d, d.fd.vkCreateSemaphore(d.device, &semaphoreInfo, nullptr, &semaphore));
 				impl.renderFinished.push_back(semaphore);
 			}
 
@@ -203,7 +205,62 @@ namespace Shalltear::RHI {
 			return created;
 		}
 
+		bool CreateSurfaceObjects(SwapChainImpl& impl) {
+			DeviceImpl& d = *impl.device;
+			auto createSurface = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(d.fi.vkCreateWin32SurfaceKHR);
+			if (!createSurface) {
+				SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: VK_KHR_win32_surface not available");
+				return false;
+			}
+
+			VkWin32SurfaceCreateInfoKHR surfaceInfo{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
+			surfaceInfo.hinstance = static_cast<HINSTANCE>(impl.hinstance);
+			surfaceInfo.hwnd = static_cast<HWND>(impl.hwnd);
+			VkResult result = createSurface(d.instance, &surfaceInfo, nullptr, &impl.surface);
+			if (result != VK_SUCCESS) {
+				SLT_LOG_ERROR("Graphics", "vkCreateWin32SurfaceKHR failed: {}", VkResultName(result));
+				impl.surface = VK_NULL_HANDLE;
+				return false;
+			}
+
+			VkBool32 supported = VK_FALSE;
+			d.fi.vkGetPhysicalDeviceSurfaceSupportKHR(d.physicalDevice, d.queueFamily, impl.surface, &supported);
+			if (!supported) {
+				SLT_LOG_ERROR("Graphics", "surface doesn't support presentation on the graphics queue family");
+				d.fi.vkDestroySurfaceKHR(d.instance, impl.surface, nullptr);
+				impl.surface = VK_NULL_HANDLE;
+				return false;
+			}
+
+			for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+				VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+				SLT_VK_CHECK(d, d.fd.vkCreateSemaphore(d.device, &semaphoreInfo, nullptr, &impl.acquireSemaphores[i]));
+			}
+			return true;
+		}
+
 	} // anonymous namespace
+
+	void ReleaseSwapChainObjects(SwapChainImpl& impl) {
+		DeviceImpl& d = *impl.device;
+		impl.acquiredThisFrame = false;
+		if (!d.device) {
+			return;
+		}
+		DestroySwapChainObjects(impl);
+		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+			if (impl.acquireSemaphores[i]) {
+				d.fd.vkDestroySemaphore(d.device, impl.acquireSemaphores[i], nullptr);
+				impl.acquireSemaphores[i] = VK_NULL_HANDLE;
+			}
+		}
+	}
+
+	void RestoreSwapChainObjects(SwapChainImpl& impl) {
+		if (!CreateSurfaceObjects(impl) || !CreateSwapChainObjects(impl, impl.size, impl.vsync, VK_NULL_HANDLE)) {
+			impl.needsRecreate = true;
+		}
+	}
 
 	SwapChain* Device::CreateSwapChainForWindow(const NativeSwapChainDesc& desc) {
 		DeviceImpl* impl = _impl;
@@ -212,40 +269,19 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: null native handles");
 			return nullptr;
 		}
-		auto createSurface = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(impl->fi.vkCreateWin32SurfaceKHR);
-		if (!createSurface) {
-			SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: VK_KHR_win32_surface not available");
-			return nullptr;
-		}
 
 		SwapChainImpl* swapImpl = New<SwapChainImpl>(MemTag::Graphics);
 		swapImpl->device = impl;
+		swapImpl->hwnd = desc.hwnd;
+		swapImpl->hinstance = desc.hinstance;
+		swapImpl->size = desc.sizePx;
+		swapImpl->vsync = desc.vsync;
 
-		VkWin32SurfaceCreateInfoKHR surfaceInfo{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
-		surfaceInfo.hinstance = static_cast<HINSTANCE>(desc.hinstance);
-		surfaceInfo.hwnd = static_cast<HWND>(desc.hwnd);
-		VkResult result = createSurface(impl->instance, &surfaceInfo, nullptr, &swapImpl->surface);
-		if (result != VK_SUCCESS) {
-			SLT_LOG_ERROR("Graphics", "vkCreateWin32SurfaceKHR failed: {}", VkResultName(result));
+		if (!impl->lost && !CreateSurfaceObjects(*swapImpl)) {
 			Delete(swapImpl);
 			return nullptr;
 		}
-
-		VkBool32 supported = VK_FALSE;
-		impl->fi.vkGetPhysicalDeviceSurfaceSupportKHR(impl->physicalDevice, impl->queueFamily, swapImpl->surface, &supported);
-		if (!supported) {
-			SLT_LOG_ERROR("Graphics", "surface doesn't support presentation on the graphics queue family");
-			impl->fi.vkDestroySurfaceKHR(impl->instance, swapImpl->surface, nullptr);
-			Delete(swapImpl);
-			return nullptr;
-		}
-
-		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
-			VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-			SLT_VK_CHECK(impl->fd.vkCreateSemaphore(impl->device, &semaphoreInfo, nullptr, &swapImpl->acquireSemaphores[i]));
-		}
-
-		if (!CreateSwapChainObjects(*swapImpl, desc.sizePx, desc.vsync, VK_NULL_HANDLE)) {
+		if (impl->lost || !CreateSwapChainObjects(*swapImpl, desc.sizePx, desc.vsync, VK_NULL_HANDLE)) {
 			swapImpl->needsRecreate = true;
 		}
 
@@ -263,13 +299,10 @@ namespace Shalltear::RHI {
 		}
 		SwapChainImpl* swapImpl = swapChain->_impl;
 
-		impl->fd.vkDeviceWaitIdle(impl->device);
-		DestroySwapChainObjects(*swapImpl);
-		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
-			if (swapImpl->acquireSemaphores[i]) {
-				impl->fd.vkDestroySemaphore(impl->device, swapImpl->acquireSemaphores[i], nullptr);
-			}
+		if (!impl->lost) {
+			impl->NoteLoss(impl->fd.vkDeviceWaitIdle(impl->device), "vkDeviceWaitIdle");
 		}
+		ReleaseSwapChainObjects(*swapImpl);
 
 		auto it = std::find(impl->swapChains.begin(), impl->swapChains.end(), swapChain);
 		if (it != impl->swapChains.end()) {
@@ -286,9 +319,11 @@ namespace Shalltear::RHI {
 		SLT_CORE_ASSERT_MSG(d.inFrame, "AcquireNextImage outside BeginFrame/EndFrame");
 		SLT_CORE_ASSERT_MSG(!impl.acquiredThisFrame, "AcquireNextImage called twice in one frame");
 
+		if (d.lost || !impl.surface) {
+			return {};
+		}
 		if (impl.needsRecreate || !impl.swapchain) {
-			d.fd.vkDeviceWaitIdle(d.device);
-			if (!RebuildSwapChainObjects(impl, impl.size, impl.vsync)) {
+			if (d.NoteLoss(d.fd.vkDeviceWaitIdle(d.device), "vkDeviceWaitIdle") || !RebuildSwapChainObjects(impl, impl.size, impl.vsync)) {
 				return {};
 			}
 		}
@@ -297,15 +332,16 @@ namespace Shalltear::RHI {
 		u32 imageIndex = 0;
 		VkResult result = d.fd.vkAcquireNextImageKHR(d.device, impl.swapchain, UINT64_MAX, acquireSemaphore, VK_NULL_HANDLE, &imageIndex);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR) {
-			d.fd.vkDeviceWaitIdle(d.device);
-			if (!RebuildSwapChainObjects(impl, impl.size, impl.vsync)) {
+			if (d.NoteLoss(d.fd.vkDeviceWaitIdle(d.device), "vkDeviceWaitIdle") || !RebuildSwapChainObjects(impl, impl.size, impl.vsync)) {
 				return {};
 			}
 			result = d.fd.vkAcquireNextImageKHR(d.device, impl.swapchain, UINT64_MAX, acquireSemaphore, VK_NULL_HANDLE, &imageIndex);
 		}
 		if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-			SLT_LOG_WARN("Graphics", "vkAcquireNextImageKHR failed: {}", VkResultName(result));
-			impl.needsRecreate = true;
+			if (!d.NoteLoss(result, "vkAcquireNextImageKHR")) {
+				SLT_LOG_WARN("Graphics", "vkAcquireNextImageKHR failed: {}", VkResultName(result));
+				impl.needsRecreate = true;
+			}
 			return {};
 		}
 		if (result == VK_SUBOPTIMAL_KHR) {
@@ -336,6 +372,9 @@ namespace Shalltear::RHI {
 			return;
 		}
 		impl.acquiredThisFrame = false;
+		if (d.lost) {
+			return;
+		}
 
 		VkSemaphore waitSemaphore = impl.renderFinished[impl.currentImageIndex];
 		VkPresentInfoKHR presentInfo{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
@@ -348,7 +387,7 @@ namespace Shalltear::RHI {
 		VkResult result = d.fd.vkQueuePresentKHR(d.queue, &presentInfo);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_SURFACE_LOST_KHR) {
 			impl.needsRecreate = true;
-		} else if (result != VK_SUCCESS) {
+		} else if (result != VK_SUCCESS && !d.NoteLoss(result, "vkQueuePresentKHR")) {
 			SLT_LOG_WARN("Graphics", "vkQueuePresentKHR failed: {}", VkResultName(result));
 		}
 	}
@@ -359,9 +398,9 @@ namespace Shalltear::RHI {
 		SLT_RHI_ASSERT_MAIN_THREAD(&d);
 		SLT_CORE_ASSERT_MSG(!d.inFrame, "Recreate mid-frame is illegal");
 
-		d.fd.vkDeviceWaitIdle(d.device);
 		impl.size = newSizePx;
-		if (!RebuildSwapChainObjects(impl, newSizePx, vsync)) {
+		if (d.lost || d.NoteLoss(d.fd.vkDeviceWaitIdle(d.device), "vkDeviceWaitIdle") || (!impl.surface && !CreateSurfaceObjects(impl)) ||
+			!RebuildSwapChainObjects(impl, newSizePx, vsync)) {
 			impl.vsync = vsync;
 			impl.needsRecreate = true;
 		}

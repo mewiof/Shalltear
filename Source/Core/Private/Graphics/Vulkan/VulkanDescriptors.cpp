@@ -111,7 +111,7 @@ namespace Shalltear::RHI {
 				layoutInfo.pushConstantRangeCount = 1;
 				layoutInfo.pPushConstantRanges = &pushRange;
 			}
-			SLT_VK_CHECK(impl.fd.vkCreatePipelineLayout(impl.device, &layoutInfo, nullptr, &layout));
+			SLT_VK_CHECK(impl, impl.fd.vkCreatePipelineLayout(impl.device, &layoutInfo, nullptr, &layout));
 			return true;
 		}
 
@@ -127,7 +127,7 @@ namespace Shalltear::RHI {
 			info.poolSizeCount = static_cast<u32>(std::size(sizes));
 			info.pPoolSizes = sizes;
 			VkDescriptorPool pool = VK_NULL_HANDLE;
-			SLT_VK_CHECK(impl.fd.vkCreateDescriptorPool(impl.device, &info, nullptr, &pool));
+			SLT_VK_CHECK(impl, impl.fd.vkCreateDescriptorPool(impl.device, &info, nullptr, &pool));
 			return pool;
 		}
 
@@ -164,7 +164,7 @@ namespace Shalltear::RHI {
 		info.bindingCount = static_cast<u32>(vkBindings.size());
 		info.pBindings = vkBindings.data();
 		VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-		SLT_VK_CHECK(fd.vkCreateDescriptorSetLayout(device, &info, nullptr, &layout));
+		SLT_VK_CHECK(*this, fd.vkCreateDescriptorSetLayout(device, &info, nullptr, &layout));
 
 		setLayoutCache.emplace(hash, layout);
 		return layout;
@@ -212,7 +212,7 @@ namespace Shalltear::RHI {
 		layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 		layoutInfo.bindingCount = TABLE_BINDING_COUNT;
 		layoutInfo.pBindings = bindings;
-		SLT_VK_CHECK(fd.vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &table.layout));
+		SLT_VK_CHECK(*this, fd.vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &table.layout));
 
 		const VkDescriptorPoolSize sizes[] = {
 			{VK_DESCRIPTOR_TYPE_SAMPLER, table.capacity[TABLE_SAMPLERS_BINDING]},
@@ -224,13 +224,13 @@ namespace Shalltear::RHI {
 		poolInfo.maxSets = 1;
 		poolInfo.poolSizeCount = static_cast<u32>(std::size(sizes));
 		poolInfo.pPoolSizes = sizes;
-		SLT_VK_CHECK(fd.vkCreateDescriptorPool(device, &poolInfo, nullptr, &table.pool));
+		SLT_VK_CHECK(*this, fd.vkCreateDescriptorPool(device, &poolInfo, nullptr, &table.pool));
 
 		VkDescriptorSetAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
 		allocateInfo.descriptorPool = table.pool;
 		allocateInfo.descriptorSetCount = 1;
 		allocateInfo.pSetLayouts = &table.layout;
-		SLT_VK_CHECK(fd.vkAllocateDescriptorSets(device, &allocateInfo, &table.set));
+		SLT_VK_CHECK(*this, fd.vkAllocateDescriptorSets(device, &allocateInfo, &table.set));
 		return true;
 	}
 
@@ -241,7 +241,9 @@ namespace Shalltear::RHI {
 		if (table.layout) {
 			fd.vkDestroyDescriptorSetLayout(device, table.layout, nullptr);
 		}
-		table = TextureTable{};
+		table.pool = VK_NULL_HANDLE;
+		table.layout = VK_NULL_HANDLE;
+		table.set = VK_NULL_HANDLE;
 	}
 
 	u32 DeviceImpl::AcquireTableIndex(u32 binding) {
@@ -251,13 +253,16 @@ namespace Shalltear::RHI {
 			freeIndices.pop_back();
 			return index;
 		}
-		if (!table.set || table.used[binding] >= table.capacity[binding]) {
+		if (!tableSupported || table.used[binding] >= table.capacity[binding]) {
 			return TABLE_NONE;
 		}
 		return table.used[binding]++;
 	}
 
 	void DeviceImpl::WriteTableEntry(u32 binding, u32 index, VkImageView view, VkSampler sampler) {
+		if (lost) {
+			return;
+		}
 		VkDescriptorImageInfo image{};
 		image.imageView = view;
 		image.sampler = sampler;
@@ -276,7 +281,7 @@ namespace Shalltear::RHI {
 		DeviceImpl* impl = _impl;
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
 		TextureResource* resource = impl->textures.Resolve(texture);
-		if (!resource || !impl->table.set) {
+		if (!resource || !impl->tableSupported) {
 			return TABLE_NONE;
 		}
 		if (resource->tableIndex != TABLE_NONE) {
@@ -298,7 +303,7 @@ namespace Shalltear::RHI {
 		DeviceImpl* impl = _impl;
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
 		SamplerResource* resource = impl->samplers.Resolve(sampler);
-		if (!resource || !impl->table.set) {
+		if (!resource || !impl->tableSupported) {
 			return TABLE_NONE;
 		}
 		if (resource->tableIndex == TABLE_NONE) {
@@ -430,6 +435,9 @@ namespace Shalltear::RHI {
 			SLT_LOG_WARN("Graphics", "CreateTransientSet: invalid pipeline handle");
 			return writer;
 		}
+		if (impl->lost || !resource->pipeline) {
+			return writer;
+		}
 		writer._device = impl;
 		writer._pipelineIndex = pipeline.index;
 		writer._setIndex = setIndex;
@@ -465,7 +473,7 @@ namespace Shalltear::RHI {
 	}
 
 	TransientSet TransientSetWriter::Commit() {
-		if (!_device) {
+		if (!_device || _device->lost) {
 			return {};
 		}
 		DeviceImpl& impl = *_device;
@@ -600,6 +608,9 @@ namespace Shalltear::RHI {
 		}
 		if (desc.pushConstantSize > 128) {
 			SLT_LOG_ERROR("Graphics", "CreateGraphicsPipeline: push constants {} B exceed the 128 B budget", desc.pushConstantSize);
+			return {};
+		}
+		if (impl->lost) {
 			return {};
 		}
 
@@ -853,6 +864,9 @@ namespace Shalltear::RHI {
 		}
 		if (desc.pushConstantSize > 128) {
 			SLT_LOG_ERROR("Graphics", "CreateComputePipeline: push constants {} B exceed the 128 B budget", desc.pushConstantSize);
+			return {};
+		}
+		if (impl->lost) {
 			return {};
 		}
 

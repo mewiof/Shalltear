@@ -915,6 +915,28 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_EQ(secondLog.find("could not be resolved"), str::npos) << secondLog;
 	EXPECT_NE(secondLog.find("number=2"), str::npos) << secondLog;
 
+	str lostLog = RunCommand("\"" + playerExe.generic_string() + "\" --frames 12 --lose-device 4", exitCode);
+	ASSERT_EQ(exitCode, 0) << lostLog;
+	EXPECT_NE(lostLog.find("device loss simulated"), str::npos) << lostLog;
+	EXPECT_NE(lostLog.find("device rebuilt in"), str::npos) << lostLog;
+	EXPECT_EQ(lostLog.find("Recreate it"), str::npos) << lostLog;
+	EXPECT_NE(lostLog.find(PLAYER_MARKER), str::npos) << lostLog;
+	auto errors = [](const str& log) {
+		size_t count = 0;
+		for (size_t at = log.find("[ERROR]"); at != str::npos; at = log.find("[ERROR]", at + 1)) {
+			++count;
+		}
+		return count;
+	};
+	EXPECT_EQ(errors(lostLog), errors(secondLog)) << lostLog;
+	auto memoryReport = [](const str& log) {
+		const size_t from = log.find("MEMORY REPORT");
+		const size_t total = log.find("TOTAL", from);
+		return from == str::npos || total == str::npos ? str() : log.substr(from, log.find('\n', total) - from);
+	};
+	EXPECT_FALSE(memoryReport(lostLog).empty()) << lostLog;
+	EXPECT_EQ(memoryReport(lostLog), memoryReport(secondLog));
+
 	str ninjaFile = FileSystem::ReadTextFile(
 		Path(BuildPipeline::GetIntermediateDirectory(Root(), "Windows") + "/build.ninja"), MemTag::Editor);
 	ASSERT_FALSE(ninjaFile.empty());

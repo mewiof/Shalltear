@@ -50,6 +50,7 @@ namespace Shalltear {
 			}
 			u32 GetSeed() const { return _seed; }
 			void Reset();
+			void Refeed();
 
 			void SetInstancing(bool allowed) { _allowInstancing = allowed; }
 			bool AllowsInstancing() const { return _allowInstancing; }

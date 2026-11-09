@@ -321,7 +321,7 @@ namespace Shalltear {
 			_liveSizePx = _viewport.GetSizePx();
 			_viewDirty = true;
 		}
-		if (!_viewDirty) {
+		if (!_viewDirty && RenderSystem::IsViewTargetDrawn(_viewport.GetTarget())) {
 			return;
 		}
 		_viewDirty = false;

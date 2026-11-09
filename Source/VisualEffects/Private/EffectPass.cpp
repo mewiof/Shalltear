@@ -5,7 +5,9 @@
 #include "Ribbon.h"
 
 #include "Shalltear/Core/Containers.h"
+#include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
+#include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
@@ -74,6 +76,23 @@ namespace Shalltear::VisualEffectsImpl {
 		const VisualEffectsSettings _defaultSettings;
 		Vector<f32>* _updates = nullptr;
 		EffectFrameCounts _advanced;
+
+		class DeviceWatcher : public Object {
+		public:
+			void OnDeviceRestored(const GraphicsDeviceRestoredEvent&) {
+				GetSimulation().RestoreDeviceContent();
+				if (!_effects) {
+					return;
+				}
+				for (const Handle<VisualEffect>& handle : *_effects) {
+					VisualEffect* effect = handle.Get();
+					if (EffectInstance* instance = effect ? EffectComponentAccess::Instance(*effect) : nullptr) {
+						instance->Refeed();
+					}
+				}
+			}
+		};
+		DeviceWatcher* _deviceWatcher = nullptr;
 
 		Vector<Handle<VisualEffect>>& Effects() {
 			if (!_effects) {
@@ -322,9 +341,16 @@ namespace Shalltear::VisualEffectsImpl {
 			SLT_LOG_ERROR("VisualEffects", "couldn't register the {} settings category", EFFECT_SETTINGS_PATH);
 		}
 		FrameStages::Register(FrameStage::LateUpdate, FrameStagePosition::Late, &LateUpdateStage, nullptr, owner);
+		_deviceWatcher = New<DeviceWatcher>(MemTag::Graphics);
+		GraphicsEvents::DeviceRestored.Subscribe(EventBus::GetGlobal(), Handle<DeviceWatcher>(_deviceWatcher), &DeviceWatcher::OnDeviceRestored);
 	}
 
 	void ShutdownEffects() {
+		if (_deviceWatcher) {
+			EventBus::GetGlobal().UnsubscribeAll(_deviceWatcher->GetInstanceId());
+			Delete(_deviceWatcher);
+			_deviceWatcher = nullptr;
+		}
 		if (_effects) {
 			Delete(_effects);
 			_effects = nullptr;

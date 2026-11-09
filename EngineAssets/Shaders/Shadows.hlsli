@@ -36,10 +36,9 @@ float3 ShalltearShadowBiasedPosition(ShalltearShadowMap map, float texelSize, fl
 									 float3 normalWS, float3 lightDirection) {
 	float NoL = saturate(dot(normalWS, -lightDirection));
 	float sinTheta = sqrt(saturate(1.0 - NoL * NoL));
-	float tanTheta = min(sinTheta / max(NoL, 1e-3), SHALLTEAR_SHADOW_MAX_SLOPE);
 
 	float3 offset = normalWS * (texelSize * map.normalBias * sinTheta);
-	offset -= lightDirection * (texelSize * map.depthBias * (1.0 + tanTheta));
+	offset -= lightDirection * (texelSize * map.depthBias);
 	return positionWS + offset;
 }
 
@@ -84,7 +83,8 @@ float ShalltearShadowCompare(Texture2D<float> atlas, float2 tap, float2 uv, floa
 	float4 stored = atlas.GatherRed(sltShadowSampler, corner);
 	float2 rise = 0.5 * sltShadowAtlasTexel * slope;
 	float4 plane = reference + dot(corner - uv, slope) + float4(rise.y - rise.x, rise.x + rise.y, rise.x - rise.y, -rise.x - rise.y);
-	float4 lit = step(stored, plane);
+	// plane only where nearer light, reference elsewhere
+	float4 lit = step(stored, max(plane, reference));
 	return lerp(lerp(lit.w, lit.z, weight.x), lerp(lit.x, lit.y, weight.x), weight.y);
 }
 

@@ -3246,6 +3246,102 @@ TEST_F(ShadowFilterFixture, CubeShadowMeetsBase) {
 	}
 }
 
+TEST_F(ShadowFilterFixture, NearCasterShadowsGrazingGround) {
+	const Vec3 travel = Travel(76.0f, 25.0f);
+	ASSERT_NO_FATAL_FAILURE(BuildRig(travel, 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	SceneSystem::EndFrame();
+	_window = 1.2f;
+	_center = Vec3::Zero();
+	Vector<u8> fitted{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_NO_FATAL_FAILURE(Render(fitted));
+	CascadeFit fits[MAX_SHADOW_CASCADES];
+	ASSERT_EQ(RenderSystem::GetCascadeFit(_target, {fits, std::size(fits)}), 1u);
+	const f32 texel = fits[0].worldTexelSize;
+
+	const Vec3 toLight = -travel;
+	const Quat facing = Quat::LookRotation(travel);
+	const Vec3 right = facing * Vec3(1.0f, 0.0f, 0.0f);
+	const Vec3 up = facing * Vec3(0.0f, 1.0f, 0.0f);
+	const f32 half = 8.0f * texel;
+	const f32 thickness = 0.1f * texel;
+	const Vec3 center = toLight * (4.0f * texel + thickness * 0.5f);
+	Handle<SceneObject> slab = Box("Slab", center, Vec3(2.0f * half, 2.0f * half, thickness));
+	slab->SetLocalRotation(facing);
+	SceneSystem::EndFrame();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+
+	for (i32 width : {1, 3, 5}) {
+		UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
+		Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+		ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+		f64 sum = 0.0;
+		u32 counted = 0;
+		for (i32 y = 0; y < PIXELS; ++y) {
+			for (i32 x = 0; x < PIXELS; ++x) {
+				const Vec3 ground = GroundAt(static_cast<f32>(x), static_cast<f32>(y));
+				const f32 above = Vec3::Dot(center - ground, toLight) / toLight.y;
+				const Vec3 seen = ground + Vec3(0.0f, above, 0.0f) - center;
+				if (above > 0.0f && Math::Abs(Vec3::Dot(seen, right)) < half + texel && Math::Abs(Vec3::Dot(seen, up)) < half + texel) {
+					continue;
+				}
+				const f32 gap = Vec3::Dot(center - ground, toLight) - thickness * 0.5f;
+				const Vec3 hit = ground + toLight * gap - center;
+				if (gap < 2.5f * texel || gap > 5.0f * texel || Math::Abs(Vec3::Dot(hit, right)) > half - 3.0f * texel ||
+					Math::Abs(Vec3::Dot(hit, up)) > half) {
+					continue;
+				}
+				sum += factor[static_cast<size_t>(y) * PIXELS + x];
+				++counted;
+			}
+		}
+		ASSERT_GT(counted, 300u) << "width " << width;
+		EXPECT_LT(sum / counted, 0.35) << "width " << width;
+	}
+}
+
+TEST_F(ShadowFilterFixture, GroundBeforeLitRiserStaysLit) {
+	const Vec3 travel = Travel(76.0f, 25.0f);
+	ASSERT_NO_FATAL_FAILURE(BuildRig(travel, 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	const Vec3 across = Vec3(travel.x, 0.0f, travel.z).Normalized();
+	const Vec3 side = Vec3::Cross(across, Vec3::Up());
+	Handle<SceneObject> riser = Box("Riser", across * 0.2f + Vec3(0.0f, 0.15f, 0.0f), Vec3(0.4f, 0.3f, 1.0f));
+	riser->SetLocalRotation(Quat::FromBasis(across, Vec3::Up(), side));
+	SceneSystem::EndFrame();
+	_window = 0.6f;
+	_center = -across * 0.15f;
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	CascadeFit fits[MAX_SHADOW_CASCADES];
+	ASSERT_EQ(RenderSystem::GetCascadeFit(_target, {fits, std::size(fits)}), 1u);
+	const f32 texel = fits[0].worldTexelSize;
+
+	for (i32 width : {1, 3, 5}) {
+		UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
+		Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+		ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+		u32 counted = 0;
+		f32 darkest = 1.0f;
+		for (i32 y = 0; y < PIXELS; ++y) {
+			for (i32 x = 0; x < PIXELS; ++x) {
+				const Vec3 ground = GroundAt(static_cast<f32>(x), static_cast<f32>(y));
+				const f32 before = Vec3::Dot(ground, across);
+				if (before > -0.25f * texel || before < -8.0f * texel || Math::Abs(Vec3::Dot(ground, side)) > 0.45f) {
+					continue;
+				}
+				darkest = Math::Min(darkest, factor[static_cast<size_t>(y) * PIXELS + x]);
+				++counted;
+			}
+		}
+		ASSERT_GT(counted, 1000u) << "width " << width;
+		EXPECT_GT(darkest, 0.95f) << "width " << width;
+	}
+}
+
 namespace {
 
 	class GraphicsErrorSink : public ILogSink {

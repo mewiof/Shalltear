@@ -8278,9 +8278,10 @@ namespace Shalltear {
 			EnsureShadowAtlases(state);
 
 			RHI::SamplerDesc shadowDesc;
-			shadowDesc.comparison = true;
+			shadowDesc.filter = RHI::FilterMode::Nearest;
+			shadowDesc.mipFilter = RHI::FilterMode::Nearest;
 			shadowDesc.addressMode = RHI::AddressMode::ClampToEdge;
-			shadowDesc.debugName = "ShadowCompare";
+			shadowDesc.debugName = "ShadowGather";
 			state.shadowSampler = state.device->CreateSamplerResource(shadowDesc);
 
 			RHI::TextureDesc environmentDesc;

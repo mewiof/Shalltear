@@ -2727,6 +2727,7 @@ namespace {
 		static constexpr f32 EYE_HEIGHT = 5.0f;
 
 		Handle<Scene> _scene;
+		Handle<SceneObject> _ground;
 		Handle<Light> _light;
 		Asset* _cube = nullptr;
 		Asset* _material = nullptr;
@@ -2768,7 +2769,7 @@ namespace {
 			ASSERT_NE(_cube, nullptr);
 			ASSERT_NE(_material, nullptr);
 			_scene = SceneSystem::CreateScene("Filter");
-			Box("Ground", Vec3(0.0f, -0.1f, 0.0f), Vec3(8.0f, 0.2f, 8.0f));
+			_ground = Box("Ground", Vec3(0.0f, -0.1f, 0.0f), Vec3(8.0f, 0.2f, 8.0f));
 			Handle<SceneObject> sun = SceneSystem::CreateObject("Light", _scene);
 			sun->SetLocalRotation(Quat::LookRotation(travel));
 			_light = sun->AddComponent<Light>();
@@ -2879,6 +2880,32 @@ namespace {
 			return std::numeric_limits<f32>::quiet_NaN();
 		}
 
+		void UseLowBias() {
+			_light->SetShadowBias(0.25f);
+			_light->SetShadowNormalBias(0.0f);
+		}
+
+		void ExpectMonotonePenumbraAtEveryWidth() {
+			for (i32 width : {1, 3, 5, 7}) {
+				UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
+				Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+				ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+
+				std::vector<Vec2> row;
+				f32 worstStepBack = 0.0f;
+				u32 crossed = 0;
+				for (i32 y = 0; y < PIXELS; ++y) {
+					Row(factor, y, row);
+					for (size_t i = 0; i + 1 < row.size(); ++i) {
+						worstStepBack = Math::Max(worstStepBack, row[i].y - row[i + 1].y);
+					}
+					crossed += std::isnan(HalfShadowX(row)) ? 0u : 1u;
+				}
+				EXPECT_EQ(crossed, static_cast<u32>(PIXELS)) << "width " << width;
+				EXPECT_LT(worstStepBack, 0.02f) << "width " << width;
+			}
+		}
+
 		void ExpectNoSelfShadowAtEveryWidth() {
 			for (i32 width : {1, 3, 5, 7}) {
 				UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
@@ -2925,25 +2952,20 @@ TEST_F(ShadowFilterFixture, PenumbraMonotoneAtEveryWidth) {
 	SceneSystem::EndFrame();
 	_center = Vec3(EdgeShadowX(), 0.0f, 0.0f);
 	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectMonotonePenumbraAtEveryWidth());
+}
 
-	for (i32 width : {1, 3, 5, 7}) {
-		UseProfile([width](GraphicsProfile& profile) { profile.shadowPcfTaps = width; });
-		Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
-		ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
-
-		std::vector<Vec2> row;
-		f32 worstStepBack = 0.0f;
-		u32 crossed = 0;
-		for (i32 y = 0; y < PIXELS; ++y) {
-			Row(factor, y, row);
-			for (size_t i = 0; i + 1 < row.size(); ++i) {
-				worstStepBack = Math::Max(worstStepBack, row[i].y - row[i + 1].y);
-			}
-			crossed += std::isnan(HalfShadowX(row)) ? 0u : 1u;
-		}
-		EXPECT_EQ(crossed, static_cast<u32>(PIXELS)) << "width " << width;
-		EXPECT_LT(worstStepBack, 0.02f) << "width " << width;
+TEST_F(ShadowFilterFixture, LowBiasPenumbraMonotone) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(EdgeTravel(), 8.0f));
+	if (IsSkipped()) {
+		return;
 	}
+	UseLowBias();
+	Box("Slab", SlabPosition(0.0f), Vec3(4.0f, SLAB_THICKNESS, 8.0f));
+	SceneSystem::EndFrame();
+	_center = Vec3(EdgeShadowX(), 0.0f, 0.0f);
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectMonotonePenumbraAtEveryWidth());
 }
 
 TEST_F(ShadowFilterFixture, QuarterTexelCasterMoveTracks) {
@@ -3039,6 +3061,67 @@ TEST_F(ShadowFilterFixture, SlantedReceiverUnshadowed) {
 	_light->SetSpotAngleDeg(60.0f);
 	_light->SetIntensity(12.0f);
 	_light->SetCastShadows(true);
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectNoSelfShadowAtEveryWidth());
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+}
+
+TEST_F(ShadowFilterFixture, LowBiasReceiverUnshadowedAtEveryWidth) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(40.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	UseLowBias();
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+	ASSERT_NO_FATAL_FAILURE(ExpectNoSelfShadowAtEveryWidth());
+}
+
+TEST_F(ShadowFilterFixture, LowBiasDiagonalSlopeUnshadowed) {
+	constexpr f32 TILT = 40.0f;
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(TILT, 0.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	UseLowBias();
+	const f32 roll = std::atan(std::sin(TILT * Math::DEG_TO_RAD)) * Math::RAD_TO_DEG;
+	for (f32 sign : {1.0f, -1.0f}) {
+		const Quat rotation = Quat::AngleAxis(sign * roll, Vec3(1.0f, 0.0f, 0.0f));
+		_ground->SetLocalRotation(rotation);
+		SceneSystem::EndFrame();
+		_center = Vec3::Zero();
+		ASSERT_NO_FATAL_FAILURE(RenderReferences());
+
+		const Mat4 cascade = Cascade();
+		auto project = [&cascade](const Vec3& point) {
+			const Vec4 clip = cascade * Vec4(point.x, point.y, point.z, 1.0f);
+			return Vec3(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+		};
+		const Vec3 origin = project(Vec3::Zero());
+		const Vec3 slope = Vec3::Cross(project(rotation * Vec3(1.0f, 0.0f, 0.0f)) - origin, project(rotation * Vec3(0.0f, 0.0f, 1.0f)) - origin);
+		EXPECT_NEAR(Math::Abs(slope.x) / Math::Abs(slope.y), 1.0f, 0.05f);
+
+		ASSERT_NO_FATAL_FAILURE(ExpectNoSelfShadowAtEveryWidth());
+	}
+}
+
+TEST_F(ShadowFilterFixture, LowBiasSpotReceiverUnshadowed) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(40.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	Handle<SceneObject> owner = _light->GetOwner();
+	owner->SetLocalPosition(Vec3(-3.0f, 2.0f, 0.0f));
+	owner->SetLocalRotation(Quat::LookRotation(Vec3(3.0f, -2.0f, 0.0f)));
+	_light->SetLightType(LightType::Spot);
+	_light->SetRange(20.0f);
+	_light->SetSpotAngleDeg(60.0f);
+	_light->SetIntensity(12.0f);
+	_light->SetCastShadows(true);
+	UseLowBias();
 	SceneSystem::EndFrame();
 	_center = Vec3::Zero();
 	ASSERT_NO_FATAL_FAILURE(RenderReferences());

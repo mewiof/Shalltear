@@ -8,7 +8,7 @@
 
 // only declared by a shader that shadows
 [[vk::binding(1, 0)]] Texture2D<float> sltShadowAtlas;
-[[vk::binding(2, 0)]] SamplerComparisonState sltShadowSampler;
+[[vk::binding(2, 0)]] SamplerState sltShadowSampler;
 [[vk::binding(3, 0)]] Texture2D<float> sltPunctualShadowAtlas;
 
 struct ShalltearShadowMap {
@@ -75,11 +75,24 @@ float2 ShalltearShadowTentFetch(uint pair, uint pairs, float offset, float halfW
 				  pairArea / (halfWidth * halfWidth));
 }
 
+// texels compared with plane at their centers (not at tap)
+float ShalltearShadowCompare(Texture2D<float> atlas, float2 tap, float2 uv, float reference, float2 slope) {
+	float2 texel = tap / sltShadowAtlasTexel - 0.5;
+	float2 lower = floor(texel);
+	float2 weight = texel - lower;
+	float2 corner = (lower + 1.0) * sltShadowAtlasTexel;
+	float4 stored = atlas.GatherRed(sltShadowSampler, corner);
+	float2 rise = 0.5 * sltShadowAtlasTexel * slope;
+	float4 plane = reference + dot(corner - uv, slope) + float4(rise.y - rise.x, rise.x + rise.y, rise.x - rise.y, -rise.x - rise.y);
+	float4 lit = step(stored, plane);
+	return lerp(lerp(lit.w, lit.z, weight.x), lerp(lit.x, lit.y, weight.x), weight.y);
+}
+
 // widths 1-7 cost 1-16 bilinear fetches
 float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, float2 slope, float2 reach, float4 uvBounds) {
 	uint width = (uint)max(sltShadowPcfTaps, 1.0);
 	if (width <= 1) {
-		return atlas.SampleCmpLevelZero(sltShadowSampler, clamp(uv, uvBounds.xy, uvBounds.zw), reference);
+		return ShalltearShadowCompare(atlas, clamp(uv, uvBounds.xy, uvBounds.zw), uv, reference, slope);
 	}
 	float2 texel = uv / sltShadowAtlasTexel;
 	float2 corner = floor(texel + 0.5);
@@ -92,7 +105,7 @@ float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, fl
 		for (uint x = 0; x < pairs; ++x) {
 			float2 column = ShalltearShadowTentFetch(x, pairs, offset.x, halfWidth);
 			float2 tap = clamp(uv + ((corner + float2(column.x, row.x)) * sltShadowAtlasTexel - uv) * reach, uvBounds.xy, uvBounds.zw);
-			sum += column.y * row.y * atlas.SampleCmpLevelZero(sltShadowSampler, tap, reference + dot(tap - uv, slope));
+			sum += column.y * row.y * ShalltearShadowCompare(atlas, tap, uv, reference, slope);
 		}
 	}
 	return sum;

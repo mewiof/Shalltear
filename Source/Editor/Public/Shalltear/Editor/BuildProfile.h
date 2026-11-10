@@ -156,7 +156,7 @@ namespace Shalltear {
 			str fix;
 		};
 
-		SHALLTEAR_EDITOR_API void FindStaticSDKRoot(StaticSDKProbe& out);
+		SHALLTEAR_EDITOR_API void FindStaticSDKRoot(StaticSDKProbe& out, std::string_view targetTriple = {});
 
 		SHALLTEAR_EDITOR_API bool MigrateStaticSDKRootToUserScope(const str& projectPath);
 

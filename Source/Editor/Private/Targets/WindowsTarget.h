@@ -6,6 +6,8 @@ namespace Shalltear {
 
 	class WindowsTarget : public IBuildTarget {
 	public:
+		static constexpr std::string_view TRIPLE = "x86_64-w64-windows-gnu";
+
 		std::string_view GetId() const override { return "Windows"; }
 		std::string_view GetDisplayName() const override { return "Windows"; }
 

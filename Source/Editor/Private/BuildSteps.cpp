@@ -304,6 +304,9 @@ namespace Shalltear {
 			commandLine += " -DCMAKE_CXX_COMPILER=" + Quote(toolchain.compiler.path);
 			commandLine += " -DCMAKE_MAKE_PROGRAM=" + Quote(toolchain.ninja.path);
 			commandLine += " -DShalltear_ROOT=" + Quote(context.sdkRoot);
+			if (!toolchain.sdkToolchainFile.empty()) {
+				commandLine += " -DCMAKE_TOOLCHAIN_FILE=" + Quote(toolchain.sdkToolchainFile);
+			}
 			commandLine += " -DSHALLTEAR_PROJECT_ROOT=" + Quote(context.projectRoot);
 
 			commandLine += " -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=" + Quote(CppToolchain::GetEngineIdentity());

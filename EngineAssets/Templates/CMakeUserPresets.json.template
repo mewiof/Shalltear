@@ -9,7 +9,7 @@
 			"environment": {
 				"PATH": "{{TOOLCHAIN_PATH}}"
 			},
-			"cacheVariables": { "Shalltear_ROOT": "{{SDK_ROOT}}"{{ENABLED_PACKAGES_ENTRY}} }
+			"cacheVariables": { "Shalltear_ROOT": "{{SDK_ROOT}}", "CMAKE_CXX_COMPILER": "{{CXX_COMPILER}}"{{TOOLCHAIN_FILE_ENTRY}}{{ENABLED_PACKAGES_ENTRY}} }
 		},
 		{
 			"name": "Debug-Local",

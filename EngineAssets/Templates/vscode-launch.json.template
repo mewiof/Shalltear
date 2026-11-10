@@ -3,13 +3,13 @@
 	"configurations": [
 		{
 			"name": "Shalltear Editor ({{MODULE_NAME}})",
-			"type": "cppvsdbg",
+			"type": "{{DEBUGGER_TYPE}}",
 			"request": "launch",
 			"program": "{{EDITOR_EXECUTABLE}}",
 			"args": ["--project", "${workspaceFolder}"],
 			"cwd": "{{EDITOR_DIRECTORY}}",
 			"stopAtEntry": false,
-			"console": "integratedTerminal"
+			{{DEBUGGER_CONSOLE_ENTRY}}
 		}
 	]
 }

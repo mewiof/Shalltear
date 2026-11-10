@@ -224,7 +224,16 @@ namespace Shalltear::CppToolchain {
 		out.sdkCompilerVersion = ReadPackageVariable(text, "SHALLTEAR_COMPILER_VERSION");
 		out.sdkCompilerTarget = ReadPackageVariable(text, "SHALLTEAR_COMPILER_TARGET");
 		out.sdkLinkMode = ReadPackageVariable(text, "SHALLTEAR_LINK_MODE");
+		out.sdkToolchainFile = ReadPackageVariable(text, "SHALLTEAR_TOOLCHAIN_FILE");
+		constexpr std::string_view PACKAGE_ROOT = "${SHALLTEAR_PACKAGE_ROOT}";
+		if (out.sdkToolchainFile.starts_with(PACKAGE_ROOT)) {
+			out.sdkToolchainFile = sdkRoot + out.sdkToolchainFile.substr(PACKAGE_ROOT.size());
+		}
 		return true;
+	}
+
+	std::string_view GetCompilerDriverName(const ToolchainInfo& info) {
+		return info.sdkToolchainFile.empty() ? "x86_64-w64-mingw32-clang++" : "clang++";
 	}
 
 	str GetEngineIdentity() {
@@ -245,19 +254,20 @@ namespace Shalltear::CppToolchain {
 										   : options.extraSearchDirectories;
 
 		ToolchainInfo info;
+		ReadSDKIdentity(sdkRoot, info);
 		Vector<std::string_view> cmakeNames{GetMemoryResource(MemTag::Editor)};
 		cmakeNames.push_back("cmake");
 		Vector<std::string_view> ninjaNames{GetMemoryResource(MemTag::Editor)};
 		ninjaNames.push_back("ninja");
 		Vector<std::string_view> compilerNames{GetMemoryResource(MemTag::Editor)};
-		compilerNames.push_back("x86_64-w64-mingw32-clang++");
-		compilerNames.push_back("clang++");
+		compilerNames.push_back(GetCompilerDriverName(info));
+		if (compilerNames.back() != "clang++") {
+			compilerNames.push_back("clang++");
+		}
 
 		info.cmake = ResolveTool("cmake", cmakeNames, options.cmakePath, bundledDirectories, pathDirectories, extraDirectories, options.probeVersions);
 		info.ninja = ResolveTool("ninja", ninjaNames, options.ninjaPath, bundledDirectories, pathDirectories, extraDirectories, options.probeVersions);
 		info.compiler = ResolveTool("clang++", compilerNames, options.compilerPath, bundledDirectories, pathDirectories, extraDirectories, options.probeVersions);
-
-		ReadSDKIdentity(sdkRoot, info);
 		return info;
 	}
 

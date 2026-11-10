@@ -595,6 +595,24 @@ TEST_F(BuildPipelineFixture, DefaultTargetIsWindows) {
 	EXPECT_EQ(BuildTargetRegistry::Find("WindowsServer")->GetDisplayName(), "Windows Dedicated Server");
 }
 
+TEST_F(BuildPipelineFixture, LinuxTargetsAreRegistered) {
+	Vector<str> ids;
+	BuildTargetRegistry::GetTargetIds(ids);
+	ASSERT_GE(ids.size(), 4u);
+	EXPECT_EQ(ids[2], "Linux");
+	EXPECT_EQ(ids[3], "LinuxServer");
+	EXPECT_EQ(BuildTargetRegistry::Find("Linux")->GetDisplayName(), "Linux");
+	EXPECT_EQ(BuildTargetRegistry::Find("LinuxServer")->GetDisplayName(), "Linux Dedicated Server");
+
+	Vector<BuildSettingDesc> schema;
+	BuildTargetRegistry::GetSchemaFor("LinuxServer", schema);
+	bool hasSymbols = false;
+	for (const BuildSettingDesc& desc : schema) {
+		hasSymbols = hasSymbols || desc.key == "copyDebugSymbols";
+	}
+	EXPECT_TRUE(hasSymbols);
+}
+
 TEST_F(BuildPipelineFixture, StagingComputedWithoutBuild) {
 	WriteScene("Assets/Scenes/Main.scene");
 	WriteScene("Assets/Scenes/FinalBoss.scene");

@@ -436,6 +436,9 @@ namespace Shalltear {
 		if (!sdkRoot.empty()) {
 			commandLine += " -DShalltear_ROOT=" + Quote(sdkRoot);
 		}
+		if (!_toolchain.sdkToolchainFile.empty()) {
+			commandLine += " -DCMAKE_TOOLCHAIN_FILE=" + Quote(_toolchain.sdkToolchainFile);
+		}
 		commandLine += " -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=" + Quote(CppToolchain::GetEngineIdentity());
 
 		str packageList;

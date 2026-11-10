@@ -32,6 +32,7 @@ namespace Shalltear::CppToolchain {
 		str sdkCompilerVersion;
 		str sdkCompilerTarget;
 		str sdkLinkMode;
+		str sdkToolchainFile;
 
 		bool IsComplete() const {
 			return cmake.status == ToolStatus::Found &&
@@ -58,6 +59,8 @@ namespace Shalltear::CppToolchain {
 	SHALLTEAR_EDITOR_API str Describe(const ToolchainInfo& info);
 
 	SHALLTEAR_EDITOR_API bool ReadSDKIdentity(const str& sdkRoot, ToolchainInfo& out);
+
+	SHALLTEAR_EDITOR_API std::string_view GetCompilerDriverName(const ToolchainInfo& info);
 
 	// must match what BuildInfo::GetEngineHash() hashes
 	SHALLTEAR_EDITOR_API str GetEngineIdentity();

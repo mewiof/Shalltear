@@ -282,4 +282,12 @@ namespace Shalltear::EditorPlatform {
 		return ':';
 	}
 
+	std::string_view GetDebuggerType() {
+		return "cppdbg";
+	}
+
+	std::string_view GetDebuggerConsoleEntry() {
+		return "\"externalConsole\": false";
+	}
+
 } // namespace Shalltear::EditorPlatform

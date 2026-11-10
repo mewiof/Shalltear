@@ -771,18 +771,18 @@ namespace Shalltear {
 
 		namespace {
 
-			str ReadPackageLinkMode(const str& sdkRoot) {
+			str ReadPackageVariable(const str& sdkRoot, std::string_view name) {
 				for (const char* relative : {"/ShalltearConfig.cmake", "/Lib/cmake/Shalltear/ShalltearConfig.cmake"}) {
 					str text = FileSystem::ReadTextFile(Path(sdkRoot + relative), MemTag::Editor);
 					if (text.empty()) {
 						continue;
 					}
-					constexpr std::string_view MARKER = "set(SHALLTEAR_LINK_MODE \"";
-					size_t at = text.find(MARKER);
+					const str marker = "set(" + str(name) + " \"";
+					size_t at = text.find(marker);
 					if (at == str::npos) {
 						continue;
 					}
-					at += MARKER.size();
+					at += marker.size();
 					size_t end = text.find('"', at);
 					return end == str::npos ? str{} : text.substr(at, end - at);
 				}
@@ -790,7 +790,11 @@ namespace Shalltear {
 			}
 
 			bool IsStaticPackage(const str& candidate) {
-				return !candidate.empty() && ReadPackageLinkMode(candidate) == "STATIC";
+				return !candidate.empty() && ReadPackageVariable(candidate, "SHALLTEAR_LINK_MODE") == "STATIC";
+			}
+
+			bool IsBuiltFor(const str& candidate, std::string_view targetTriple) {
+				return targetTriple.empty() || ReadPackageVariable(candidate, "SHALLTEAR_COMPILER_TARGET") == targetTriple;
 			}
 
 			bool IsInstalledPackage(const str& sdkRoot) {
@@ -799,7 +803,7 @@ namespace Shalltear {
 					   fs::exists(fs::path{sdkRoot} / "Lib" / "cmake" / "Shalltear" / "ShalltearConfig.cmake", ec);
 			}
 
-			bool FindSiblingStaticTree(str& out) {
+			bool FindSiblingStaticTree(std::string_view targetTriple, str& out) {
 				str executable = ScriptProjectOps::GetEditorExecutablePath();
 				if (executable.empty()) {
 					return false;
@@ -817,7 +821,7 @@ namespace Shalltear {
 						continue;
 					}
 					str candidate = it->path().generic_string();
-					if (IsStaticPackage(candidate)) {
+					if (IsStaticPackage(candidate) && IsBuiltFor(candidate, targetTriple)) {
 						out = std::move(candidate);
 						return true;
 					}
@@ -836,23 +840,26 @@ namespace Shalltear {
 
 		} // anonymous namespace
 
-		void FindStaticSDKRoot(StaticSDKProbe& out) {
+		void FindStaticSDKRoot(StaticSDKProbe& out, std::string_view targetTriple) {
 			out = StaticSDKProbe{};
 
 			str configured = EditorConfig::ReadBuildPreferences().staticSDKRoot;
 			if (!configured.empty()) {
-				out.source = "the Static SDK Root setting";
-				if (IsStaticPackage(configured)) {
+				if (!IsStaticPackage(configured)) {
+					out.source = "the Static SDK Root setting";
+					out.fix = "'" + configured + "' is not a STATIC Shalltear package. Fix or clear Static SDK Root in the Settings window (Editor > Build).";
+					return;
+				}
+				if (IsBuiltFor(configured, targetTriple)) {
+					out.source = "the Static SDK Root setting";
 					out.root = std::move(configured);
 					return;
 				}
-				out.fix = "'" + configured + "' is not a STATIC Shalltear package. Fix or clear Static SDK Root in the Settings window (Editor > Build).";
-				return;
 			}
 
 			str sdkRoot = ScriptProjectOps::GetSDKRoot();
 
-			if (IsStaticPackage(sdkRoot)) {
+			if (IsStaticPackage(sdkRoot) && IsBuiltFor(sdkRoot, targetTriple)) {
 				out.root = sdkRoot;
 				out.source = "the running editor's package";
 				return;
@@ -860,7 +867,7 @@ namespace Shalltear {
 
 			if (!sdkRoot.empty()) {
 				str installed = sdkRoot + "/Static";
-				if (IsStaticPackage(installed)) {
+				if (IsStaticPackage(installed) && IsBuiltFor(installed, targetTriple)) {
 					out.root = std::move(installed);
 					out.source = "the SDK's Static flavor";
 					return;
@@ -868,7 +875,7 @@ namespace Shalltear {
 			}
 
 			str sibling;
-			if (FindSiblingStaticTree(sibling)) {
+			if (FindSiblingStaticTree(targetTriple, sibling)) {
 				out.root = std::move(sibling);
 				out.source = "a sibling static build tree";
 				return;
@@ -876,13 +883,16 @@ namespace Shalltear {
 
 			str fromEnvironment;
 			if (ReadStaticSDKEnvironment(fromEnvironment)) {
-				out.source = "SHALLTEAR_SDK_STATIC";
-				if (IsStaticPackage(fromEnvironment)) {
+				if (!IsStaticPackage(fromEnvironment)) {
+					out.source = "SHALLTEAR_SDK_STATIC";
+					out.fix = "SHALLTEAR_SDK_STATIC is '" + fromEnvironment + "' (not a STATIC Shalltear package).";
+					return;
+				}
+				if (IsBuiltFor(fromEnvironment, targetTriple)) {
+					out.source = "SHALLTEAR_SDK_STATIC";
 					out.root = std::move(fromEnvironment);
 					return;
 				}
-				out.fix = "SHALLTEAR_SDK_STATIC is '" + fromEnvironment + "' (not a STATIC Shalltear package).";
-				return;
 			}
 
 			out.fix = IsInstalledPackage(sdkRoot)

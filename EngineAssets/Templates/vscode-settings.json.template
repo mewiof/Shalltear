@@ -3,7 +3,7 @@
 	"cmake.useCMakePresets": "always",
 	"cmake.cmakePath": "{{CMAKE_PATH}}",
 	"cmake.debugConfig": {
-		"type": "cppvsdbg",
+		"type": "{{DEBUGGER_TYPE}}",
 		"visualizerFile": "{{ENGINE_ASSETS_DIRECTORY}}/Debug/libcxx.natvis"
 	},
 	"C_Cpp.intelliSenseEngine": "disabled",

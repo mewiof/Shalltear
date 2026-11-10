@@ -10,6 +10,7 @@
 #include "Shalltear/Core/StringUtil.h"
 
 #include "Shalltear/Editor/AssetBrowserOps.h"
+#include "Shalltear/Editor/BuildProfile.h"
 #include "Shalltear/Editor/CompileService.h"
 #include "Shalltear/Editor/CppToolchain.h"
 #include "Shalltear/Editor/PackageOps.h"
@@ -786,7 +787,7 @@ TEST_F(ScriptWorkflowFixture, PresetsCarryLoadedPackages) {
 	ScriptProjectOps::ScaffoldResult regenerated;
 	ASSERT_TRUE(ScriptProjectOps::RegenerateProjectFiles(Root(), options, regenerated));
 	const str presets = Read("CMakeUserPresets.json");
-	EXPECT_NE(presets.find("\"cacheVariables\": { \"Shalltear_ROOT\": \"C:/Sdk\", "
+	EXPECT_NE(presets.find("\"cacheVariables\": { \"Shalltear_ROOT\": \"C:/Sdk\", \"CMAKE_CXX_COMPILER\": \"x86_64-w64-mingw32-clang++\", "
 						   "\"SHALLTEAR_ENABLED_PACKAGES\": \"dev.shalltear.audio;dev.shalltear.physics3d\" }"),
 			  str::npos)
 		<< presets;
@@ -799,6 +800,24 @@ TEST_F(ScriptWorkflowFixture, PresetsCarryLoadedPackages) {
 	ASSERT_TRUE(ScriptProjectOps::RegenerateProjectFiles(Root(), options, regenerated));
 	EXPECT_NE(Read("CMakeUserPresets.json").find("\"SHALLTEAR_ENABLED_PACKAGES\": \"\""), str::npos)
 		<< Read("CMakeUserPresets.json");
+}
+
+TEST_F(ScriptWorkflowFixture, UserPresetsCarrySDKToolchainFile) {
+	WriteSource("project://Project.ini", "[Project]\nname = MyGame\n");
+	WriteSource("project://Sdk/ShalltearConfig.cmake",
+				"set(SHALLTEAR_TOOLCHAIN_FILE \"${SHALLTEAR_PACKAGE_ROOT}/Toolchains/Linux-x64.cmake\")\n");
+
+	ScriptProjectOps::ScaffoldOptions options;
+	options.moduleName = "MyGame";
+	options.sdkRoot = Root() + "/Sdk";
+	ScriptProjectOps::ScaffoldResult scaffolded;
+	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
+
+	const str presets = Read("CMakeUserPresets.json");
+	EXPECT_NE(presets.find("\"CMAKE_CXX_COMPILER\": \"clang++\", \"CMAKE_TOOLCHAIN_FILE\": \"" + Root() + "/Sdk/Toolchains/Linux-x64.cmake\""),
+			  str::npos)
+		<< presets;
+	EXPECT_EQ(Read("CMakePresets.json").find("CMAKE_CXX_COMPILER"), str::npos);
 }
 
 TEST_F(ScriptWorkflowFixture, ContentOnlyProjectHasNoScriptProject) {
@@ -1244,6 +1263,54 @@ TEST_F(ScriptWorkflowFixture, ToolchainPrefersRecordedCompiler) {
 	EXPECT_EQ(info.compiler.path, (recorded / "x86_64-w64-mingw32-clang++.exe").generic_string());
 	EXPECT_EQ(info.cmake.path, (onPath / "cmake.exe").generic_string());
 	EXPECT_EQ(info.ninja.path, (onPath / "ninja.exe").generic_string());
+}
+
+TEST_F(ScriptWorkflowFixture, ToolchainFileSDKUsesPlainDriver) {
+	const std::filesystem::path recorded = _root / "recorded-bin";
+	WriteStub(recorded / "x86_64-w64-mingw32-clang++.exe");
+	WriteStub(recorded / "clang++.exe");
+	WriteStub(recorded / "cmake.exe");
+	WriteStub(recorded / "ninja.exe");
+
+	WriteSource("project://ShalltearConfig.cmake",
+				"set(SHALLTEAR_COMPILER_PATH \"" + (recorded / "clang++.exe").generic_string() +
+					"\")\n"
+					"set(SHALLTEAR_TOOLCHAIN_FILE \"${SHALLTEAR_PACKAGE_ROOT}/Lib/cmake/Shalltear/Toolchains/Linux-x64.cmake\")\n");
+
+	CppToolchain::DiscoveryOptions options;
+	options.sdkRoot = Root();
+	options.probeVersions = false;
+	const CppToolchain::ToolchainInfo info = CppToolchain::Discover(options);
+
+	EXPECT_EQ(info.compiler.path, (recorded / "clang++.exe").generic_string());
+	EXPECT_EQ(info.sdkToolchainFile, Root() + "/Lib/cmake/Shalltear/Toolchains/Linux-x64.cmake");
+	EXPECT_EQ(CppToolchain::GetCompilerDriverName(info), "clang++");
+	EXPECT_EQ(CppToolchain::GetCompilerDriverName(CppToolchain::ToolchainInfo{}), "x86_64-w64-mingw32-clang++");
+}
+
+TEST_F(ScriptWorkflowFixture, StaticSDKProbeMatchesTargetTriple) {
+	WriteSource("project://Static/ShalltearConfig.cmake",
+				"set(SHALLTEAR_COMPILER_TARGET \"probe-unknown-none\")\nset(SHALLTEAR_LINK_MODE \"STATIC\")\n");
+	WriteSource("project://Shared/ShalltearConfig.cmake",
+				"set(SHALLTEAR_COMPILER_TARGET \"probe-unknown-none\")\nset(SHALLTEAR_LINK_MODE \"SHARED\")\n");
+
+	{
+		ScopedEnvironment scoped("SHALLTEAR_SDK_STATIC", Root() + "/Static");
+		BuildProfileOps::StaticSDKProbe probe;
+		BuildProfileOps::FindStaticSDKRoot(probe, "probe-unknown-none");
+		EXPECT_EQ(probe.root, Root() + "/Static");
+		EXPECT_EQ(probe.source, "SHALLTEAR_SDK_STATIC");
+
+		BuildProfileOps::FindStaticSDKRoot(probe, "other-unknown-none");
+		EXPECT_TRUE(probe.root.empty());
+		EXPECT_TRUE(probe.source.empty());
+	}
+
+	ScopedEnvironment scoped("SHALLTEAR_SDK_STATIC", Root() + "/Shared");
+	BuildProfileOps::StaticSDKProbe probe;
+	BuildProfileOps::FindStaticSDKRoot(probe, "probe-unknown-none");
+	EXPECT_TRUE(probe.root.empty());
+	EXPECT_NE(probe.fix.find("not a STATIC Shalltear package"), str::npos) << probe.fix;
 }
 
 TEST_F(ScriptWorkflowFixture, ToolchainIgnoresMissingCompiler) {

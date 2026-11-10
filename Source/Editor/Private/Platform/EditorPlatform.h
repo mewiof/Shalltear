@@ -45,6 +45,10 @@ namespace Shalltear::EditorPlatform {
 	std::string_view GetSharedLibrarySuffix();
 	char GetSearchPathSeparator();
 
+	// VS Code launch.json "type" value + a whole "key": value entry
+	std::string_view GetDebuggerType();
+	std::string_view GetDebuggerConsoleEntry();
+
 	void AppendDefaultToolDirectories(Vector<str>& out);
 
 	struct ExternalEditorCandidate {

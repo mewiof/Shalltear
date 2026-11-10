@@ -39,7 +39,7 @@ namespace Shalltear {
 
 	void WindowsTarget::Validate(const str&, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
 		BuildProfileOps::StaticSDKProbe probe;
-		BuildProfileOps::FindStaticSDKRoot(probe);
+		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
 		if (probe.root.empty()) {
 			AddIssue(out, BuildIssueSeverity::Error, profile.name, "",
 					 "a Shalltear player links the game statically + no STATIC SDK was found. " + probe.fix);
@@ -48,7 +48,7 @@ namespace Shalltear {
 
 	void WindowsTarget::ConfigurePipeline(BuildContext& context) const {
 		BuildProfileOps::StaticSDKProbe probe;
-		BuildProfileOps::FindStaticSDKRoot(probe);
+		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
 		context.sdkRoot = probe.root;
 		if (!probe.root.empty()) {
 			context.Log("static SDK: " + probe.root + " (" + probe.source + ")");

@@ -156,7 +156,7 @@ namespace Shalltear::ScriptProjectOps {
 			if (!options.toolchainDirectory.empty()) {
 				toolchainDirectories.push_back(options.toolchainDirectory);
 				compilerDirectory = options.toolchainDirectory;
-				str beside = options.toolchainDirectory + "/cmake.exe";
+				str beside = options.toolchainDirectory + "/cmake" + str(EditorPlatform::GetExecutableSuffix());
 				std::error_code ec;
 				if (fs::exists(fs::path(beside), ec)) {
 					cmakePath = beside;
@@ -177,7 +177,7 @@ namespace Shalltear::ScriptProjectOps {
 
 			str clangdPath = "clangd";
 			if (!compilerDirectory.empty()) {
-				str beside = compilerDirectory + "/clangd.exe";
+				str beside = compilerDirectory + "/clangd" + str(EditorPlatform::GetExecutableSuffix());
 				std::error_code ec;
 				if (fs::exists(fs::path(beside), ec)) {
 					clangdPath = beside;
@@ -186,9 +186,16 @@ namespace Shalltear::ScriptProjectOps {
 
 			str toolchainPath;
 			for (const str& directory : toolchainDirectories) {
-				toolchainPath += directory + ";";
+				toolchainPath += directory + EditorPlatform::GetSearchPathSeparator();
 			}
 			toolchainPath += "$penv{PATH}";
+
+			CppToolchain::ToolchainInfo sdk;
+			CppToolchain::ReadSDKIdentity(options.sdkRoot, sdk);
+			str toolchainFileEntry;
+			if (!sdk.sdkToolchainFile.empty()) {
+				toolchainFileEntry = ", \"CMAKE_TOOLCHAIN_FILE\": \"" + sdk.sdkToolchainFile + "\"";
+			}
 
 			str packagesEntry;
 			if (options.enabledPackages) {
@@ -211,6 +218,10 @@ namespace Shalltear::ScriptProjectOps {
 			tokens.push_back({"CLANGD_PATH", clangdPath});
 			tokens.push_back({"CMAKE_PATH", cmakePath});
 			tokens.push_back({"TOOLCHAIN_PATH", toolchainPath});
+			tokens.push_back({"CXX_COMPILER", str(CppToolchain::GetCompilerDriverName(sdk))});
+			tokens.push_back({"TOOLCHAIN_FILE_ENTRY", toolchainFileEntry});
+			tokens.push_back({"DEBUGGER_TYPE", str(EditorPlatform::GetDebuggerType())});
+			tokens.push_back({"DEBUGGER_CONSOLE_ENTRY", str(EditorPlatform::GetDebuggerConsoleEntry())});
 			tokens.push_back({"EDITOR_EXECUTABLE", editorExecutable});
 			tokens.push_back({"EDITOR_DIRECTORY", editorDirectory});
 			tokens.push_back({"ENGINE_ASSETS_DIRECTORY", engineAssetsDirectory});
@@ -372,7 +383,7 @@ namespace Shalltear::ScriptProjectOps {
 	}
 
 	str GetModuleBinaryPath(const str& projectPath, std::string_view configName) {
-		return Join(projectPath, "Library/Binaries/") + str(configName) + "/" + GetModuleName(projectPath) + ".dll";
+		return Join(projectPath, "Library/Binaries/") + str(configName) + "/" + GetModuleName(projectPath) + str(EditorPlatform::GetSharedLibrarySuffix());
 	}
 
 	str GetModuleCompileStampPath(const str& projectPath, std::string_view configName) {

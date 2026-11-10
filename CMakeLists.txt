@@ -441,6 +441,11 @@ endif()
 set(SHALLTEAR_CONFIG_PLAYER_SOURCE_DIR "\${SHALLTEAR_PACKAGE_ROOT}/${SHALLTEAR_INSTALL_PLAYER_SOURCE}")
 set(SHALLTEAR_CONFIG_ENGINE_SOURCE_DIR "")
 set(SHALLTEAR_CONFIG_COMPILER_PATH "")
+set(SHALLTEAR_CONFIG_TOOLCHAIN_FILE "")
+if(SHALLTEAR_LINUX_PACK)
+    set(SHALLTEAR_CONFIG_TOOLCHAIN_FILE "\${SHALLTEAR_PACKAGE_ROOT}/${SHALLTEAR_INSTALL_CMAKE}/Toolchains/Linux-x64.cmake")
+    install(FILES ${CMAKE_SOURCE_DIR}/CMake/Toolchains/Linux-x64.cmake DESTINATION ${SHALLTEAR_INSTALL_CMAKE}/Toolchains)
+endif()
 configure_file(
     ${CMAKE_SOURCE_DIR}/CMake/ShalltearConfig.cmake.in
     ${CMAKE_BINARY_DIR}/CMakePackage/ShalltearConfig.cmake
@@ -487,6 +492,9 @@ set(SHALLTEAR_CONFIG_PLAYER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/Source/PlayerExecuta
 set(SHALLTEAR_CONFIG_ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}")
 # only record of the compiler in a dev checkout
 set(SHALLTEAR_CONFIG_COMPILER_PATH "${CMAKE_CXX_COMPILER}")
+if(SHALLTEAR_LINUX_PACK)
+    set(SHALLTEAR_CONFIG_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/CMake/Toolchains/Linux-x64.cmake")
+endif()
 configure_file(
     ${CMAKE_SOURCE_DIR}/CMake/ShalltearConfig.cmake.in
     ${CMAKE_BINARY_DIR}/ShalltearConfig.cmake

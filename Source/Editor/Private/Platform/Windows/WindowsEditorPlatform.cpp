@@ -208,6 +208,14 @@ namespace Shalltear::EditorPlatform {
 		return ';';
 	}
 
+	std::string_view GetDebuggerType() {
+		return "cppvsdbg";
+	}
+
+	std::string_view GetDebuggerConsoleEntry() {
+		return "\"console\": \"integratedTerminal\"";
+	}
+
 	void AppendDefaultToolDirectories(Vector<str>& out) {
 		str programFiles = EnvironmentValue("ProgramFiles");
 		if (!programFiles.empty()) {

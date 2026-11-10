@@ -140,7 +140,8 @@ function(shalltear_add_module MODULE_NAME)
 
 	if(CMAKE_CONFIGURATION_TYPES)
 		set_target_properties(${MODULE_NAME} PROPERTIES
-			RUNTIME_OUTPUT_DIRECTORY "${moduleOutputRoot}/$<CONFIG>")
+			RUNTIME_OUTPUT_DIRECTORY "${moduleOutputRoot}/$<CONFIG>"
+			LIBRARY_OUTPUT_DIRECTORY "${moduleOutputRoot}/$<CONFIG>")
 	else()
 		if(CMAKE_BUILD_TYPE)
 			set(moduleConfig "${CMAKE_BUILD_TYPE}")
@@ -148,7 +149,8 @@ function(shalltear_add_module MODULE_NAME)
 			set(moduleConfig "Debug")
 		endif()
 		set_target_properties(${MODULE_NAME} PROPERTIES
-			RUNTIME_OUTPUT_DIRECTORY "${moduleOutputRoot}/${moduleConfig}")
+			RUNTIME_OUTPUT_DIRECTORY "${moduleOutputRoot}/${moduleConfig}"
+			LIBRARY_OUTPUT_DIRECTORY "${moduleOutputRoot}/${moduleConfig}")
 	endif()
 
 	add_custom_target(${MODULE_NAME}_ShalltearCompileStamp ALL
@@ -158,7 +160,17 @@ function(shalltear_add_module MODULE_NAME)
 
 	_shalltear_write_build_stamp(${MODULE_NAME} FALSE)
 
-	target_compile_options(${MODULE_NAME} PRIVATE -g -gcodeview)
+	if(WIN32)
+		target_compile_options(${MODULE_NAME} PRIVATE -g -gcodeview)
+	else()
+		target_compile_options(${MODULE_NAME} PRIVATE -g)
+		set_target_properties(${MODULE_NAME} PROPERTIES
+			C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+	endif()
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		# unused package should not become an import (shitty ELF default)
+		target_link_options(${MODULE_NAME} PRIVATE -Wl,--no-undefined -Wl,--as-needed)
+	endif()
 	if(MINGW)
 		target_link_options(${MODULE_NAME} PRIVATE -g -Wl,--pdb=)
 	else()

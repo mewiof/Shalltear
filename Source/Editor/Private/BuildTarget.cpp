@@ -3,6 +3,8 @@
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 
+#include "Platform/EditorPlatform.h"
+#include "Targets/LinuxTarget.h"
 #include "Targets/WindowsTarget.h"
 
 #include <vector>
@@ -26,6 +28,8 @@ namespace Shalltear {
 
 		const WindowsTarget _Windows;
 		const WindowsServerTarget _WindowsServer;
+		const LinuxTarget _Linux;
+		const LinuxServerTarget _LinuxServer;
 
 		TargetState& State() {
 			if (!_state) {
@@ -55,6 +59,8 @@ namespace Shalltear {
 		}
 		Register(&_Windows, nullptr);
 		Register(&_WindowsServer, nullptr);
+		Register(&_Linux, nullptr);
+		Register(&_LinuxServer, nullptr);
 	}
 
 	void BuildTargetRegistry::Shutdown() {
@@ -124,6 +130,11 @@ namespace Shalltear {
 
 	str BuildTargetRegistry::GetDefaultTargetId() {
 		TargetState& state = State();
+		for (const TargetEntry& entry : state.targets) {
+			if (entry.id == EditorPlatform::GetHostPlatformName()) {
+				return entry.id;
+			}
+		}
 		return state.targets.empty() ? str{} : state.targets.front().id;
 	}
 

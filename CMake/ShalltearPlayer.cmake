@@ -123,9 +123,14 @@ function(_shalltear_add_player_impl MODULE_NAME)
 		target_compile_definitions(${MODULE_NAME} PRIVATE ${SHALLTEAR_PLAYER_DEFINES})
 	endif()
 
+	if(WIN32)
+		set(playerSymbolFlags -g -gcodeview)
+	else()
+		set(playerSymbolFlags -g)
+	endif()
 	# means emit symbols in a Release player
 	if(SHALLTEAR_PLAYER_DEBUG_SYMBOLS)
-		target_compile_options(${MODULE_NAME} PRIVATE -g -gcodeview)
+		target_compile_options(${MODULE_NAME} PRIVATE ${playerSymbolFlags})
 	endif()
 
 	# the EDITOR flag is ignored
@@ -177,7 +182,7 @@ function(_shalltear_add_player_impl MODULE_NAME)
 		target_compile_definitions(${playerTarget} PRIVATE ${SHALLTEAR_PLAYER_DEFINES})
 	endif()
 	if(SHALLTEAR_PLAYER_DEBUG_SYMBOLS)
-		target_compile_options(${playerTarget} PRIVATE -g -gcodeview)
+		target_compile_options(${playerTarget} PRIVATE ${playerSymbolFlags})
 		# no copy step because the PDB shoved beside the exe
 		if(MINGW)
 			target_link_options(${playerTarget} PRIVATE -g -Wl,--pdb= "-Wl,--Xlink=-pdbaltpath:${playerOutputName}.pdb")
@@ -186,6 +191,21 @@ function(_shalltear_add_player_impl MODULE_NAME)
 		endif()
 	elseif(MINGW)
 		target_link_options(${playerTarget} PRIVATE -Wl,-s)
+	elseif(NOT WIN32)
+		target_link_options(${playerTarget} PRIVATE $<$<NOT:$<CONFIG:Debug>>:-Wl,-s>)
+	endif()
+
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		set_target_properties(${playerTarget} PROPERTIES SUFFIX ".${CMAKE_SYSTEM_PROCESSOR}")
+		# looked up by name at boot (BootManifest.cpp)
+		target_link_options(${playerTarget} PRIVATE -static-libstdc++ "-Wl,--export-dynamic-symbol=ShalltearRegisterCoreExtensions")
+		target_link_libraries(${playerTarget} PRIVATE -l:libc++abi.a)
+		if(SHALLTEAR_PLAYER_DEBUG_SYMBOLS)
+			add_custom_command(TARGET ${playerTarget} POST_BUILD
+				COMMAND ${CMAKE_OBJCOPY} --only-keep-debug "$<TARGET_FILE:${playerTarget}>" "$<TARGET_FILE:${playerTarget}>.debug"
+				COMMAND ${CMAKE_OBJCOPY} --strip-all "--add-gnu-debuglink=$<TARGET_FILE:${playerTarget}>.debug" "$<TARGET_FILE:${playerTarget}>"
+				VERBATIM)
+		endif()
 	endif()
 
 	# whole archive around the game lib only

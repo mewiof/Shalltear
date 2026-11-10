@@ -99,6 +99,8 @@ namespace Shalltear {
 		static Path GetUserDataDirectory();
 
 		static Path GetUserHomeDirectory();
+
+		static Path GetExecutablePath();
 	};
 
 	enum class FileSharing : u8 {

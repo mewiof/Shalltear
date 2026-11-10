@@ -13,7 +13,7 @@
 #include "ScreenSettings.h"
 #include "Module/EngineStateTable.h"
 #include "StaticLinkAnchors.h"
-#include "Module/ModuleAddress.h"
+#include "Platform/Library.h"
 #include "Serialization/SerializerInternal.h"
 
 #include <cstring>
@@ -411,7 +411,7 @@ namespace Shalltear {
 		category->defaults = defaults;
 		category->scope = scope;
 		category->overridable = overridable;
-		category->owner = ModuleInternal::ImageBaseOf(__builtin_return_address(0));
+		category->owner = Platform::ImageBaseOf(__builtin_return_address(0));
 		category->fields = std::move(fields);
 		category->resolvedFrom.assign(category->fields.size(), -1);
 		category->editScope.assign(category->fields.size(), -1);

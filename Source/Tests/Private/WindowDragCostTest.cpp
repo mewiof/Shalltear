@@ -3,7 +3,7 @@
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Window.h"
 
-#include "Window/Win32/Win32Internal.h"
+#include "Platform/Windows/Window/Win32Internal.h"
 
 #include <string>
 #include <vector>
@@ -52,7 +52,7 @@ protected:
 		desc.flags = WindowFlags::Resizable | WindowFlags::Hidden;
 		_window = WindowSystem::Create(desc);
 		ASSERT_TRUE(_window.IsValid());
-		_hwnd = static_cast<HWND>(_window->GetNativeHandle().hwnd);
+		_hwnd = static_cast<HWND>(_window->GetNativeHandle().window);
 		ASSERT_NE(_hwnd, nullptr);
 		_recorder->SubscribeAll();
 	}

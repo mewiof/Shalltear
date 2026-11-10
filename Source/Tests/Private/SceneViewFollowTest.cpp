@@ -151,7 +151,7 @@ namespace {
 			WindowSystem::PumpEvents();
 		}
 	private:
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().hwnd); }
+		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 		static LPARAM KeyLParam(bool up) {
 			LPARAM lParam = 1;
 			lParam |= static_cast<LPARAM>(0x11) << 16;

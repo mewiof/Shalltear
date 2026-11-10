@@ -1,4 +1,5 @@
 file(GLOB_RECURSE EDITOR_SOURCES "Private/*.cpp" "Private/*.h" "Public/*.h")
+shalltear_select_platform_sources(EDITOR_SOURCES)
 
 add_library(ShalltearEditor ${SHALLTEAR_LIB_TYPE} ${EDITOR_SOURCES})
 

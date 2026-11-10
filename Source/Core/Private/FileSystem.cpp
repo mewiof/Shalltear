@@ -17,11 +17,8 @@
 
 #include "FileAccessRecorder.h"
 #include "Module/EngineStateTable.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#undef CreateDirectory
-#endif
+#include "Platform/NativeFile.h"
+#include "Platform/Process.h"
 
 namespace Shalltear {
 
@@ -366,6 +363,9 @@ namespace Shalltear {
 
 	bool FileSystem::WriteFile(const Path& path, const Buffer& buffer) {
 		Path resolved = Resolve(path);
+		if (!Platform::CanReplaceFile(resolved.ToString())) {
+			return false;
+		}
 		std::ofstream file(resolved.CStr(), std::ios::binary);
 		if (!file.is_open()) {
 			return false;
@@ -378,6 +378,9 @@ namespace Shalltear {
 
 	bool FileSystem::WriteTextFile(const Path& path, const str& text) {
 		Path resolved = Resolve(path);
+		if (!Platform::CanReplaceFile(resolved.ToString())) {
+			return false;
+		}
 		std::ofstream file(resolved.CStr(), std::ios::binary);
 		if (!file.is_open()) {
 			return false;
@@ -430,65 +433,24 @@ namespace Shalltear {
 	}
 
 	u64 FileSystem::GetCreationTimeUnix(const Path& path) {
-#ifdef _WIN32
-		std::filesystem::path native{Resolve(path).ToString()};
-		WIN32_FILE_ATTRIBUTE_DATA attributes{};
-		if (!GetFileAttributesExW(native.c_str(), GetFileExInfoStandard, &attributes)) {
-			return 0;
-		}
-		u64 ticks = (static_cast<u64>(attributes.ftCreationTime.dwHighDateTime) << 32) |
-					attributes.ftCreationTime.dwLowDateTime;
-		constexpr u64 TICKS_AT_UNIX_EPOCH = 116444736000000000ull;
-		constexpr u64 TICKS_PER_SECOND = 10000000ull;
-		return ticks > TICKS_AT_UNIX_EPOCH ? (ticks - TICKS_AT_UNIX_EPOCH) / TICKS_PER_SECOND : 0;
-#else
-		return GetLastWriteTimeUnix(path);
-#endif
+		return Platform::GetFileCreationTimeUnix(Resolve(path).ToString());
 	}
 
-#ifdef _WIN32
-	namespace {
-		str ReadEnvironmentPath(const wchar_t* name) {
-			wchar_t buffer[MAX_PATH];
-			DWORD length = GetEnvironmentVariableW(name, buffer, MAX_PATH);
-			if (length == 0 || length >= MAX_PATH) {
-				return {};
-			}
-			return StringUtil::WideToUTF8(std::wstring_view(buffer, length));
-		}
-	} // anonymous namespace
-#endif
-
 	Path FileSystem::GetUserDataDirectory() {
-#ifdef _WIN32
-		str local = ReadEnvironmentPath(L"LOCALAPPDATA");
-		if (local.empty()) {
-			str profile = ReadEnvironmentPath(L"USERPROFILE");
-			if (profile.empty()) {
-				return {};
-			}
-			local = profile + "/AppData/Local";
-		}
-		return Path(local);
-#else
-		return {};
-#endif
+		const str directory = Platform::GetUserDataDirectory();
+		return directory.empty() ? Path{} : Path(directory);
 	}
 
 	Path FileSystem::GetUserHomeDirectory() {
-#ifdef _WIN32
-		return Path(ReadEnvironmentPath(L"USERPROFILE"));
-#else
-		return {};
-#endif
+		return Path(Platform::GetUserHomeDirectory());
+	}
+
+	Path FileSystem::GetExecutablePath() {
+		return Path(Platform::GetExecutablePath());
 	}
 
 	FileReader::~FileReader() {
-#ifdef _WIN32
-		if (_handle) {
-			CloseHandle(static_cast<HANDLE>(_handle));
-		}
-#endif
+		Platform::CloseFile(_handle);
 	}
 
 	FileReader::FileReader(FileReader&& other) noexcept : _handle(other._handle), _size(other._size), _sharing(other._sharing) {
@@ -508,232 +470,48 @@ namespace Shalltear {
 		return *this;
 	}
 
-#ifdef _WIN32
-	namespace {
-		DWORD ShareModeOf(FileSharing sharing) {
-			return sharing == FileSharing::ReadDelete ? FILE_SHARE_READ | FILE_SHARE_DELETE : FILE_SHARE_READ;
-		}
-	} // anonymous namespace
-#endif
-
 	bool FileReader::Open(const Path& physicalPath, FileSharing sharing) {
-#ifdef _WIN32
-		const std::wstring wide = StringUtil::UTF8ToWide(physicalPath.ToString());
-		return Adopt(CreateFileW(wide.c_str(), GENERIC_READ, ShareModeOf(sharing), nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), sharing);
-#else
-		(void)physicalPath;
-		return Adopt(nullptr, sharing);
-#endif
+		return Adopt(Platform::OpenFileForRead(physicalPath.ToString(), sharing), sharing);
 	}
 
 	bool FileReader::Open(const FileReader& reader) {
 		const FileSharing sharing = reader._sharing;
-#ifdef _WIN32
-		if (!reader._handle) {
-			return Adopt(INVALID_HANDLE_VALUE, sharing);
-		}
-		return Adopt(::ReOpenFile(static_cast<HANDLE>(reader._handle), GENERIC_READ, ShareModeOf(sharing), 0), sharing);
-#else
-		return Adopt(nullptr, sharing);
-#endif
+		return Adopt(Platform::ReopenFile(reader._handle, sharing), sharing);
 	}
 
 	bool FileReader::Adopt(void* handle, FileSharing sharing) {
 		*this = FileReader();
-#ifdef _WIN32
-		if (handle == INVALID_HANDLE_VALUE) {
+		if (!handle) {
 			return false;
 		}
-		LARGE_INTEGER size{};
-		if (!GetFileSizeEx(static_cast<HANDLE>(handle), &size) || size.QuadPart < 0) {
-			CloseHandle(static_cast<HANDLE>(handle));
+		u64 size = 0;
+		if (!Platform::GetFileSize(handle, size)) {
+			Platform::CloseFile(handle);
 			return false;
 		}
 		_handle = handle;
-		_size = static_cast<u64>(size.QuadPart);
+		_size = size;
 		_sharing = sharing;
 		return true;
-#else
-		(void)handle;
-		(void)sharing;
-		return false;
-#endif
 	}
 
 	bool FileReader::ReadAt(u64 offset, std::span<u8> out) const {
 		if (!_handle || offset > _size || out.size() > _size - offset) {
 			return false;
 		}
-#ifdef _WIN32
-		constexpr u64 LARGEST_READ = 1ull << 30;
-		u8* into = out.data();
-		u64 left = out.size();
-		u64 at = offset;
-		while (left > 0) {
-			const DWORD asked = static_cast<DWORD>(left < LARGEST_READ ? left : LARGEST_READ);
-			OVERLAPPED position{};
-			position.Offset = static_cast<DWORD>(at & 0xFFFFFFFFull);
-			position.OffsetHigh = static_cast<DWORD>(at >> 32);
-			DWORD read = 0;
-			if (!::ReadFile(static_cast<HANDLE>(_handle), into, asked, &read, &position) || read != asked) {
-				return false;
-			}
-			into += read;
-			left -= read;
-			at += read;
-		}
-		return true;
-#else
-		return false;
-#endif
+		return Platform::ReadFileAt(_handle, offset, out);
 	}
 
-#ifdef _WIN32
-
 	struct FileWatcher::Impl {
-		static constexpr size_t WATCH_BUFFER_SIZE = 64 * 1024;
+		Platform::DirectoryWatcher* watcher = nullptr;
 
-		Path directory;
-		Callback onEvent;
-		std::atomic<bool> running{false};
-		std::thread workerThread;
-		HANDLE hDirectory = INVALID_HANDLE_VALUE;
-
-		Impl(const Path& dir, Callback cb) : directory(dir), onEvent(cb) {
-			Start();
-		}
+		Impl(const Path& directory, Callback callback)
+			: watcher(Platform::StartDirectoryWatcher(directory, std::move(callback))) {}
 
 		~Impl() {
-			Stop();
-		}
-
-		void Start() {
-			str dirStr = directory.ToString();
-			std::wstring wideDir = StringUtil::UTF8ToWide(dirStr);
-
-			hDirectory = CreateFileW(
-				wideDir.c_str(),
-				FILE_LIST_DIRECTORY,
-				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL,
-				OPEN_EXISTING,
-				FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
-				NULL);
-
-			if (hDirectory == INVALID_HANDLE_VALUE) {
-				return;
-			}
-
-			running = true;
-			workerThread = std::thread(&Impl::WorkerLoop, this);
-		}
-
-		void Stop() {
-			if (running.exchange(false)) {
-				if (hDirectory != INVALID_HANDLE_VALUE) {
-					CancelIoEx(hDirectory, NULL);
-				}
-				if (workerThread.joinable()) {
-					workerThread.join();
-				}
-				if (hDirectory != INVALID_HANDLE_VALUE) {
-					CloseHandle(hDirectory);
-					hDirectory = INVALID_HANDLE_VALUE;
-				}
-			}
-		}
-
-		void WorkerLoop() {
-			std::vector<u8> buffer(WATCH_BUFFER_SIZE);
-			OVERLAPPED overlapped = {};
-			overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-			bool pending = false;
-
-			while (running) {
-				if (!pending) {
-					ResetEvent(overlapped.hEvent);
-					BOOL result = ReadDirectoryChangesW(
-						hDirectory,
-						buffer.data(),
-						static_cast<DWORD>(buffer.size()),
-						TRUE,
-						FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_CREATION,
-						NULL,
-						&overlapped,
-						NULL);
-
-					if (!result) {
-						break;
-					}
-					pending = true;
-				}
-
-				DWORD waitResult = WaitForSingleObject(overlapped.hEvent, 100);
-				if (waitResult != WAIT_OBJECT_0) {
-					continue;
-				}
-
-				DWORD bytesReturned = 0;
-				if (!GetOverlappedResult(hDirectory, &overlapped, &bytesReturned, FALSE)) {
-					break;
-				}
-				pending = false;
-
-				if (bytesReturned == 0) {
-					SLT_LOG_WARN("FileSystem", "FileWatcher: notification overflow, events were dropped ({})", directory.ToString());
-					continue;
-				}
-
-				FILE_NOTIFY_INFORMATION* fni = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer.data());
-				do {
-					str fileName = StringUtil::WideToUTF8(
-						std::wstring_view(fni->FileName, fni->FileNameLength / sizeof(WCHAR)));
-
-					Path fullPath = directory / fileName;
-					FileAction action;
-
-					switch (fni->Action) {
-					case FILE_ACTION_ADDED:
-						action = FileAction::Added;
-						break;
-					case FILE_ACTION_REMOVED:
-						action = FileAction::Removed;
-						break;
-					case FILE_ACTION_MODIFIED:
-						action = FileAction::Modified;
-						break;
-					case FILE_ACTION_RENAMED_OLD_NAME:
-					case FILE_ACTION_RENAMED_NEW_NAME:
-						action = FileAction::Renamed;
-						break;
-					default:
-						action = FileAction::Modified;
-						break;
-					}
-
-					if (onEvent) {
-						onEvent(fullPath, action);
-					}
-
-					if (fni->NextEntryOffset == 0) {
-						break;
-					}
-					fni = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<u8*>(fni) + fni->NextEntryOffset);
-				} while (true);
-			}
-
-			CloseHandle(overlapped.hEvent);
+			Platform::StopDirectoryWatcher(watcher);
 		}
 	};
-
-#else
-#pragma message("FileWatcher not implemented on this platform")
-	struct FileWatcher::Impl {
-		Impl(const Path& dir, Callback cb) {}
-		~Impl() {}
-	};
-#endif
 
 	FileWatcher::FileWatcher(const Path& directory, Callback callback) {
 		_impl = new Impl(FileSystem::Resolve(directory), callback);

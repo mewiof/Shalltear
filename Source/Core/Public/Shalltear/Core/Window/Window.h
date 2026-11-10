@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/Vector.h"
+#include "Shalltear/Core/NativeWindow.h"
 #include "Shalltear/Core/Object.h"
 #include "Shalltear/Core/Types.h"
 #include "Shalltear/Core/Window/Monitor.h"
@@ -37,11 +38,6 @@ namespace Shalltear {
 		Vec2I maxClientSize = {0, 0};
 		WindowFlags flags = WindowFlags::Resizable | WindowFlags::AcceptFileDrops;
 		Handle<Window> owner;
-	};
-
-	struct NativeWindowHandle {
-		void* hwnd = nullptr;
-		void* hinstance = nullptr;
 	};
 
 	enum class HitTestResult : u8 {

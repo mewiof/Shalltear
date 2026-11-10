@@ -555,7 +555,7 @@ TEST_F(EditorPanelsTest, LookOwnsPointerUntilRelease) {
 		return desc;
 	}());
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(FindPanelType("SceneViewPanel"));
 	ASSERT_TRUE(panel.IsValid());
@@ -622,7 +622,7 @@ TEST_F(EditorPanelsTest, LookBlockedByPopup) {
 		return desc;
 	}());
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(FindPanelType("SceneViewPanel"));
 	ASSERT_TRUE(panel.IsValid());

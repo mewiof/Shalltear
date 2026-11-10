@@ -256,7 +256,7 @@ namespace {
 		}
 
 		HWND Hwnd() const {
-			return static_cast<HWND>(_window->GetNativeHandle().hwnd);
+			return static_cast<HWND>(_window->GetNativeHandle().window);
 		}
 
 		static LPARAM KeyLParam(u16 scancode, bool up = false) {

@@ -1,10 +1,4 @@
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
+#include "Platform/Windows/WindowsHeaders.h"
 
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Time.h"
@@ -187,5 +181,3 @@ namespace Shalltear::InputInternal {
 	}
 
 } // namespace Shalltear::InputInternal
-
-#endif

@@ -1,4 +1,5 @@
 file(GLOB_RECURSE CORE_SOURCES "Private/*.cpp" "Private/*.h" "Public/*.h")
+shalltear_select_platform_sources(CORE_SOURCES)
 
 add_library(ShalltearCore ${SHALLTEAR_LIB_TYPE} ${CORE_SOURCES})
 
@@ -6,9 +7,8 @@ set_target_properties(ShalltearCore PROPERTIES LINKER_LANGUAGE CXX)
 
 target_compile_definitions(ShalltearCore PRIVATE SHALLTEAR_CORE_BUILD)
 
-target_compile_definitions(ShalltearCore PUBLIC _WIN32_WINNT=0x0A00)
-
 if(WIN32)
+    target_compile_definitions(ShalltearCore PUBLIC _WIN32_WINNT=0x0A00)
     target_link_libraries(ShalltearCore PRIVATE user32 gdi32 shell32 shcore dwmapi)
 endif()
 

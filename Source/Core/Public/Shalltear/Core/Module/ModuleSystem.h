@@ -35,7 +35,12 @@ namespace Shalltear {
 		static u32 GetLoadedCount();
 		static str GetModuleName(ModuleHandle handle);
 		static Path GetModuleBinaryPath(ModuleHandle handle);
+		// image base (an owner token)
 		static void* GetNativeHandle(ModuleHandle handle);
+
+		static void* GetExecutableImage();
+		// null unless exported by that image
+		static void* FindSymbol(const void* imageBase, const char* name);
 	};
 
 } // namespace Shalltear

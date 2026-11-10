@@ -17,11 +17,8 @@
 #include <utility>
 #include <vector>
 
-#if defined(_WIN32)
-#include <windows.h>
-
 #include "Module/EngineStateTable.h"
-#endif
+#include "Platform/Process.h"
 
 namespace Shalltear {
 
@@ -92,11 +89,7 @@ namespace Shalltear {
 		std::time_t nowC = std::chrono::system_clock::to_time_t(timestamp);
 		std::tm parts;
 
-#if defined(_WIN32)
-		localtime_s(&parts, &nowC);
-#else
-		localtime_r(&nowC, &parts);
-#endif
+		Platform::ToLocalTime(nowC, parts);
 
 		std::ostringstream oss;
 		oss << std::put_time(&parts, "%H:%M:%S") << '.' << std::setfill('0') << std::setw(3) << milliseconds.count();
@@ -121,53 +114,8 @@ namespace Shalltear {
 		}
 	}
 
-	namespace {
-
-		bool AcquireStandardOutput(bool createConsole) {
-#if defined(_WIN32)
-			HANDLE existing = ::GetStdHandle(STD_OUTPUT_HANDLE);
-			if (existing != nullptr && existing != INVALID_HANDLE_VALUE &&
-				::GetFileType(existing) != FILE_TYPE_UNKNOWN) {
-				return true;
-			}
-
-			auto adopt = []() {
-				FILE* reopened = nullptr;
-				::freopen_s(&reopened, "CONOUT$", "w", stdout);
-				::freopen_s(&reopened, "CONOUT$", "w", stderr);
-				std::cout.clear();
-				std::cerr.clear();
-			};
-
-			if (::AttachConsole(ATTACH_PARENT_PROCESS)) {
-				adopt();
-				return true;
-			}
-			if (createConsole && ::AllocConsole()) {
-				adopt();
-				return true;
-			}
-			return false;
-#else
-			(void)createConsole;
-			return true;
-#endif
-		}
-
-	} // anonymous namespace
-
 	ConsoleSink::ConsoleSink() {
-#if defined(_WIN32)
-		HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-		if (hOut != INVALID_HANDLE_VALUE) {
-			DWORD mode = 0;
-			if (GetConsoleMode(hOut, &mode)) {
-				mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-				SetConsoleMode(hOut, mode);
-			}
-		}
-		SetConsoleOutputCP(CP_UTF8);
-#endif
+		Platform::PrepareConsoleOutput();
 	}
 
 	void ConsoleSink::ReceiveLog(const LogEvent& event) {
@@ -232,11 +180,7 @@ namespace Shalltear {
 
 		std::time_t launch = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 		std::tm parts;
-#if defined(_WIN32)
-		localtime_s(&parts, &launch);
-#else
-		localtime_r(&launch, &parts);
-#endif
+		Platform::ToLocalTime(launch, parts);
 		_fileStream << "\n================================================================\n"
 					<< "SESSION " << std::put_time(&parts, "%Y-%m-%d %H:%M:%S")
 					<< " | Shalltear " << BuildInfo::GetVersionString()
@@ -284,7 +228,7 @@ namespace Shalltear {
 
 		data.isTerminated.store(false, std::memory_order_relaxed);
 
-		if (config.enableConsoleSink && AcquireStandardOutput(config.createConsole))
+		if (config.enableConsoleSink && Platform::AcquireStandardOutput(config.createConsole))
 			AddSink(std::make_shared<ConsoleSink>());
 		if (config.enableFileSink)
 			AddSink(std::make_shared<FileSink>(config.fileSinkPath));

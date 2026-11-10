@@ -1,6 +1,7 @@
 #include "Shalltear/Editor/EditorExtensions.h"
 
 #include "Shalltear/Core/Log.h"
+#include "Shalltear/Core/Module/ModuleSystem.h"
 
 #include "Shalltear/Editor/AssetOpeners.h"
 #include "Shalltear/Editor/AuthoringDefaults.h"
@@ -21,29 +22,19 @@
 #include "Shalltear/Editor/SceneViewOverlays.h"
 #include "Shalltear/Editor/SettingsPresentation.h"
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
 namespace Shalltear::EditorExtensions {
 
 	bool Load(const void* moduleBase) {
 		if (!moduleBase) {
 			return false;
 		}
-#if defined(_WIN32)
-		auto entry = reinterpret_cast<EditorExtensionRegisterFn>(
-			::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(moduleBase)), REGISTER_SYMBOL));
+		auto entry = reinterpret_cast<EditorExtensionRegisterFn>(ModuleSystem::FindSymbol(moduleBase, REGISTER_SYMBOL));
 		if (!entry) {
 			return false;
 		}
 
 		entry(moduleBase);
 		return true;
-#else
-		return false;
-#endif
 	}
 
 	u32 Unload(const void* moduleBase) {

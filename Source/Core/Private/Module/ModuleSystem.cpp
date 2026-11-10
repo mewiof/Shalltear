@@ -22,7 +22,7 @@
 
 #include "Asset/AssetMigration.h"
 #include "Module/EngineStateTable.h"
-#include "Module/ModuleAddress.h"
+#include "Platform/Library.h"
 #include "Scene/SceneMigration.h"
 #include "Shalltear/Core/Serialization/HandleResolver.h"
 #include "Shalltear/Core/Time.h"
@@ -30,9 +30,6 @@
 #include <filesystem>
 #include <format>
 #include <thread>
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 
 namespace Shalltear {
 
@@ -45,7 +42,7 @@ namespace Shalltear {
 			Path sourcePath;
 			std::filesystem::path cachePath;
 			std::filesystem::path previousCachePath;
-			HMODULE image = nullptr;
+			void* image = nullptr;
 			ShalltearModuleAPI* api = nullptr;
 			u32 generation = 1;
 			bool active = false;
@@ -97,7 +94,7 @@ namespace Shalltear {
 			std::filesystem::path cache;
 			for (u32 attempt = 0; attempt < MAX_CACHE_SLOTS; ++attempt) {
 				u32 counter = ++state.cacheCounter;
-				cache = cacheDir / std::format("{}-{}.dll", src.stem().string(), counter);
+				cache = cacheDir / std::format("{}-{}{}", src.stem().string(), counter, Platform::GetSharedLibrarySuffix());
 				ec.clear();
 				std::filesystem::copy_file(src, cache, std::filesystem::copy_options::overwrite_existing, ec);
 				if (!ec) {
@@ -110,11 +107,12 @@ namespace Shalltear {
 				}
 			}
 
+			const std::string_view symbols = Platform::GetDebugSymbolsSuffix();
 			std::filesystem::path pdb = src;
-			pdb.replace_extension(".pdb");
-			if (std::filesystem::exists(pdb, ec)) {
+			pdb.replace_extension(symbols);
+			if (!symbols.empty() && std::filesystem::exists(pdb, ec)) {
 				std::filesystem::path cachePdb = cache;
-				cachePdb.replace_extension(".pdb");
+				cachePdb.replace_extension(symbols);
 				std::filesystem::copy_file(pdb, cachePdb, std::filesystem::copy_options::overwrite_existing, ec);
 			}
 
@@ -132,25 +130,33 @@ namespace Shalltear {
 			return true;
 		}
 
+		void* OpenImage(const std::filesystem::path& binary, str& outError) {
+			const std::u8string utf8 = binary.u8string();
+			return Platform::OpenLibrary(str(utf8.begin(), utf8.end()), &outError);
+		}
+
 		void DeleteCacheCopy(const std::filesystem::path& cache) {
 			if (cache.empty())
 				return;
 			std::error_code ec;
 			std::filesystem::remove(cache, ec);
-			std::filesystem::path pdb = cache;
-			pdb.replace_extension(".pdb");
-			std::filesystem::remove(pdb, ec);
+			const std::string_view symbols = Platform::GetDebugSymbolsSuffix();
+			if (!symbols.empty()) {
+				std::filesystem::path pdb = cache;
+				pdb.replace_extension(symbols);
+				std::filesystem::remove(pdb, ec);
+			}
 		}
 
-		void LoadCoreExtensions(HMODULE image) {
+		void LoadCoreExtensions(void* image) {
 			auto entry = reinterpret_cast<CoreExtensionRegisterFn>(
-				::GetProcAddress(image, SLT_CORE_EXTENSION_REGISTER_SYMBOL));
+				Platform::FindSymbol(image, SLT_CORE_EXTENSION_REGISTER_SYMBOL));
 			if (entry) {
 				entry(image);
 			}
 		}
 
-		void RegisterDeclaredImporters(HMODULE image) {
+		void RegisterDeclaredImporters(void* image) {
 			TypeRegistry::ForEachType(
 				+[](const TypeInfo* type, void* user) {
 					if (type->ownerModule != user || AssetImporterRegistry::RegisterDeclared(type, user)) {
@@ -165,7 +171,7 @@ namespace Shalltear {
 				image);
 		}
 
-		u32 UnloadCoreExtensions(HMODULE image) {
+		u32 UnloadCoreExtensions(void* image) {
 			u32 removed = 0;
 			removed += UI::WidgetRegistry::UnregisterOwnedBy(image);
 			removed += Settings::UnregisterOwnedBy(image);
@@ -177,13 +183,13 @@ namespace Shalltear {
 			return removed;
 		}
 
-		void AnnounceImageUnloading(HMODULE image) {
+		void AnnounceImageUnloading(void* image) {
 			ModuleEvents::ImageUnloading.Publish(EventBus::GetGlobal(), ImageUnloadingEvent{image});
 		}
 
-		bool ValidateAndBind(LoaderState& state, HMODULE image, const std::filesystem::path& mappedFrom, ShalltearModuleAPI** outAPI) {
+		bool ValidateAndBind(LoaderState& state, void* image, const std::filesystem::path& mappedFrom, ShalltearModuleAPI** outAPI) {
 			auto getAPI = reinterpret_cast<ShalltearModuleGetAPIFn>(
-				::GetProcAddress(image, SLT_MODULE_GET_API_SYMBOL));
+				Platform::FindSymbol(image, SLT_MODULE_GET_API_SYMBOL));
 			if (!getAPI) {
 				SLT_LOG_ERROR("Module", "{}: missing {} export (not a Shalltear module)",
 							  mappedFrom.string(), SLT_MODULE_GET_API_SYMBOL);
@@ -237,7 +243,7 @@ namespace Shalltear {
 			return true;
 		}
 
-		bool RejectSceneObjectSubclasses(HMODULE image, const std::filesystem::path& mappedFrom) {
+		bool RejectSceneObjectSubclasses(void* image, const std::filesystem::path& mappedFrom) {
 			struct ScanState {
 				const void* image;
 				const TypeInfo* sceneObjectType;
@@ -264,20 +270,20 @@ namespace Shalltear {
 			return true;
 		}
 
-		void AssertNoLiveModuleObjects(HMODULE image) {
+		void AssertNoLiveModuleObjects(void* image) {
 #ifndef NDEBUG
 			struct SweepState {
-				const void* image;
+				Platform::ImageSpan image;
 				u32 liveCount;
 				u64 firstId;
 				const char* firstType;
-			} sweep{image, 0, 0, "<none>"};
+			} sweep{Platform::GetImageSpan(image), 0, 0, "<none>"};
 
 			ObjectRegistry::ForEachLiveObject(
 				+[](Object* object, u64 id, void* user) {
 					auto* s = static_cast<SweepState*>(user);
 					const void* vptr = *reinterpret_cast<void* const*>(object);
-					if (!ModuleInternal::IsAddressInImage(vptr, s->image))
+					if (!s->image.Contains(vptr))
 						return;
 
 					if (s->liveCount == 0) {
@@ -298,12 +304,12 @@ namespace Shalltear {
 #endif
 		}
 
-		void FreeModuleImage(HMODULE image) {
+		void FreeModuleImage(void* image) {
 			if (!image) {
 				return;
 			}
 			LogManager::DrainBeforeImageUnload();
-			::FreeLibrary(image);
+			Platform::CloseLibrary(image);
 		}
 
 		void RunUnloadSweeps(LoadedModule& entry) {
@@ -399,9 +405,10 @@ namespace Shalltear {
 			return {};
 		}
 
-		HMODULE image = ::LoadLibraryW(mapped.wstring().c_str());
+		str loadError;
+		void* image = OpenImage(mapped, loadError);
 		if (!image) {
-			SLT_LOG_ERROR("Module", "LoadLibrary failed for {} (error {})", mapped.string(), ::GetLastError());
+			SLT_LOG_ERROR("Module", "couldn't load {} ({})", mapped.string(), loadError);
 			DeleteCacheCopy(owned);
 			return {};
 		}
@@ -537,12 +544,13 @@ namespace Shalltear {
 
 		std::filesystem::path rollbackBinary = entry->cachePath;
 		std::filesystem::path newCache;
-		HMODULE newImage = nullptr;
+		void* newImage = nullptr;
+		str loadError;
 		ShalltearModuleAPI* newAPI = nullptr;
 		bool loadedNew = false;
 
 		if (CopyToCache(state, source, newCache)) {
-			newImage = ::LoadLibraryW(newCache.wstring().c_str());
+			newImage = OpenImage(newCache, loadError);
 			if (newImage) {
 				if (ValidateAndBind(state, newImage, newCache, &newAPI) && RejectSceneObjectSubclasses(newImage, newCache)) {
 					loadedNew = true;
@@ -557,7 +565,7 @@ namespace Shalltear {
 					newImage = nullptr;
 				}
 			} else {
-				SLT_LOG_ERROR("Module", "Reload: LoadLibrary failed for {} (error {})", newCache.string(), ::GetLastError());
+				SLT_LOG_ERROR("Module", "Reload: couldn't load {} ({})", newCache.string(), loadError);
 			}
 			if (!loadedNew) {
 				DeleteCacheCopy(newCache);
@@ -566,7 +574,7 @@ namespace Shalltear {
 
 		if (!loadedNew) {
 			SLT_LOG_WARN("Module", "Reload: new binary rejected, rolling back to the previous binary");
-			newImage = ::LoadLibraryW(rollbackBinary.wstring().c_str());
+			newImage = OpenImage(rollbackBinary, loadError);
 			if (newImage && ValidateAndBind(state, newImage, rollbackBinary, &newAPI)) {
 				newCache = rollbackBinary;
 				rollbackBinary.clear();

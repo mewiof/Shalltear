@@ -1,8 +1,4 @@
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#include "Window/Win32/Win32Internal.h"
+#include "Platform/Windows/Window/Win32Internal.h"
 
 #include <shellscalingapi.h>
 
@@ -323,5 +319,3 @@ namespace Shalltear::WindowBackend {
 	}
 
 } // namespace Shalltear::WindowBackend
-
-#endif

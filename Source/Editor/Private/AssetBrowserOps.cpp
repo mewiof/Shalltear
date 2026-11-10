@@ -27,12 +27,7 @@
 #include <system_error>
 #include <unordered_map>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <shellapi.h>
-#endif
+#include "Platform/EditorPlatform.h"
 
 namespace Shalltear::AssetBrowserOps {
 
@@ -116,19 +111,7 @@ namespace Shalltear::AssetBrowserOps {
 		}
 
 		bool ShellRevealPath(const fs::path& target, bool isDirectory) {
-#if defined(_WIN32)
-			fs::path preferred = target;
-			str native = preferred.make_preferred().string();
-			str arguments = isDirectory ? ("\"" + native + "\"") : ("/select,\"" + native + "\"");
-			std::wstring wideArguments(arguments.begin(), arguments.end());
-			auto result = reinterpret_cast<std::uintptr_t>(
-				::ShellExecuteW(nullptr, L"open", L"explorer.exe", wideArguments.c_str(), nullptr, SW_SHOWNORMAL));
-			return result > 32;
-#else
-			(void)target;
-			(void)isDirectory;
-			return false;
-#endif
+			return EditorPlatform::RevealInFileManager(target.string(), isDirectory);
 		}
 
 		void WalkDirectory(const fs::path& directory, const str& relPrefix, u32 depth, Vector<Entry>& out) {

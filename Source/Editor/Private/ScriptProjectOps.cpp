@@ -21,12 +21,7 @@
 #include <system_error>
 #include <unordered_set>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shellapi.h>
-#undef CreateDirectory
-#endif
+#include "Platform/EditorPlatform.h"
 
 namespace Shalltear::ScriptProjectOps {
 
@@ -222,45 +217,9 @@ namespace Shalltear::ScriptProjectOps {
 			return tokens;
 		}
 
-		str EnvironmentValue(const char* name) {
-			size_t length = 0;
-			char buffer[4096];
-			if (::getenv_s(&length, buffer, sizeof(buffer), name) != 0 || length == 0) {
-				return {};
-			}
-			return str(buffer, length - 1);
-		}
-
-#if defined(_WIN32)
-		constexpr const wchar_t* HOSTILE_CHILD_VARIABLES[] = {
-			L"ELECTRON_RUN_AS_NODE=",
+		constexpr std::string_view HOSTILE_CHILD_VARIABLES[] = {
+			"ELECTRON_RUN_AS_NODE",
 		};
-
-		Vector<wchar_t> BuildEditorEnvironment() {
-			Vector<wchar_t> block{GetMemoryResource(MemTag::Editor)};
-			wchar_t* strings = ::GetEnvironmentStringsW();
-			if (strings == nullptr) {
-				return block;
-			}
-			for (const wchar_t* entry = strings; *entry != L'\0';) {
-				size_t length = std::wcslen(entry);
-				bool hostile = false;
-				for (const wchar_t* prefix : HOSTILE_CHILD_VARIABLES) {
-					if (::_wcsnicmp(entry, prefix, std::wcslen(prefix)) == 0) {
-						hostile = true;
-						break;
-					}
-				}
-				if (!hostile) {
-					block.insert(block.end(), entry, entry + length + 1);
-				}
-				entry += length + 1;
-			}
-			::FreeEnvironmentStringsW(strings);
-			block.push_back(L'\0');
-			return block;
-		}
-#endif
 
 		str SanitizeModuleName(std::string_view raw) {
 			str result;
@@ -376,16 +335,7 @@ namespace Shalltear::ScriptProjectOps {
 	}
 
 	str GetEditorExecutablePath() {
-#if defined(_WIN32)
-		wchar_t buffer[MAX_PATH * 2] = {};
-		DWORD length = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
-		if (length == 0 || length >= std::size(buffer)) {
-			return {};
-		}
-		return fs::path(std::wstring(buffer, length)).generic_string();
-#else
-		return {};
-#endif
+		return FileSystem::GetExecutablePath().ToString();
 	}
 
 	str GetSDKRoot() {
@@ -706,30 +656,10 @@ namespace Shalltear::ScriptProjectOps {
 
 	ExternalEditor DetectExternalEditor() {
 		ExternalEditor detected;
-#if defined(_WIN32)
 		std::error_code ec;
-		str localAppData = EnvironmentValue("LOCALAPPDATA");
-		str programFiles = EnvironmentValue("ProgramFiles");
-
-		struct Candidate {
-			const char* name;
-			str path;
-			const char* folderArguments;
-			const char* fileArguments;
-		};
-		Vector<Candidate> candidates{GetMemoryResource(MemTag::Editor)};
-
-		constexpr const char* CODE_FOLDER = "\"{folder}\"";
-		constexpr const char* CODE_FILE = "\"{folder}\" --goto \"{file}:{line}:{column}\"";
-		if (!localAppData.empty()) {
-			candidates.push_back({"VS Code", localAppData + "/Programs/Microsoft VS Code/Code.exe", CODE_FOLDER, CODE_FILE});
-		}
-		if (!programFiles.empty()) {
-			candidates.push_back({"VS Code", programFiles + "/Microsoft VS Code/Code.exe", CODE_FOLDER, CODE_FILE});
-			candidates.push_back({"CLion", programFiles + "/JetBrains/CLion/bin/clion64.exe", "\"{folder}\"", "--line {line} \"{file}\""});
-			candidates.push_back({"Rider", programFiles + "/JetBrains/Rider/bin/rider64.exe", "\"{folder}\"", "--line {line} \"{file}\""});
-		}
-		for (const Candidate& candidate : candidates) {
+		Vector<EditorPlatform::ExternalEditorCandidate> candidates{GetMemoryResource(MemTag::Editor)};
+		EditorPlatform::AppendExternalEditorCandidates(candidates);
+		for (const EditorPlatform::ExternalEditorCandidate& candidate : candidates) {
 			if (fs::is_regular_file(fs::path(candidate.path), ec)) {
 				str quoted = "\"" + candidate.path + "\" ";
 				detected.name = candidate.name;
@@ -738,7 +668,6 @@ namespace Shalltear::ScriptProjectOps {
 				break;
 			}
 		}
-#endif
 		return detected;
 	}
 
@@ -755,12 +684,8 @@ namespace Shalltear::ScriptProjectOps {
 			command = hasFileTarget ? detected.fileCommand : detected.folderCommand;
 		}
 
-#if defined(_WIN32)
 		if (command.empty()) {
-			std::wstring wide = StringUtil::UTF8ToWide(target);
-			auto result = reinterpret_cast<std::uintptr_t>(
-				::ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-			return result > 32;
+			return EditorPlatform::OpenWithDefaultApplication(target);
 		}
 
 		command = StringUtil::Replace(command, "{file}", target);
@@ -768,26 +693,17 @@ namespace Shalltear::ScriptProjectOps {
 		command = StringUtil::Replace(command, "{line}", std::to_string(line == 0 ? 1u : line));
 		command = StringUtil::Replace(command, "{column}", std::to_string(column == 0 ? 1u : column));
 
-		std::wstring wideCommand = StringUtil::UTF8ToWide(command);
-		Vector<wchar_t> environment = BuildEditorEnvironment();
-		STARTUPINFOW startup{};
-		startup.cb = sizeof(startup);
-		PROCESS_INFORMATION process{};
-		if (!::CreateProcessW(nullptr, wideCommand.data(), nullptr, nullptr, FALSE,
-							  environment.empty() ? 0u : CREATE_UNICODE_ENVIRONMENT,
-							  environment.empty() ? nullptr : environment.data(),
-							  projectPath.empty() ? nullptr : StringUtil::UTF8ToWide(projectPath).c_str(),
-							  &startup, &process)) {
+		EditorPlatform::SpawnOptions options;
+		options.workingDirectory = projectPath;
+		options.hiddenVariables = HOSTILE_CHILD_VARIABLES;
+		EditorPlatform::SpawnedProcess spawned;
+		str error;
+		if (!EditorPlatform::SpawnProcess(command, options, spawned, error)) {
 			SLT_LOG_WARN("Editor", "couldn't launch the external editor: {}", command);
 			return false;
 		}
-		::CloseHandle(process.hThread);
-		::CloseHandle(process.hProcess);
+		EditorPlatform::ReleaseProcess(spawned.process);
 		return true;
-#else
-		(void)command;
-		return false;
-#endif
 	}
 
 	bool IsValidClassName(std::string_view className) {

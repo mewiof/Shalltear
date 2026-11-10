@@ -1,13 +1,6 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #include "Graphics/Vulkan/VulkanInternal.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <vulkan/vulkan_win32.h>
+#include "Graphics/Vulkan/VulkanPlatform.h"
 
 #include "Shalltear/Core/Memory.h"
 
@@ -250,7 +243,7 @@ namespace Shalltear::RHI {
 			return false;
 		}
 
-		CandidateInfo EvaluateAdapter(const VulkanInstanceFunctions& fi, VkPhysicalDevice physical, bool headless) {
+		CandidateInfo EvaluateAdapter(const VulkanInstanceFunctions& fi, VkInstance instance, VkPhysicalDevice physical, bool headless) {
 			CandidateInfo candidate;
 			candidate.physical = physical;
 
@@ -321,12 +314,8 @@ namespace Shalltear::RHI {
 				if ((families[i].queueFlags & FRAME_QUEUE) != FRAME_QUEUE) {
 					continue;
 				}
-				if (!headless) {
-					auto presentSupport = reinterpret_cast<PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR>(
-						fi.vkGetPhysicalDeviceWin32PresentationSupportKHR);
-					if (!presentSupport || !presentSupport(physical, i)) {
-						continue;
-					}
+				if (!headless && !VulkanPlatform::QueueFamilyPresents(instance, physical, i)) {
+					continue;
 				}
 				candidate.graphicsFamily = i;
 				found = true;
@@ -519,15 +508,29 @@ namespace Shalltear::RHI {
 		VulkanLoader::Get_vkEnumerateInstanceExtensionProperties()(nullptr, &instanceExtensionCount, instanceExtensions.data());
 
 		Vector<const char*> enabledExtensions{GetMemoryResource(MemTag::Graphics)};
+		Vector<const char*> windowExtensions{GetMemoryResource(MemTag::Graphics)};
+		for (const char* extension : VulkanPlatform::GetSurfaceExtensions()) {
+			if (HasExtension(instanceExtensions, extension)) {
+				windowExtensions.push_back(extension);
+			}
+		}
 		bool haveSurfaceExtensions = HasExtension(instanceExtensions, VK_KHR_SURFACE_EXTENSION_NAME) &&
-									 HasExtension(instanceExtensions, "VK_KHR_win32_surface");
+									 !windowExtensions.empty();
 		if (!desc.headless && !haveSurfaceExtensions) {
-			return fail("VK_KHR_surface / VK_KHR_win32_surface unavailable");
+			static const str unavailable = [] {
+				str text = VK_KHR_SURFACE_EXTENSION_NAME;
+				for (const char* extension : VulkanPlatform::GetSurfaceExtensions()) {
+					text += " / ";
+					text += extension;
+				}
+				return text + " unavailable";
+			}();
+			return fail(unavailable.c_str());
 		}
 		impl->surfaceCapabilities2 = haveSurfaceExtensions && HasExtension(instanceExtensions, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
 		if (haveSurfaceExtensions) {
 			enabledExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-			enabledExtensions.push_back("VK_KHR_win32_surface");
+			enabledExtensions.insert(enabledExtensions.end(), windowExtensions.begin(), windowExtensions.end());
 		}
 		if (impl->surfaceCapabilities2) {
 			enabledExtensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
@@ -581,7 +584,7 @@ namespace Shalltear::RHI {
 		Vector<CandidateInfo> candidates{GetMemoryResource(MemTag::Graphics)};
 		impl->adapters.clear();
 		for (VkPhysicalDevice physical : physicals) {
-			candidates.push_back(EvaluateAdapter(impl->fi, physical, impl->headless));
+			candidates.push_back(EvaluateAdapter(impl->fi, impl->instance, physical, impl->headless));
 			impl->adapters.push_back(candidates.back().info);
 		}
 
@@ -1540,5 +1543,3 @@ namespace Shalltear::RHI {
 	}
 
 } // namespace Shalltear::RHI
-
-#endif

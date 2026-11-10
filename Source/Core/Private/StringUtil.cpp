@@ -4,10 +4,7 @@
 #include <algorithm>
 #include <cctype>
 
-#if defined(SLT_PLATFORM_WINDOWS)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
+#include "Platform/Text.h"
 
 namespace Shalltear {
 
@@ -111,41 +108,11 @@ namespace Shalltear {
 	}
 
 	std::wstring StringUtil::UTF8ToWide(std::string_view utf8Str) {
-		if (utf8Str.empty()) {
-			return std::wstring();
-		}
-
-#if defined(SLT_PLATFORM_WINDOWS)
-		int count = MultiByteToWideChar(CP_UTF8, 0, utf8Str.data(), static_cast<int>(utf8Str.length()), nullptr, 0);
-		if (count == 0) {
-			return std::wstring();
-		}
-
-		std::wstring result(count, 0);
-		MultiByteToWideChar(CP_UTF8, 0, utf8Str.data(), static_cast<int>(utf8Str.length()), &result[0], count);
-		return result;
-#else
-#error "StringUtil not yet implemented for non-Windows platforms"
-#endif
+		return Platform::UTF8ToWide(utf8Str);
 	}
 
 	str StringUtil::WideToUTF8(std::wstring_view wideStr) {
-		if (wideStr.empty()) {
-			return "";
-		}
-
-#if defined(SLT_PLATFORM_WINDOWS)
-		int count = WideCharToMultiByte(CP_UTF8, 0, wideStr.data(), static_cast<int>(wideStr.length()), nullptr, 0, nullptr, nullptr);
-		if (count == 0) {
-			return "";
-		}
-
-		str result(count, 0);
-		WideCharToMultiByte(CP_UTF8, 0, wideStr.data(), static_cast<int>(wideStr.length()), &result[0], count, nullptr, nullptr);
-		return result;
-#else
-#error "StringUtil not yet implemented for non-Windows platforms"
-#endif
+		return Platform::WideToUTF8(wideStr);
 	}
 
 } // namespace Shalltear

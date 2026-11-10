@@ -8,8 +8,10 @@
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
 #include "ChildProcess.h"
+#include "Platform/EditorPlatform.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <system_error>
@@ -25,19 +27,15 @@ namespace Shalltear::CppToolchain {
 		constexpr int PROBE_POLL_MS = 10;
 
 		str EnvironmentValue(const char* name) {
-			size_t length = 0;
-			char buffer[4096];
-			if (::getenv_s(&length, buffer, sizeof(buffer), name) != 0 || length == 0) {
-				return {};
-			}
-			return str(buffer, length - 1);
+			const char* value = std::getenv(name);
+			return value ? str(value) : str();
 		}
 
 		Vector<str> SplitSearchPath(const str& value) {
 			Vector<str> parts{GetMemoryResource(MemTag::Editor)};
 			size_t start = 0;
 			while (start <= value.size()) {
-				size_t end = value.find(';', start);
+				size_t end = value.find(EditorPlatform::GetSearchPathSeparator(), start);
 				if (end == str::npos) {
 					end = value.size();
 				}
@@ -115,17 +113,7 @@ namespace Shalltear::CppToolchain {
 
 		Vector<str> DefaultSearchDirectories() {
 			Vector<str> directories{GetMemoryResource(MemTag::Editor)};
-			str programFiles = EnvironmentValue("ProgramFiles");
-			if (!programFiles.empty()) {
-				directories.push_back(programFiles + "/LLVM/bin");
-				directories.push_back(programFiles + "/CMake/bin");
-				directories.push_back(programFiles + "/Ninja");
-			}
-			str programFilesX86 = EnvironmentValue("ProgramFiles(x86)");
-			if (!programFilesX86.empty()) {
-				directories.push_back(programFilesX86 + "/LLVM/bin");
-				directories.push_back(programFilesX86 + "/CMake/bin");
-			}
+			EditorPlatform::AppendDefaultToolDirectories(directories);
 			return directories;
 		}
 
@@ -136,7 +124,7 @@ namespace Shalltear::CppToolchain {
 					if (directory.empty()) {
 						continue;
 					}
-					fs::path candidate = fs::path(directory) / (str(executableName) + ".exe");
+					fs::path candidate = fs::path(directory) / (str(executableName) + str(EditorPlatform::GetExecutableSuffix()));
 					if (fs::is_regular_file(candidate, ec)) {
 						return candidate.generic_string();
 					}

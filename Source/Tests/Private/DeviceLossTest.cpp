@@ -589,8 +589,7 @@ TEST(DeviceLossSwapChainTest, WindowPresentsAfterRebuild) {
 
 		NativeWindowHandle native = window.Get()->GetNativeHandle();
 		RHI::NativeSwapChainDesc swapDesc;
-		swapDesc.hwnd = native.hwnd;
-		swapDesc.hinstance = native.hinstance;
+		swapDesc.window = native;
 		swapDesc.sizePx = window.Get()->GetClientSize();
 		swapDesc.vsync = false;
 		RHI::SwapChain* swapChain = device->CreateSwapChainForWindow(swapDesc);

@@ -1,7 +1,3 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #include "Graphics/Vulkan/VulkanInternal.h"
 
 #include "Shalltear/Core/Profiler.h"
@@ -1084,5 +1080,3 @@ namespace Shalltear::RHI {
 	}
 
 } // namespace Shalltear::RHI
-
-#endif

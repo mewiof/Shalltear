@@ -518,7 +518,7 @@ TEST_F(UIScreenFixture, WindowInputReachesScreen) {
 	EXPECT_FLOAT_EQ(UISystem::GetSurfaceContext(surface)->GetContentScale(), window->GetContentScale());
 	EXPECT_FALSE(UISystem::GetSurfaceTexture(surface).IsValid());
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(50, 50));
 	::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 50));
 	WindowSystem::PumpEvents();
@@ -566,7 +566,7 @@ TEST_F(UIScreenFixture, RenderSizeMapsClicks) {
 	ASSERT_GT(box.h, 25.0f);
 	ASSERT_LT(box.h, 80.0f);
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	auto click = [&](i32 x, i32 y) {
 		::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
 		::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
@@ -596,7 +596,7 @@ TEST_F(UIScreenFixture, TextureScreenTakesNothingFromWindow) {
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(50, 50));
 	::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 50));
 	::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(50, 50));

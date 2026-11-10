@@ -1,10 +1,10 @@
 #include "ChildProcess.h"
 
-#include "Shalltear/Core/Log.h"
-#include "Shalltear/Core/StringUtil.h"
+#include "Platform/EditorPlatform.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "Shalltear/Core/Log.h"
+
+#include <format>
 
 namespace Shalltear {
 
@@ -12,7 +12,7 @@ namespace Shalltear {
 
 		constexpr size_t MAX_QUEUED_LINES = 20000;
 
-		constexpr DWORD READ_CHUNK = 4096;
+		constexpr size_t READ_CHUNK = 4096;
 
 	} // anonymous namespace
 
@@ -21,19 +21,15 @@ namespace Shalltear {
 	}
 
 	bool StartDetachedProcess(const str& commandLine, const str& workingDirectory) {
-		std::wstring wideCommand = StringUtil::UTF8ToWide(commandLine);
-		std::wstring wideDirectory = StringUtil::UTF8ToWide(workingDirectory);
-
-		STARTUPINFOW startup{};
-		startup.cb = sizeof(startup);
-		PROCESS_INFORMATION process{};
-		if (!::CreateProcessW(nullptr, wideCommand.data(), nullptr, nullptr, FALSE, 0, nullptr,
-							  wideDirectory.empty() ? nullptr : wideDirectory.c_str(), &startup, &process)) {
-			SLT_LOG_ERROR("Editor", "couldn't launch '{}' (error {})", commandLine, ::GetLastError());
+		EditorPlatform::SpawnOptions options;
+		options.workingDirectory = workingDirectory;
+		EditorPlatform::SpawnedProcess spawned;
+		str error;
+		if (!EditorPlatform::SpawnProcess(commandLine, options, spawned, error)) {
+			SLT_LOG_ERROR("Editor", "couldn't launch '{}' ({})", commandLine, error);
 			return false;
 		}
-		::CloseHandle(process.hThread);
-		::CloseHandle(process.hProcess);
+		EditorPlatform::ReleaseProcess(spawned.process);
 		return true;
 	}
 
@@ -46,43 +42,18 @@ namespace Shalltear {
 			return false;
 		}
 
-		SECURITY_ATTRIBUTES security{};
-		security.nLength = sizeof(security);
-		security.bInheritHandle = TRUE;
-
-		HANDLE readEnd = nullptr;
-		HANDLE writeEnd = nullptr;
-		if (!::CreatePipe(&readEnd, &writeEnd, &security, 0)) {
-			SLT_LOG_ERROR("Editor", "child process: couldn't create the output pipe (error {})", ::GetLastError());
+		EditorPlatform::SpawnOptions options;
+		options.workingDirectory = workingDirectory;
+		options.captureOutput = true;
+		EditorPlatform::SpawnedProcess spawned;
+		str error;
+		if (!EditorPlatform::SpawnProcess(commandLine, options, spawned, error)) {
+			SLT_LOG_ERROR("Editor", "child process: couldn't start '{}' ({})", commandLine, error);
 			return false;
 		}
-		::SetHandleInformation(readEnd, HANDLE_FLAG_INHERIT, 0);
 
-		STARTUPINFOW startup{};
-		startup.cb = sizeof(startup);
-		startup.dwFlags = STARTF_USESTDHANDLES;
-		startup.hStdOutput = writeEnd;
-		startup.hStdError = writeEnd;
-		startup.hStdInput = nullptr;
-
-		std::wstring wideCommand = StringUtil::UTF8ToWide(commandLine);
-		std::wstring wideDirectory = StringUtil::UTF8ToWide(workingDirectory);
-
-		PROCESS_INFORMATION process{};
-		BOOL created = ::CreateProcessW(nullptr, wideCommand.data(), nullptr, nullptr,
-										TRUE, CREATE_NO_WINDOW, nullptr,
-										wideDirectory.empty() ? nullptr : wideDirectory.c_str(),
-										&startup, &process);
-		::CloseHandle(writeEnd);
-		if (!created) {
-			SLT_LOG_ERROR("Editor", "child process: couldn't start '{}' (error {})", commandLine, ::GetLastError());
-			::CloseHandle(readEnd);
-			return false;
-		}
-		::CloseHandle(process.hThread);
-
-		_process = process.hProcess;
-		_readEnd = readEnd;
+		_process = spawned.process;
+		_readEnd = spawned.output;
 		_running = true;
 		{
 			std::lock_guard lock(_mutex);
@@ -91,15 +62,15 @@ namespace Shalltear {
 			_droppedLines = 0;
 		}
 
-		_reader = std::thread([this]() {
+		_reader = std::thread([this, output = spawned.output]() {
 			char chunk[READ_CHUNK];
 			for (;;) {
-				DWORD read = 0;
-				if (!::ReadFile(static_cast<HANDLE>(_readEnd), chunk, READ_CHUNK, &read, nullptr) || read == 0) {
+				const size_t read = EditorPlatform::ReadProcessOutput(output, chunk, READ_CHUNK);
+				if (read == 0) {
 					break;
 				}
 				std::lock_guard lock(_mutex);
-				for (DWORD i = 0; i < read; ++i) {
+				for (size_t i = 0; i < read; ++i) {
 					char c = chunk[i];
 					if (c == '\n') {
 						if (!_partial.empty() && _partial.back() == '\r') {
@@ -145,15 +116,14 @@ namespace Shalltear {
 		if (!_running || !_process) {
 			return false;
 		}
-		if (::WaitForSingleObject(static_cast<HANDLE>(_process), 0) != WAIT_OBJECT_0) {
+		i32 exitCode = 0;
+		if (!EditorPlatform::TryWaitProcess(_process, exitCode)) {
 			return false;
 		}
 		if (_reader.joinable()) {
 			_reader.join();
 		}
-		DWORD exitCode = 0;
-		::GetExitCodeProcess(static_cast<HANDLE>(_process), &exitCode);
-		outExitCode = static_cast<i32>(exitCode);
+		outExitCode = exitCode;
 		CloseHandles();
 		_running = false;
 		return true;
@@ -163,7 +133,7 @@ namespace Shalltear {
 		if (!_running || !_process) {
 			return;
 		}
-		::TerminateProcess(static_cast<HANDLE>(_process), 1);
+		EditorPlatform::KillProcess(_process);
 		if (_reader.joinable()) {
 			_reader.join();
 		}
@@ -173,10 +143,7 @@ namespace Shalltear {
 
 	void ChildProcess::Detach() {
 		if (_reader.joinable()) {
-			if (_readEnd) {
-				::CloseHandle(static_cast<HANDLE>(_readEnd));
-				_readEnd = nullptr;
-			}
+			EditorPlatform::CancelProcessOutput(_readEnd);
 			_reader.join();
 		}
 		CloseHandles();
@@ -185,11 +152,11 @@ namespace Shalltear {
 
 	void ChildProcess::CloseHandles() {
 		if (_readEnd) {
-			::CloseHandle(static_cast<HANDLE>(_readEnd));
+			EditorPlatform::CloseProcessOutput(_readEnd);
 			_readEnd = nullptr;
 		}
 		if (_process) {
-			::CloseHandle(static_cast<HANDLE>(_process));
+			EditorPlatform::ReleaseProcess(_process);
 			_process = nullptr;
 		}
 	}

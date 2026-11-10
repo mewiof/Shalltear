@@ -1,8 +1,4 @@
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#include "Window/Win32/Win32Internal.h"
+#include "Platform/Windows/Window/Win32Internal.h"
 
 #include <shellapi.h>
 #include <dwmapi.h>
@@ -1184,7 +1180,7 @@ namespace Shalltear {
 		if (!_impl) {
 			return {};
 		}
-		return {_impl->hwnd, GetBackendState().hinstance};
+		return {NativeWindowSystem::Win32, GetBackendState().hinstance, _impl->hwnd};
 	}
 
 	void Window::SetVSyncHint(bool on) {
@@ -1200,5 +1196,3 @@ namespace Shalltear {
 #undef SLT_WINDOW_ASSERT_MAIN_THREAD
 
 } // namespace Shalltear
-
-#endif

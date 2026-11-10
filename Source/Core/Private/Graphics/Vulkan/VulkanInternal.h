@@ -272,8 +272,7 @@ namespace Shalltear::RHI {
 
 	struct SwapChainImpl {
 		DeviceImpl* device = nullptr;
-		void* hwnd = nullptr;
-		void* hinstance = nullptr;
+		NativeWindowHandle window;
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 		Format format = Format::Unknown;

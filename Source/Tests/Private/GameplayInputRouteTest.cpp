@@ -125,7 +125,7 @@ protected:
 		return desc;
 	}
 
-	HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().hwnd); }
+	HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 
 	void Focus() {
 		::PostMessageW(Hwnd(), WM_SETFOCUS, 0, 0);

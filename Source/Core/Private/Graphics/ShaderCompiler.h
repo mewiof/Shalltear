@@ -37,6 +37,7 @@ namespace Shalltear {
 	class ShaderCompiler {
 	public:
 		static bool IsAvailable();
+		static std::string_view GetLibraryName();
 
 		static ShaderCompileResult Compile(
 			std::string_view source,

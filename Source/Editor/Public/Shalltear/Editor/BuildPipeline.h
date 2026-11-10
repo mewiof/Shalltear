@@ -80,6 +80,9 @@ namespace Shalltear {
 
 		str bootManifest;
 
+		// staged beside executable, found beside SDK/editor
+		Vector<str> runtimeFiles;
+
 		void Log(std::string_view message) const;
 
 		void AddIssue(BuildIssueSeverity severity, std::string_view key, std::string_view message);

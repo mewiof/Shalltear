@@ -120,12 +120,11 @@ namespace Shalltear {
 		}
 
 		bool ReadEnvironment(const str& name, str& out) {
-			char buffer[4096] = {};
-			size_t length = 0;
-			if (::getenv_s(&length, buffer, sizeof(buffer), name.c_str()) != 0 || length == 0) {
+			const char* value = std::getenv(name.c_str());
+			if (!value || !*value) {
 				return false;
 			}
-			out.assign(buffer);
+			out.assign(value);
 			return true;
 		}
 

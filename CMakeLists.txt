@@ -91,6 +91,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # included, not installed because the engine declares packages
 include(${CMAKE_SOURCE_DIR}/CMake/ShalltearPackage.cmake)
+include(${CMAKE_SOURCE_DIR}/CMake/ShalltearPlatform.cmake)
 
 # set before subdirectories because packages install their headers
 set(SHALLTEAR_INSTALL_BIN .)

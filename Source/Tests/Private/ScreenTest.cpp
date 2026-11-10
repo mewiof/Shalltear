@@ -299,7 +299,7 @@ TEST_F(ScreenFixture, RelaunchRestoresChoiceUntilProjectChanges) {
 TEST_F(ScreenFixture, AltEnterTogglesFullscreen) {
 	Handle<Window> window = CreateHidden();
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	auto altEnter = [&]() {
 		const LPARAM altDown = (1 << 29) | (::MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC) << 16) | 1;
 		const LPARAM enterDown = (1 << 29) | (::MapVirtualKeyW(VK_RETURN, MAPVK_VK_TO_VSC) << 16) | 1;

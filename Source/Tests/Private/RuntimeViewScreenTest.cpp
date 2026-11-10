@@ -166,7 +166,7 @@ namespace {
 			EditorEvents::PlayModeChanged.Publish(EventBus::GetGlobal(), {state});
 		}
 
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().hwnd); }
+		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 
 		void PostClick(i32 x, i32 y) {
 			::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));

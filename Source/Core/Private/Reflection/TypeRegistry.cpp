@@ -8,7 +8,7 @@
 #include "Shalltear/Core/Reflection/Walk.h"
 
 #include "Module/EngineStateTable.h"
-#include "Module/ModuleAddress.h"
+#include "Platform/Library.h"
 
 #include <atomic>
 #include <cstring>
@@ -154,7 +154,7 @@ namespace Shalltear {
 			return existing->second;
 		}
 
-		typeInfo->ownerModule = ModuleInternal::ImageBaseOf(ownerHint ? ownerHint : __builtin_return_address(0));
+		typeInfo->ownerModule = Platform::ImageBaseOf(ownerHint ? ownerHint : __builtin_return_address(0));
 
 		typeInfo->moduleEpoch = data.epoch.load(std::memory_order_relaxed);
 
@@ -393,11 +393,12 @@ namespace Shalltear {
 		if (!imageBase)
 			return 0;
 
+		const Platform::ImageSpan image = Platform::GetImageSpan(imageBase);
 		u32 removed = 0;
 		TypeRegistrarNode** link = &_pendingHead;
 		TypeRegistrarNode* previous = nullptr;
 		while (*link) {
-			if (ModuleInternal::IsAddressInImage(*link, imageBase)) {
+			if (image.Contains(*link)) {
 				*link = (*link)->next;
 				++removed;
 			} else {

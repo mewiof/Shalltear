@@ -6,27 +6,13 @@
 #include "Shalltear/Core/Settings.h"
 
 #include "Module/EngineStateTable.h"
+#include "Platform/Clock.h"
 #include "TimeInternal.h"
 #include "TimeSettings.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#error "Time not yet implemented for non-Windows platforms"
-#endif
 
 namespace Shalltear {
 
 	namespace {
-		u64 InitTicksPerSecond() noexcept {
-#if defined(SLT_PLATFORM_WINDOWS)
-			LARGE_INTEGER frequency;
-			QueryPerformanceFrequency(&frequency);
-			return static_cast<u64>(frequency.QuadPart);
-#endif
-		}
-
 		struct ClockState {
 			FrameTime frame;
 			f64 fixedTime = 0.0;
@@ -42,7 +28,7 @@ namespace Shalltear {
 			u32 stageDepth = 0;
 			u32 scopeDepth = 0;
 
-			TimeData() noexcept : frequency(InitTicksPerSecond()), initialTicks(Time::GetTicks()) {}
+			TimeData() noexcept : frequency(Platform::GetClockTicksPerSecond()), initialTicks(Time::GetTicks()) {}
 		};
 
 		TimeSettings ResolveTimePolicy() {
@@ -79,11 +65,7 @@ namespace Shalltear {
 	} // namespace
 
 	u64 Time::GetTicks() noexcept {
-#if defined(SLT_PLATFORM_WINDOWS)
-		LARGE_INTEGER ticks;
-		QueryPerformanceCounter(&ticks);
-		return static_cast<u64>(ticks.QuadPart);
-#endif
+		return Platform::GetClockTicks();
 	}
 
 	u64 Time::GetTicksPerSecond() noexcept {

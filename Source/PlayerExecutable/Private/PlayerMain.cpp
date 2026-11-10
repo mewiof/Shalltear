@@ -31,12 +31,6 @@
 #include <filesystem>
 #include <string>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#endif
-
 namespace Shalltear {
 
 	namespace {
@@ -87,16 +81,7 @@ namespace Shalltear {
 		};
 
 		str GetExecutableDirectory() {
-#if defined(_WIN32)
-			wchar_t buffer[MAX_PATH * 2] = {};
-			DWORD length = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
-			if (length == 0 || length >= std::size(buffer)) {
-				return {};
-			}
-			return std::filesystem::path(std::wstring(buffer, length)).parent_path().generic_string();
-#else
-			return {};
-#endif
+			return FileSystem::GetExecutablePath().GetDirectory();
 		}
 
 	} // anonymous namespace

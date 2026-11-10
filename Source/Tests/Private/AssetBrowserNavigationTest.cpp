@@ -92,7 +92,7 @@ namespace {
 			FileSystem::WriteTextFile(resolved, "x");
 		}
 
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().hwnd); }
+		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 		UI::Context& Ui() { return *UISystem::GetContext(_window); }
 
 		void Frame() {

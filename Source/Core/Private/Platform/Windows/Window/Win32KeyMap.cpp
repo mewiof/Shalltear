@@ -1,8 +1,4 @@
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#include "Window/Win32/Win32Internal.h"
+#include "Platform/Windows/Window/Win32Internal.h"
 
 #include "Shalltear/Core/Input/InputEvent.h"
 
@@ -153,7 +149,7 @@ namespace Shalltear::Win32 {
 				return false;
 			}
 			for (Window* window : WindowInternal::GetState().windows) {
-				if (window && static_cast<HWND>(window->GetNativeHandle().hwnd) == hwnd) {
+				if (window && static_cast<HWND>(window->GetNativeHandle().window) == hwnd) {
 					return true;
 				}
 			}
@@ -374,5 +370,3 @@ namespace Shalltear::Win32 {
 	}
 
 } // namespace Shalltear::Win32
-
-#endif

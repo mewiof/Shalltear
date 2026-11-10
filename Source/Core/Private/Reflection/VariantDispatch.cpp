@@ -3,7 +3,7 @@
 #include "Shalltear/Core/Reflection/Variant.h"
 
 #include "Module/EngineStateTable.h"
-#include "Module/ModuleAddress.h"
+#include "Platform/Library.h"
 
 #include <mutex>
 #include <shared_mutex>
@@ -45,7 +45,7 @@ namespace Shalltear {
 		if (data.entries.contains(typeId))
 			return;
 
-		data.entries.emplace(typeId, DispatchEntry{vtable, ModuleInternal::ImageBaseOf(vtable)});
+		data.entries.emplace(typeId, DispatchEntry{vtable, Platform::ImageBaseOf(vtable)});
 	}
 
 	void VariantDispatch::Unregister(StringHash typeId) noexcept {

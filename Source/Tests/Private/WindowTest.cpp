@@ -123,8 +123,8 @@ TEST_F(WindowTest, CreateQueryDestroyRoundTrip) {
 	EXPECT_EQ(window->GetTitle(), "Renamed");
 
 	NativeWindowHandle native = window->GetNativeHandle();
-	EXPECT_NE(native.hwnd, nullptr);
-	EXPECT_NE(native.hinstance, nullptr);
+	EXPECT_NE(native.window, nullptr);
+	EXPECT_NE(native.display, nullptr);
 
 	Vec2I probe{17, 23};
 	EXPECT_EQ(window->ScreenToClient(window->ClientToScreen(probe)), probe);
@@ -161,7 +161,7 @@ TEST_F(WindowTest, PostedCloseBecomesCloseRequestedEvent) {
 	Handle<Window> window = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(window.IsValid());
 
-	::PostMessageW(static_cast<HWND>(window->GetNativeHandle().hwnd), WM_CLOSE, 0, 0);
+	::PostMessageW(static_cast<HWND>(window->GetNativeHandle().window), WM_CLOSE, 0, 0);
 	WindowSystem::PumpEvents();
 
 	EXPECT_EQ(recorder->closeRequestedCount, 1);
@@ -176,7 +176,7 @@ TEST_F(WindowTest, DestroyFromInsideCallbackIsSafe) {
 	recorder->destroyOnCloseRequest = true;
 
 	Handle<Window> window = WindowSystem::Create(HiddenDesc());
-	::PostMessageW(static_cast<HWND>(window->GetNativeHandle().hwnd), WM_CLOSE, 0, 0);
+	::PostMessageW(static_cast<HWND>(window->GetNativeHandle().window), WM_CLOSE, 0, 0);
 	WindowSystem::PumpEvents();
 	EXPECT_TRUE(window.IsValid());
 	WindowSystem::PumpEvents();
@@ -289,7 +289,7 @@ TEST_F(WindowTest, DpiChangeUsesSuggestedRect) {
 	window->Show();
 	WindowSystem::PumpEvents();
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	ASSERT_NE(hwnd, nullptr);
 
 	RECT suggested{200, 160, 200 + 840, 160 + 630};
@@ -941,7 +941,7 @@ TEST_F(WindowTest, QueuedMessageEndsWaitAtOnce) {
 	Handle<Window> window = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(window.IsValid());
 	WindowSystem::PumpEvents();
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	::PostMessageW(hwnd, WM_NULL, 0, 0);
 	auto start = std::chrono::steady_clock::now();
@@ -953,7 +953,7 @@ TEST_F(WindowTest, EarlyWakeKeepsNextWait) {
 	Handle<Window> window = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(window.IsValid());
 	WindowSystem::PumpEvents();
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	::PostMessageW(hwnd, WM_NULL, 0, 0);
 	WindowSystem::WaitEvents(0.010);
@@ -992,7 +992,7 @@ namespace {
 TEST_F(WindowTest, ContentWinsEdgePixel) {
 	Handle<Window> window = MakeBorderless();
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	ASSERT_NE(hwnd, nullptr);
 
 	HitTestProbe probe;
@@ -1013,7 +1013,7 @@ TEST_F(WindowTest, ContentWinsEdgePixel) {
 TEST_F(WindowTest, ResizeEdgeBeatsCaption) {
 	Handle<Window> window = MakeBorderless();
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().hwnd);
+	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	ASSERT_NE(hwnd, nullptr);
 
 	HitTestProbe probe;

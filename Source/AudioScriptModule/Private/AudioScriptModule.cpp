@@ -9,14 +9,9 @@
 #include "Shalltear/Core/Asset/AssetImporter.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Module/ModuleAPI.h"
+#include "Shalltear/Core/Module/ModuleSystem.h"
 #include "Shalltear/Core/Reflection/Reflect.h"
 #include "Shalltear/Core/Reflection/TypeRegistry.h"
-
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
 
 using namespace Shalltear;
 
@@ -34,7 +29,7 @@ namespace AudioScriptModuleImpl {
 	AudioScriptProbe::Version* _report = nullptr;
 
 	void FindProbe() {
-		const auto find = reinterpret_cast<AudioScriptProbeFn>(::GetProcAddress(::GetModuleHandleW(nullptr), AUDIO_SCRIPT_PROBE_EXPORT));
+		const auto find = reinterpret_cast<AudioScriptProbeFn>(ModuleSystem::FindSymbol(ModuleSystem::GetExecutableImage(), AUDIO_SCRIPT_PROBE_EXPORT));
 		_probe = find ? find() : nullptr;
 		_report = _probe ? &_probe->versions[VERSION] : nullptr;
 	}

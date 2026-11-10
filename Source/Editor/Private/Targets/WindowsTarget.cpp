@@ -4,6 +4,7 @@
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
 #include "ChildProcess.h"
+#include "Platform/EditorPlatform.h"
 
 namespace Shalltear {
 
@@ -17,13 +18,12 @@ namespace Shalltear {
 	} // anonymous namespace
 
 	bool WindowsTarget::IsAvailable(str& outReason) const {
-#if defined(_WIN32)
+		if (EditorPlatform::GetHostPlatformName() != "Windows") {
+			outReason = "a Windows player can only be built on Windows";
+			return false;
+		}
 		outReason.clear();
 		return true;
-#else
-		outReason = "a Windows player can only be built on Windows";
-		return false;
-#endif
 	}
 
 	void WindowsTarget::DescribeSettings(Vector<BuildSettingDesc>& out) const {
@@ -58,6 +58,9 @@ namespace Shalltear {
 		context.windowedSubsystem = true;
 
 		context.defines.push_back("SLT_PLAYER");
+
+		context.runtimeFiles.push_back("libc++.dll");
+		context.runtimeFiles.push_back("libunwind.dll");
 	}
 
 	str WindowsTarget::GetLaunchCommand(const BuildContext& context) const {

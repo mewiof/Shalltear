@@ -28,11 +28,9 @@ namespace Shalltear::RHI {
 	X(vkGetPhysicalDeviceSurfacePresentModesKHR) \
 	X(vkGetPhysicalDeviceSurfaceSupportKHR)
 
-#define SLT_VK_INSTANCE_OPTIONAL_FUNCS(X)             \
-	X(vkCreateDebugUtilsMessengerEXT)                 \
-	X(vkDestroyDebugUtilsMessengerEXT)                \
-	X(vkCreateWin32SurfaceKHR)                        \
-	X(vkGetPhysicalDeviceWin32PresentationSupportKHR) \
+#define SLT_VK_INSTANCE_OPTIONAL_FUNCS(X) \
+	X(vkCreateDebugUtilsMessengerEXT)     \
+	X(vkDestroyDebugUtilsMessengerEXT)    \
 	X(vkGetPhysicalDeviceSurfaceCapabilities2KHR)
 
 #define SLT_VK_DEVICE_FUNCS(X)      \

@@ -7465,9 +7465,7 @@ namespace Shalltear {
 				auto contextIt = state.windowContexts.find(windowId);
 				if (contextIt == state.windowContexts.end()) {
 					RHI::NativeSwapChainDesc swapDesc;
-					NativeWindowHandle native = window->GetNativeHandle();
-					swapDesc.hwnd = native.hwnd;
-					swapDesc.hinstance = native.hinstance;
+					swapDesc.window = window->GetNativeHandle();
 					swapDesc.sizePx = window->GetClientSize();
 					swapDesc.vsync = state.ResolveVSync(windowWork.window);
 					RHI::SwapChain* swapChain = device.CreateSwapChainForWindow(swapDesc);

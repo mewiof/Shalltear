@@ -31,8 +31,7 @@ namespace {
 			}
 			NativeWindowHandle native = window.Get()->GetNativeHandle();
 			RHI::NativeSwapChainDesc swapDesc;
-			swapDesc.hwnd = native.hwnd;
-			swapDesc.hinstance = native.hinstance;
+			swapDesc.window = native;
 			swapDesc.sizePx = window.Get()->GetClientSize();
 			swapChain = device->CreateSwapChainForWindow(swapDesc);
 			return swapChain != nullptr;

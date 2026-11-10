@@ -1658,8 +1658,7 @@ TEST(RHISwapChainTest, CreateResizeDestroyAgainstHiddenWindow) {
 
 		NativeWindowHandle native = window.Get()->GetNativeHandle();
 		RHI::NativeSwapChainDesc swapDesc;
-		swapDesc.hwnd = native.hwnd;
-		swapDesc.hinstance = native.hinstance;
+		swapDesc.window = native;
 		swapDesc.sizePx = window.Get()->GetClientSize();
 		RHI::SwapChain* swapChain = device->CreateSwapChainForWindow(swapDesc);
 		ASSERT_NE(swapChain, nullptr);

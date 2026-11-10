@@ -330,7 +330,7 @@ namespace {
 	void ClickPointInWindow(Handle<Window> window, i32 x, i32 y) {
 		Window* resolved = window.Get();
 		ASSERT_NE(resolved, nullptr);
-		HWND hwnd = static_cast<HWND>(resolved->GetNativeHandle().hwnd);
+		HWND hwnd = static_cast<HWND>(resolved->GetNativeHandle().window);
 		::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
 		Frame();
 		::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));

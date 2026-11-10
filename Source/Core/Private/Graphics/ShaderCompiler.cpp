@@ -1,9 +1,6 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #include "Graphics/ShaderCompiler.h"
 #include "Graphics/DxcMinimal.h"
+#include "Platform/Library.h"
 
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/StringHash.h"
@@ -14,11 +11,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-extern "C" {
-__declspec(dllimport) void* __stdcall LoadLibraryA(const char* name);
-__declspec(dllimport) void* __stdcall GetProcAddress(void* module, const char* name);
-}
 
 namespace Shalltear {
 
@@ -31,6 +23,11 @@ namespace Shalltear {
 			L"-HV",
 			L"2021",
 		};
+
+		const str& LibraryName() {
+			static const str name = Platform::GetSystemLibraryFileName("dxcompiler");
+			return name;
+		}
 
 		struct DxcState {
 			void* module = nullptr;
@@ -62,14 +59,14 @@ namespace Shalltear {
 		void LoadDxcOnce() {
 			std::call_once(_dxcOnce, []() {
 				DxcState& s = GetDxc();
-				s.module = LoadLibraryA("dxcompiler.dll");
+				s.module = Platform::OpenLibrary(LibraryName());
 				if (!s.module) {
-					SLT_LOG_INFO("Graphics", "dxcompiler.dll not found (run Scripts/fetch_prebuilt.py)");
+					SLT_LOG_INFO("Graphics", "{} not found (run Scripts/fetch_prebuilt.py)", LibraryName());
 					return;
 				}
-				s.createInstance = reinterpret_cast<Dxc::DxcCreateInstanceProc>(GetProcAddress(s.module, "DxcCreateInstance"));
+				s.createInstance = reinterpret_cast<Dxc::DxcCreateInstanceProc>(Platform::FindSymbol(s.module, "DxcCreateInstance"));
 				if (!s.createInstance) {
-					SLT_LOG_ERROR("Graphics", "dxcompiler.dll is present but DxcCreateInstance is missing");
+					SLT_LOG_ERROR("Graphics", "{} is present but DxcCreateInstance is missing", LibraryName());
 					return;
 				}
 				ThreadDxc& own = _threadDxc;
@@ -84,9 +81,9 @@ namespace Shalltear {
 
 				std::error_code ec;
 				std::filesystem::path dllPath;
-				dllPath = std::filesystem::current_path(ec) / "dxcompiler.dll";
+				dllPath = std::filesystem::current_path(ec) / LibraryName();
 				if (!std::filesystem::exists(dllPath, ec)) {
-					dllPath = "dxcompiler.dll";
+					dllPath = LibraryName();
 				}
 				u64 size = static_cast<u64>(std::filesystem::file_size(dllPath, ec));
 				u64 time = static_cast<u64>(std::filesystem::last_write_time(dllPath, ec).time_since_epoch().count());
@@ -145,7 +142,7 @@ namespace Shalltear {
 				for (u32 k = 0; k < extra && i < utf8.size(); ++k, ++i) {
 					cp = (cp << 6) | (static_cast<u8>(utf8[i]) & 0x3F);
 				}
-				if (cp >= 0x10000) {
+				if (sizeof(wchar_t) == 2 && cp >= 0x10000) {
 					cp -= 0x10000;
 					wide.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
 					wide.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
@@ -252,6 +249,10 @@ namespace Shalltear {
 
 	} // anonymous namespace
 
+	std::string_view ShaderCompiler::GetLibraryName() {
+		return LibraryName();
+	}
+
 	bool ShaderCompiler::IsAvailable() {
 		LoadDxcOnce();
 		return GetDxc().loaded;
@@ -294,7 +295,7 @@ namespace Shalltear {
 		ShaderCompileResult result;
 		ThreadDxc* dxc = ThreadCompiler();
 		if (!dxc) {
-			result.errors = "dxcompiler.dll unavailable";
+			result.errors = LibraryName() + " unavailable";
 			return result;
 		}
 		(_isCompileThread ? _compilesOnCompileThreads : _compilesElsewhere).fetch_add(1, std::memory_order_relaxed);
@@ -390,5 +391,3 @@ namespace Shalltear {
 	ShaderCompiler::ScopedMessages::~ScopedMessages() { _messageSink = _outer; }
 
 } // namespace Shalltear
-
-#endif

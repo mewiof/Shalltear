@@ -14,6 +14,8 @@
 
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
+#include "Platform/EditorPlatform.h"
+
 #include <chrono>
 #include <ctime>
 #include <format>
@@ -49,7 +51,7 @@ namespace Shalltear {
 			const std::time_t seconds = static_cast<std::time_t>(unixSeconds);
 			std::tm local{};
 			char text[32] = {};
-			if (::localtime_s(&local, &seconds) == 0 &&
+			if (EditorPlatform::ToLocalTime(seconds, local) &&
 				std::strftime(text, sizeof(text), "%Y-%m-%d %H:%M", &local) != 0) {
 				return str(text);
 			}

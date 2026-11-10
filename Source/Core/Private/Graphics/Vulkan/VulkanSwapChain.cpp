@@ -1,15 +1,7 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #include "Graphics/PresentPolicy.h"
 
 #include "Graphics/Vulkan/VulkanInternal.h"
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <vulkan/vulkan_win32.h>
+#include "Graphics/Vulkan/VulkanPlatform.h"
 
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Time.h"
@@ -236,18 +228,9 @@ namespace Shalltear::RHI {
 
 		bool CreateSurfaceObjects(SwapChainImpl& impl) {
 			DeviceImpl& d = *impl.device;
-			auto createSurface = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(d.fi.vkCreateWin32SurfaceKHR);
-			if (!createSurface) {
-				SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: VK_KHR_win32_surface not available");
-				return false;
-			}
-
-			VkWin32SurfaceCreateInfoKHR surfaceInfo{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
-			surfaceInfo.hinstance = static_cast<HINSTANCE>(impl.hinstance);
-			surfaceInfo.hwnd = static_cast<HWND>(impl.hwnd);
-			VkResult result = createSurface(d.instance, &surfaceInfo, nullptr, &impl.surface);
+			VkResult result = VulkanPlatform::CreateSurface(d.instance, impl.window, &impl.surface);
 			if (result != VK_SUCCESS) {
-				SLT_LOG_ERROR("Graphics", "vkCreateWin32SurfaceKHR failed: {}", VkResultName(result));
+				SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: surface creation failed: {}", VkResultName(result));
 				impl.surface = VK_NULL_HANDLE;
 				return false;
 			}
@@ -365,15 +348,14 @@ namespace Shalltear::RHI {
 	SwapChain* Device::CreateSwapChainForWindow(const NativeSwapChainDesc& desc) {
 		DeviceImpl* impl = _impl;
 		SLT_RHI_ASSERT_MAIN_THREAD(impl);
-		if (!desc.hwnd || !desc.hinstance) {
+		if (!desc.window.window || !desc.window.display) {
 			SLT_LOG_ERROR("Graphics", "CreateSwapChainForWindow: null native handles");
 			return nullptr;
 		}
 
 		SwapChainImpl* swapImpl = New<SwapChainImpl>(MemTag::Graphics);
 		swapImpl->device = impl;
-		swapImpl->hwnd = desc.hwnd;
-		swapImpl->hinstance = desc.hinstance;
+		swapImpl->window = desc.window;
 		swapImpl->size = desc.sizePx;
 		swapImpl->vsync = desc.vsync;
 
@@ -535,5 +517,3 @@ namespace Shalltear::RHI {
 	}
 
 } // namespace Shalltear::RHI
-
-#endif

@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Math/Geometry.h"
 #include "Shalltear/Core/Math/Vector.h"
 #include "Shalltear/Core/Math/Color.h"
+#include "Shalltear/Core/NativeWindow.h"
 #include "Shalltear/Core/Types.h"
 
 #include <optional>
@@ -468,8 +469,7 @@ namespace Shalltear::RHI {
 	};
 
 	struct NativeSwapChainDesc {
-		void* hwnd = nullptr;
-		void* hinstance = nullptr;
+		NativeWindowHandle window;
 		Vec2I sizePx{};
 		bool vsync = true;
 	};

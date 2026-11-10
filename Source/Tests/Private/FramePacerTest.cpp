@@ -163,7 +163,7 @@ namespace {
 			return *project;
 		}
 
-		static HWND Hwnd(Handle<Window> window) { return static_cast<HWND>(window->GetNativeHandle().hwnd); }
+		static HWND Hwnd(Handle<Window> window) { return static_cast<HWND>(window->GetNativeHandle().window); }
 
 		static void RenderFrame() {
 			SceneSystem::UpdateAll();

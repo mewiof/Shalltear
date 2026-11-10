@@ -36,7 +36,7 @@ protected:
 #ifdef _WIN32
 	HWND Hwnd(Handle<Window> window = {}) const {
 		Handle<Window> target = window.IsValid() ? window : _window;
-		return static_cast<HWND>(target->GetNativeHandle().hwnd);
+		return static_cast<HWND>(target->GetNativeHandle().window);
 	}
 
 	static LPARAM KeyLParam(u16 scancode, bool extended = false, bool repeat = false, bool up = false) {

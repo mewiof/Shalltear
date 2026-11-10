@@ -1,7 +1,3 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
@@ -18,6 +14,4 @@
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
-#endif
-
 #endif

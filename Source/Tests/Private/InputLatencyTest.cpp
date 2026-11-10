@@ -1693,7 +1693,7 @@ namespace {
 
 		bool Held() const { return Input::IsKeyDown(Key::V); }
 	private:
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().hwnd); }
+		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 
 		static LPARAM KeyLParam(bool up) {
 			LPARAM lParam = 1;

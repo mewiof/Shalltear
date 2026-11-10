@@ -1,12 +1,6 @@
 #include "UI/SystemFontFallback.h"
 
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
+#include "Platform/Windows/WindowsHeaders.h"
 #include <dwrite_2.h>
 
 #include "Shalltear/Core/Containers.h"
@@ -247,5 +241,3 @@ namespace Shalltear::UI {
 	}
 
 } // namespace Shalltear::UI
-
-#endif

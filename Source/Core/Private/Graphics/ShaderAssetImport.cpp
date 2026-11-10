@@ -565,7 +565,7 @@ namespace Shalltear {
 			}
 
 			if (!ShaderCompiler::IsAvailable()) {
-				SLT_LOG_ERROR("Graphics", "ShaderAsset: '{}' has no cached SPIR-V and dxcompiler.dll is unavailable", assetPath.ToString());
+				SLT_LOG_ERROR("Graphics", "ShaderAsset: '{}' has no cached SPIR-V and {} is unavailable", assetPath.ToString(), ShaderCompiler::GetLibraryName());
 				return false;
 			}
 

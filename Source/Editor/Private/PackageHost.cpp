@@ -1,5 +1,7 @@
 #include "PackageHost.h"
 
+#include "Platform/EditorPlatform.h"
+
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Log.h"
 
@@ -76,7 +78,7 @@ namespace Shalltear {
 			if (binaryName.empty()) {
 				continue;
 			}
-			std::filesystem::path binary = binaryRoot / (binaryName + ".dll");
+			std::filesystem::path binary = binaryRoot / (binaryName + str(EditorPlatform::GetSharedLibrarySuffix()));
 			if (!std::filesystem::exists(binary)) {
 				if (RegisterLinkedPackage(resolved.name)) {
 					_names.push_back(resolved.name);

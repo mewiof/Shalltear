@@ -18,6 +18,7 @@
 
 #include "ChildProcess.h"
 
+#include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <format>
@@ -171,12 +172,8 @@ namespace Shalltear {
 		BuildStepStatus BuildNumberStep(BuildContext& context) {
 			std::time_t now = std::time(nullptr);
 			context.buildTimeUnix = static_cast<i64>(now);
-			std::tm utc{};
-			if (::gmtime_s(&utc, &now) == 0) {
-				char buffer[32] = {};
-				std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
-				context.buildTimeIso = buffer;
-			}
+			context.buildTimeIso = std::format("{:%Y-%m-%dT%H:%M:%SZ}",
+											   std::chrono::sys_seconds{std::chrono::seconds{static_cast<i64>(now)}});
 
 			str raw = ResolvedString(context, "buildNumber");
 			if (raw.find("${AUTO}") != str::npos) {
@@ -389,16 +386,8 @@ namespace Shalltear {
 		}
 
 		struct RuntimeDependency {
-			std::string_view source;
-			std::string_view destination;
-		};
-
-		constexpr RuntimeDependency RuntimeDependencies[] = {
-			{"THIRD-PARTY-NOTICES-Runtime.txt", "THIRD-PARTY-NOTICES.txt"},
-#ifdef __MINGW32__
-			{"libc++.dll", "libc++.dll"},
-			{"libunwind.dll", "libunwind.dll"},
-#endif
+			str source;
+			str destination;
 		};
 
 		bool FindRuntimeDependency(const BuildContext& context, std::string_view fileName, str& out) {
@@ -426,16 +415,21 @@ namespace Shalltear {
 		}
 
 		BuildStepStatus StageRuntimeStep(BuildContext& context) {
-			for (const RuntimeDependency& dependency : RuntimeDependencies) {
+			Vector<RuntimeDependency> dependencies{GetMemoryResource(MemTag::Editor)};
+			dependencies.push_back({"THIRD-PARTY-NOTICES-Runtime.txt", "THIRD-PARTY-NOTICES.txt"});
+			for (const str& file : context.runtimeFiles) {
+				dependencies.push_back({file, file});
+			}
+			for (const RuntimeDependency& dependency : dependencies) {
 				str source;
 				if (!FindRuntimeDependency(context, dependency.source, source)) {
 					context.AddIssue(BuildIssueSeverity::Error, "",
-									 "'" + str(dependency.source) +
+									 "'" + dependency.source +
 										 "' was not found beside the SDK or the editor (should be installed beside the "
 										 "engine binaries)");
 					return BuildStepStatus::Failed;
 				}
-				if (!CopyFileInto(context, source, context.stagingDir + "/" + str(dependency.destination))) {
+				if (!CopyFileInto(context, source, context.stagingDir + "/" + dependency.destination)) {
 					return BuildStepStatus::Failed;
 				}
 			}

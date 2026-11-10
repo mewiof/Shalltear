@@ -1,20 +1,8 @@
 #pragma once
 
-// include only under Private/Window/Win32 (Windows.h must not leak)
+// include only under Platform/Windows (Windows.h must not leak, macro hell)
 
-#include "Shalltear/Core/Platform.h"
-
-#ifdef SLT_PLATFORM_WINDOWS
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#ifndef UNICODE
-#define UNICODE
-#endif
-#ifndef _UNICODE
-#define _UNICODE
-#endif
-#include <windows.h>
+#include "Platform/Windows/WindowsHeaders.h"
 #include <windowsx.h>
 
 #undef IsMinimized
@@ -103,5 +91,3 @@ namespace Shalltear {
 	} // namespace Win32
 
 } // namespace Shalltear
-
-#endif

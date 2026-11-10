@@ -1,17 +1,11 @@
-#include "Shalltear/Core/Platform.h"
-
-#if defined(SLT_PLATFORM_WINDOWS)
-
 #include "Graphics/Vulkan/VulkanLoader.h"
+
+#include "Graphics/Vulkan/VulkanPlatform.h"
+#include "Platform/Library.h"
 
 #include "Shalltear/Core/Log.h"
 
 #include <mutex>
-
-extern "C" {
-__declspec(dllimport) void* __stdcall LoadLibraryA(const char* name);
-__declspec(dllimport) void* __stdcall GetProcAddress(void* module, const char* name);
-}
 
 namespace Shalltear::RHI {
 
@@ -41,16 +35,17 @@ namespace Shalltear::RHI {
 			LoaderState& s = GetState();
 			s.attempted = true;
 
-			s.module = LoadLibraryA("vulkan-1.dll");
+			const char* library = VulkanPlatform::GetLoaderLibraryName();
+			s.module = Platform::OpenLibrary(library);
 			if (!s.module) {
-				SLT_LOG_INFO("Graphics", "vulkan-1.dll not found");
+				SLT_LOG_INFO("Graphics", "{} not found", library);
 				return;
 			}
 
 			s.getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
-				GetProcAddress(s.module, "vkGetInstanceProcAddr"));
+				Platform::FindSymbol(s.module, "vkGetInstanceProcAddr"));
 			if (!s.getInstanceProcAddr) {
-				SLT_LOG_ERROR("Graphics", "vulkan-1.dll is present but vkGetInstanceProcAddr is missing (loader DLL is broken)");
+				SLT_LOG_ERROR("Graphics", "{} is present but vkGetInstanceProcAddr is missing (loader is broken)", library);
 				return;
 			}
 
@@ -125,5 +120,3 @@ namespace Shalltear::RHI {
 	}
 
 } // namespace Shalltear::RHI
-
-#endif

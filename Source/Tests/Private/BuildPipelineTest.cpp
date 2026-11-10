@@ -540,7 +540,7 @@ TEST_F(BuildPipelineFixture, ModuleTargetOverrideRestored) {
 	BuildTargetRegistry::GetTargetIds(ids);
 	ASSERT_GE(ids.size(), 2u);
 	EXPECT_EQ(ids[0], "Windows");
-	EXPECT_EQ(BuildTargetRegistry::GetDefaultTargetId(), "Windows");
+	EXPECT_EQ(BuildTargetRegistry::GetDefaultTargetId(), SLT_TEST_HOST_TARGET);
 }
 
 TEST_F(BuildPipelineFixture, TheSchemaResolvesDifferentlyForTwoTargets) {
@@ -583,13 +583,13 @@ TEST_F(BuildPipelineFixture, TheSchemaResolvesDifferentlyForTwoTargets) {
 	EXPECT_EQ(setting->value, "fake-default");
 }
 
-TEST_F(BuildPipelineFixture, DefaultTargetIsWindows) {
+TEST_F(BuildPipelineFixture, DefaultTargetIsHost) {
 	Vector<str> ids;
 	BuildTargetRegistry::GetTargetIds(ids);
 	ASSERT_GE(ids.size(), 2u);
 	EXPECT_EQ(ids[0], "Windows");
 	EXPECT_EQ(ids[1], "WindowsServer");
-	EXPECT_EQ(BuildTargetRegistry::GetDefaultTargetId(), "Windows");
+	EXPECT_EQ(BuildTargetRegistry::GetDefaultTargetId(), SLT_TEST_HOST_TARGET);
 	EXPECT_NE(BuildTargetRegistry::Find("WindowsServer"), nullptr);
 	EXPECT_EQ(BuildTargetRegistry::Find("Windows")->GetDisplayName(), "Windows");
 	EXPECT_EQ(BuildTargetRegistry::Find("WindowsServer")->GetDisplayName(), "Windows Dedicated Server");
@@ -910,9 +910,9 @@ TEST_F(BuildPipelineFixture, AValidationIssueIsPrintedOnce) {
 
 TEST_F(BuildPipelineFixture, ServerTargetPicksEntryAndName) {
 	WriteScene("Assets/Scenes/Main.scene");
-	WriteProfile("Client", "Windows", {"Assets/Scenes/Main.scene"});
-	WriteProfile("Server", "WindowsServer", {"Assets/Scenes/Main.scene"});
-	WriteProfile("NamedServer", "WindowsServer", {"Assets/Scenes/Main.scene"},
+	WriteProfile("Client", SLT_TEST_HOST_TARGET, {"Assets/Scenes/Main.scene"});
+	WriteProfile("Server", SLT_TEST_HOST_TARGET "Server", {"Assets/Scenes/Main.scene"});
+	WriteProfile("NamedServer", SLT_TEST_HOST_TARGET "Server", {"Assets/Scenes/Main.scene"},
 				 {{"executableName", "Northwind"}});
 
 	struct Seen {

@@ -4,13 +4,7 @@
 #include "Shalltear/Core/Window.h"
 #include "Shalltear/Editor/EditorInputOps.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 using namespace Shalltear::EditorInputOps;
@@ -235,8 +229,6 @@ TEST(EditorInputRuleTest, EscapeAloneDisarmsPointer) {
 	EXPECT_TRUE(AdvanceGamePointerArm(true, escape, true));
 }
 
-#ifdef _WIN32
-
 namespace {
 
 	class EditorShortcutTest : public ::testing::Test {
@@ -255,33 +247,20 @@ namespace {
 			WindowSystem::Terminate();
 		}
 
-		HWND Hwnd() const {
-			return static_cast<HWND>(_window->GetNativeHandle().window);
-		}
-
-		static LPARAM KeyLParam(u16 scancode, bool up = false) {
-			LPARAM lParam = 1;
-			lParam |= static_cast<LPARAM>(scancode & 0xFF) << 16;
-			if (up) {
-				lParam |= (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
-			}
-			return lParam;
-		}
-
-		void PostChord(int vk, u16 scancode, KeyMod mods) {
-			auto modKey = [&](KeyMod flag, int modVk, u16 modScan, bool up) {
+		void PostChord(Key key, KeyMod mods) {
+			auto modKey = [&](KeyMod flag, Key modifier, bool down) {
 				if (HasFlag(mods, flag)) {
-					::PostMessageW(Hwnd(), up ? WM_KEYUP : WM_KEYDOWN, modVk, KeyLParam(modScan, up));
+					TestPlatform::PostKey(_window, modifier, down);
 				}
 			};
-			modKey(KeyMod::Ctrl, VK_CONTROL, 0x1D, false);
-			modKey(KeyMod::Shift, VK_SHIFT, 0x2A, false);
-			modKey(KeyMod::Alt, VK_MENU, 0x38, false);
-			::PostMessageW(Hwnd(), WM_KEYDOWN, vk, KeyLParam(scancode));
-			::PostMessageW(Hwnd(), WM_KEYUP, vk, KeyLParam(scancode, true));
-			modKey(KeyMod::Alt, VK_MENU, 0x38, true);
-			modKey(KeyMod::Shift, VK_SHIFT, 0x2A, true);
-			modKey(KeyMod::Ctrl, VK_CONTROL, 0x1D, true);
+			modKey(KeyMod::Ctrl, Key::LeftCtrl, true);
+			modKey(KeyMod::Shift, Key::LeftShift, true);
+			modKey(KeyMod::Alt, Key::LeftAlt, true);
+			TestPlatform::PostKey(_window, key, true);
+			TestPlatform::PostKey(_window, key, false);
+			modKey(KeyMod::Alt, Key::LeftAlt, false);
+			modKey(KeyMod::Shift, Key::LeftShift, false);
+			modKey(KeyMod::Ctrl, Key::LeftCtrl, false);
 			WindowSystem::PumpEvents();
 		}
 
@@ -298,36 +277,35 @@ namespace {
 
 	struct ChordCase {
 		Shortcut shortcut;
-		int vk;
-		u16 scancode;
+		Key key;
 		KeyMod mods;
 		const char* name;
 	};
 
 	const ChordCase allChords[] = {
-		{Shortcut::ReloadModule, 'R', 0x13, KeyMod::Ctrl, "Ctrl+R ReloadModule"},
-		{Shortcut::CompileModule, VK_F7, 0x41, KeyMod::None, "F7 CompileModule"},
-		{Shortcut::RecompileModule, VK_F7, 0x41, KeyMod::Shift, "Shift+F7 RecompileModule"},
-		{Shortcut::OpenBuildProfiles, 'B', 0x30, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+B OpenBuildProfiles"},
-		{Shortcut::BuildAndRun, 'B', 0x30, KeyMod::Ctrl, "Ctrl+B BuildAndRun"},
-		{Shortcut::TogglePlay, 'P', 0x19, KeyMod::Ctrl, "Ctrl+P TogglePlay"},
-		{Shortcut::TogglePause, 'P', 0x19, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+P TogglePause"},
-		{Shortcut::Step, 'P', 0x19, KeyMod::Ctrl | KeyMod::Alt, "Ctrl+Alt+P Step"},
-		{Shortcut::Undo, 'Z', 0x2C, KeyMod::Ctrl, "Ctrl+Z Undo"},
-		{Shortcut::Redo, 'Y', 0x15, KeyMod::Ctrl, "Ctrl+Y Redo"},
-		{Shortcut::SaveScene, 'S', 0x1F, KeyMod::Ctrl, "Ctrl+S SaveScene"},
-		{Shortcut::SaveSceneAs, 'S', 0x1F, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+S SaveSceneAs"},
-		{Shortcut::DeleteSelection, VK_DELETE, 0x53, KeyMod::None, "Del DeleteSelection"},
-		{Shortcut::RenameSelection, VK_F2, 0x3C, KeyMod::None, "F2 RenameSelection"},
-		{Shortcut::SelectAll, 'A', 0x1E, KeyMod::Ctrl, "Ctrl+A SelectAll"},
-		{Shortcut::DuplicateSelection, 'D', 0x20, KeyMod::Ctrl, "Ctrl+D DuplicateSelection"},
+		{Shortcut::ReloadModule, Key::R, KeyMod::Ctrl, "Ctrl+R ReloadModule"},
+		{Shortcut::CompileModule, Key::F7, KeyMod::None, "F7 CompileModule"},
+		{Shortcut::RecompileModule, Key::F7, KeyMod::Shift, "Shift+F7 RecompileModule"},
+		{Shortcut::OpenBuildProfiles, Key::B, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+B OpenBuildProfiles"},
+		{Shortcut::BuildAndRun, Key::B, KeyMod::Ctrl, "Ctrl+B BuildAndRun"},
+		{Shortcut::TogglePlay, Key::P, KeyMod::Ctrl, "Ctrl+P TogglePlay"},
+		{Shortcut::TogglePause, Key::P, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+P TogglePause"},
+		{Shortcut::Step, Key::P, KeyMod::Ctrl | KeyMod::Alt, "Ctrl+Alt+P Step"},
+		{Shortcut::Undo, Key::Z, KeyMod::Ctrl, "Ctrl+Z Undo"},
+		{Shortcut::Redo, Key::Y, KeyMod::Ctrl, "Ctrl+Y Redo"},
+		{Shortcut::SaveScene, Key::S, KeyMod::Ctrl, "Ctrl+S SaveScene"},
+		{Shortcut::SaveSceneAs, Key::S, KeyMod::Ctrl | KeyMod::Shift, "Ctrl+Shift+S SaveSceneAs"},
+		{Shortcut::DeleteSelection, Key::Delete, KeyMod::None, "Del DeleteSelection"},
+		{Shortcut::RenameSelection, Key::F2, KeyMod::None, "F2 RenameSelection"},
+		{Shortcut::SelectAll, Key::A, KeyMod::Ctrl, "Ctrl+A SelectAll"},
+		{Shortcut::DuplicateSelection, Key::D, KeyMod::Ctrl, "Ctrl+D DuplicateSelection"},
 	};
 
 } // anonymous namespace
 
 TEST_F(EditorShortcutTest, EveryShortcutFiresOnItsRealChord) {
 	for (const ChordCase& chord : allChords) {
-		PostChord(chord.vk, chord.scancode, chord.mods);
+		PostChord(chord.key, chord.mods);
 		RouteAndEvaluate(false);
 		EXPECT_TRUE(_shortcuts.WasPerformed(chord.shortcut)) << chord.name;
 	}
@@ -335,7 +313,7 @@ TEST_F(EditorShortcutTest, EveryShortcutFiresOnItsRealChord) {
 
 TEST_F(EditorShortcutTest, TextFieldClosesDocumentMap) {
 	for (const ChordCase& chord : allChords) {
-		PostChord(chord.vk, chord.scancode, chord.mods);
+		PostChord(chord.key, chord.mods);
 		RouteAndEvaluate(true);
 
 		bool isGlobal = !EditorShortcuts::RouteFor(chord.shortcut).yieldToTextField;
@@ -399,12 +377,12 @@ TEST_F(EditorShortcutTest, ShortcutOutsideTableHasNoLabel) {
 }
 
 TEST_F(EditorShortcutTest, OverlappingChordFiresOnlyShortcut) {
-	PostChord('B', 0x30, KeyMod::Ctrl | KeyMod::Shift);
+	PostChord(Key::B, KeyMod::Ctrl | KeyMod::Shift);
 	RouteAndEvaluate(false);
 	EXPECT_TRUE(_shortcuts.WasPerformed(Shortcut::OpenBuildProfiles));
 	EXPECT_FALSE(_shortcuts.WasPerformed(Shortcut::BuildAndRun));
 
-	PostChord('P', 0x19, KeyMod::Ctrl | KeyMod::Alt);
+	PostChord(Key::P, KeyMod::Ctrl | KeyMod::Alt);
 	RouteAndEvaluate(false);
 	EXPECT_TRUE(_shortcuts.WasPerformed(Shortcut::Step));
 	EXPECT_FALSE(_shortcuts.WasPerformed(Shortcut::TogglePlay));
@@ -418,7 +396,7 @@ TEST_F(EditorShortcutTest, RouteReapplyKeepsMapOpen) {
 
 	RouteFacts open;
 	ApplyRoute(map, Routes::GlobalShortcut, open);
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SPACE, KeyLParam(0x39));
+	TestPlatform::PostKey(_window, Key::Space, true);
 	WindowSystem::PumpEvents();
 	map.Evaluate();
 	ASSERT_TRUE(map.IsPressed(hold));
@@ -432,7 +410,7 @@ TEST_F(EditorShortcutTest, RouteReapplyKeepsMapOpen) {
 }
 
 TEST_F(EditorShortcutTest, MissedShortcutDoesNotFireLater) {
-	PostChord('Z', 0x2C, KeyMod::Ctrl);
+	PostChord(Key::Z, KeyMod::Ctrl);
 	RouteAndEvaluate(true);
 	ASSERT_FALSE(_shortcuts.WasPerformed(Shortcut::Undo));
 
@@ -440,5 +418,3 @@ TEST_F(EditorShortcutTest, MissedShortcutDoesNotFireLater) {
 	RouteAndEvaluate(false);
 	EXPECT_FALSE(_shortcuts.WasPerformed(Shortcut::Undo));
 }
-
-#endif

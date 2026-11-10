@@ -392,7 +392,7 @@ TEST(JobCostTest, FanOutRetainsNothing) {
 
 TEST(ModuleCostTest, LoadUnloadReturnsToStart) {
 	ModuleSystem::Initialize();
-	const Path binary("ShalltearSampleModule.dll");
+	const Path binary("ShalltearSampleModule" SLT_TEST_DLL_SUFFIX);
 
 	TypeRegistry::RegisterPendingTypes();
 	const u32 typesAtEntry = TypeRegistry::GetTypeCount();
@@ -445,7 +445,7 @@ TEST(SubsystemZoneTest, ZonesEnteredOncePerOperation) {
 	SceneSystem::Terminate();
 
 	ModuleSystem::Initialize();
-	ModuleHandle handle = ModuleSystem::Load(Path("ShalltearSampleModule.dll"));
+	ModuleHandle handle = ModuleSystem::Load(Path("ShalltearSampleModule" SLT_TEST_DLL_SUFFIX));
 	const bool moduleLoaded = ModuleSystem::IsLoaded(handle);
 	if (moduleLoaded) {
 		ModuleSystem::Unload(handle);

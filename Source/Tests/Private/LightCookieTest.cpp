@@ -232,7 +232,7 @@ TEST_F(MaterialReadbackFixture, TableKindsIndexApart) {
 
 TEST_F(LightCookieFixture, DirectionalCookieTilesAtSizeAndOffset) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* cookie = Cookie("Quadrants.tga", COOKIE_SIZE, COOKIE_SIZE, QuadrantCookie(), false);
@@ -270,7 +270,7 @@ TEST_F(LightCookieFixture, DirectionalCookieTilesAtSizeAndOffset) {
 
 TEST_F(LightCookieFixture, SpotCookieFollowsCone) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* cookie = Cookie("Quadrants.tga", COOKIE_SIZE, COOKIE_SIZE, QuadrantCookie(), false);
@@ -306,7 +306,7 @@ TEST_F(LightCookieFixture, SpotCookieFollowsCone) {
 
 TEST_F(LightCookieFixture, PointCookieTurnsWithLight) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* cookie = Cookie("Faces.tga", FACE_SIZE * 6, FACE_SIZE, PositiveXDarkStrip(), true);
@@ -350,7 +350,7 @@ TEST_F(LightCookieFixture, PointCookieTurnsWithLight) {
 
 TEST_F(LightCookieFixture, MismatchedCookieShapeIgnored) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* flat = Cookie("Quadrants.tga", COOKIE_SIZE, COOKIE_SIZE, QuadrantCookie(), false);
@@ -376,7 +376,7 @@ TEST_F(LightCookieFixture, MismatchedCookieShapeIgnored) {
 
 TEST_F(LightCookieFixture, CookiedFramesReadIdentical) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* cookie = Cookie("Quadrants.tga", COOKIE_SIZE, COOKIE_SIZE, QuadrantCookie(), false);
@@ -403,7 +403,7 @@ TEST_F(LightCookieFixture, CookiedFramesReadIdentical) {
 
 TEST_F(LightCookieFixture, UnloadedCookieLeavesLightPlain) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	TextureAsset* cookie = Cookie("Quadrants.tga", COOKIE_SIZE, COOKIE_SIZE, QuadrantCookie(), false);
@@ -449,7 +449,7 @@ TEST_F(LightCookieFixture, UnloadedCookieLeavesLightPlain) {
 
 TEST_F(LightCookieFixture, LightSkipsOtherLayerShadowStillCasts) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	ASSERT_NE(material, nullptr);
@@ -504,7 +504,7 @@ TEST_F(LightCookieFixture, LightSkipsOtherLayerShadowStillCasts) {
 
 TEST_F(LightCookieFixture, DefaultLightReachesHighLayers) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* material = AttenuationMaterial();
 	ASSERT_NE(material, nullptr);
@@ -530,7 +530,7 @@ TEST_F(LightCookieFixture, DefaultLightReachesHighLayers) {
 
 TEST_F(LightCookieFixture, RuntimeArraysOnlyInTableSet) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	const str vertex = "struct VSOutput { float4 positionCS : SV_Position; };\n"
 					   "VSOutput VSMain(uint vertexId : SV_VertexID) {\n"

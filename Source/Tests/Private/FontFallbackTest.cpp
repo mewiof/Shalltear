@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "UITestUtil.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
@@ -260,6 +261,9 @@ TEST_F(FontFallbackFixture, CycleEndsInMissingMark) {
 }
 
 TEST_F(FontFallbackFixture, InstalledFontsCoverChainGaps) {
+	if (!TestPlatform::SystemFontsCover(U'\u4E2D')) {
+		GTEST_SKIP() << "no installed font has U+4E2D";
+	}
 	FontAsset* inter = Load("Inter");
 	ASSERT_NE(inter, nullptr);
 	EXPECT_NEAR(Width(inter, "?"), 8.0f, 1.0f);

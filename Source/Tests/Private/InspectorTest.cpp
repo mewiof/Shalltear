@@ -1866,7 +1866,7 @@ TEST_F(ScriptedProjectFixture, NewComponentDialogFocused) {
 
 namespace {
 
-	constexpr const char* RELOAD_MODULE_V1 = "ShalltearHotReloadModuleV1.dll";
+	constexpr const char* RELOAD_MODULE_V1 = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
 	const StringHash ReloadBehavior{"HotReloadBehavior"};
 
 	constexpr i32 PROBE_COUNTER = 4242;
@@ -4327,8 +4327,8 @@ TEST_F(NestedAssetInspectorTest, ElementFoldSurvivesRebuild) {
 
 namespace {
 
-	constexpr const char* DATA_RELOAD_V2 = "ShalltearHotReloadModuleV2.dll";
-	constexpr const char* DATA_RELOAD_GONE = "ShalltearHotReloadModuleGone.dll";
+	constexpr const char* DATA_RELOAD_V2 = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* DATA_RELOAD_GONE = "ShalltearHotReloadModuleGone" SLT_TEST_DLL_SUFFIX;
 	const StringHash DataAssetType{"HotReloadDataAsset"};
 	constexpr const char* DATA_ASSET_PATH = "project://InspectorProbe.hrdata";
 	constexpr i32 PROBE_DAMAGE = 4242;

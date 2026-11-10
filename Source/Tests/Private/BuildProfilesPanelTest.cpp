@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Editor/EditorIcons.h"
 
 #include "UITestUtil.h"
@@ -368,9 +370,7 @@ TEST_F(BuildProfilesPanelFixture, PreviewShowsResolvedVariable) {
 }
 
 TEST_F(BuildProfilesPanelFixture, ExpandedValuePreviewShowsResolvedVariable) {
-#if defined(_WIN32)
-	::_putenv_s("SHALLTEAR_PANEL_PROBE_SET", "77");
-#endif
+	TestPlatform::SetEnvironment("SHALLTEAR_PANEL_PROBE_SET", "77");
 	BuildProfile base;
 	base.SetString("version", "1.0.${ENV:SHALLTEAR_PANEL_PROBE_SET}");
 	SaveProfile("Default", base);
@@ -381,9 +381,7 @@ TEST_F(BuildProfilesPanelFixture, ExpandedValuePreviewShowsResolvedVariable) {
 
 	EXPECT_TRUE(SaysSomethingContaining(harness.context, harness.root, "1.0.${ENV:SHALLTEAR_PANEL_PROBE_SET}"));
 	EXPECT_TRUE(SaysSomethingContaining(harness.context, harness.root, "-> 1.0.77"));
-#if defined(_WIN32)
-	::_putenv_s("SHALLTEAR_PANEL_PROBE_SET", "");
-#endif
+	TestPlatform::SetEnvironment("SHALLTEAR_PANEL_PROBE_SET", "");
 }
 
 TEST_F(BuildProfilesPanelFixture, ValidationShownBeforeBuild) {

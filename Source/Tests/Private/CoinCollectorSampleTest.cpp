@@ -124,7 +124,7 @@ namespace {
 			TypeRegistry::InitializePrimitives();
 			SceneSystem::Initialize();
 			ModuleSystem::Initialize();
-			for (const char* package : {"Physics3D.dll", "Audio.dll"}) {
+			for (const char* package : {"Physics3D" SLT_TEST_DLL_SUFFIX, "Audio" SLT_TEST_DLL_SUFFIX}) {
 				ASSERT_TRUE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path(package), ModuleLoadPolicy::InPlace))) << package;
 			}
 			AssetDatabase::Initialize();

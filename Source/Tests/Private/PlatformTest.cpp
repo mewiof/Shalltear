@@ -1,13 +1,14 @@
 #include "TestsPCH.h"
 
 TEST(PlatformTest, CorrectPlatformMacroIsDefined) {
-#if defined(_WIN32)
-#if !defined(SLT_PLATFORM_WINDOWS)
-	FAIL() << "SLT_PLATFORM_WINDOWS undefined on Windows";
-#endif
-	SUCCEED();
+#if defined(_WIN32) != defined(SLT_PLATFORM_WINDOWS)
+	FAIL() << "SLT_PLATFORM_WINDOWS disagrees with the compiler";
+#elif defined(__linux__) != defined(SLT_PLATFORM_LINUX)
+	FAIL() << "SLT_PLATFORM_LINUX disagrees with the compiler";
+#elif defined(SLT_PLATFORM_WINDOWS) == defined(SLT_PLATFORM_LINUX)
+	FAIL() << "1 platform macro should be defined";
 #else
-	FAIL() << "tests are configured for Windows only";
+	SUCCEED();
 #endif
 }
 

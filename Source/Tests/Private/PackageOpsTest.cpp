@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Config.h"
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Settings.h"
@@ -1086,13 +1088,17 @@ namespace {
 		return manifest;
 	}
 
-	constexpr const char* CORE_ONLY_MODULE = "ShalltearSampleModule.dll";
+	constexpr const char* CORE_ONLY_MODULE = "ShalltearSampleModule" SLT_TEST_DLL_SUFFIX;
 
 } // anonymous namespace
 
 TEST(PackageImportTest, UnloadedImportNamed) {
+	const char* common = TestPlatform::GetCommonImportName();
+	if (!*common) {
+		GTEST_SKIP() << "modules import no package-like library in this tree";
+	}
 	Vector<PackageOps::PackageManifest> catalogue;
-	catalogue.push_back(MakeStagedAs("com.test.kernel", "KERNEL32"));
+	catalogue.push_back(MakeStagedAs("com.test.kernel", common));
 	catalogue.push_back(MakeStagedAs("com.test.absent", "ImportedByNothing"));
 
 	Vector<str> unloaded;
@@ -1101,8 +1107,12 @@ TEST(PackageImportTest, UnloadedImportNamed) {
 }
 
 TEST(PackageImportTest, ImportedPackageSessionLoadedIsNotNamed) {
+	const char* common = TestPlatform::GetCommonImportName();
+	if (!*common) {
+		GTEST_SKIP() << "modules import no package-like library in this tree";
+	}
 	Vector<PackageOps::PackageManifest> catalogue;
-	catalogue.push_back(MakeStagedAs("com.test.kernel", "KERNEL32"));
+	catalogue.push_back(MakeStagedAs("com.test.kernel", common));
 
 	const str loaded[] = {str("com.test.kernel")};
 	Vector<str> unloaded;
@@ -1114,8 +1124,8 @@ TEST(PackageImportTest, IncompleteImageHasNoAnswer) {
 	const std::filesystem::path directory = std::filesystem::temp_directory_path() /
 											("shalltear_imports_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
 	std::filesystem::create_directories(directory);
-	const std::filesystem::path text = directory / "NotAnImage.dll";
-	const std::filesystem::path truncated = directory / "Truncated.dll";
+	const std::filesystem::path text = directory / "NotAnImage" SLT_TEST_DLL_SUFFIX;
+	const std::filesystem::path truncated = directory / "Truncated" SLT_TEST_DLL_SUFFIX;
 	std::ofstream(text, std::ios::binary) << "this is not a PE image";
 
 	char head[256];
@@ -1124,8 +1134,8 @@ TEST(PackageImportTest, IncompleteImageHasNoAnswer) {
 	std::ofstream(truncated, std::ios::binary).write(head, sizeof(head));
 
 	Vector<PackageOps::PackageManifest> catalogue;
-	catalogue.push_back(MakeStagedAs("com.test.kernel", "KERNEL32"));
-	for (const std::filesystem::path& file : {text, truncated, directory / "Missing.dll"}) {
+	catalogue.push_back(MakeStagedAs("com.test.kernel", TestPlatform::GetCommonImportName()));
+	for (const std::filesystem::path& file : {text, truncated, directory / "Missing" SLT_TEST_DLL_SUFFIX}) {
 		Vector<str> unloaded;
 		unloaded.push_back("left over from a previous call");
 		EXPECT_FALSE(PackageOps::FindUnloadedPackageImports(Path(file.generic_string()), catalogue, {}, unloaded))
@@ -1146,11 +1156,11 @@ TEST(PackageImportTest, UnloadedPhysicsLinkNamed) {
 	ASSERT_NE(PackageOps::FindPackage(catalogue, "dev.shalltear.physics3d"), nullptr) << Join(diagnostics);
 
 	Vector<str> unloaded;
-	ASSERT_TRUE(PackageOps::FindUnloadedPackageImports(Path("ShalltearPhysicsScriptModule.dll"), catalogue, {}, unloaded));
+	ASSERT_TRUE(PackageOps::FindUnloadedPackageImports(Path("ShalltearPhysicsScriptModule" SLT_TEST_DLL_SUFFIX), catalogue, {}, unloaded));
 	EXPECT_EQ(Join(unloaded), "dev.shalltear.physics3d");
 
 	const str loaded[] = {str("dev.shalltear.physics3d")};
-	ASSERT_TRUE(PackageOps::FindUnloadedPackageImports(Path("ShalltearPhysicsScriptModule.dll"), catalogue, loaded, unloaded));
+	ASSERT_TRUE(PackageOps::FindUnloadedPackageImports(Path("ShalltearPhysicsScriptModule" SLT_TEST_DLL_SUFFIX), catalogue, loaded, unloaded));
 	EXPECT_TRUE(unloaded.empty()) << Join(unloaded);
 
 	ASSERT_TRUE(PackageOps::FindUnloadedPackageImports(Path(CORE_ONLY_MODULE), catalogue, {}, unloaded));

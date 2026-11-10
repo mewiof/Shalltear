@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Config.h"
 #include "Shalltear/Core/Module.h"
 #include "Shalltear/Core/Reflection.h"
@@ -72,6 +74,7 @@ namespace {
 			_cmakePath = toolchain.cmake.path;
 			_compilerPath = toolchain.compiler.path;
 			_ninjaPath = toolchain.ninja.path;
+			_toolchainFile = toolchain.sdkToolchainFile;
 
 			static std::atomic<u64> counter{0};
 			u64 stamp = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -206,20 +209,8 @@ namespace {
 		}
 
 		str RunTool(const str& toolPath, const str& arguments, i32* outExitCode = nullptr) const {
-			str command = "\"\"" + toolPath + "\" " + arguments + " 2>&1\"";
-			str output;
-			FILE* pipe = ::_popen(command.c_str(), "r");
-			if (!pipe) {
-				if (outExitCode) {
-					*outExitCode = -1;
-				}
-				return output;
-			}
-			char buffer[512];
-			while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-				output += buffer;
-			}
-			i32 exitCode = ::_pclose(pipe);
+			int exitCode = 0;
+			str output = TestPlatform::RunCommand("\"" + toolPath + "\" " + arguments, exitCode);
 			if (outExitCode) {
 				*outExitCode = exitCode;
 			}
@@ -228,6 +219,9 @@ namespace {
 
 		const str& CompilerPath() const { return _compilerPath; }
 		const str& NinjaPath() const { return _ninjaPath; }
+		str ToolchainFileArgument() const {
+			return _toolchainFile.empty() ? str() : " -DCMAKE_TOOLCHAIN_FILE=\"" + _toolchainFile + "\"";
+		}
 
 		str FabricateStaleSDK(std::string_view commit, str& outPackageDirectory, std::string_view version = {}) const {
 			std::filesystem::path suggested = _root / "StaleSDK";
@@ -243,6 +237,7 @@ namespace {
 		str _cmakePath;
 		str _compilerPath;
 		str _ninjaPath;
+		str _toolchainFile;
 	};
 
 } // anonymous namespace
@@ -381,7 +376,7 @@ TEST_F(ScriptCompileIntegrationTest, TheScaffoldBuildsWithPrecompiledHeadersDisa
 	i32 exitCode = -1;
 	str configured = RunCMake("-S \"" + Root() + "\" -B \"" + binaryDirectory + "\" -G Ninja" +
 								  " -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + CompilerPath() + "\"" +
-								  " -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + " -DShalltear_ROOT=\"" + SDKRoot() + "\"" +
+								  " -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + ToolchainFileArgument() + " -DShalltear_ROOT=\"" + SDKRoot() + "\"" +
 								  " -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=\"" + CppToolchain::GetEngineIdentity() + "\"" +
 								  " -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON",
 							  &exitCode);
@@ -471,7 +466,7 @@ namespace {
 } // anonymous namespace
 
 TEST_F(ScriptCompileIntegrationTest, ScaffoldHasNoUnusedInclude) {
-	std::filesystem::path clangd = std::filesystem::path(CompilerPath()).parent_path() / "clangd.exe";
+	std::filesystem::path clangd = std::filesystem::path(CompilerPath()).parent_path() / "clangd" SLT_TEST_EXE_SUFFIX;
 	if (!std::filesystem::exists(clangd)) {
 		GTEST_SKIP() << "no clangd at " << clangd.generic_string();
 	}
@@ -603,31 +598,17 @@ TEST_F(ScriptCompileIntegrationTest, GeneratedPresetsConfigureWithNoEnvironmentS
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 
-	str previous;
-	{
-		size_t length = 0;
-		char buffer[4096];
-		if (::getenv_s(&length, buffer, sizeof(buffer), "SHALLTEAR_SDK") == 0 && length > 0) {
-			previous = str(buffer, length - 1);
-		}
-	}
-	::_putenv_s("SHALLTEAR_SDK", "");
+	const str previous = TestPlatform::GetEnvironment("SHALLTEAR_SDK");
+	TestPlatform::SetEnvironment("SHALLTEAR_SDK", "");
 
-	str previousPath;
-	{
-		size_t length = 0;
-		char buffer[32768];
-		if (::getenv_s(&length, buffer, sizeof(buffer), "PATH") == 0 && length > 0) {
-			previousPath = str(buffer, length - 1);
-		}
-	}
-	::_putenv_s("PATH", "C:\\Windows\\system32");
+	const str previousPath = TestPlatform::GetEnvironment("PATH");
+	TestPlatform::SetEnvironment("PATH", TestPlatform::GetSystemSearchPath());
 
 	str listed = RunCMake("-S \"" + Root() + "\" --list-presets");
 	str configured = RunCMake("-S \"" + Root() + "\" --preset " + _config + "-Local");
 
-	::_putenv_s("PATH", previousPath.c_str());
-	::_putenv_s("SHALLTEAR_SDK", previous.c_str());
+	TestPlatform::SetEnvironment("PATH", previousPath);
+	TestPlatform::SetEnvironment("SHALLTEAR_SDK", previous);
 
 	EXPECT_NE(listed.find("\"Debug-Local\""), str::npos) << listed;
 	EXPECT_NE(listed.find("\"Release-Local\""), str::npos) << listed;
@@ -636,8 +617,9 @@ TEST_F(ScriptCompileIntegrationTest, GeneratedPresetsConfigureWithNoEnvironmentS
 	str userPresets = ReadWholeFile(std::filesystem::path(Root()) / "CMakeUserPresets.json");
 	str compilerDirectory = std::filesystem::path(CompilerPath()).parent_path().generic_string();
 	str ninjaDirectory = std::filesystem::path(NinjaPath()).parent_path().generic_string();
-	EXPECT_NE(userPresets.find(compilerDirectory + ";"), str::npos) << userPresets;
-	EXPECT_NE(userPresets.find(ninjaDirectory + ";"), str::npos) << userPresets;
+	const str separator(1, TestPlatform::GetSearchPathSeparator());
+	EXPECT_NE(userPresets.find(compilerDirectory + separator), str::npos) << userPresets;
+	EXPECT_NE(userPresets.find(ninjaDirectory + separator), str::npos) << userPresets;
 
 	EXPECT_NE(configured.find("Build files have been written"), str::npos) << configured;
 	std::filesystem::path compileDirectory = ScriptProjectOps::GetCompileDirectory(Root(), _config);
@@ -658,7 +640,7 @@ namespace {
 
 	constexpr const char* PHYSICS_CALLER = R"(#include "Shalltear.h"
 
-extern "C" __declspec(dllexport) u32 LinkProbeOverlapCount() {
+extern "C" SLT_API_EXPORT u32 LinkProbeOverlapCount() {
 	Vector<Handle<Collider>> results;
 	return Physics::OverlapSphere(Vec3{0.0f, 0.0f, 0.0f}, 1.0f, results);
 }
@@ -814,7 +796,7 @@ TEST_F(ScriptCompileIntegrationTest, ForeignEnginePackageRefused) {
 	auto configure = [&](const str& binaryDirectory, const str& identity) {
 		return RunCMake("-S \"" + Root() + "\" -B \"" + Root() + "/Library/Compile/" + binaryDirectory + "\" -G Ninja" +
 						" -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + CompilerPath() + "\"" +
-						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + " -DShalltear_ROOT=\"" + staleRoot + "\"" +
+						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + ToolchainFileArgument() + " -DShalltear_ROOT=\"" + staleRoot + "\"" +
 						" -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=\"" + identity + "\"");
 	};
 
@@ -866,7 +848,7 @@ TEST_F(ScriptCompileIntegrationTest, ForeignAbiSdkRefused) {
 	auto configure = [&](const str& binaryDirectory, const str& packageRoot) {
 		return RunCMake("-S \"" + Root() + "\" -B \"" + Root() + "/Library/Compile/" + binaryDirectory + "\" -G Ninja" +
 						" -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + CompilerPath() + "\"" +
-						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + " -DShalltear_ROOT=\"" + packageRoot + "\"" +
+						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + ToolchainFileArgument() + " -DShalltear_ROOT=\"" + packageRoot + "\"" +
 						" -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=\"" + ours + "\"");
 	};
 
@@ -918,7 +900,7 @@ TEST_F(ScriptCompileIntegrationTest, ScaffoldedProjectConfiguresAgainstLaterEngi
 	auto configure = [&](const str& binaryDirectory) {
 		return RunCMake("-S \"" + Root() + "\" -B \"" + Root() + "/Library/Compile/" + binaryDirectory + "\" -G Ninja" +
 						" -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + CompilerPath() + "\"" +
-						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + " -DShalltear_ROOT=\"" + staleRoot + "\"" +
+						" -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + ToolchainFileArgument() + " -DShalltear_ROOT=\"" + staleRoot + "\"" +
 						" -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=\"" + later + "\"");
 	};
 
@@ -999,13 +981,13 @@ TEST_F(ScriptCompileIntegrationTest, CacheFromMovedEngineReconfigured) {
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 
-	const std::filesystem::path otherDriver = std::filesystem::path(CompilerPath()).parent_path() / "x86_64-w64-mingw32-c++.exe";
+	const std::filesystem::path otherDriver = TestPlatform::MakeCompilerAlias(CompilerPath(), Root());
 	ASSERT_TRUE(std::filesystem::exists(otherDriver)) << otherDriver.generic_string();
 	const str compileDirectory = ScriptProjectOps::GetCompileDirectory(Root(), _config);
 	i32 exitCode = -1;
 	str configured = RunCMake("-S \"" + Root() + "\" -B \"" + compileDirectory + "\" -G Ninja" +
 								  " -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + otherDriver.generic_string() + "\"" +
-								  " -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + " -DShalltear_ROOT=\"" + SDKRoot() + "\"" +
+								  " -DCMAKE_MAKE_PROGRAM=\"" + NinjaPath() + "\"" + ToolchainFileArgument() + " -DShalltear_ROOT=\"" + SDKRoot() + "\"" +
 								  " -DSHALLTEAR_EXPECT_ENGINE_IDENTITY=\"" + CppToolchain::GetEngineIdentity() + "\"",
 							  &exitCode);
 	ASSERT_EQ(exitCode, 0) << configured;
@@ -1015,7 +997,7 @@ TEST_F(ScriptCompileIntegrationTest, CacheFromMovedEngineReconfigured) {
 	ASSERT_TRUE(RunCompile(service)) << Diagnostics(service);
 	EXPECT_TRUE(FileSystem::Exists(Path(ScriptProjectOps::GetModuleBinaryPath(Root(), _config))));
 	str cache = FileSystem::ReadTextFile(Path(compileDirectory + "/CMakeCache.txt"), MemTag::Editor);
-	EXPECT_EQ(cache.find("x86_64-w64-mingw32-c++.exe"), str::npos);
+	EXPECT_EQ(cache.find(otherDriver.filename().generic_string()), str::npos);
 }
 
 TEST_F(ScriptCompileIntegrationTest, StarterComponentTurnsTarget) {

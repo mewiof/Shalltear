@@ -1599,9 +1599,6 @@ TEST_F(VisualEffectComponentFixture, SeedAndEachSpawnsIdReachKernels) {
 
 #else
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
 #undef CreateDirectory
 #undef far
 #undef near
@@ -1643,7 +1640,7 @@ namespace {
 		void SetUp() override {
 			MaterialReadbackFixture::SetUp();
 			ModuleSystem::Initialize();
-			_module = ModuleSystem::Load(Path("VisualEffects.dll"), ModuleLoadPolicy::InPlace);
+			_module = ModuleSystem::Load(Path("VisualEffects" SLT_TEST_DLL_SUFFIX), ModuleLoadPolicy::InPlace);
 			SetEffectTimes(0.0f, 0.0f);
 		}
 
@@ -2081,13 +2078,13 @@ TEST_F(VisualEffectSceneFixture, ScriptReadsCpuPositions) {
 	FrameStages::Run(FrameStage::LateUpdate, {});
 	RenderSystem::RenderAll();
 
-	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule.dll"));
+	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(script));
-	HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(script));
+	void* image = ModuleSystem::GetNativeHandle(script);
 	using CountFn = u32 (*)(VisualEffect*, const char*);
 	using ReadFn = u32 (*)(VisualEffect*, const char*, f32*, u32);
-	const CountFn count = image ? reinterpret_cast<CountFn>(GetProcAddress(image, "VisualEffectsScriptModuleCount")) : nullptr;
-	const ReadFn read = image ? reinterpret_cast<ReadFn>(GetProcAddress(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
+	const CountFn count = image ? reinterpret_cast<CountFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleCount")) : nullptr;
+	const ReadFn read = image ? reinterpret_cast<ReadFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
 	EXPECT_TRUE(count && read);
 	if (count && read) {
 		f32 xyz[3 * 8] = {};
@@ -2161,11 +2158,11 @@ TEST_F(VisualEffectSceneFixture, EffectUsesProjectFixedStep) {
 		RenderSystem::RenderAll();
 	}
 
-	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule.dll"));
+	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(script));
-	HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(script));
+	void* image = ModuleSystem::GetNativeHandle(script);
 	using ReadFn = u32 (*)(VisualEffect*, const char*, f32*, u32);
-	const ReadFn read = image ? reinterpret_cast<ReadFn>(GetProcAddress(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
+	const ReadFn read = image ? reinterpret_cast<ReadFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
 	ASSERT_NE(read, nullptr);
 	f32 xyz[3 * 8] = {};
 	ASSERT_EQ(read(effects[0], "Sparks", xyz, 8), 4u);
@@ -2229,13 +2226,13 @@ TEST_F(VisualEffectSceneFixture, CpuSystemUsesMeshVertices) {
 	FrameStages::Run(FrameStage::LateUpdate, {});
 	RenderSystem::RenderAll();
 
-	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule.dll"));
+	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(script));
-	HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(script));
+	void* image = ModuleSystem::GetNativeHandle(script);
 	using CountFn = u32 (*)(VisualEffect*, const char*);
 	using ReadFn = u32 (*)(VisualEffect*, const char*, f32*, u32);
-	const CountFn count = image ? reinterpret_cast<CountFn>(GetProcAddress(image, "VisualEffectsScriptModuleCount")) : nullptr;
-	const ReadFn read = image ? reinterpret_cast<ReadFn>(GetProcAddress(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
+	const CountFn count = image ? reinterpret_cast<CountFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleCount")) : nullptr;
+	const ReadFn read = image ? reinterpret_cast<ReadFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleReadPositions")) : nullptr;
 	EXPECT_TRUE(count && read);
 	if (count && read) {
 		const u32 corners = static_cast<u32>(cube->vertices.size());
@@ -2279,11 +2276,11 @@ TEST_F(VisualEffectSceneFixture, ScriptHearsImportedCpuSystemsParticlesDie) {
 	if (!imported) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule.dll"));
+	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(script));
-	HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(script));
+	void* image = ModuleSystem::GetNativeHandle(script);
 	using HeardFn = u32 (*)(Component*, char*, u32, f32*, f32*);
-	const HeardFn heard = image ? reinterpret_cast<HeardFn>(GetProcAddress(image, "VisualEffectsScriptModuleHeard")) : nullptr;
+	const HeardFn heard = image ? reinterpret_cast<HeardFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleHeard")) : nullptr;
 	const TypeInfo* effectType = TypeRegistry::FindType(StringHash("VisualEffect"));
 	const TypeInfo* probeType = TypeRegistry::FindType(StringHash("ParticleEventProbe"));
 	EXPECT_TRUE(heard && effectType && probeType);
@@ -2349,11 +2346,11 @@ TEST_F(VisualEffectSceneFixture, ScriptHearsImportedBurst) {
 	if (!imported) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule.dll"));
+	const ModuleHandle script = ModuleSystem::Load(Path("ShalltearVisualEffectsScriptModule" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(script));
-	HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(script));
+	void* image = ModuleSystem::GetNativeHandle(script);
 	using HeardFn = u32 (*)(Component*, char*, u32, f32*, f32*);
-	const HeardFn heard = image ? reinterpret_cast<HeardFn>(GetProcAddress(image, "VisualEffectsScriptModuleHeard")) : nullptr;
+	const HeardFn heard = image ? reinterpret_cast<HeardFn>(ModuleSystem::FindSymbol(image, "VisualEffectsScriptModuleHeard")) : nullptr;
 	const TypeInfo* effectType = TypeRegistry::FindType(StringHash("VisualEffect"));
 	const TypeInfo* probeType = TypeRegistry::FindType(StringHash("ParticleEventProbe"));
 	EXPECT_TRUE(heard && effectType && probeType);

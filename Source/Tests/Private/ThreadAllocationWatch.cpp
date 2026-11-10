@@ -4,6 +4,8 @@
 
 #ifndef SHALLTEAR_SHARED
 
+#include "TestPlatform.h"
+
 #include <atomic>
 #include <cstdlib>
 #include <malloc.h>
@@ -44,7 +46,7 @@ namespace {
 			size = 1;
 		}
 		for (;;) {
-			if (void* block = _aligned_malloc(size, static_cast<std::size_t>(alignment))) {
+			if (void* block = TestPlatform::AllocateAligned(size, static_cast<std::size_t>(alignment))) {
 				return block;
 			}
 			std::new_handler handler = std::get_new_handler();
@@ -119,11 +121,11 @@ void operator delete[](void* block, std::size_t) noexcept { std::free(block); }
 void operator delete(void* block, const std::nothrow_t&) noexcept { std::free(block); }
 void operator delete[](void* block, const std::nothrow_t&) noexcept { std::free(block); }
 
-void operator delete(void* block, std::align_val_t) noexcept { _aligned_free(block); }
-void operator delete[](void* block, std::align_val_t) noexcept { _aligned_free(block); }
-void operator delete(void* block, std::size_t, std::align_val_t) noexcept { _aligned_free(block); }
-void operator delete[](void* block, std::size_t, std::align_val_t) noexcept { _aligned_free(block); }
-void operator delete(void* block, std::align_val_t, const std::nothrow_t&) noexcept { _aligned_free(block); }
-void operator delete[](void* block, std::align_val_t, const std::nothrow_t&) noexcept { _aligned_free(block); }
+void operator delete(void* block, std::align_val_t) noexcept { TestPlatform::FreeAligned(block); }
+void operator delete[](void* block, std::align_val_t) noexcept { TestPlatform::FreeAligned(block); }
+void operator delete(void* block, std::size_t, std::align_val_t) noexcept { TestPlatform::FreeAligned(block); }
+void operator delete[](void* block, std::size_t, std::align_val_t) noexcept { TestPlatform::FreeAligned(block); }
+void operator delete(void* block, std::align_val_t, const std::nothrow_t&) noexcept { TestPlatform::FreeAligned(block); }
+void operator delete[](void* block, std::align_val_t, const std::nothrow_t&) noexcept { TestPlatform::FreeAligned(block); }
 
 #endif

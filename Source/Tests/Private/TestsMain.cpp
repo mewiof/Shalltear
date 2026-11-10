@@ -1,6 +1,7 @@
 #include "TestsPCH.h"
 
 #include "TestHelperProcess.h"
+#include "TestPlatform.h"
 
 #include "Shalltear/Core/Asset/ImportTier.h"
 
@@ -37,22 +38,15 @@ void Shalltear::TestHelpers::RestoreNodeShader() {
 }
 
 int main(int argc, char** argv) {
-#ifdef _WIN32
 	for (int arg = 1; arg < argc; ++arg) {
-		if (std::strcmp(argv[arg], Shalltear::TestHelpers::WINDOW_HOST_FLAG) == 0) {
-			return Shalltear::TestHelpers::RunWindowHost();
-		}
-		if (std::strcmp(argv[arg], Shalltear::TestHelpers::SHOW_STATE_FLAG) == 0) {
-			return Shalltear::TestHelpers::RunShowStateProbe();
-		}
-		if (std::strcmp(argv[arg], Shalltear::TestHelpers::DATA_ASSET_RELOAD_FLAG) == 0) {
-			return Shalltear::TestHelpers::RunDataAssetReloadProbe(arg + 1 < argc ? argv[arg + 1] : nullptr);
-		}
 		if (std::strcmp(argv[arg], Shalltear::TestHelpers::REFLECTION_STARTUP_FLAG) == 0) {
 			return Shalltear::TestHelpers::RunReflectionStartupProbe();
 		}
 	}
-#endif
+	int helperExitCode = 0;
+	if (TestPlatform::RunHelperProcess(argc, argv, helperExitCode)) {
+		return helperExitCode;
+	}
 
 	::testing::InitGoogleTest(&argc, argv);
 	Shalltear::ImportTier::Install();

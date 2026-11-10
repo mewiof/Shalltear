@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Frame/FrameStages.h"
 #include "Shalltear/Core/Module.h"
 #include "Shalltear/Core/Module/ModuleAPI.h"
@@ -24,7 +26,7 @@ using namespace Shalltear;
 namespace {
 
 	constexpr const char* PACKAGE_TARGET = "Physics3D";
-	constexpr const char* LISTENER_MODULE_DLL = "ShalltearPhysicsListenerModule.dll";
+	constexpr const char* LISTENER_MODULE_DLL = "ShalltearPhysicsListenerModule" SLT_TEST_DLL_SUFFIX;
 
 	constexpr const char* RIGIDBODY_TYPE_NAME = "Rigidbody";
 	constexpr const char* SPHERE_COLLIDER_TYPE_NAME = "SphereCollider";
@@ -113,6 +115,11 @@ namespace {
 
 			_scene = SceneSystem::CreateScene("physics-contact");
 			ASSERT_TRUE(_scene.IsValid());
+#ifndef SHALLTEAR_SHARED
+			if (!TestPlatform::StaticModulesShareTypeInfo()) {
+				GTEST_SKIP() << "listener module has its copy of the interface's type info in a static tree";
+			}
+#endif
 		}
 
 		void TearDown() override {
@@ -128,7 +135,7 @@ namespace {
 
 		bool StandUp() {
 #ifdef SHALLTEAR_SHARED
-			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + ".dll"), ModuleLoadPolicy::InPlace);
+			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + SLT_TEST_DLL_SUFFIX), ModuleLoadPolicy::InPlace);
 			return ModuleSystem::IsLoaded(_module);
 #else
 			SLT_CALL_LINKED_PACKAGE(Physics3D, &_token);

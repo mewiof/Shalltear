@@ -2,6 +2,8 @@
 
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Log.h"
 
@@ -12,9 +14,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 
 namespace DeviceLossTest {
 
@@ -106,18 +105,13 @@ namespace DeviceLossTest {
 	public:
 		ScopedEnvironment(const char* name, const char* value)
 			: _name(name) {
-			char previous[1024];
-			const DWORD length = ::GetEnvironmentVariableA(name, previous, sizeof(previous));
-			_had = length > 0 && length < sizeof(previous);
-			if (_had) {
-				_previous = previous;
-			}
-			::SetEnvironmentVariableA(name, value);
+			_previous = TestPlatform::GetEnvironment(name);
+			TestPlatform::SetEnvironment(name, value ? value : "");
 		}
 		~ScopedEnvironment() { Restore(); }
 		void Restore() {
 			if (!_restored) {
-				::SetEnvironmentVariableA(_name, _had ? _previous.c_str() : nullptr);
+				TestPlatform::SetEnvironment(_name, _previous);
 				_restored = true;
 			}
 		}

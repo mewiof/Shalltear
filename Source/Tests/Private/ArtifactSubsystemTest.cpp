@@ -1,6 +1,6 @@
 #include "TestsPCH.h"
 
-#include "PESubsystem.h"
+#include "TestPlatform.h"
 
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
@@ -13,11 +13,12 @@ TEST(ArtifactSubsystemTest, TheEditorExecutableIsAWindowedApplication) {
 	if (here.empty() || !here.has_parent_path()) {
 		GTEST_SKIP();
 	}
-	std::filesystem::path editor = here.parent_path() / "Shalltear.exe";
+	std::filesystem::path editor = here.parent_path() / "Shalltear" SLT_TEST_EXE_SUFFIX;
 	if (!std::filesystem::exists(editor)) {
 		GTEST_SKIP() << "no editor exe (" << editor.string() << ")";
 	}
 
-	EXPECT_EQ(PESubsystem::Read(here), PESubsystem::CONSOLE);
-	EXPECT_EQ(PESubsystem::Read(editor), PESubsystem::GUI);
+	str why;
+	EXPECT_TRUE(TestPlatform::IsArtifactKind(here.generic_string(), false, why)) << why;
+	EXPECT_TRUE(TestPlatform::IsArtifactKind(editor.generic_string(), true, why)) << why;
 }

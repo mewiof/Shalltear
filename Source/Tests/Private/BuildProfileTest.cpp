@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Editor/BuildProfile.h"
 
 #include <algorithm>
@@ -116,7 +118,7 @@ namespace {
 	}
 
 	void SetEnv(const char* name, const char* value) {
-		::_putenv_s(name, value);
+		TestPlatform::SetEnvironment(name, value);
 	}
 
 } // namespace

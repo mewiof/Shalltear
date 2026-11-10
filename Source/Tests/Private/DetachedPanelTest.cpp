@@ -16,11 +16,7 @@
 #include "Shalltear/Editor/EditorSelection.h"
 #include "Shalltear/Editor/PanelManager.h"
 
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 using namespace UITest;
@@ -330,13 +326,12 @@ namespace {
 	void ClickPointInWindow(Handle<Window> window, i32 x, i32 y) {
 		Window* resolved = window.Get();
 		ASSERT_NE(resolved, nullptr);
-		HWND hwnd = static_cast<HWND>(resolved->GetNativeHandle().window);
-		::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+		TestPlatform::PostMouseMove(resolved, {x, y});
 		Frame();
-		::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+		TestPlatform::PostMouseButton(resolved, MouseButton::Left, true, {x, y});
 		Frame();
 		Frame();
-		::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+		TestPlatform::PostMouseButton(resolved, MouseButton::Left, false, {x, y});
 		Frame();
 	}
 

@@ -14,9 +14,9 @@ using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
-	constexpr const char* GONE_DLL = "ShalltearHotReloadModuleGone.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* GONE_DLL = "ShalltearHotReloadModuleGone" SLT_TEST_DLL_SUFFIX;
 
 	const StringHash DataAssetType{"HotReloadDataAsset"};
 	const StringHash BehaviorType{"HotReloadBehavior"};

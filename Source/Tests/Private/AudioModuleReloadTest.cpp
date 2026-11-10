@@ -13,12 +13,6 @@
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Time.h"
 
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -27,16 +21,16 @@
 
 using namespace Shalltear;
 
-extern "C" __declspec(dllexport) AudioScriptProbe* ShalltearAudioScriptProbe() {
+extern "C" SLT_API_EXPORT AudioScriptProbe* ShalltearAudioScriptProbe() {
 	static AudioScriptProbe probe;
 	return &probe;
 }
 
 namespace {
 
-	constexpr const char* PACKAGE_DLL = "Audio.dll";
-	constexpr const char* V1_DLL = "ShalltearAudioScriptModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearAudioScriptModuleV2.dll";
+	constexpr const char* PACKAGE_DLL = "Audio" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V1_DLL = "ShalltearAudioScriptModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearAudioScriptModuleV2" SLT_TEST_DLL_SUFFIX;
 	constexpr const char* TONE_PATH = "project://Probe.sltone";
 
 	const StringHash TONE_TYPE{"AudioScriptTone"};
@@ -96,8 +90,8 @@ namespace {
 
 		template <typename Fn>
 		Fn Resolve(const char* name) {
-			HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(_module));
-			return image ? reinterpret_cast<Fn>(::GetProcAddress(image, name)) : nullptr;
+			void* image = ModuleSystem::GetNativeHandle(_module);
+			return image ? reinterpret_cast<Fn>(ModuleSystem::FindSymbol(image, name)) : nullptr;
 		}
 
 		bool ReloadTo(const char* dll) {

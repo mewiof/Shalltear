@@ -20,19 +20,11 @@
 #include "Shalltear/Editor/UIDebugOps.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 #include <filesystem>
 
 using namespace Shalltear;
-
-#ifdef _WIN32
 
 namespace {
 
@@ -166,26 +158,16 @@ namespace {
 			EditorEvents::PlayModeChanged.Publish(EventBus::GetGlobal(), {state});
 		}
 
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
-
 		void PostClick(i32 x, i32 y) {
-			::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
-			::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-			::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+			TestPlatform::PostMouseMove(_window, {x, y});
+			TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {x, y});
+			TestPlatform::PostMouseButton(_window, MouseButton::Left, false, {x, y});
 		}
-		static LPARAM KeyLParam(u16 scancode, bool up = false) {
-			LPARAM lParam = 1;
-			lParam |= static_cast<LPARAM>(scancode & 0xFF) << 16;
-			if (up) {
-				lParam |= (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
-			}
-			return lParam;
+		void PostKey(Key key) {
+			TestPlatform::PostKey(_window, key, true);
+			TestPlatform::PostKey(_window, key, false);
 		}
-		void PostKey(u16 vk, u16 scancode) {
-			::PostMessageW(Hwnd(), WM_KEYDOWN, vk, KeyLParam(scancode));
-			::PostMessageW(Hwnd(), WM_KEYUP, vk, KeyLParam(scancode, true));
-		}
-		void PostKeyTap() { PostKey('G', 0x22); }
+		void PostKeyTap() { PostKey(Key::G); }
 	};
 
 	struct Probe {
@@ -340,14 +322,14 @@ TEST_F(RuntimeViewScreenFixture, PressForwardsUntilRelease) {
 	Frame();
 	UI::Context* context = UISystem::GetSurfaceContext(probe.surface);
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
+	TestPlatform::PostMouseMove(_window, {X(rect, 40.0f), Y(rect, 40.0f)});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {X(rect, 40.0f), Y(rect, 40.0f)});
 	Frame();
 	EXPECT_TRUE(context->WantsMouse());
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(X(rect, 40.0f), Y(rect, -8.0f)));
+	TestPlatform::PostMouseMove(_window, {X(rect, 40.0f), Y(rect, -8.0f)});
 	Frame();
 	EXPECT_LT(context->GetPointerPosition().y, 0.0f);
-	::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, -8.0f)));
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, false, {X(rect, 40.0f), Y(rect, -8.0f)});
 	Frame();
 	EXPECT_FALSE(context->WantsMouse());
 	EXPECT_EQ(probe.clicks, 0u);
@@ -365,8 +347,8 @@ TEST_F(RuntimeViewScreenFixture, ViewLossEndsPress) {
 	Frame();
 	UI::Context* game = UISystem::GetSurfaceContext(probe.surface);
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
+	TestPlatform::PostMouseMove(_window, {X(rect, 40.0f), Y(rect, 40.0f)});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {X(rect, 40.0f), Y(rect, 40.0f)});
 	Frame();
 	ASSERT_TRUE(game->WantsMouse());
 
@@ -385,7 +367,7 @@ TEST_F(RuntimeViewScreenFixture, ViewLossEndsPress) {
 	Frame();
 	Frame();
 	ASSERT_TRUE(EditorViewportOps::ViewportIsOnScreen(RectOf(view)));
-	::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, false, {X(rect, 40.0f), Y(rect, 40.0f)});
 	Frame();
 	EXPECT_EQ(probe.clicks, 0u);
 	UISystem::DestroySurface(probe.surface);
@@ -434,8 +416,8 @@ TEST_F(RuntimeViewScreenFixture, PauseEndsPress) {
 	Frame();
 	UI::Context* game = UISystem::GetSurfaceContext(probe.surface);
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
+	TestPlatform::PostMouseMove(_window, {X(rect, 40.0f), Y(rect, 40.0f)});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {X(rect, 40.0f), Y(rect, 40.0f)});
 	Frame();
 	ASSERT_TRUE(game->WantsMouse());
 
@@ -445,7 +427,7 @@ TEST_F(RuntimeViewScreenFixture, PauseEndsPress) {
 
 	SetPlayState(PlayModeState::Playing);
 	Frame();
-	::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(X(rect, 40.0f), Y(rect, 40.0f)));
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, false, {X(rect, 40.0f), Y(rect, 40.0f)});
 	Frame();
 	EXPECT_EQ(probe.clicks, 0u);
 	UISystem::DestroySurface(probe.surface);
@@ -466,7 +448,7 @@ TEST_F(RuntimeViewScreenFixture, EscapeReachesGame) {
 	ASSERT_EQ(probe.clicks, 1u);
 	ASSERT_TRUE(_context->GetFocused() == ViewportOf(view));
 
-	PostKey(VK_ESCAPE, 0x01);
+	PostKey(Key::Escape);
 	Frame();
 	EXPECT_EQ(probe.keys, 1u);
 	EXPECT_TRUE(_context->GetFocused() == ViewportOf(view));
@@ -490,7 +472,7 @@ TEST_F(RuntimeViewScreenFixture, EscapeStillClearsFocusForEditorsElements) {
 	Frame();
 	ASSERT_TRUE(_context->GetFocused() == other);
 
-	PostKey(VK_ESCAPE, 0x01);
+	PostKey(Key::Escape);
 	Frame();
 	EXPECT_FALSE(_context->GetFocused() == other);
 }
@@ -510,7 +492,7 @@ TEST_F(RuntimeViewScreenFixture, EscapeKeepsSecondViewFocus) {
 	Frame();
 	ASSERT_TRUE(_context->GetFocused() == ViewportOf(second));
 
-	PostKey(VK_ESCAPE, 0x01);
+	PostKey(Key::Escape);
 	Frame();
 	EXPECT_TRUE(_context->GetFocused() == ViewportOf(second));
 }
@@ -535,5 +517,3 @@ TEST_F(RuntimeViewScreenFixture, DebuggerNamesScreenSurfaceForDocument) {
 	EXPECT_TRUE(listed);
 	UISystem::DestroySurface(probe.surface);
 }
-
-#endif

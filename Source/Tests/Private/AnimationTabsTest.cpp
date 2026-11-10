@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #ifdef SHALLTEAR_SHARED
 
 #include "UITestUtil.h"
@@ -28,20 +30,11 @@
 #include <cstring>
 #include <filesystem>
 
-#include <windows.h>
-
 using namespace Shalltear;
 
 namespace {
 
 	constexpr const char* PACKAGE_TARGET = "Animation";
-
-	const void* ImageOf(const void* address) {
-		HMODULE image = nullptr;
-		::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-							 static_cast<const char*>(address), &image);
-		return image;
-	}
 
 	std::filesystem::path RepoDir(const char* relative) {
 		std::error_code ec;
@@ -94,7 +87,7 @@ namespace {
 			UndoSystem::Initialize();
 			PanelManager::Initialize();
 
-			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + ".dll"));
+			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			_moduleBase = ModuleSystem::GetNativeHandle(_module);
 			ASSERT_NE(_moduleBase, nullptr);
@@ -102,7 +95,7 @@ namespace {
 
 			ASSERT_TRUE(EditorExtensions::Load(_moduleBase));
 
-			_importPipelineBase = ImageOf(reinterpret_cast<const void*>(&RegisterImportPipeline));
+			_importPipelineBase = TestPlatform::ImageOf(reinterpret_cast<const void*>(&RegisterImportPipeline));
 			ASSERT_NE(_importPipelineBase, nullptr);
 			ASSERT_TRUE(EditorExtensions::Load(_importPipelineBase));
 

@@ -18,7 +18,7 @@
 #include "Shalltear/Editor/SceneAnnotations.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
-#include <windows.h>
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 using namespace UITest;
@@ -135,8 +135,8 @@ namespace {
 		}
 		~HeldInput() {
 			if (_window.IsValid()) {
-				::PostMessageW(Hwnd(), WM_KEYUP, 'W', KeyLParam(true));
-				::PostMessageW(Hwnd(), WM_RBUTTONUP, 0, MAKELPARAM(10, 10));
+				TestPlatform::PostKey(_window, Key::W, false);
+				TestPlatform::PostMouseButton(_window, MouseButton::Right, false, {10, 10});
 				WindowSystem::PumpEvents();
 			}
 		}
@@ -145,22 +145,12 @@ namespace {
 
 		bool IsValid() const { return _window.IsValid(); }
 		void HoldRightButtonAndW() {
-			::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(10, 10));
-			::PostMessageW(Hwnd(), WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(10, 10));
-			::PostMessageW(Hwnd(), WM_KEYDOWN, 'W', KeyLParam(false));
+			TestPlatform::PostMouseMove(_window, {10, 10});
+			TestPlatform::PostMouseButton(_window, MouseButton::Right, true, {10, 10});
+			TestPlatform::PostKey(_window, Key::W, true);
 			WindowSystem::PumpEvents();
 		}
 	private:
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
-		static LPARAM KeyLParam(bool up) {
-			LPARAM lParam = 1;
-			lParam |= static_cast<LPARAM>(0x11) << 16;
-			if (up) {
-				lParam |= static_cast<LPARAM>(1) << 30;
-				lParam |= static_cast<LPARAM>(1) << 31;
-			}
-			return lParam;
-		}
 		Handle<Window> _window;
 	};
 

@@ -1,3 +1,5 @@
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/FileSystem.h"
 #include <gtest/gtest.h>
 #include <filesystem>
@@ -145,7 +147,6 @@ TEST(FileSystem, UnixTimestampsAreWallClock) {
 TEST(FileSystem, UserDataDirectoryIsWritable) {
 	Path userData = FileSystem::GetUserDataDirectory();
 	Path home = FileSystem::GetUserHomeDirectory();
-#ifdef _WIN32
 	ASSERT_FALSE(userData.ToString().empty());
 	EXPECT_TRUE(FileSystem::IsDirectory(userData));
 	EXPECT_EQ(userData.ToString().find('\\'), str::npos);
@@ -153,10 +154,6 @@ TEST(FileSystem, UserDataDirectoryIsWritable) {
 	ASSERT_FALSE(home.ToString().empty());
 	EXPECT_TRUE(FileSystem::IsDirectory(home));
 	EXPECT_EQ(home.ToString().find('\\'), str::npos);
-#else
-	EXPECT_TRUE(userData.ToString().empty());
-	EXPECT_TRUE(home.ToString().empty());
-#endif
 }
 
 TEST(FileSystem, ReadWriteBinaryFile) {
@@ -209,10 +206,8 @@ TEST(FileSystem, FileWatcherBasic) {
 		}
 	}
 
-#ifdef _WIN32
 	EXPECT_GT(callbackFiredCount.load(), 0);
 	EXPECT_EQ(lastPath.GetFilename(), "new_file.txt");
-#endif
 
 	std::filesystem::remove_all(watchDir.ToString());
 }
@@ -327,7 +322,9 @@ TEST(FileReader, OpenFileRefusesWriterAndDelete) {
 
 		EXPECT_FALSE(FileSystem::WriteFile(file, replacement));
 		std::error_code ec;
-		EXPECT_FALSE(std::filesystem::remove(path, ec));
+		if (TestPlatform::OpenFileRefusesDelete()) {
+			EXPECT_FALSE(std::filesystem::remove(path, ec));
+		}
 
 		FileReader second;
 		EXPECT_TRUE(second.Open(file));
@@ -388,7 +385,11 @@ TEST(FileReader, ReopenInheritsSharing) {
 			ASSERT_TRUE(reader.Open(Path(path.generic_string())));
 			ASSERT_TRUE(reopened.Open(reader));
 		}
-		EXPECT_FALSE(std::filesystem::remove(path, ec));
+		Buffer replacement(16, MemTag::Unknown);
+		EXPECT_FALSE(FileSystem::WriteFile(Path(path.generic_string()), replacement));
+		if (TestPlatform::OpenFileRefusesDelete()) {
+			EXPECT_FALSE(std::filesystem::remove(path, ec));
+		}
 		std::vector<u8> bytes(96, 0);
 		EXPECT_TRUE(reopened.ReadAt(4000, std::span<u8>(bytes)));
 		EXPECT_TRUE(MatchesPattern(bytes, 4000));

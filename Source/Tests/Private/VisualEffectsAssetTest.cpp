@@ -131,7 +131,7 @@ TEST(VisualEffectsAssemblyTest, ImporterExistsWhereEditorHalfDoes) {
 	TypeRegistry::InitializePrimitives();
 	ModuleSystem::Initialize();
 #ifdef SHALLTEAR_SHARED
-	ModuleHandle module = ModuleSystem::Load(Path("VisualEffects.dll"));
+	ModuleHandle module = ModuleSystem::Load(Path("VisualEffects" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(module));
 	EXPECT_NE(AssetImporterRegistry::FindByExtension(".sleffect"), nullptr);
 	ModuleSystem::Unload(module);
@@ -988,7 +988,7 @@ namespace {
 			Settings::Initialize(_paths);
 			SceneSystem::Initialize();
 			ModuleSystem::Initialize();
-			_module = ModuleSystem::Load(Path("VisualEffects.dll"));
+			_module = ModuleSystem::Load(Path("VisualEffects" SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			AssetDatabase::Initialize();
 		}

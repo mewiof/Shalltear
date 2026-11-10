@@ -4,13 +4,7 @@
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Window.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 
@@ -33,35 +27,11 @@ protected:
 		return desc;
 	}
 
-#ifdef _WIN32
-	HWND Hwnd(Handle<Window> window = {}) const {
-		Handle<Window> target = window.IsValid() ? window : _window;
-		return static_cast<HWND>(target->GetNativeHandle().window);
-	}
-
-	static LPARAM KeyLParam(u16 scancode, bool extended = false, bool repeat = false, bool up = false) {
-		LPARAM lParam = 1;
-		lParam |= static_cast<LPARAM>(scancode & 0xFF) << 16;
-		if (extended) {
-			lParam |= static_cast<LPARAM>(1) << 24;
-		}
-		if (repeat || up) {
-			lParam |= static_cast<LPARAM>(1) << 30;
-		}
-		if (up) {
-			lParam |= static_cast<LPARAM>(1) << 31;
-		}
-		return lParam;
-	}
-#endif
-
 	Handle<Window> _window;
 };
 
-#ifdef _WIN32
-
 TEST_F(InputTest, PostedKeyDrivesStateAndQueue) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'A', KeyLParam(0x1E));
+	TestPlatform::PostKey(_window, Key::A, true);
 	WindowSystem::PumpEvents();
 
 	EXPECT_TRUE(Input::IsKeyDown(Key::A));
@@ -84,18 +54,18 @@ TEST_F(InputTest, PostedKeyDrivesStateAndQueue) {
 	EXPECT_FALSE(Input::WasKeyPressed(Key::A));
 	EXPECT_TRUE(Input::GetFrameEvents().empty());
 
-	::PostMessageW(Hwnd(), WM_KEYUP, 'A', KeyLParam(0x1E, false, false, true));
+	TestPlatform::PostKey(_window, Key::A, false);
 	WindowSystem::PumpEvents();
 	EXPECT_FALSE(Input::IsKeyDown(Key::A));
 	EXPECT_TRUE(Input::WasKeyReleased(Key::A));
 }
 
 TEST_F(InputTest, OsRepeatIsFlaggedNotFreshPress) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_F13, KeyLParam(0x64));
+	TestPlatform::PostKey(_window, Key::F13, true);
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::WasKeyPressed(Key::F13));
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_F13, KeyLParam(0x64, false, true));
+	TestPlatform::PostKey(_window, Key::F13, true, true);
 	WindowSystem::PumpEvents();
 	EXPECT_TRUE(Input::IsKeyDown(Key::F13));
 	EXPECT_FALSE(Input::WasKeyPressed(Key::F13));
@@ -106,8 +76,8 @@ TEST_F(InputTest, OsRepeatIsFlaggedNotFreshPress) {
 }
 
 TEST_F(InputTest, ModifiersStampEventsAndPolledView) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::S, true);
 	WindowSystem::PumpEvents();
 
 	EXPECT_TRUE(Input::IsKeyDown(Key::LeftCtrl));
@@ -124,10 +94,10 @@ TEST_F(InputTest, ModifiersStampEventsAndPolledView) {
 }
 
 TEST_F(InputTest, LeftRightModifiersDiscriminate) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SHIFT, KeyLParam(0x2A));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SHIFT, KeyLParam(0x36));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D, true));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_RETURN, KeyLParam(0x1C, true));
+	TestPlatform::PostKey(_window, Key::LeftShift, true);
+	TestPlatform::PostKey(_window, Key::RightShift, true);
+	TestPlatform::PostKey(_window, Key::RightCtrl, true);
+	TestPlatform::PostKey(_window, Key::KpEnter, true);
 	WindowSystem::PumpEvents();
 
 	EXPECT_TRUE(Input::IsKeyDown(Key::LeftShift));
@@ -137,10 +107,10 @@ TEST_F(InputTest, LeftRightModifiersDiscriminate) {
 }
 
 TEST_F(InputTest, TextEventsFuseSurrogatePairs) {
-	::PostMessageW(Hwnd(), WM_CHAR, 'A', 1);
-	::PostMessageW(Hwnd(), WM_CHAR, 0xD83D, 1);
-	::PostMessageW(Hwnd(), WM_CHAR, 0xDE00, 1);
-	::PostMessageW(Hwnd(), WM_CHAR, 0x08, 1);
+	TestPlatform::PostText(_window, U'A');
+	TestPlatform::PostText(_window, static_cast<char32_t>(0xD83D));
+	TestPlatform::PostText(_window, static_cast<char32_t>(0xDE00));
+	TestPlatform::PostText(_window, static_cast<char32_t>(0x08));
 	WindowSystem::PumpEvents();
 
 	std::vector<char32_t> text;
@@ -155,8 +125,8 @@ TEST_F(InputTest, TextEventsFuseSurrogatePairs) {
 }
 
 TEST_F(InputTest, MouseMoveEnterButtonsAndPosition) {
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {100, 50});
 	WindowSystem::PumpEvents();
 
 	auto events = Input::GetFrameEvents();
@@ -171,16 +141,16 @@ TEST_F(InputTest, MouseMoveEnterButtonsAndPosition) {
 	EXPECT_TRUE(Input::WasMouseButtonPressed(MouseButton::Left));
 	EXPECT_EQ(Input::GetMousePosition(_window), Vec2I(100, 50));
 
-	::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, false, {100, 50});
 	WindowSystem::PumpEvents();
 	EXPECT_FALSE(Input::IsMouseButtonDown(MouseButton::Left));
 	EXPECT_TRUE(Input::WasMouseButtonReleased(MouseButton::Left));
 }
 
 TEST_F(InputTest, WheelAccumulatesPerPumpInNotches) {
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
-	::PostMessageW(Hwnd(), WM_MOUSEHWHEEL, MAKEWPARAM(0, static_cast<WORD>(-WHEEL_DELTA)), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
+	TestPlatform::PostMouseWheel(_window, {-1.0f, 0.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 
 	Vec2 wheel = Input::GetMouseWheel();
@@ -195,8 +165,8 @@ TEST_F(InputTest, EventsRouteToTheirSourceWindow) {
 	Handle<Window> second = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(second.IsValid());
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_F13, KeyLParam(0x64));
-	::PostMessageW(Hwnd(second), WM_KEYDOWN, VK_F14, KeyLParam(0x65));
+	TestPlatform::PostKey(_window, Key::F13, true);
+	TestPlatform::PostKey(second, Key::F14, true);
 	WindowSystem::PumpEvents();
 
 	std::vector<InputEvent> keys;
@@ -229,15 +199,15 @@ TEST_F(InputTest, HeldModifierKeepsLaterChords) {
 	actions.Bind(save, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_MENU, KeyLParam(0x38));
+	TestPlatform::PostKey(_window, Key::LeftAlt, true);
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::IsKeyDown(Key::LeftAlt));
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	WindowSystem::PumpEvents();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::S, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -246,12 +216,12 @@ TEST_F(InputTest, HeldModifierKeepsLaterChords) {
 }
 
 TEST_F(InputTest, DeactivationReleasesHeldKeysAsEvents) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_F13, KeyLParam(0x64));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::F13, true);
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::IsKeyDown(Key::F13));
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	WindowSystem::PumpEvents();
 
 	EXPECT_FALSE(Input::IsKeyDown(Key::LeftCtrl));
@@ -271,12 +241,12 @@ TEST_F(InputTest, DeactivationReleasesHeldKeysAsEvents) {
 }
 
 TEST_F(InputTest, DeactivationReleasesHeldMouseButtons) {
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {100, 50});
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::IsMouseButtonDown(MouseButton::Left));
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	WindowSystem::PumpEvents();
 
 	EXPECT_FALSE(Input::IsMouseButtonDown(MouseButton::Left));
@@ -287,11 +257,11 @@ TEST_F(InputTest, FocusMovingBetweenWindowsKeepsHeldKeys) {
 	Handle<Window> second = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(second.IsValid());
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SHIFT, KeyLParam(0x2A));
+	TestPlatform::PostKey(_window, Key::LeftShift, true);
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::IsKeyDown(Key::LeftShift));
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, reinterpret_cast<WPARAM>(Hwnd(second)), 0);
+	TestPlatform::PostFocusMove(_window, second);
 	WindowSystem::PumpEvents();
 
 	EXPECT_TRUE(Input::IsKeyDown(Key::LeftShift));
@@ -304,7 +274,7 @@ TEST_F(InputTest, ButtonActionPressAndPerformEdge) {
 	actions.Bind(jump, InputBinding{InputBinding::Source::Key, static_cast<u16>(Key::Space)});
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SPACE, KeyLParam(0x39));
+	TestPlatform::PostKey(_window, Key::Space, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_TRUE(actions.IsPressed(jump));
@@ -326,10 +296,10 @@ TEST_F(InputTest, ChordCompletedInsideOnePumpStillPerforms) {
 	actions.Bind(save, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
-	::PostMessageW(Hwnd(), WM_KEYUP, 'S', KeyLParam(0x1F, false, false, true));
-	::PostMessageW(Hwnd(), WM_KEYUP, VK_CONTROL, KeyLParam(0x1D, false, false, true));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::S, true);
+	TestPlatform::PostKey(_window, Key::S, false);
+	TestPlatform::PostKey(_window, Key::LeftCtrl, false);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -351,9 +321,9 @@ TEST_F(InputTest, ChordModsReadAtPress) {
 	actions.Bind(save, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
-	::PostMessageW(Hwnd(), WM_KEYUP, VK_CONTROL, KeyLParam(0x1D, false, false, true));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::S, true);
+	TestPlatform::PostKey(_window, Key::LeftCtrl, false);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -378,13 +348,13 @@ TEST_F(InputTest, Axis2DCompositeSumsBindings) {
 	bind(Key::S, 1, -1.0f);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'W', KeyLParam(0x11));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'D', KeyLParam(0x20));
+	TestPlatform::PostKey(_window, Key::W, true);
+	TestPlatform::PostKey(_window, Key::D, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_EQ(actions.GetAxis2D(move), Vec2(1.0f, 1.0f));
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
+	TestPlatform::PostKey(_window, Key::S, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_EQ(actions.GetAxis2D(move), Vec2(1.0f, 0.0f));
@@ -400,12 +370,12 @@ TEST_F(InputTest, RequiredModsGateBindings) {
 	actions.Bind(save, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
+	TestPlatform::PostKey(_window, Key::S, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_FALSE(actions.IsPressed(save));
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_TRUE(actions.IsPressed(save));
@@ -427,9 +397,9 @@ TEST_F(InputTest, ExactModsSeparatesOverlappingChords) {
 	actions.Bind(pause, chord(Key::P, KeyMod::Ctrl | KeyMod::Shift));
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SHIFT, KeyLParam(0x2A));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'P', KeyLParam(0x19));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::LeftShift, true);
+	TestPlatform::PostKey(_window, Key::P, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -447,9 +417,9 @@ TEST_F(InputTest, RequiredModsRemainMinimumWithoutExactMods) {
 	actions.Bind(sprint, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SHIFT, KeyLParam(0x2A));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'P', KeyLParam(0x19));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::LeftShift, true);
+	TestPlatform::PostKey(_window, Key::P, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -472,7 +442,7 @@ TEST_F(InputTest, MapEvaluatesNothingUntilEnabled) {
 	ActionId jump = actions.RegisterAction("Jump"_hash, ActionType::Button);
 	actions.Bind(jump, InputBinding{InputBinding::Source::Key, static_cast<u16>(Key::Space)});
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_SPACE, KeyLParam(0x39));
+	TestPlatform::PostKey(_window, Key::Space, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -496,10 +466,10 @@ TEST_F(InputTest, DisabledMapIgnoresChord) {
 	actions.Bind(save, binding);
 
 	auto pressCtrlS = [this] {
-		::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-		::PostMessageW(Hwnd(), WM_KEYDOWN, 'S', KeyLParam(0x1F));
-		::PostMessageW(Hwnd(), WM_KEYUP, 'S', KeyLParam(0x1F, false, false, true));
-		::PostMessageW(Hwnd(), WM_KEYUP, VK_CONTROL, KeyLParam(0x1D, false, false, true));
+		TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+		TestPlatform::PostKey(_window, Key::S, true);
+		TestPlatform::PostKey(_window, Key::S, false);
+		TestPlatform::PostKey(_window, Key::LeftCtrl, false);
 		WindowSystem::PumpEvents();
 	};
 
@@ -519,7 +489,7 @@ TEST_F(InputTest, DisableClearsEvaluatedStateWithoutAnotherEvaluate) {
 	actions.Bind(move, InputBinding{InputBinding::Source::Key, static_cast<u16>(Key::D)});
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'D', KeyLParam(0x20));
+	TestPlatform::PostKey(_window, Key::D, true);
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	ASSERT_EQ(actions.GetAxis2D(move), Vec2(1.0f, 0.0f));
@@ -543,7 +513,7 @@ TEST_F(InputTest, EnablingOneMapLeavesTheOtherAlone) {
 	second.Bind(b, InputBinding{InputBinding::Source::Key, static_cast<u16>(Key::F13)});
 
 	first.Enable();
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_F13, KeyLParam(0x64));
+	TestPlatform::PostKey(_window, Key::F13, true);
 	WindowSystem::PumpEvents();
 	first.Evaluate();
 	second.Evaluate();
@@ -576,12 +546,12 @@ TEST_F(InputTest, ReEnableInventsNoPress) {
 
 	i32 x = 140;
 	auto moveAndPump = [this, &x] {
-		::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, 50));
+		TestPlatform::PostMouseMove(_window, {x, 50});
 		x += 40;
 		WindowSystem::PumpEvents();
 	};
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	WindowSystem::PumpEvents();
@@ -613,14 +583,14 @@ TEST_F(InputTest, AxisIsOnePumpsTravel) {
 	actions.Bind(look, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
 	i32 x = 100;
 	for (int pump = 0; pump < 20; ++pump) {
 		x += 10;
-		::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, 50));
+		TestPlatform::PostMouseMove(_window, {x, 50});
 		WindowSystem::PumpEvents();
 	}
 	actions.Evaluate();
@@ -638,11 +608,11 @@ TEST_F(InputTest, DeltaCodePicksAxisAndTarget) {
 	actions.Bind(look, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(110, 80));
+	TestPlatform::PostMouseMove(_window, {110, 80});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -659,13 +629,13 @@ TEST_F(InputTest, WheelBindingDrivesSignedAxis1D) {
 	actions.Bind(hotbar, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_FLOAT_EQ(actions.GetAxis1D(hotbar), 2.0f);
 
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(-WHEEL_DELTA)), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, -1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_FLOAT_EQ(actions.GetAxis1D(hotbar), -1.0f);
@@ -684,8 +654,8 @@ TEST_F(InputTest, HorizontalWheelIsBindableAxis) {
 	actions.Bind(pan, binding);
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_MOUSEHWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(-WHEEL_DELTA)), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {1.0f, 0.0f}, {10, 10});
+	TestPlatform::PostMouseWheel(_window, {0.0f, -1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
@@ -705,7 +675,7 @@ TEST_F(InputTest, ButtonOnWheelFiresOnEitherDirection) {
 	actions.Evaluate();
 	ASSERT_FALSE(actions.IsPressed(cycle));
 
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_TRUE(actions.IsPressed(cycle));
@@ -715,7 +685,7 @@ TEST_F(InputTest, ButtonOnWheelFiresOnEitherDirection) {
 	actions.Evaluate();
 	ASSERT_FALSE(actions.IsPressed(cycle));
 
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(-WHEEL_DELTA)), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, -1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 	EXPECT_TRUE(actions.IsPressed(cycle));
@@ -733,12 +703,12 @@ TEST_F(InputTest, ReadingOnePumpTwiceCountsItTwice) {
 	actions.Bind(fire, InputBinding{InputBinding::Source::MouseButton, static_cast<u16>(MouseButton::Left)});
 	actions.Enable();
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(100, 50));
+	TestPlatform::PostMouseMove(_window, {100, 50});
 	WindowSystem::PumpEvents();
 	actions.Evaluate();
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(110, 50));
-	::PostMessageW(Hwnd(), WM_LBUTTONDOWN, 0, MAKELPARAM(110, 50));
+	TestPlatform::PostMouseMove(_window, {110, 50});
+	TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {110, 50});
 	WindowSystem::PumpEvents();
 
 	f32 travel = 0.0f;
@@ -810,7 +780,7 @@ protected:
 		ASSERT_FALSE(HasFatalFailure());
 		for (int attempt = 0; attempt < 200 && !_sink->Armed(); ++attempt) {
 			SLT_LOG_INFO("Input", CadenceLogSink::SENTINEL);
-			::Sleep(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		ASSERT_TRUE(_sink->Armed());
 	}
@@ -916,27 +886,24 @@ TEST_F(InputCadenceLogFixture, WrongCadenceReportedOnce) {
 }
 
 TEST_F(InputTest, ApplicationFocusFollowsTheRealFocusMessages) {
-	::PostMessageW(Hwnd(), WM_SETFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, true);
 	WindowSystem::PumpEvents();
 	EXPECT_EQ(WindowSystem::GetFocusedWindow(), _window);
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	WindowSystem::PumpEvents();
 	EXPECT_FALSE(WindowSystem::GetFocusedWindow().IsValid());
 
 	Handle<Window> second = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(second.IsValid());
-	::PostMessageW(Hwnd(), WM_SETFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, true);
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(WindowSystem::GetFocusedWindow().IsValid());
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, reinterpret_cast<WPARAM>(Hwnd(second)), 0);
-	::PostMessageW(Hwnd(second), WM_SETFOCUS, 0, 0);
+	TestPlatform::PostFocusMove(_window, second);
 	WindowSystem::PumpEvents();
 	EXPECT_EQ(WindowSystem::GetFocusedWindow(), second);
 }
-
-#endif
 
 TEST(InputCodesTest, NamesRoundTripEveryValue) {
 	for (u16 i = 0; i < static_cast<u16>(Key::Count); ++i) {
@@ -964,8 +931,8 @@ TEST(InputCodesTest, OutOfRangeQueriesAreSafe) {
 }
 
 TEST_F(InputTest, CtrlChordDeliversNoText) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'A', KeyLParam(0x1E));
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::A, true);
 	WindowSystem::PumpEvents();
 
 	bool chord = false;
@@ -984,9 +951,9 @@ TEST_F(InputTest, CtrlChordDeliversNoText) {
 }
 
 TEST_F(InputTest, AltGrTextSurvivesCtrlChordGuard) {
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_CONTROL, KeyLParam(0x1D));
-	::PostMessageW(Hwnd(), WM_KEYDOWN, VK_MENU, KeyLParam(0x38, true));
-	::PostMessageW(Hwnd(), WM_CHAR, '@', 1);
+	TestPlatform::PostKey(_window, Key::LeftCtrl, true);
+	TestPlatform::PostKey(_window, Key::RightAlt, true);
+	TestPlatform::PostText(_window, U'@');
 	WindowSystem::PumpEvents();
 
 	std::vector<char32_t> text;
@@ -1000,7 +967,7 @@ TEST_F(InputTest, AltGrTextSurvivesCtrlChordGuard) {
 }
 
 TEST_F(InputTest, PlainTextIsUnaffectedByChordGuard) {
-	::PostMessageW(Hwnd(), WM_CHAR, 'k', 1);
+	TestPlatform::PostText(_window, U'k');
 	WindowSystem::PumpEvents();
 
 	std::vector<char32_t> text;

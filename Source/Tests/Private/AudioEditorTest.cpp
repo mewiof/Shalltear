@@ -103,7 +103,7 @@ namespace {
 			EditorPreviews::Initialize();
 			EditorPreviewStore::Initialize();
 
-			_module = ModuleSystem::Load(Path("Audio.dll"));
+			_module = ModuleSystem::Load(Path("Audio" SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			_moduleBase = ModuleSystem::GetNativeHandle(_module);
 			AssetDatabase::Initialize();

@@ -3,6 +3,7 @@
 #include "ProductLookup.h"
 
 #include "PassProbes.h"
+#include "TestPlatform.h"
 #include "UITestUtil.h"
 
 #include "Shalltear/Core/Asset.h"
@@ -1658,14 +1659,6 @@ TEST_F(SceneViewLatencyFixture, RuntimeViewComposesEveryCamera) {
 	RenderSystem::SetSceneCamerasRenderToWindows(restoreWindows);
 }
 
-#ifdef _WIN32
-
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
 namespace {
 
 	class HeldVertexSnapKey {
@@ -1677,13 +1670,13 @@ namespace {
 			desc.flags = WindowFlags::Hidden;
 			_window = WindowSystem::Create(desc);
 			if (_window.IsValid()) {
-				::PostMessageW(Hwnd(), WM_KEYDOWN, 'V', KeyLParam(false));
+				TestPlatform::PostKey(_window, Key::V, true);
 				WindowSystem::PumpEvents();
 			}
 		}
 		~HeldVertexSnapKey() {
 			if (_window.IsValid()) {
-				::PostMessageW(Hwnd(), WM_KEYUP, 'V', KeyLParam(true));
+				TestPlatform::PostKey(_window, Key::V, false);
 				WindowSystem::PumpEvents();
 			}
 		}
@@ -1693,18 +1686,6 @@ namespace {
 
 		bool Held() const { return Input::IsKeyDown(Key::V); }
 	private:
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
-
-		static LPARAM KeyLParam(bool up) {
-			LPARAM lParam = 1;
-			lParam |= static_cast<LPARAM>(0x2F) << 16;
-			if (up) {
-				lParam |= static_cast<LPARAM>(1) << 30;
-				lParam |= static_cast<LPARAM>(1) << 31;
-			}
-			return lParam;
-		}
-
 		Handle<Window> _window;
 	};
 
@@ -1956,5 +1937,3 @@ TEST_F(SceneViewLatencyFixture, VOutsideViewportMarksNothing) {
 		EXPECT_EQ(changedAnywhere(snapshot(), before), 0u);
 	}
 }
-
-#endif

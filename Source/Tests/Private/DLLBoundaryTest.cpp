@@ -1,11 +1,11 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #ifdef SHALLTEAR_SHARED
 
 #include "Shalltear/Core/Serialization/BinarySerializer.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -36,7 +36,7 @@ namespace {
 			ASSERT_NE(hostI32VTable, nullptr);
 			ASSERT_NE(hostStrVTable, nullptr);
 
-			module = LoadLibraryA("ShalltearSampleModule.dll");
+			module = TestPlatform::OpenLibrary("ShalltearSampleModule" SLT_TEST_DLL_SUFFIX);
 			ASSERT_NE(module, nullptr);
 
 			registerTypes = Resolve<RegisterTypesFn>("SampleModuleRegisterTypes");
@@ -61,7 +61,7 @@ namespace {
 					unregisterTypes();
 				}
 				TypeRegistry::UnlinkPendingRegistrationsIn(module);
-				FreeLibrary(module);
+				TestPlatform::CloseLibrary(module);
 				module = nullptr;
 			}
 
@@ -71,12 +71,12 @@ namespace {
 
 		template <typename Fn>
 		Fn Resolve(const char* name) {
-			Fn fn = reinterpret_cast<Fn>(GetProcAddress(module, name));
+			Fn fn = reinterpret_cast<Fn>(TestPlatform::FindSymbol(module, name));
 			EXPECT_NE(fn, nullptr) << "missing export: " << name;
 			return fn;
 		}
 
-		HMODULE module = nullptr;
+		void* module = nullptr;
 		u32 baselineTypeCount = 0;
 
 		const VariantVTable* hostI32VTable = nullptr;

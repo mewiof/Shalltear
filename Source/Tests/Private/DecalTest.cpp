@@ -156,7 +156,7 @@ namespace {
 
 TEST_F(DecalFixture, DecalTexelEqualsSurfaceOfItsColor) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* red = Surface(1.0f, 0.0f, 0.0f);
@@ -190,7 +190,7 @@ TEST_F(DecalFixture, DecalTexelEqualsSurfaceOfItsColor) {
 
 TEST_F(DecalFixture, DecalTextureFacesProjector) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	const Guid quadrants = QuadrantTexture();
 	ASSERT_TRUE(quadrants.IsValid());
@@ -227,7 +227,7 @@ TEST_F(DecalFixture, DecalTextureFacesProjector) {
 
 TEST_F(DecalFixture, HigherPriorityDecalDrawsOver) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* red = Surface(1.0f, 0.0f, 0.0f);
@@ -266,7 +266,7 @@ TEST_F(DecalFixture, HigherPriorityDecalDrawsOver) {
 
 TEST_F(DecalFixture, TransparentSurfaceReceivesDecal) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* glass = Surface(1.0f, 1.0f, 1.0f, 0.5f, true);
 	MaterialAsset* redGlass = Surface(1.0f, 0.0f, 0.0f, 0.5f, true);
@@ -296,7 +296,7 @@ TEST_F(DecalFixture, TransparentSurfaceReceivesDecal) {
 
 TEST_F(DecalFixture, DecalSkipsOtherLayers) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* redDecal = DecalMaterial(1.0f, 0.0f, 0.0f);
@@ -328,7 +328,7 @@ TEST_F(DecalFixture, DecalSkipsOtherLayers) {
 
 TEST_F(DecalFixture, AngleFadeAtPredictedFactor) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* half = Surface(1.0f, 0.5f, 0.5f);
@@ -376,7 +376,7 @@ TEST_F(DecalFixture, AngleFadeAtPredictedFactor) {
 
 TEST_F(DecalFixture, DecalBinnedToItsCluster) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* black = Surface(0.0f, 0.0f, 0.0f);
@@ -419,7 +419,7 @@ TEST_F(DecalFixture, DecalBinnedToItsCluster) {
 
 TEST_F(DecalFixture, DecaledFramesReadIdentical) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	const Guid quadrants = QuadrantTexture();
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
@@ -444,7 +444,7 @@ TEST_F(DecalFixture, DecaledFramesReadIdentical) {
 
 TEST_F(DecalFixture, DeadDecalMaterialLeavesSurface) {
 	if (!Ready()) {
-		GTEST_SKIP() << "no Vulkan device or dxcompiler.dll";
+		GTEST_SKIP() << "no Vulkan device or dxcompiler" SLT_TEST_DLL_SUFFIX;
 	}
 	MaterialAsset* white = Surface(1.0f, 1.0f, 1.0f);
 	MaterialAsset* redDecal = DecalMaterial(1.0f, 0.0f, 0.0f);

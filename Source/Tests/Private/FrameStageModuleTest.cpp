@@ -5,16 +5,12 @@
 #include "Shalltear/Core/Module.h"
 #include "Shalltear/Core/Scene.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
 using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 
 	constexpr FrameStage PROBE_STAGE = FrameStage::Update;
 
@@ -55,27 +51,27 @@ namespace {
 
 		u32 ModulesOwnRuns() const {
 			auto fn = reinterpret_cast<GetRunsFn>(
-				::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(ModuleBase())), "HotReloadModuleGetFrameStageRuns"));
+				ModuleSystem::FindSymbol(ModuleBase(), "HotReloadModuleGetFrameStageRuns"));
 			return fn ? fn() : 0u;
 		}
 
 		f32 ModulesOwnAlpha() const {
 			auto fn = reinterpret_cast<GetF32Fn>(
-				::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(ModuleBase())), "HotReloadModuleGetFrameStageAlpha"));
+				ModuleSystem::FindSymbol(ModuleBase(), "HotReloadModuleGetFrameStageAlpha"));
 			return fn ? fn() : 0.0f;
 		}
 
 		template <typename Fn>
 		auto ModulesOwnClock(const char* symbol) const {
 			auto fn = reinterpret_cast<Fn>(
-				::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(ModuleBase())), symbol));
+				ModuleSystem::FindSymbol(ModuleBase(), symbol));
 			return fn ? fn() : decltype(fn())();
 		}
 
 		bool ModuleSetsTimeScale(f32 scale) const {
 			using SetScaleFn = void (*)(float);
 			auto fn = reinterpret_cast<SetScaleFn>(
-				::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(ModuleBase())), "HotReloadModuleSetTimeScale"));
+				ModuleSystem::FindSymbol(ModuleBase(), "HotReloadModuleSetTimeScale"));
 			if (!fn) {
 				return false;
 			}

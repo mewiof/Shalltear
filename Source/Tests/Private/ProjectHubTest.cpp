@@ -1,6 +1,7 @@
 #include "TestsPCH.h"
 
 #include "ScopedSettingsStore.h"
+#include "TestPlatform.h"
 #include "UITestUtil.h"
 
 #include "Shalltear/Core/Asset.h"
@@ -414,7 +415,7 @@ TEST_F(ProjectHubFixture, ModifiedTimeFollowsTheNewestProjectFile) {
 	EXPECT_EQ(ProjectOps::GetModifiedTime(Location() + "/Gone"), 0u);
 }
 
-TEST_F(ProjectHubFixture, PathsCompareCaseInsensitively) {
+TEST_F(ProjectHubFixture, PathsCompareWayFileNamesDo) {
 	str project = MakeProject("Cased");
 	ASSERT_TRUE(ProjectOps::AddProject(_registry, project));
 
@@ -424,8 +425,12 @@ TEST_F(ProjectHubFixture, PathsCompareCaseInsensitively) {
 			c = static_cast<char>(c - 32);
 		}
 	}
-	EXPECT_TRUE(ProjectOps::PathsEqual(project, shouting));
 	EXPECT_FALSE(ProjectOps::PathsEqual(project, project + "x"));
+	if (!TestPlatform::FileNamesFoldCase()) {
+		EXPECT_FALSE(ProjectOps::PathsEqual(project, shouting));
+		return;
+	}
+	EXPECT_TRUE(ProjectOps::PathsEqual(project, shouting));
 
 	ProjectHub hub{_registry};
 	hub.Select(shouting);
@@ -758,10 +763,8 @@ TEST_F(ProjectHubFixture, DefaultLocationIsUsableOnFirstRun) {
 	ProjectHub fresh{_registry};
 	ASSERT_TRUE(fresh.GetEntries().empty());
 	str firstRun = fresh.GetDefaultLocation();
-#ifdef _WIN32
 	ASSERT_FALSE(firstRun.empty());
 	EXPECT_TRUE(FileSystem::IsDirectory(Path(firstRun)));
-#endif
 
 	ASSERT_TRUE(ProjectOps::AddProject(_registry, MakeProject("Neighbour")));
 	ProjectHub listed{_registry};

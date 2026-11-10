@@ -13,16 +13,14 @@
 
 #ifdef SHALLTEAR_SHARED
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 
 using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* PACKAGE_DLL = "Physics3D.dll";
-	constexpr const char* SCRIPT_MODULE_DLL = "ShalltearPhysicsScriptModule.dll";
+	constexpr const char* PACKAGE_DLL = "Physics3D" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* SCRIPT_MODULE_DLL = "ShalltearPhysicsScriptModule" SLT_TEST_DLL_SUFFIX;
 	constexpr const char* SPHERE_COLLIDER_TYPE_NAME = "SphereCollider";
 
 	using OverlapCountFn = u32 (*)(f32, f32, f32, f32);
@@ -98,9 +96,9 @@ namespace {
 
 		template <typename Fn>
 		Fn ResolveInModule(const char* name) {
-			HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(_scriptModule));
+			void* image = ModuleSystem::GetNativeHandle(_scriptModule);
 			EXPECT_NE(image, nullptr);
-			Fn fn = image ? reinterpret_cast<Fn>(GetProcAddress(image, name)) : nullptr;
+			Fn fn = image ? reinterpret_cast<Fn>(ModuleSystem::FindSymbol(image, name)) : nullptr;
 			EXPECT_NE(fn, nullptr) << "missing export: " << name;
 			return fn;
 		}

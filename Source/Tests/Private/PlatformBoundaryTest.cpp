@@ -41,10 +41,12 @@ namespace {
 		"<xkbcommon/",
 	};
 
-	constexpr std::string_view DECLARING_HEADERS[] = {
+	constexpr std::string_view DECLARING_FILES[] = {
 		"Core/Public/Shalltear/Core/Platform.h",
 		"Core/Public/Shalltear/Core/Export.h",
 		"Core/Public/Shalltear/Core/Module/ModuleAPI.h",
+		"Tests/Private/PlatformTest.cpp",
+		"Tests/Private/PlatformBoundaryTest.cpp",
 	};
 
 	bool IsIdentifierChar(char c) {
@@ -74,12 +76,12 @@ namespace {
 	}
 
 	bool IsExempt(std::string_view relative) {
-		if (relative.starts_with("Tests/") || relative.find("/ThirdParty/") != std::string_view::npos ||
+		if (relative.starts_with("Tests/Fixtures/") || relative.find("/ThirdParty/") != std::string_view::npos ||
 			relative.ends_with("/stb_image.h") || IsPlatformFamilyFile(relative)) {
 			return true;
 		}
-		for (std::string_view header : DECLARING_HEADERS) {
-			if (relative == header) {
+		for (std::string_view file : DECLARING_FILES) {
+			if (relative == file) {
 				return true;
 			}
 		}
@@ -195,6 +197,7 @@ TEST(PlatformBoundaryTest, MatcherFindsMacrosAndHeaders) {
 TEST(PlatformBoundaryTest, FamilyDirectoryIsRecognized) {
 	EXPECT_TRUE(IsPlatformFamilyFile("Core/Private/Platform/Windows/WindowsClock.cpp"));
 	EXPECT_TRUE(IsPlatformFamilyFile("Editor/Private/Platform/Linux/Window/X11/X11Window.cpp"));
+	EXPECT_TRUE(IsPlatformFamilyFile("Tests/Private/Platform/Windows/WindowsTestPlatform.cpp"));
 	EXPECT_FALSE(IsPlatformFamilyFile("Core/Private/Platform/Clock.h"));
 	EXPECT_FALSE(IsPlatformFamilyFile("Core/Private/Time.cpp"));
 }
@@ -220,7 +223,7 @@ TEST(PlatformBoundaryTest, SharedSourcesNameNoPlatform) {
 		}
 	}
 
-	EXPECT_GT(scanned, size_t{900});
+	EXPECT_GT(scanned, size_t{1300});
 	EXPECT_TRUE(offenders.empty()) << offenders.size() << " file(s), 1st " << offenders.front();
 }
 

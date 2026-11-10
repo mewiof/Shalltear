@@ -116,7 +116,7 @@ namespace {
 			EditorGizmos::Initialize();
 			EditorAssetWatch::Initialize();
 			ModuleSystem::Initialize();
-			_module = ModuleSystem::Load(Path("VisualEffects.dll"));
+			_module = ModuleSystem::Load(Path("VisualEffects" SLT_TEST_DLL_SUFFIX));
 			if (ModuleSystem::IsLoaded(_module)) {
 				_moduleBase = ModuleSystem::GetNativeHandle(_module);
 				EditorExtensions::Load(_moduleBase);

@@ -17,18 +17,14 @@
 #include "Shalltear/Editor/PanelManager.h"
 #include "Shalltear/Editor/UndoSystem.h"
 
+#include "TestPlatform.h"
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 using namespace Shalltear;
 using namespace UITest;
-
-#ifdef _WIN32
 
 namespace {
 
@@ -92,7 +88,6 @@ namespace {
 			FileSystem::WriteTextFile(resolved, "x");
 		}
 
-		HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
 		UI::Context& Ui() { return *UISystem::GetContext(_window); }
 
 		void Frame() {
@@ -160,35 +155,35 @@ namespace {
 			return {box.x + box.w * 0.5f, box.y + box.h * 0.5f};
 		}
 
-		static LPARAM At(Vec2 point) { return MAKELPARAM(static_cast<i32>(point.x), static_cast<i32>(point.y)); }
+		static Vec2I At(Vec2 point) { return {static_cast<i32>(point.x), static_cast<i32>(point.y)}; }
 
 		void Press(Vec2 point) {
-			::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, At(point));
-			::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, At(point));
+			TestPlatform::PostMouseMove(_window, At(point));
+			TestPlatform::PostMouseButton(_window, MouseButton::Left, true, At(point));
 			Frame();
-			::PostMessageW(Hwnd(), WM_LBUTTONUP, 0, At(point));
+			TestPlatform::PostMouseButton(_window, MouseButton::Left, false, At(point));
 			Frame();
 		}
 
-		void Chord(WPARAM vk, bool alt) {
+		void Chord(Key key, bool alt) {
 			if (alt) {
-				::PostMessageW(Hwnd(), WM_KEYDOWN, VK_MENU, 1 | (0x38 << 16));
+				TestPlatform::PostKey(_window, Key::LeftAlt, true);
 			}
-			::PostMessageW(Hwnd(), WM_KEYDOWN, vk, 1);
-			::PostMessageW(Hwnd(), WM_KEYUP, vk, 0xC0000001);
+			TestPlatform::PostKey(_window, key, true);
+			TestPlatform::PostKey(_window, key, false);
 			if (alt) {
-				::PostMessageW(Hwnd(), WM_KEYUP, VK_MENU, 0xC0000001 | (0x38 << 16));
+				TestPlatform::PostKey(_window, Key::LeftAlt, false);
 			}
 			Frame();
 			Frame();
 		}
 
 		void SideButton(Vec2 point, bool forward) {
-			const WPARAM which = MAKEWPARAM(forward ? MK_XBUTTON2 : MK_XBUTTON1, forward ? XBUTTON2 : XBUTTON1);
-			::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, At(point));
-			::PostMessageW(Hwnd(), WM_XBUTTONDOWN, which, At(point));
+			const MouseButton which = forward ? MouseButton::X2 : MouseButton::X1;
+			TestPlatform::PostMouseMove(_window, At(point));
+			TestPlatform::PostMouseButton(_window, which, true, At(point));
 			Frame();
-			::PostMessageW(Hwnd(), WM_XBUTTONUP, MAKEWPARAM(0, forward ? XBUTTON2 : XBUTTON1), At(point));
+			TestPlatform::PostMouseButton(_window, which, false, At(point));
 			Frame();
 		}
 	};
@@ -205,25 +200,25 @@ TEST_F(AssetBrowserNavigationTest, KeysStepOnlyWithKeyboardFocus) {
 
 	Press(ConsolePoint());
 	ASSERT_EQ(PanelManager::GetFocusedPanel().Get(), _console.Get());
-	Chord(VK_LEFT, true);
+	Chord(Key::Left, true);
 	EXPECT_EQ(Folder(), "Assets/Sub/Deep");
 
 	Press(BrowserPoint());
 	ASSERT_EQ(PanelManager::GetFocusedPanel().Get(), _browser.Get());
-	Chord(VK_LEFT, true);
+	Chord(Key::Left, true);
 	EXPECT_EQ(Folder(), "Assets/Sub");
-	Chord(VK_RIGHT, true);
+	Chord(Key::Right, true);
 	EXPECT_EQ(Folder(), "Assets/Sub/Deep");
-	Chord(VK_LEFT, false);
+	Chord(Key::Left, false);
 	EXPECT_EQ(Folder(), "Assets/Sub/Deep");
 
-	Chord(VK_BACK, false);
+	Chord(Key::Backspace, false);
 	EXPECT_EQ(Folder(), "Assets/Sub");
-	Chord(VK_BACK, false);
+	Chord(Key::Backspace, false);
 	EXPECT_EQ(Folder(), "Assets");
-	Chord(VK_BACK, false);
+	Chord(Key::Backspace, false);
 	EXPECT_EQ(Folder(), "Assets");
-	Chord(VK_LEFT, true);
+	Chord(Key::Left, true);
 	EXPECT_EQ(Folder(), "Assets/Sub");
 }
 
@@ -252,5 +247,3 @@ TEST_F(AssetBrowserNavigationTest, SideButtonsStepBrowserUnderPointer) {
 	SideButton(BrowserPoint(), false);
 	EXPECT_EQ(Folder(), "Assets/Sub");
 }
-
-#endif

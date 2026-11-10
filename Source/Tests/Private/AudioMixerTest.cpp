@@ -1255,7 +1255,7 @@ namespace {
 			Settings::Initialize(_paths);
 			SceneSystem::Initialize();
 			ModuleSystem::Initialize();
-			_module = ModuleSystem::Load(Path("Audio.dll"));
+			_module = ModuleSystem::Load(Path("Audio" SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			AssetDatabase::Initialize();
 		}

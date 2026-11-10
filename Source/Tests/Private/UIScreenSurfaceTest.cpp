@@ -6,13 +6,7 @@
 #include "Shalltear/Core/Window.h"
 #include "Window/WindowInternal.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 #include <filesystem>
 
@@ -503,8 +497,6 @@ TEST_F(UIScreenFixture, DestroyingSurfaceHoldingPressEndsGesture) {
 	UISystem::DestroySurface(top);
 }
 
-#ifdef _WIN32
-
 TEST_F(UIScreenFixture, WindowInputReachesScreen) {
 	Handle<Window> window = MakeHiddenWindow();
 	ASSERT_TRUE(window.IsValid());
@@ -518,14 +510,13 @@ TEST_F(UIScreenFixture, WindowInputReachesScreen) {
 	EXPECT_FLOAT_EQ(UISystem::GetSurfaceContext(surface)->GetContentScale(), window->GetContentScale());
 	EXPECT_FALSE(UISystem::GetSurfaceTexture(surface).IsValid());
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
-	::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(50, 50));
-	::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 50));
+	TestPlatform::PostMouseMove(window, {50, 50});
+	TestPlatform::PostMouseButton(window, MouseButton::Left, true, {50, 50});
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 	EXPECT_TRUE(UISystem::WantsMouse(window));
 
-	::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(50, 50));
+	TestPlatform::PostMouseButton(window, MouseButton::Left, false, {50, 50});
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 	EXPECT_EQ(probe.clicks, 1u);
@@ -536,9 +527,9 @@ TEST_F(UIScreenFixture, WindowInputReachesScreen) {
 	Box(*chrome, shield, 0.0f, 0.0f, 100.0f, 100.0f);
 	WindowSystem::PumpEvents();
 	UISystem::Update();
-	::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(50, 50));
-	::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 50));
-	::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(50, 50));
+	TestPlatform::PostMouseMove(window, {50, 50});
+	TestPlatform::PostMouseButton(window, MouseButton::Left, true, {50, 50});
+	TestPlatform::PostMouseButton(window, MouseButton::Left, false, {50, 50});
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 	EXPECT_EQ(shield.clicks, 1u);
@@ -566,13 +557,12 @@ TEST_F(UIScreenFixture, RenderSizeMapsClicks) {
 	ASSERT_GT(box.h, 25.0f);
 	ASSERT_LT(box.h, 80.0f);
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	auto click = [&](i32 x, i32 y) {
-		::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
-		::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+		TestPlatform::PostMouseMove(window, {x, y});
+		TestPlatform::PostMouseButton(window, MouseButton::Left, true, {x, y});
 		WindowSystem::PumpEvents();
 		UISystem::Update();
-		::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+		TestPlatform::PostMouseButton(window, MouseButton::Left, false, {x, y});
 		WindowSystem::PumpEvents();
 		UISystem::Update();
 	};
@@ -596,10 +586,9 @@ TEST_F(UIScreenFixture, TextureScreenTakesNothingFromWindow) {
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
-	::PostMessageW(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(50, 50));
-	::PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 50));
-	::PostMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(50, 50));
+	TestPlatform::PostMouseMove(window, {50, 50});
+	TestPlatform::PostMouseButton(window, MouseButton::Left, true, {50, 50});
+	TestPlatform::PostMouseButton(window, MouseButton::Left, false, {50, 50});
 	WindowSystem::PumpEvents();
 	UISystem::Update();
 	EXPECT_EQ(probe.clicks, 0u);
@@ -609,8 +598,6 @@ TEST_F(UIScreenFixture, TextureScreenTakesNothingFromWindow) {
 	WindowSystem::RequestDestroy(window);
 	WindowSystem::PumpEvents();
 }
-
-#endif
 
 TEST_F(UIScreenFixture, YieldedCursorModeLasts) {
 	Handle<Window> window = MakeHiddenWindow();
@@ -716,8 +703,6 @@ TEST_F(UIScreenFixture, TextureScreenRendersToTexture) {
 	UISystem::DestroySurface(surface);
 }
 
-#ifdef _WIN32
-
 TEST_F(UIScreenFixture, WindowScreenPaintsWindow) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";
@@ -743,5 +728,3 @@ TEST_F(UIScreenFixture, WindowScreenPaintsWindow) {
 	WindowSystem::RequestDestroy(window);
 	WindowSystem::PumpEvents();
 }
-
-#endif

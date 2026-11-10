@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "TestHelperProcess.h"
 
 #include "Shalltear/Core/Graphics/Camera.h"
@@ -9,9 +10,6 @@
 #include "Shalltear/Core/StringUtil.h"
 
 #include <array>
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 
 using namespace Shalltear;
 
@@ -27,7 +25,7 @@ namespace {
 		"UnresolvedComponent",
 		"RenderPass"};
 
-	constexpr const char* SAMPLE_MODULE_DLL = "ShalltearSampleModule.dll";
+	constexpr const char* SAMPLE_MODULE_DLL = "ShalltearSampleModule" SLT_TEST_DLL_SUFFIX;
 
 	class DrainOrderProbe : public Object {
 	public:
@@ -63,7 +61,7 @@ TEST(CoreTypeOwnershipTest, CoresTypesAllReportSameOwningImage) {
 	}
 
 #ifdef SHALLTEAR_SHARED
-	EXPECT_NE(coreImage, static_cast<const void*>(::GetModuleHandleW(nullptr)));
+	EXPECT_NE(coreImage, static_cast<const void*>(ModuleSystem::GetExecutableImage()));
 #endif
 }
 
@@ -118,50 +116,20 @@ namespace Shalltear::TestHelpers {
 } // namespace Shalltear::TestHelpers
 
 TEST(CoreTypeOwnershipTest, ReflectionStepRegistersCoreTypes) {
-	wchar_t exePath[MAX_PATH] = {};
-	ASSERT_GT(::GetModuleFileNameW(nullptr, exePath, MAX_PATH), 0u);
-	std::wstring commandLine = L"\"";
-	commandLine += exePath;
-	commandLine += L"\" ";
-	commandLine += StringUtil::UTF8ToWide(TestHelpers::REFLECTION_STARTUP_FLAG);
-
-	HANDLE job = ::CreateJobObjectW(nullptr, nullptr);
-	ASSERT_NE(job, nullptr);
-	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-	limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-	::SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
-
-	STARTUPINFOW startup{};
-	startup.cb = sizeof(startup);
-	PROCESS_INFORMATION process{};
-	if (!::CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, FALSE,
-						  CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &process)) {
-		::CloseHandle(job);
+	const str commandLine = "\"" + FileSystem::GetExecutablePath().ToString() + "\" " + TestHelpers::REFLECTION_STARTUP_FLAG;
+	const TestPlatform::ProcessResult result = TestPlatform::RunProcess(commandLine, 30000);
+	if (!result.started) {
 		GTEST_SKIP() << "couldn't spawn helper process";
 	}
-	::AssignProcessToJobObject(job, process.hProcess);
-	::ResumeThread(process.hThread);
+	ASSERT_TRUE(result.exited);
+	ASSERT_NE(result.exitCode, TestHelpers::ReflectionStartupNoPrimitives);
 
-	DWORD wait = ::WaitForSingleObject(process.hProcess, 30000);
-	DWORD exitCode = static_cast<DWORD>(-1);
-	if (wait == WAIT_OBJECT_0) {
-		::GetExitCodeProcess(process.hProcess, &exitCode);
-	} else {
-		::TerminateProcess(process.hProcess, 1);
-	}
-	::CloseHandle(process.hThread);
-	::CloseHandle(process.hProcess);
-	::CloseHandle(job);
-
-	ASSERT_EQ(wait, static_cast<DWORD>(WAIT_OBJECT_0));
-	ASSERT_NE(exitCode, static_cast<DWORD>(TestHelpers::ReflectionStartupNoPrimitives));
-
-	const DWORD index = exitCode - TestHelpers::ReflectionStartupFirstMissing;
+	const size_t index = static_cast<size_t>(result.exitCode - TestHelpers::ReflectionStartupFirstMissing);
 	const char* missing = "<none>";
-	if (exitCode >= TestHelpers::ReflectionStartupFirstMissing && index < CORE_BASE_TYPES.size()) {
+	if (result.exitCode >= TestHelpers::ReflectionStartupFirstMissing && index < CORE_BASE_TYPES.size()) {
 		missing = CORE_BASE_TYPES[index];
 	}
-	EXPECT_EQ(exitCode, static_cast<DWORD>(TestHelpers::ReflectionStartupOk)) << missing << " unregistered";
+	EXPECT_EQ(result.exitCode, TestHelpers::ReflectionStartupOk) << missing << " unregistered";
 }
 
 #ifdef SHALLTEAR_SHARED

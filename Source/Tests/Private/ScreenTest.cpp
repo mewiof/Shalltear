@@ -13,13 +13,7 @@
 #include "ScreenSettings.h"
 #include "Window/WindowInternal.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 #include <algorithm>
 #include <atomic>
@@ -295,19 +289,15 @@ TEST_F(ScreenFixture, RelaunchRestoresChoiceUntilProjectChanges) {
 	Close(window);
 }
 
-#ifdef _WIN32
 TEST_F(ScreenFixture, AltEnterTogglesFullscreen) {
 	Handle<Window> window = CreateHidden();
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 	auto altEnter = [&]() {
-		const LPARAM altDown = (1 << 29) | (::MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC) << 16) | 1;
-		const LPARAM enterDown = (1 << 29) | (::MapVirtualKeyW(VK_RETURN, MAPVK_VK_TO_VSC) << 16) | 1;
-		::PostMessageW(hwnd, WM_SYSKEYDOWN, VK_MENU, altDown);
-		::PostMessageW(hwnd, WM_SYSKEYDOWN, VK_RETURN, enterDown);
+		TestPlatform::PostKey(window, Key::LeftAlt, true);
+		TestPlatform::PostKey(window, Key::Enter, true);
 		EndFrame();
-		::PostMessageW(hwnd, WM_SYSKEYUP, VK_RETURN, enterDown | (1u << 30) | (1u << 31));
-		::PostMessageW(hwnd, WM_KEYUP, VK_MENU, altDown | (1u << 30) | (1u << 31));
+		TestPlatform::PostKey(window, Key::Enter, false);
+		TestPlatform::PostKey(window, Key::LeftAlt, false);
 		EndFrame();
 	};
 
@@ -324,7 +314,6 @@ TEST_F(ScreenFixture, AltEnterTogglesFullscreen) {
 	EXPECT_TRUE(Screen::IsFullScreen());
 	Close(window);
 }
-#endif
 
 TEST_F(ScreenFixture, TextureScreenUsesViewSize) {
 	Handle<Window> window = CreateHidden();

@@ -25,13 +25,7 @@
 
 #include "EditorConfig.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 using namespace UITest;
@@ -544,7 +538,6 @@ TEST_F(EditorPanelsTest, SceneViewCameraRoundTripsThroughRestore) {
 	EXPECT_EQ(position.As<Vec3>(), Vec3(1.0f, 2.0f, 3.0f));
 }
 
-#ifdef _WIN32
 TEST_F(EditorPanelsTest, LookOwnsPointerUntilRelease) {
 	WindowSystem::Initialize();
 	Handle<Window> window = WindowSystem::Create([] {
@@ -555,7 +548,6 @@ TEST_F(EditorPanelsTest, LookOwnsPointerUntilRelease) {
 		return desc;
 	}());
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(FindPanelType("SceneViewPanel"));
 	ASSERT_TRUE(panel.IsValid());
@@ -581,7 +573,7 @@ TEST_F(EditorPanelsTest, LookOwnsPointerUntilRelease) {
 	context.Update();
 	EXPECT_EQ(context.GetPointerClaimMode(), CursorMode::Normal);
 
-	::PostMessageW(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(10, 10));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, true, {10, 10});
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::WasMouseButtonPressed(MouseButton::Right));
 	panel.Get()->OnSubmitView(0.016f);
@@ -589,12 +581,12 @@ TEST_F(EditorPanelsTest, LookOwnsPointerUntilRelease) {
 	EXPECT_EQ(context.GetPointerClaimMode(), CursorMode::Wrapped);
 	EXPECT_FALSE(context.GetFocused().IsValid());
 
-	::PostMessageW(hwnd, WM_MOUSEMOVE, MK_RBUTTON, MAKELPARAM(40, 40));
+	TestPlatform::PostMouseMove(window, {40, 40});
 	WindowSystem::PumpEvents();
 	panel.Get()->OnSubmitView(0.016f);
 	EXPECT_EQ(context.GetPointerClaimMode(), CursorMode::Wrapped);
 
-	::PostMessageW(hwnd, WM_RBUTTONUP, 0, MAKELPARAM(40, 40));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, false, {40, 40});
 	WindowSystem::PumpEvents();
 	ASSERT_FALSE(Input::IsMouseButtonDown(MouseButton::Right));
 	panel.Get()->OnSubmitView(0.016f);
@@ -622,7 +614,6 @@ TEST_F(EditorPanelsTest, LookBlockedByPopup) {
 		return desc;
 	}());
 	ASSERT_TRUE(window.IsValid());
-	HWND hwnd = static_cast<HWND>(window->GetNativeHandle().window);
 
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(FindPanelType("SceneViewPanel"));
 	ASSERT_TRUE(panel.IsValid());
@@ -652,36 +643,35 @@ TEST_F(EditorPanelsTest, LookBlockedByPopup) {
 	Variant yawBefore;
 	ASSERT_TRUE(GetField(panel.Get(), type, "cameraYawDeg"_hash, &yawBefore));
 
-	::PostMessageW(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(10, 10));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, true, {10, 10});
 	WindowSystem::PumpEvents();
 	ASSERT_TRUE(Input::WasMouseButtonPressed(MouseButton::Right));
 	panel.Get()->OnSubmitView(0.016f);
 	EXPECT_EQ(context.GetPointerClaimMode(), CursorMode::Normal);
 
-	::PostMessageW(hwnd, WM_MOUSEMOVE, MK_RBUTTON, MAKELPARAM(120, 90));
+	TestPlatform::PostMouseMove(window, {120, 90});
 	WindowSystem::PumpEvents();
 	panel.Get()->OnSubmitView(0.016f);
 	Variant yawUnderDialog;
 	ASSERT_TRUE(GetField(panel.Get(), type, "cameraYawDeg"_hash, &yawUnderDialog));
 	EXPECT_FLOAT_EQ(yawUnderDialog.As<f32>(), yawBefore.As<f32>());
 
-	::PostMessageW(hwnd, WM_RBUTTONUP, 0, MAKELPARAM(120, 90));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, false, {120, 90});
 	WindowSystem::PumpEvents();
 	panel.Get()->OnSubmitView(0.016f);
 	context.ClosePopup(card);
 	context.Update();
 
-	::PostMessageW(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(10, 10));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, true, {10, 10});
 	WindowSystem::PumpEvents();
 	panel.Get()->OnSubmitView(0.016f);
 	EXPECT_EQ(context.GetPointerClaimMode(), CursorMode::Wrapped);
 
-	::PostMessageW(hwnd, WM_RBUTTONUP, 0, MAKELPARAM(10, 10));
+	TestPlatform::PostMouseButton(window, MouseButton::Right, false, {10, 10});
 	WindowSystem::PumpEvents();
 	panel.Get()->OnSubmitView(0.016f);
 	WindowSystem::Terminate();
 }
-#endif
 
 TEST_F(EditorPanelsTest, SpaceToggleByButtonOrHotkey) {
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(FindPanelType("SceneViewPanel"));
@@ -886,7 +876,7 @@ TEST_F(EditorPanelsTest, EffectsDropdownSwitchesCategories) {
 
 TEST_F(EditorPanelsTest, GizmosMenuSwitchesOutline) {
 	const std::filesystem::path root =
-		std::filesystem::temp_directory_path() / ("shalltear_gizmos_menu_" + std::to_string(::GetCurrentProcessId()));
+		std::filesystem::temp_directory_path() / ("shalltear_gizmos_menu_" + std::to_string(TestPlatform::GetProcessId()));
 	std::filesystem::create_directories(root);
 	SettingsPaths paths;
 	paths.project = Path((root / "ProjectSettings.ini").generic_string());

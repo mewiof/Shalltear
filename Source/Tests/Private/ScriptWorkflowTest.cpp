@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "Checkout.h"
 
 #include "Shalltear/Core/Asset.h"
@@ -59,41 +60,23 @@ namespace {
 		return trees;
 	}
 
-	class ScopedPath {
-	public:
-		explicit ScopedPath(const str& value) {
-			size_t length = 0;
-			char buffer[32768];
-			if (::getenv_s(&length, buffer, sizeof(buffer), "PATH") == 0 && length > 0) {
-				_previous = str(buffer, length - 1);
-			}
-			::_putenv_s("PATH", value.c_str());
-		}
-		~ScopedPath() { ::_putenv_s("PATH", _previous.c_str()); }
-
-		ScopedPath(const ScopedPath&) = delete;
-		ScopedPath& operator=(const ScopedPath&) = delete;
-	private:
-		str _previous;
-	};
-
 	class ScopedEnvironment {
 	public:
-		ScopedEnvironment(const char* name, const str& value) : _name(name) {
-			size_t length = 0;
-			char buffer[32768];
-			if (::getenv_s(&length, buffer, sizeof(buffer), name) == 0 && length > 0) {
-				_previous = str(buffer, length - 1);
-			}
-			::_putenv_s(name, value.c_str());
+		ScopedEnvironment(const char* name, const str& value) : _name(name), _previous(TestPlatform::GetEnvironment(name)) {
+			TestPlatform::SetEnvironment(name, value);
 		}
-		~ScopedEnvironment() { ::_putenv_s(_name, _previous.c_str()); }
+		~ScopedEnvironment() { TestPlatform::SetEnvironment(_name, _previous); }
 
 		ScopedEnvironment(const ScopedEnvironment&) = delete;
 		ScopedEnvironment& operator=(const ScopedEnvironment&) = delete;
 	private:
 		const char* _name;
 		str _previous;
+	};
+
+	class ScopedPath : public ScopedEnvironment {
+	public:
+		explicit ScopedPath(const str& value) : ScopedEnvironment("PATH", value) {}
 	};
 
 	class CapturingLogSink : public ILogSink {
@@ -332,7 +315,7 @@ TEST_F(ScriptWorkflowFixture, DerivedPathsUseOneConfigurationSpelling) {
 	EXPECT_EQ(ScriptProjectOps::GetSourceDirectory(Root()), Root() + "/Source");
 	EXPECT_EQ(ScriptProjectOps::GetCompileDirectory(Root(), config), Root() + "/Library/Compile/" + str(config));
 	EXPECT_EQ(ScriptProjectOps::GetModuleBinaryPath(Root(), config),
-			  Root() + "/Library/Binaries/" + str(config) + "/MyGame.dll");
+			  Root() + "/Library/Binaries/" + str(config) + "/MyGame" SLT_TEST_DLL_SUFFIX);
 
 	EXPECT_EQ(ScriptProjectOps::GetCompileDirectory(Root(), config).find("/Binaries/"), str::npos);
 }
@@ -362,7 +345,7 @@ TEST_F(ScriptWorkflowFixture, StalenessCoversBuildInputs) {
 	str binaryPath = ScriptProjectOps::GetModuleBinaryPath(Root(), config);
 	EXPECT_TRUE(ScriptProjectOps::IsModuleBinaryOutOfDate(Root(), config));
 
-	WriteSource(str("project://Library/Binaries/") + str(config) + "/MyGame.dll", "MZ");
+	WriteSource(str("project://Library/Binaries/") + str(config) + "/MyGame" SLT_TEST_DLL_SUFFIX, "MZ");
 	WriteSource(str("project://Library/Compile/") + str(config) + "/CMakeCache.txt",
 				str("//No help, variable specified on the command line.\nSHALLTEAR_EXPECT_ENGINE_IDENTITY:UNINITIALIZED=") + CppToolchain::GetEngineIdentity() + "\n");
 	std::filesystem::path binary(binaryPath);
@@ -404,7 +387,7 @@ TEST_F(ScriptWorkflowFixture, StalenessFromCompileStamp) {
 	WriteSource("project://CMakeLists.txt", "project(MyGame CXX)\n");
 	WriteSource("project://Source/MyGame.cpp", "// module entry point\n");
 	WriteSource("project://Source/Tests/MyTest.cpp", "// a suite the module's CMakeLists.txt excludes\n");
-	WriteSource(str("project://Library/Binaries/") + str(config) + "/MyGame.dll", "MZ");
+	WriteSource(str("project://Library/Binaries/") + str(config) + "/MyGame" SLT_TEST_DLL_SUFFIX, "MZ");
 	WriteSource(str("project://Library/Compile/") + str(config) + "/CMakeCache.txt",
 				str("//No help, variable specified on the command line.\nSHALLTEAR_EXPECT_ENGINE_IDENTITY:UNINITIALIZED=") + CppToolchain::GetEngineIdentity() + "\n");
 
@@ -435,16 +418,17 @@ TEST_F(ScriptWorkflowFixture, StalenessFromCompileStamp) {
 	std::filesystem::remove(binary);
 	reason.clear();
 	EXPECT_TRUE(ScriptProjectOps::IsModuleBinaryOutOfDate(Root(), config, &reason));
-	EXPECT_NE(reason.find("MyGame.dll"), str::npos) << "got '" << reason << "'";
+	EXPECT_NE(reason.find("MyGame" SLT_TEST_DLL_SUFFIX), str::npos) << "got '" << reason << "'";
 }
 
 TEST_F(ScriptWorkflowFixture, CompileCacheFromElsewhereIsStale) {
 	std::string_view config = ScriptProjectOps::GetActiveConfigName();
-	const str compiler = "C:/Engine/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang++.exe";
+	const str root = TestPlatform::GetAbsoluteRoot();
+	const str compiler = root + "Engine/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX;
 	const str compileDirectory = ScriptProjectOps::GetCompileDirectory(Root(), config);
 	auto writeCache = [&](const str& recordedCompiler, const str& home, const str& cacheDirectory) {
 		WriteSource(str("project://Library/Compile/") + str(config) + "/CMakeCache.txt",
-					"CMAKE_CXX_COMPILER:STRING=" + recordedCompiler + "\nCMAKE_CXX_COMPILER_AR:FILEPATH=C:/Other/ar.exe" +
+					"CMAKE_CXX_COMPILER:STRING=" + recordedCompiler + "\nCMAKE_CXX_COMPILER_AR:FILEPATH=" + root + "Other/ar" SLT_TEST_EXE_SUFFIX +
 						"\nCMAKE_CACHEFILE_DIR:INTERNAL=" + cacheDirectory + "\nCMAKE_HOME_DIRECTORY:INTERNAL=" + home + "\n");
 	};
 	auto windowsSpelling = [](const str& path) { return StringUtil::Replace(StringUtil::ToLower(path), "/", "\\"); };
@@ -460,20 +444,20 @@ TEST_F(ScriptWorkflowFixture, CompileCacheFromElsewhereIsStale) {
 	str reason;
 	writeCache(StringUtil::ToUpper(compiler), Root(), compileDirectory);
 	EXPECT_TRUE(ScriptProjectOps::IsCompileCacheStale(Root(), config, compiler, &reason));
-	EXPECT_NE(reason.find("CMAKE_CXX_COMPILER was 'C:/ENGINE/"), str::npos) << "got '" << reason << "'";
+	EXPECT_NE(reason.find("CMAKE_CXX_COMPILER was '" + root + "ENGINE/"), str::npos) << "got '" << reason << "'";
 
 	reason.clear();
-	writeCache("C:/OldEngine/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang++.exe", Root(), compileDirectory);
+	writeCache(root + "OldEngine/External/Prebuilt/llvm-mingw/bin/x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX, Root(), compileDirectory);
 	EXPECT_TRUE(ScriptProjectOps::IsCompileCacheStale(Root(), config, compiler, &reason));
-	EXPECT_NE(reason.find("CMAKE_CXX_COMPILER was 'C:/OldEngine/"), str::npos) << "got '" << reason << "'";
+	EXPECT_NE(reason.find("CMAKE_CXX_COMPILER was '" + root + "OldEngine/"), str::npos) << "got '" << reason << "'";
 
 	reason.clear();
-	writeCache(compiler, "C:/Copied/From/Here", compileDirectory);
+	writeCache(compiler, root + "Copied/From/Here", compileDirectory);
 	EXPECT_TRUE(ScriptProjectOps::IsCompileCacheStale(Root(), config, compiler, &reason));
-	EXPECT_NE(reason.find("CMAKE_HOME_DIRECTORY was 'C:/Copied/From/Here'"), str::npos) << "got '" << reason << "'";
+	EXPECT_NE(reason.find("CMAKE_HOME_DIRECTORY was '" + root + "Copied/From/Here'"), str::npos) << "got '" << reason << "'";
 
 	reason.clear();
-	writeCache(compiler, Root(), "C:/Copied/From/Here/Library/Compile/Debug");
+	writeCache(compiler, Root(), root + "Copied/From/Here/Library/Compile/Debug");
 	EXPECT_TRUE(ScriptProjectOps::IsCompileCacheStale(Root(), config, compiler, &reason));
 	EXPECT_NE(reason.find("CMAKE_CACHEFILE_DIR was"), str::npos) << "got '" << reason << "'";
 }
@@ -498,7 +482,7 @@ TEST_F(ScriptWorkflowFixture, ScaffoldWritesExpectedSetAndIsIdempotent) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = "C:/Sdk";
-	options.editorExecutable = "C:/Sdk/Bin/Shalltear.exe";
+	options.editorExecutable = "C:/Sdk/Bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 
 	ScriptProjectOps::ScaffoldResult first;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, first));
@@ -532,14 +516,14 @@ TEST_F(ScriptWorkflowFixture, GeneratedSettingsNameClangdBesideCompiler) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = Root() + "/SDK";
-	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear.exe";
+	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 	options.toolchainDirectory = toolchain;
 
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 	EXPECT_NE(Read(".vscode/settings.json").find("\"clangd.path\": \"clangd\""), str::npos) << Read(".vscode/settings.json");
 
-	str beside = toolchain + "/clangd.exe";
+	str beside = toolchain + "/clangd" SLT_TEST_EXE_SUFFIX;
 	WriteStub(std::filesystem::path(beside));
 	ASSERT_TRUE(std::filesystem::exists(std::filesystem::path(beside)));
 
@@ -553,7 +537,7 @@ TEST_F(ScriptWorkflowFixture, GeneratedSettingsNameEngineAssetsEditorMounted) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = Root() + "/SDK";
-	options.editorExecutable = Root() + "/Checkout/build/bin/Shalltear.exe";
+	options.editorExecutable = Root() + "/Checkout/build/bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 	options.toolchainDirectory = Root() + "/Toolchain/bin";
 
 	const str mounted = RepoDir("EngineAssets").generic_string();
@@ -573,14 +557,14 @@ TEST_F(ScriptWorkflowFixture, GeneratedSettingsNameCMakeEditorResolved) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = Root() + "/SDK";
-	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear.exe";
+	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 	options.toolchainDirectory = toolchain;
 
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 	EXPECT_NE(Read(".vscode/settings.json").find("\"cmake.cmakePath\": \"\""), str::npos) << Read(".vscode/settings.json");
 
-	str beside = toolchain + "/cmake.exe";
+	str beside = toolchain + "/cmake" SLT_TEST_EXE_SUFFIX;
 	WriteStub(std::filesystem::path(beside));
 	ASSERT_TRUE(std::filesystem::exists(std::filesystem::path(beside)));
 
@@ -594,7 +578,7 @@ TEST_F(ScriptWorkflowFixture, RegenerateReportsResult) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = Root() + "/SDK";
-	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear.exe";
+	options.editorExecutable = options.sdkRoot + "/Bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 
@@ -669,11 +653,15 @@ TEST_F(ScriptWorkflowFixture, GeneratedPresetsNamesTheResolvedToolchainDirectory
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, scaffolded));
 
 	str presets = Read("CMakeUserPresets.json");
-	EXPECT_NE(presets.find("\"PATH\": \"C:/Somewhere/llvm-mingw/bin;$penv{PATH}\""), str::npos) << presets;
+	const str separator(1, TestPlatform::GetSearchPathSeparator());
+	EXPECT_NE(presets.find("\"PATH\": \"C:/Somewhere/llvm-mingw/bin" + separator + "$penv{PATH}\""), str::npos) << presets;
 	EXPECT_EQ(presets.find("/Toolchain/LLVM/bin"), str::npos) << presets;
 }
 
 TEST_F(ScriptWorkflowFixture, PresetsKeepPathWithoutToolchain) {
+	if (!TestPlatform::ToolDirectoriesFollowEnvironment()) {
+		GTEST_SKIP() << "this host's tool directories are fixed";
+	}
 	WriteSource("project://Project.ini", "[Project]\nname = MyGame\n");
 
 	ScriptProjectOps::ScaffoldOptions options;
@@ -830,24 +818,13 @@ TEST_F(ScriptWorkflowFixture, ContentOnlyProjectHasNoScriptProject) {
 }
 
 TEST_F(ScriptWorkflowFixture, DetectsVsCodeCommands) {
-	std::filesystem::path programs = _root / "AppData" / "Programs" / "Microsoft VS Code";
-	std::filesystem::create_directories(programs);
-	std::ofstream stub(programs / "Code.exe", std::ios::binary);
-	stub << "stub";
-	stub.close();
-
-	str previous;
-	{
-		size_t length = 0;
-		char buffer[4096];
-		if (::getenv_s(&length, buffer, sizeof(buffer), "LOCALAPPDATA") == 0 && length > 0) {
-			previous = str(buffer, length - 1);
-		}
-	}
-	ASSERT_EQ(::_putenv_s("LOCALAPPDATA", (_root / "AppData").generic_string().c_str()), 0);
+	str variable;
+	const str staged = TestPlatform::StageExternalEditor(_root.generic_string(), variable);
+	const str previous = TestPlatform::GetEnvironment(variable.c_str());
+	TestPlatform::SetEnvironment(variable.c_str(), staged);
 
 	ScriptProjectOps::ExternalEditor editor = ScriptProjectOps::DetectExternalEditor();
-	::_putenv_s("LOCALAPPDATA", previous.c_str());
+	TestPlatform::SetEnvironment(variable.c_str(), previous);
 
 	EXPECT_EQ(editor.name, "VS Code");
 
@@ -861,11 +838,11 @@ TEST_F(ScriptWorkflowFixture, DetectsVsCodeCommands) {
 }
 
 TEST_F(ScriptWorkflowFixture, LaunchStripsVariablesThatRedefineChildProgram) {
-#if defined(_WIN32)
 	std::filesystem::path receipt = _root / "child-saw.txt";
-	str command = "cmd.exe /c \"echo [%ELECTRON_RUN_AS_NODE%]> \"" + receipt.generic_string() + "\"\"";
+	str unset;
+	str command = TestPlatform::GetEnvironmentProbeCommand("ELECTRON_RUN_AS_NODE", receipt.generic_string(), unset);
 
-	ASSERT_EQ(::_putenv_s("ELECTRON_RUN_AS_NODE", "1"), 0);
+	TestPlatform::SetEnvironment("ELECTRON_RUN_AS_NODE", "1");
 	EXPECT_TRUE(ScriptProjectOps::OpenInExternalEditor(Root(), command, {}, 0, 0));
 
 	str seen = Read("child-saw.txt");
@@ -873,14 +850,11 @@ TEST_F(ScriptWorkflowFixture, LaunchStripsVariablesThatRedefineChildProgram) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 		seen = Read("child-saw.txt");
 	}
-	::_putenv_s("ELECTRON_RUN_AS_NODE", "");
+	TestPlatform::SetEnvironment("ELECTRON_RUN_AS_NODE", "");
 
 	ASSERT_NE(seen.find('\n'), str::npos) << seen;
 	EXPECT_EQ(seen.find("[1]"), str::npos) << seen;
-	EXPECT_NE(seen.find("[%ELECTRON_RUN_AS_NODE%]"), str::npos) << seen;
-#else
-	GTEST_SKIP();
-#endif
+	EXPECT_NE(seen.find(unset), str::npos) << seen;
 }
 
 TEST(ScriptClassNameTest, ValidatesCppIdentifiers) {
@@ -1111,14 +1085,14 @@ TEST(CompilerDiagnosticsTest, StripsAnsiBeforeParsing) {
 
 TEST_F(ScriptWorkflowFixture, ToolchainDiscoveryReportsMissingAndPresentTools) {
 	std::filesystem::create_directories(_root / "fake-bin");
-	for (const char* tool : {"cmake.exe", "ninja.exe"}) {
+	for (const char* tool : {"cmake" SLT_TEST_EXE_SUFFIX, "ninja" SLT_TEST_EXE_SUFFIX}) {
 		std::ofstream stub(_root / "fake-bin" / tool, std::ios::binary);
 		stub << "stub";
 	}
 
 	CppToolchain::DiscoveryOptions options;
-	options.cmakePath = (_root / "fake-bin" / "cmake.exe").generic_string();
-	options.ninjaPath = (_root / "fake-bin" / "ninja.exe").generic_string();
+	options.cmakePath = (_root / "fake-bin" / "cmake" SLT_TEST_EXE_SUFFIX).generic_string();
+	options.ninjaPath = (_root / "fake-bin" / "ninja" SLT_TEST_EXE_SUFFIX).generic_string();
 	options.extraSearchDirectories.push_back((_root / "fake-bin").generic_string());
 	options.sdkRoot = Root();
 	options.probeVersions = false;
@@ -1156,14 +1130,14 @@ TEST_F(ScriptWorkflowFixture, ToolchainDescribesMissingToolWithFix) {
 
 TEST_F(ScriptWorkflowFixture, ToolchainPrefersTheBundledToolchainOverPATH) {
 	const std::filesystem::path bundle = _root / "fake-sdk" / "Toolchain";
-	WriteStub(bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++.exe");
-	WriteStub(bundle / "CMake" / "bin" / "cmake.exe");
-	WriteStub(bundle / "Ninja" / "ninja.exe");
+	WriteStub(bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(bundle / "CMake" / "bin" / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(bundle / "Ninja" / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	const std::filesystem::path onPath = _root / "path-bin";
-	WriteStub(onPath / "clang++.exe");
-	WriteStub(onPath / "cmake.exe");
-	WriteStub(onPath / "ninja.exe");
+	WriteStub(onPath / "clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	CppToolchain::DiscoveryOptions options;
 	options.sdkRoot = (_root / "fake-sdk").generic_string();
@@ -1175,17 +1149,17 @@ TEST_F(ScriptWorkflowFixture, ToolchainPrefersTheBundledToolchainOverPATH) {
 		info = CppToolchain::Discover(options);
 	}
 
-	EXPECT_EQ(info.compiler.path, (bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++.exe").generic_string());
-	EXPECT_EQ(info.cmake.path, (bundle / "CMake" / "bin" / "cmake.exe").generic_string());
-	EXPECT_EQ(info.ninja.path, (bundle / "Ninja" / "ninja.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.cmake.path, (bundle / "CMake" / "bin" / "cmake" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.ninja.path, (bundle / "Ninja" / "ninja" SLT_TEST_EXE_SUFFIX).generic_string());
 }
 
 TEST_F(ScriptWorkflowFixture, ToolchainFindsNestedBundle) {
 	const std::filesystem::path install = _root / "fake-sdk";
 	const std::filesystem::path bundle = install / "Toolchain";
-	WriteStub(bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++.exe");
-	WriteStub(bundle / "CMake" / "bin" / "cmake.exe");
-	WriteStub(bundle / "Ninja" / "ninja.exe");
+	WriteStub(bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(bundle / "CMake" / "bin" / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(bundle / "Ninja" / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	const std::filesystem::path flavor = install / "Static";
 	std::filesystem::create_directories(flavor / "Lib" / "cmake" / "Shalltear");
@@ -1206,9 +1180,9 @@ TEST_F(ScriptWorkflowFixture, ToolchainFindsNestedBundle) {
 		info = CppToolchain::Discover(options);
 	}
 
-	EXPECT_EQ(info.compiler.path, (bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++.exe").generic_string());
-	EXPECT_EQ(info.cmake.path, (bundle / "CMake" / "bin" / "cmake.exe").generic_string());
-	EXPECT_EQ(info.ninja.path, (bundle / "Ninja" / "ninja.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (bundle / "LLVM" / "bin" / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.cmake.path, (bundle / "CMake" / "bin" / "cmake" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.ninja.path, (bundle / "Ninja" / "ninja" SLT_TEST_EXE_SUFFIX).generic_string());
 	EXPECT_TRUE(info.IsComplete());
 
 	EXPECT_EQ(info.sdkRoot, flavor.generic_string());
@@ -1217,9 +1191,9 @@ TEST_F(ScriptWorkflowFixture, ToolchainFindsNestedBundle) {
 
 TEST_F(ScriptWorkflowFixture, ToolchainFallsBackToPath) {
 	const std::filesystem::path onPath = _root / "path-bin";
-	WriteStub(onPath / "clang++.exe");
-	WriteStub(onPath / "cmake.exe");
-	WriteStub(onPath / "ninja.exe");
+	WriteStub(onPath / "clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	CppToolchain::DiscoveryOptions options;
 	options.sdkRoot = Root();
@@ -1231,24 +1205,24 @@ TEST_F(ScriptWorkflowFixture, ToolchainFallsBackToPath) {
 		info = CppToolchain::Discover(options);
 	}
 
-	EXPECT_EQ(info.compiler.path, (onPath / "clang++.exe").generic_string());
-	EXPECT_EQ(info.cmake.path, (onPath / "cmake.exe").generic_string());
-	EXPECT_EQ(info.ninja.path, (onPath / "ninja.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (onPath / "clang++" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.cmake.path, (onPath / "cmake" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.ninja.path, (onPath / "ninja" SLT_TEST_EXE_SUFFIX).generic_string());
 }
 
 TEST_F(ScriptWorkflowFixture, ToolchainPrefersRecordedCompiler) {
 	const std::filesystem::path recorded = _root / "recorded-bin";
-	WriteStub(recorded / "x86_64-w64-mingw32-clang++.exe");
+	WriteStub(recorded / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX);
 
 	const std::filesystem::path onPath = _root / "path-bin";
-	WriteStub(onPath / "clang++.exe");
-	WriteStub(onPath / "cmake.exe");
-	WriteStub(onPath / "ninja.exe");
+	WriteStub(onPath / "clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	WriteSource("project://ShalltearConfig.cmake",
 				"set(SHALLTEAR_COMPILER_ID \"Clang\")\n"
 				"set(SHALLTEAR_COMPILER_PATH \"" +
-					(recorded / "x86_64-w64-mingw32-clang++.exe").generic_string() + "\")\n");
+					(recorded / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX).generic_string() + "\")\n");
 
 	CppToolchain::DiscoveryOptions options;
 	options.sdkRoot = Root();
@@ -1260,20 +1234,20 @@ TEST_F(ScriptWorkflowFixture, ToolchainPrefersRecordedCompiler) {
 		info = CppToolchain::Discover(options);
 	}
 
-	EXPECT_EQ(info.compiler.path, (recorded / "x86_64-w64-mingw32-clang++.exe").generic_string());
-	EXPECT_EQ(info.cmake.path, (onPath / "cmake.exe").generic_string());
-	EXPECT_EQ(info.ninja.path, (onPath / "ninja.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (recorded / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.cmake.path, (onPath / "cmake" SLT_TEST_EXE_SUFFIX).generic_string());
+	EXPECT_EQ(info.ninja.path, (onPath / "ninja" SLT_TEST_EXE_SUFFIX).generic_string());
 }
 
 TEST_F(ScriptWorkflowFixture, ToolchainFileSDKUsesPlainDriver) {
 	const std::filesystem::path recorded = _root / "recorded-bin";
-	WriteStub(recorded / "x86_64-w64-mingw32-clang++.exe");
-	WriteStub(recorded / "clang++.exe");
-	WriteStub(recorded / "cmake.exe");
-	WriteStub(recorded / "ninja.exe");
+	WriteStub(recorded / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(recorded / "clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(recorded / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(recorded / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	WriteSource("project://ShalltearConfig.cmake",
-				"set(SHALLTEAR_COMPILER_PATH \"" + (recorded / "clang++.exe").generic_string() +
+				"set(SHALLTEAR_COMPILER_PATH \"" + (recorded / "clang++" SLT_TEST_EXE_SUFFIX).generic_string() +
 					"\")\n"
 					"set(SHALLTEAR_TOOLCHAIN_FILE \"${SHALLTEAR_PACKAGE_ROOT}/Lib/cmake/Shalltear/Toolchains/Linux-x64.cmake\")\n");
 
@@ -1282,7 +1256,7 @@ TEST_F(ScriptWorkflowFixture, ToolchainFileSDKUsesPlainDriver) {
 	options.probeVersions = false;
 	const CppToolchain::ToolchainInfo info = CppToolchain::Discover(options);
 
-	EXPECT_EQ(info.compiler.path, (recorded / "clang++.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (recorded / "clang++" SLT_TEST_EXE_SUFFIX).generic_string());
 	EXPECT_EQ(info.sdkToolchainFile, Root() + "/Lib/cmake/Shalltear/Toolchains/Linux-x64.cmake");
 	EXPECT_EQ(CppToolchain::GetCompilerDriverName(info), "clang++");
 	EXPECT_EQ(CppToolchain::GetCompilerDriverName(CppToolchain::ToolchainInfo{}), "x86_64-w64-mingw32-clang++");
@@ -1315,12 +1289,12 @@ TEST_F(ScriptWorkflowFixture, StaticSDKProbeMatchesTargetTriple) {
 
 TEST_F(ScriptWorkflowFixture, ToolchainIgnoresMissingCompiler) {
 	const std::filesystem::path onPath = _root / "path-bin";
-	WriteStub(onPath / "clang++.exe");
-	WriteStub(onPath / "cmake.exe");
-	WriteStub(onPath / "ninja.exe");
+	WriteStub(onPath / "clang++" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "cmake" SLT_TEST_EXE_SUFFIX);
+	WriteStub(onPath / "ninja" SLT_TEST_EXE_SUFFIX);
 
 	WriteSource("project://ShalltearConfig.cmake",
-				"set(SHALLTEAR_COMPILER_PATH \"" + (_root / "gone" / "x86_64-w64-mingw32-clang++.exe").generic_string() + "\")\n");
+				"set(SHALLTEAR_COMPILER_PATH \"" + (_root / "gone" / "x86_64-w64-mingw32-clang++" SLT_TEST_EXE_SUFFIX).generic_string() + "\")\n");
 
 	CppToolchain::DiscoveryOptions options;
 	options.sdkRoot = Root();
@@ -1332,7 +1306,7 @@ TEST_F(ScriptWorkflowFixture, ToolchainIgnoresMissingCompiler) {
 		info = CppToolchain::Discover(options);
 	}
 
-	EXPECT_EQ(info.compiler.path, (onPath / "clang++.exe").generic_string());
+	EXPECT_EQ(info.compiler.path, (onPath / "clang++" SLT_TEST_EXE_SUFFIX).generic_string());
 }
 
 TEST_F(ScriptWorkflowFixture, ToolchainReadsSDKIdentityFromPackage) {
@@ -1639,7 +1613,7 @@ TEST_F(ScriptWorkflowFixture, ScaffoldedIgnoreCoversDerivedAssetIndex) {
 	ScriptProjectOps::ScaffoldOptions options;
 	options.moduleName = "MyGame";
 	options.sdkRoot = "C:/Sdk";
-	options.editorExecutable = "C:/Sdk/Bin/Shalltear.exe";
+	options.editorExecutable = "C:/Sdk/Bin/Shalltear" SLT_TEST_EXE_SUFFIX;
 	ScriptProjectOps::ScaffoldResult result;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), options, result));
 

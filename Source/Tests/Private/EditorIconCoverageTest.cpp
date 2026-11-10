@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #ifdef SHALLTEAR_SHARED
 
 #include "TestHelperProcess.h"
@@ -35,8 +37,6 @@
 #include <filesystem>
 #include <map>
 #include <set>
-
-#include <windows.h>
 
 using namespace Shalltear;
 
@@ -192,8 +192,8 @@ namespace {
 			for (const PackageOps::ResolvedPackage& resolved : resolution) {
 				const PackageOps::PackageManifest* manifest = PackageOps::FindPackage(catalogue, resolved.name);
 				ASSERT_NE(manifest, nullptr);
-				const str binary = PackageOps::GetPackageBinaryName(*manifest) + ".dll";
-				if (const HMODULE linked = ::GetModuleHandleA(binary.c_str())) {
+				const str binary = PackageOps::GetPackageBinaryName(*manifest) + SLT_TEST_DLL_SUFFIX;
+				if (const void* linked = TestPlatform::FindLoadedLibrary(binary)) {
 					_linked.push_back(linked);
 					continue;
 				}

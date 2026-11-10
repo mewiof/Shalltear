@@ -1035,7 +1035,7 @@ namespace {
 			UndoSystem::Initialize();
 			PanelManager::Initialize();
 
-			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + ".dll"));
+			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			_moduleBase = ModuleSystem::GetNativeHandle(_module);
 			ASSERT_NE(_moduleBase, nullptr);

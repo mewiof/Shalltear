@@ -10,8 +10,6 @@
 #include <chrono>
 #include <filesystem>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -19,8 +17,8 @@ using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 
 	constexpr const char* PROBE_PATH = "HotReloadProbe";
 	constexpr const char* V1_PROFILE = "probe-v1";
@@ -80,7 +78,7 @@ namespace {
 
 		i32 ModulesOwnThreshold() const {
 			auto fn = reinterpret_cast<GetProbeThresholdFn>(
-				::GetProcAddress(static_cast<HMODULE>(const_cast<void*>(ModuleBase())), "HotReloadModuleGetProbeThreshold"));
+				ModuleSystem::FindSymbol(ModuleBase(), "HotReloadModuleGetProbeThreshold"));
 			return fn ? fn() : -1;
 		}
 

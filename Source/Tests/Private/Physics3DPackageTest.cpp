@@ -212,7 +212,7 @@ namespace {
 
 		bool StandUp() {
 #ifdef SHALLTEAR_SHARED
-			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + ".dll"));
+			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + SLT_TEST_DLL_SUFFIX));
 			return ModuleSystem::IsLoaded(_module);
 #else
 			SLT_CALL_LINKED_PACKAGE(Physics3D, &_token);

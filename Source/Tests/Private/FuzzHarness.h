@@ -2,10 +2,7 @@
 
 #include "TestsPCH.h"
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "TestPlatform.h"
 
 #include <vector>
 
@@ -34,23 +31,13 @@ namespace Fuzz {
 	class GuardedInput {
 	public:
 		explicit GuardedInput(size_t minimumBytes = 0) {
-			SYSTEM_INFO info{};
-			GetSystemInfo(&info);
-			size_t pageSize = info.dwPageSize;
+			size_t pageSize = TestPlatform::GetPageSize();
 			size_t pages = (minimumBytes + pageSize - 1) / pageSize;
 			_committed = (pages == 0 ? 1 : pages) * pageSize;
-
-			_base = static_cast<u8*>(VirtualAlloc(nullptr, _committed + pageSize, MEM_RESERVE, PAGE_NOACCESS));
-			if (_base) {
-				VirtualAlloc(_base, _committed, MEM_COMMIT, PAGE_READWRITE);
-			}
+			_base = TestPlatform::AllocateGuarded(_committed);
 		}
 
-		~GuardedInput() {
-			if (_base) {
-				VirtualFree(_base, 0, MEM_RELEASE);
-			}
-		}
+		~GuardedInput() { TestPlatform::FreeGuarded(_base, _committed); }
 
 		GuardedInput(const GuardedInput&) = delete;
 		GuardedInput& operator=(const GuardedInput&) = delete;

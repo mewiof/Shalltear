@@ -22,8 +22,8 @@ using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 
 	constexpr const char* PROBE_TYPE = "HotReloadDataAsset";
 	constexpr const char* PROBE_PATH = "project://ProbeData.hrdata";

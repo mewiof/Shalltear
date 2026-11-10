@@ -272,8 +272,8 @@ TEST_F(IsolatedSceneFixture, IsolatedTickListCompacts) {
 
 namespace {
 
-	constexpr const char* ISO_V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* ISO_V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* ISO_V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* ISO_V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 	const StringHash IsoBehaviorType{"HotReloadBehavior"};
 
 	class IsolatedSceneReloadFixture : public ::testing::Test {

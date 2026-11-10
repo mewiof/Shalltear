@@ -1,6 +1,6 @@
 #include "TestsPCH.h"
 
-#include "PESubsystem.h"
+#include "TestPlatform.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Config.h"
@@ -41,10 +41,6 @@
 #include <cwchar>
 #include <iterator>
 #include <thread>
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
 
 using namespace Shalltear;
 
@@ -342,98 +338,12 @@ void PotionDrinker::OnEnable() {
 	}
 
 	str RunCommand(const str& commandLine, int& outExitCode) {
-		str command = "\"" + commandLine + " 2>&1\"";
-		str output;
-		FILE* pipe = ::_popen(command.c_str(), "r");
-		if (!pipe) {
-			outExitCode = -1;
-			return output;
-		}
-		char buffer[512];
-		while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-			output += buffer;
-		}
-		outExitCode = ::_pclose(pipe);
-		return output;
+		return TestPlatform::RunCommand(commandLine, outExitCode);
 	}
 
 	str ReadAllBytes(const std::filesystem::path& path) {
 		std::ifstream file(path, std::ios::binary);
 		return str((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	}
-
-	struct LaunchedProcess {
-		HANDLE process = nullptr;
-		DWORD id = 0;
-		~LaunchedProcess() {
-			if (process) {
-				::TerminateProcess(process, 1);
-				::CloseHandle(process);
-			}
-		}
-	};
-
-	bool Launch(const str& commandLine, LaunchedProcess& out) {
-		str mutableLine = commandLine;
-		STARTUPINFOA startup{};
-		startup.cb = sizeof(startup);
-		PROCESS_INFORMATION info{};
-		if (!::CreateProcessA(nullptr, mutableLine.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
-							  &startup, &info)) {
-			return false;
-		}
-		::CloseHandle(info.hThread);
-		out.process = info.hProcess;
-		out.id = info.dwProcessId;
-		return true;
-	}
-
-	struct WindowSearch {
-		DWORD id = 0;
-		const wchar_t* title = nullptr;
-		HWND found = nullptr;
-		str seen;
-	};
-
-	static BOOL CALLBACK FindWindowOfProcess(HWND window, LPARAM parameter) {
-		WindowSearch* search = reinterpret_cast<WindowSearch*>(parameter);
-		DWORD owner = 0;
-		::GetWindowThreadProcessId(window, &owner);
-		if (owner != search->id || !::IsWindowVisible(window) || ::GetWindow(window, GW_OWNER) != nullptr) {
-			return TRUE;
-		}
-		wchar_t text[256] = {};
-		::GetWindowTextW(window, text, static_cast<int>(std::size(text)));
-		char narrow[256] = {};
-		::WideCharToMultiByte(CP_UTF8, 0, text, -1, narrow, static_cast<int>(std::size(narrow)), nullptr, nullptr);
-		search->seen += str("\n    \"") + narrow + "\"";
-		if (std::wcscmp(text, search->title) == 0) {
-			search->found = window;
-			return FALSE;
-		}
-		return TRUE;
-	}
-
-	HWND WaitForWindow(DWORD processId, const wchar_t* title, DWORD timeoutMs, str& outSeen) {
-		const DWORD deadline = ::GetTickCount() + timeoutMs;
-		while (::GetTickCount() < deadline) {
-			WindowSearch search;
-			search.id = processId;
-			search.title = title;
-			::EnumWindows(&FindWindowOfProcess, reinterpret_cast<LPARAM>(&search));
-			if (search.found) {
-				return search.found;
-			}
-			outSeen = search.seen;
-			::Sleep(100);
-		}
-		return nullptr;
-	}
-
-	int RunCommandExitCode(const str& commandLine) {
-		int exitCode = 0;
-		RunCommand(commandLine, exitCode);
-		return exitCode;
 	}
 
 	class PlayerBuildIntegrationTest : public ::testing::Test {
@@ -573,7 +483,7 @@ void PotionDrinker::OnEnable() {
 
 		str EditorExecutable() const {
 			return Path(ScriptProjectOps::GetEditorExecutablePath()).GetDirectory() +
-				   "/Shalltear.exe";
+				   "/Shalltear" SLT_TEST_EXE_SUFFIX;
 		}
 	private:
 		static str ReadPackageLinkMode(const str& sdkRoot) {
@@ -750,7 +660,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 
 	Settings::Initialize(Settings::GetDefaultPaths());
 
-	WriteProfile("Windows", "Windows", {"Assets/Scenes/Boot.scene"},
+	WriteProfile("Windows", SLT_TEST_HOST_TARGET, {"Assets/Scenes/Boot.scene"},
 				 {{"version", "1.0.0"}, {"buildNumber", "${AUTO}"}});
 
 	BuildResult result = Build({"Windows"});
@@ -762,7 +672,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	std::filesystem::path staging = _root / "Builds" / "Windows";
 	EXPECT_EQ(result.profiles[0].outputPath, staging.generic_string());
 
-	std::filesystem::path playerExe = staging / "PlayerProbe.exe";
+	std::filesystem::path playerExe = staging / "PlayerProbe" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << playerExe.generic_string();
 	std::printf("[player] PlayerProbe.exe %llu B\n", static_cast<unsigned long long>(std::filesystem::file_size(playerExe)));
 
@@ -868,7 +778,9 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 		EXPECT_EQ(text.find("ufbx"), str::npos);
 	}
 
-	EXPECT_EQ(PESubsystem::Read(playerExe), PESubsystem::GUI);
+	str artifactKind;
+	EXPECT_TRUE(TestPlatform::IsArtifactKind(playerExe.generic_string(), true, artifactKind)) << artifactKind;
+	EXPECT_EQ(TestPlatform::FindForeignDependency(playerExe.generic_string()), "");
 
 	int exitCode = 0;
 	str playerLog = RunCommand("\"" + playerExe.generic_string() + "\" --frames 8", exitCode);
@@ -956,7 +868,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_NE(archiveBytes.find(PLAYER_MARKER), str::npos);
 
 	EXPECT_NE(playerLog.find("isPlayer=true"), str::npos) << playerLog;
-	EXPECT_NE(playerLog.find("target=Windows"), str::npos) << playerLog;
+	EXPECT_NE(playerLog.find("target=" SLT_TEST_HOST_TARGET " "), str::npos) << playerLog;
 	EXPECT_NE(playerLog.find("number=1"), str::npos) << playerLog;
 	EXPECT_NE(playerLog.find("version=1.0.0"), str::npos) << playerLog;
 	EXPECT_NE(playerLog.find("profile=Windows"), str::npos) << playerLog;
@@ -976,9 +888,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 		std::filesystem::remove_all(staging / "Logs", ec);
 		std::filesystem::remove_all(staging / "Library", ec);
 
-		int denied = RunCommandExitCode("icacls \"" + staging.generic_string() +
-										"\" /deny \"*S-1-1-0:(OI)(CI)(WD,AD,WEA,WA)\" /T /C");
-		ASSERT_EQ(denied, 0);
+		ASSERT_TRUE(TestPlatform::DenyDirectoryWrites(staging.generic_string()));
 
 		{
 			std::ofstream probe(staging / "acl-probe.tmp");
@@ -986,14 +896,14 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 			probe.close();
 			std::filesystem::remove(staging / "acl-probe.tmp", ec);
 			if (writable) {
-				RunCommandExitCode("icacls \"" + staging.generic_string() + "\" /remove:d \"*S-1-1-0\" /T /C");
+				TestPlatform::AllowDirectoryWrites(staging.generic_string());
 				GTEST_FAIL();
 			}
 		}
 
 		str readOnlyLog = RunCommand("\"" + playerExe.generic_string() + "\" --frames 8", exitCode);
 
-		RunCommandExitCode("icacls \"" + staging.generic_string() + "\" /remove:d \"*S-1-1-0\" /T /C");
+		TestPlatform::AllowDirectoryWrites(staging.generic_string());
 
 		ASSERT_EQ(exitCode, 0) << readOnlyLog;
 
@@ -1062,7 +972,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 		}
 	}
 
-	WriteProfile("Windows Server", "WindowsServer", {"Assets/Scenes/Boot.scene"},
+	WriteProfile("Windows Server", SLT_TEST_HOST_TARGET "Server", {"Assets/Scenes/Boot.scene"},
 				 {{"version", "1.0.0"}, {"buildNumber", "${AUTO}"}});
 
 	BuildResult serverResult = Build({"Windows Server"});
@@ -1071,11 +981,12 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 
 	EXPECT_EQ(serverResult.profiles[0].buildNumber, 1u);
 
-	std::filesystem::path serverExe = _root / "Builds" / "Windows Server" / "PlayerProbeServer.exe";
+	std::filesystem::path serverExe = _root / "Builds" / "Windows Server" / "PlayerProbeServer" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(serverExe)) << serverExe.generic_string();
 	EXPECT_NE(serverExe.filename(), playerExe.filename());
 
-	EXPECT_EQ(PESubsystem::Read(serverExe), PESubsystem::CONSOLE);
+	EXPECT_TRUE(TestPlatform::IsArtifactKind(serverExe.generic_string(), false, artifactKind)) << artifactKind;
+	EXPECT_EQ(TestPlatform::FindForeignDependency(serverExe.generic_string()), "");
 
 	str serverLog = RunCommand("\"" + serverExe.generic_string() + "\" --frames 4", exitCode);
 	ASSERT_EQ(exitCode, 0) << serverLog;
@@ -1083,7 +994,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_NE(serverLog.find(PLAYER_MARKER), str::npos) << serverLog;
 	EXPECT_EQ(serverLog.find("could not be resolved"), str::npos) << serverLog;
 	EXPECT_NE(serverLog.find("headless"), str::npos) << serverLog;
-	EXPECT_NE(serverLog.find("target=WindowsServer"), str::npos) << serverLog;
+	EXPECT_NE(serverLog.find("target=" SLT_TEST_HOST_TARGET "Server"), str::npos) << serverLog;
 	expectGameExtensions(serverLog);
 
 	EXPECT_EQ(serverLog.find("WindowSystem initialized"), str::npos) << serverLog;
@@ -1135,7 +1046,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{str("Assets/Scenes/Standalone.scene")});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1152,7 +1063,7 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_TRUE(std::filesystem::exists(contentOnly / "Library" / "Player" / "Windows" / "CMakeLists.txt"));
 	EXPECT_FALSE(std::filesystem::exists(contentOnly / "CMakeLists.txt"));
 
-	std::filesystem::path standaloneExe = contentOnly / "Builds" / "Windows" / "Standalone.exe";
+	std::filesystem::path standaloneExe = contentOnly / "Builds" / "Windows" / "Standalone" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(standaloneExe)) << batchLog;
 
 	str standaloneLog = RunCommand("\"" + standaloneExe.generic_string() + "\" --frames 4", exitCode);
@@ -1182,7 +1093,7 @@ TEST_F(PlayerBuildIntegrationTest, TheCloseButtonEndsAShippedGame) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1193,32 +1104,28 @@ TEST_F(PlayerBuildIntegrationTest, TheCloseButtonEndsAShippedGame) {
 	str buildLog = RunCommand(
 		"\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "CloseProbe.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "CloseProbe" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 
-	LaunchedProcess game;
-	ASSERT_TRUE(Launch("\"" + playerExe.generic_string() + "\"", game));
+	struct Game {
+		TestPlatform::LaunchedProcess* process = nullptr;
+		~Game() { TestPlatform::Terminate(process); }
+	} game;
+	game.process = TestPlatform::Launch("\"" + playerExe.generic_string() + "\"");
+	ASSERT_NE(game.process, nullptr);
 
 	str windowsSeen;
-	HWND window = WaitForWindow(game.id, L"CloseProbe", 30000, windowsSeen);
-	if (!window) {
+	if (!TestPlatform::WaitForWindow(game.process, "CloseProbe", 30000, windowsSeen)) {
 		GTEST_SKIP() << (windowsSeen.empty() ? str("\n    <none>") : windowsSeen);
 	}
 
-	ASSERT_EQ(::WaitForSingleObject(game.process, 1500), static_cast<DWORD>(WAIT_TIMEOUT));
+	i32 gameExitCode = 1;
+	ASSERT_FALSE(TestPlatform::WaitForExit(game.process, 1500, gameExitCode));
 
-	ASSERT_TRUE(::PostMessageW(window, WM_CLOSE, 0, 0));
+	ASSERT_TRUE(TestPlatform::CloseWindow(game.process));
 
-	DWORD waited = ::WaitForSingleObject(game.process, 60000);
-	if (waited != WAIT_OBJECT_0) {
-		const bool windowSurvived = ::IsWindow(window) != 0;
-		ADD_FAILURE();
-		return;
-	}
-
-	DWORD gameExitCode = 1;
-	::GetExitCodeProcess(game.process, &gameExitCode);
-	EXPECT_EQ(gameExitCode, 0u);
+	ASSERT_TRUE(TestPlatform::WaitForExit(game.process, 60000, gameExitCode));
+	EXPECT_EQ(gameExitCode, 0);
 }
 
 TEST_F(PlayerBuildIntegrationTest, LinkMatchesEnabledPackages) {
@@ -1235,7 +1142,7 @@ TEST_F(PlayerBuildIntegrationTest, LinkMatchesEnabledPackages) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1243,7 +1150,7 @@ TEST_F(PlayerBuildIntegrationTest, LinkMatchesEnabledPackages) {
 	}
 
 	int exitCode = 0;
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "PackageProbe.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "PackageProbe" SLT_TEST_PLAYER_SUFFIX;
 
 	str disabledBuild = RunCommand(
 		"\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
@@ -1320,7 +1227,8 @@ u32 PackageCallOverlapCount() {
 		return RunCMake("-S \"" + Root() + "\" -B \"" + Root() + "/Library/" + directory + "\" -G Ninja" +
 							" -DCMAKE_BUILD_TYPE=" + _config + " -DCMAKE_CXX_COMPILER=\"" + toolchain.compiler.path + "\"" +
 							" -DCMAKE_MAKE_PROGRAM=\"" + toolchain.ninja.path + "\" -DShalltear_ROOT=\"" + SDKRoot() + "\"" +
-							" -DSHALLTEAR_PLAYER_TARGET=Windows -DSHALLTEAR_ENABLED_PACKAGES=\"" + packages + "\"",
+							(toolchain.sdkToolchainFile.empty() ? str() : " -DCMAKE_TOOLCHAIN_FILE=\"" + toolchain.sdkToolchainFile + "\"") +
+							" -DSHALLTEAR_PLAYER_TARGET=" SLT_TEST_HOST_TARGET " -DSHALLTEAR_ENABLED_PACKAGES=\"" + packages + "\"",
 						outExitCode);
 	};
 	auto build = [&](const char* directory, int& outExitCode) {
@@ -1362,7 +1270,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoImportPipeline) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1380,7 +1288,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoImportPipeline) {
 		"\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
 
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "ToolStrip.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "ToolStrip" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 
 	str bytes = ReadAllBytes(playerExe);
@@ -1412,7 +1320,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoBuildMachinePath) {
 	scaffoldOptions.editorExecutable = ScriptProjectOps::GetEditorExecutablePath();
 	ScriptProjectOps::ScaffoldResult scaffolded;
 	ASSERT_TRUE(ScriptProjectOps::ScaffoldScriptProject(Root(), scaffoldOptions, scaffolded));
-	WriteProfile("Windows", "Windows", {});
+	WriteProfile("Windows", SLT_TEST_HOST_TARGET, {});
 
 	CompileService service;
 	service.RefreshToolchain();
@@ -1421,7 +1329,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoBuildMachinePath) {
 	int exitCode = 0;
 	str buildLog = RunCommand("\"" + EditorExecutable() + "\" --project \"" + Root() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
-	std::filesystem::path playerExe = _root / "Builds" / "Windows" / "PathStrip.exe";
+	std::filesystem::path playerExe = _root / "Builds" / "Windows" / "PathStrip" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 
 	const str bytes = StringUtil::ToLower(ReadAllBytes(playerExe));
@@ -1460,7 +1368,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerLinksNoneOfCoresImportTier) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1472,7 +1380,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerLinksNoneOfCoresImportTier) {
 		"\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
 
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "TierStrip.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "TierStrip" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 	str bytes = ReadAllBytes(playerExe);
 	ASSERT_FALSE(bytes.empty());
@@ -1528,12 +1436,12 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoGraphCode) {
 	SceneSystem::UnloadScene(scene);
 	SceneSystem::EndFrame();
 	AssetDatabase::ScanProjectDirectory();
-	WriteProfile("Windows", "Windows", {"Assets/Scenes/Graph.scene"});
+	WriteProfile("Windows", SLT_TEST_HOST_TARGET, {"Assets/Scenes/Graph.scene"});
 
 	int exitCode = 0;
 	str buildLog = RunCommand("\"" + EditorExecutable() + "\" --project \"" + Root() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
-	std::filesystem::path playerExe = _root / "Builds" / "Windows" / "GraphStrip.exe";
+	std::filesystem::path playerExe = _root / "Builds" / "Windows" / "GraphStrip" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 
 	{
@@ -1599,7 +1507,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoOpusEncoder) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(BuildProfileOps::GetProfilePath(project.generic_string(), "Windows"), profile));
@@ -1614,7 +1522,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerHasNoOpusEncoder) {
 	int exitCode = 0;
 	str buildLog = RunCommand("\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << buildLog;
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "OpusProbe.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "OpusProbe" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
 
 	str bytes = ReadAllBytes(playerExe);
@@ -1648,7 +1556,7 @@ TEST_F(PlayerBuildIntegrationTest, BuildRefusesSDKFromDifferentEngineBuild) {
 	SceneSystem::EndFrame();
 	AssetDatabase::ScanProjectDirectory();
 
-	WriteProfile("Windows", "Windows", {"Assets/Scenes/Stale.scene"});
+	WriteProfile("Windows", SLT_TEST_HOST_TARGET, {"Assets/Scenes/Stale.scene"});
 
 	BuildResult result = Build({"Windows"});
 	ASSERT_EQ(result.profiles.size(), 1u);
@@ -1661,7 +1569,7 @@ TEST_F(PlayerBuildIntegrationTest, BuildRefusesSDKFromDifferentEngineBuild) {
 	}
 	EXPECT_TRUE(refusedAtConfigure) << DescribeFailure(result);
 
-	EXPECT_FALSE(std::filesystem::exists(_root / "Builds" / "Windows" / "StaleSDKPlayer.exe"));
+	EXPECT_FALSE(std::filesystem::exists(_root / "Builds" / "Windows" / "StaleSDKPlayer" SLT_TEST_PLAYER_SUFFIX));
 }
 
 TEST_F(PlayerBuildIntegrationTest, PlayerCarriesLoadableCoreTypes) {
@@ -1677,7 +1585,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerCarriesLoadableCoreTypes) {
 	{
 		BuildProfile profile;
 		profile.name = "Windows";
-		profile.target = "Windows";
+		profile.target = SLT_TEST_HOST_TARGET;
 		profile.SetList("scenes", Vector<str>{});
 		profile.SetString("configuration", _config);
 		ASSERT_TRUE(BuildProfileOps::SaveProfile(
@@ -1689,7 +1597,7 @@ TEST_F(PlayerBuildIntegrationTest, PlayerCarriesLoadableCoreTypes) {
 		"\"" + EditorExecutable() + "\" --project \"" + project.generic_string() + "\" --build Windows", exitCode);
 	ASSERT_EQ(exitCode, 0) << build;
 
-	std::filesystem::path playerExe = project / "Builds" / "Windows" / "AnchorProbe.exe";
+	std::filesystem::path playerExe = project / "Builds" / "Windows" / "AnchorProbe" SLT_TEST_PLAYER_SUFFIX;
 	ASSERT_TRUE(std::filesystem::exists(playerExe)) << build;
 	str bytes = ReadAllBytes(playerExe);
 	ASSERT_FALSE(bytes.empty());

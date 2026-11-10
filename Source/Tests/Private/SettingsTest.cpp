@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "Checkout.h"
 
 #include "Shalltear/Core/Config.h"
@@ -16,8 +17,6 @@
 #include <filesystem>
 #include <fstream>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -79,14 +78,7 @@ namespace {
 	};
 
 	void* ThisImageBase() {
-		HMODULE image = nullptr;
-		if (!::GetModuleHandleExW(
-				GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-				reinterpret_cast<LPCWSTR>(&ThisImageBase),
-				&image)) {
-			return nullptr;
-		}
-		return image;
+		return TestPlatform::ImageOf(reinterpret_cast<const void*>(&ThisImageBase));
 	}
 
 	struct UnencodableSettings {
@@ -536,7 +528,7 @@ TEST_F(SettingsFixture, ASweepOfAnotherImageTakesNothing) {
 	Settings::Initialize(_paths);
 	ASSERT_NE(Settings::DeclareCategory<SampleSettings>("Sample", SettingScope::Project), nullptr);
 
-	void* other = ::GetModuleHandleW(L"kernel32.dll");
+	void* other = TestPlatform::GetSystemImage();
 	ASSERT_NE(other, nullptr);
 	EXPECT_EQ(Settings::UnregisterOwnedBy(other), 0u);
 

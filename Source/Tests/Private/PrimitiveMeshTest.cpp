@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
@@ -9,8 +11,6 @@
 #include <cmath>
 #include <filesystem>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -31,13 +31,6 @@ namespace {
 			dir = dir.parent_path();
 		}
 		return {};
-	}
-
-	const void* ImageOf(const void* address) {
-		HMODULE image = nullptr;
-		::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-							 static_cast<const char*>(address), &image);
-		return image;
 	}
 
 	class PrimitiveAssetFixture : public ::testing::Test {
@@ -328,7 +321,7 @@ TEST_F(PrimitiveAssetFixture, PackageImportedAssetSharesCoresVTable) {
 	const void* coreAnchor = reinterpret_cast<const void*>(&ObjectRegistry::Register);
 	const void* assetVTable = *reinterpret_cast<void* const*>(imported);
 
-	EXPECT_EQ(ImageOf(assetVTable), ImageOf(coreAnchor));
+	EXPECT_EQ(TestPlatform::ImageOf(assetVTable), TestPlatform::ImageOf(coreAnchor));
 
 	AssetDatabase::UnloadAsset(imported);
 }

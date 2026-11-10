@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "UITestUtil.h"
 
 #include "EditorConfig.h"
@@ -22,8 +23,6 @@
 #include <chrono>
 #include <filesystem>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -40,14 +39,7 @@ namespace {
 	};
 
 	void* ThisImageBase() {
-		HMODULE image = nullptr;
-		if (!::GetModuleHandleExW(
-				GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-				reinterpret_cast<LPCWSTR>(&ThisImageBase),
-				&image)) {
-			return nullptr;
-		}
-		return image;
+		return TestPlatform::ImageOf(reinterpret_cast<const void*>(&ThisImageBase));
 	}
 
 } // namespace

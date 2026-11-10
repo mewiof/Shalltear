@@ -1,5 +1,6 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
 #include "UITestUtil.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
@@ -564,8 +565,10 @@ TEST_F(FontInkFixture, FallbackGlyphShearedWithRun) {
 }
 
 TEST_F(FontInkFixture, InstalledVariableFontFollowsWeight) {
-	const std::filesystem::path bahnschrift = "C:/Windows/Fonts/bahnschrift.ttf";
-	ASSERT_TRUE(std::filesystem::exists(bahnschrift));
+	const std::filesystem::path bahnschrift = TestPlatform::FindSystemFont("bahnschrift.ttf");
+	if (bahnschrift.empty()) {
+		GTEST_SKIP() << "bahnschrift.ttf isn't installed";
+	}
 	std::filesystem::copy_file(bahnschrift, _root / "Assets" / "Bahnschrift.ttf");
 	ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(FontPath("Bahnschrift")).IsValid());
 	FontAsset* font = Load("Bahnschrift");

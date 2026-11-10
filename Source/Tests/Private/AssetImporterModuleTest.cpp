@@ -1,20 +1,18 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/AssetImporter.h"
 #include "Shalltear/Core/Module.h"
 #include "Shalltear/Core/Reflection.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
 using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 
 	constexpr const char* PROBE_TYPE = "HotReloadProbeAsset";
 	constexpr const char* PROBE_EXT = ".hotreloadprobe";
@@ -22,13 +20,6 @@ namespace {
 
 	constexpr const char* DECLARED_TYPE = "HotReloadDeclaredAsset";
 	constexpr const char* DECLARED_EXT = ".hrdeclared";
-
-	HMODULE ImageOf(const void* address) {
-		HMODULE image = nullptr;
-		::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-							 static_cast<LPCSTR>(address), &image);
-		return image;
-	}
 
 	class AssetImporterModuleFixture : public ::testing::Test {
 	protected:
@@ -111,7 +102,7 @@ TEST_F(AssetImporterModuleFixture, DeclaredDataAssetNeedsNoCode) {
 	EXPECT_TRUE(importer->CanCreateAsset());
 	EXPECT_EQ(importer->GetCreateMenuLabel(), "Hot Reload Declared");
 	EXPECT_EQ(importer->GetCreateDefaultFileName(), "New Hot Reload Declared.hrdeclared");
-	EXPECT_EQ(ImageOf(importer), static_cast<HMODULE>(const_cast<void*>(ModuleBase())));
+	EXPECT_EQ(TestPlatform::ImageOf(importer), ModuleBase());
 }
 
 TEST_F(AssetImporterModuleFixture, UnloadingModuleTakesDeclaredImporterWithIt) {
@@ -132,6 +123,6 @@ TEST_F(AssetImporterModuleFixture, ReloadRegistersDeclaredImporterOfNewImage) {
 
 	IAssetImporter* reloaded = AssetImporterRegistry::Find(StringHash(DECLARED_TYPE));
 	ASSERT_NE(reloaded, nullptr);
-	EXPECT_EQ(ImageOf(reloaded), static_cast<HMODULE>(const_cast<void*>(ModuleBase())));
+	EXPECT_EQ(TestPlatform::ImageOf(reloaded), ModuleBase());
 	EXPECT_EQ(AssetImporterRegistry::FindByExtension(DECLARED_EXT), reloaded);
 }

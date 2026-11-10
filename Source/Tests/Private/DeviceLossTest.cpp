@@ -652,8 +652,7 @@ TEST(DeviceLossSwapChainTest, WindowPresentsAfterRebuild) {
 }
 
 TEST_F(DeviceLossFixture, FaultedAddressLosesDevice) {
-	char opted[8];
-	if (::GetEnvironmentVariableA("SHALLTEAR_TEST_GPU_FAULT", opted, sizeof(opted)) == 0) {
+	if (TestPlatform::GetEnvironment("SHALLTEAR_TEST_GPU_FAULT").empty()) {
 		GTEST_SKIP() << "faults the GPU. Set SHALLTEAR_TEST_GPU_FAULT=1 to run";
 	}
 	ShaderAsset kernel;

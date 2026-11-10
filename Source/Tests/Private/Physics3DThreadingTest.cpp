@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Frame/FrameStages.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Log.h"
@@ -22,11 +24,6 @@
 #include "PhysicsWorld.h"
 #endif
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <tlhelp32.h>
-
 using namespace Shalltear;
 
 #ifndef SHALLTEAR_SHARED
@@ -37,37 +34,16 @@ namespace {
 
 	constexpr const char* PACKAGE_TARGET = "Physics3D";
 
-	u32 CountProcessThreads() {
-		const unsigned long self = ::GetCurrentProcessId();
-		void* snapshot = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-		if (snapshot == INVALID_HANDLE_VALUE) {
-			return 0;
-		}
-
-		THREADENTRY32 entry{};
-		entry.dwSize = sizeof(entry);
-		u32 count = 0;
-		if (::Thread32First(snapshot, &entry)) {
-			do {
-				if (entry.th32OwnerProcessID == self) {
-					++count;
-				}
-			} while (::Thread32Next(snapshot, &entry));
-		}
-		::CloseHandle(snapshot);
-		return count;
-	}
-
 	u32 SettledThreadCount() {
 		for (int attempt = 0; attempt < 60; ++attempt) {
-			const u32 first = CountProcessThreads();
+			const u32 first = TestPlatform::CountProcessThreads();
 			std::this_thread::sleep_for(std::chrono::milliseconds(4));
-			const u32 second = CountProcessThreads();
+			const u32 second = TestPlatform::CountProcessThreads();
 			if (first == second) {
 				return second;
 			}
 		}
-		return CountProcessThreads();
+		return TestPlatform::CountProcessThreads();
 	}
 
 } // namespace
@@ -309,7 +285,7 @@ namespace {
 		}
 
 		ShalltearModuleAPI* LoadAndGetAPI() {
-			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + ".dll"));
+			_module = ModuleSystem::Load(Path(str(PACKAGE_TARGET) + SLT_TEST_DLL_SUFFIX));
 			if (!ModuleSystem::IsLoaded(_module)) {
 				return nullptr;
 			}
@@ -318,7 +294,7 @@ namespace {
 				return nullptr;
 			}
 			auto getAPI = reinterpret_cast<ShalltearModuleGetAPIFn>(
-				::GetProcAddress(static_cast<HMODULE>(native), SLT_MODULE_GET_API_SYMBOL));
+				ModuleSystem::FindSymbol(native, SLT_MODULE_GET_API_SYMBOL));
 			if (!getAPI) {
 				return nullptr;
 			}

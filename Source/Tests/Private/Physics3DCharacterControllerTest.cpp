@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Frame/FrameStages.h"
 #include "Shalltear/Core/Module.h"
 #include "Shalltear/Core/Module/ModuleAPI.h"
@@ -46,7 +48,7 @@ namespace {
 	constexpr f32 SKIN = 0.08f;
 	constexpr f32 REST_Y = 1.0f + SKIN - MOVER_SLOP;
 
-	constexpr const char* LISTENER_MODULE_DLL = "ShalltearPhysicsListenerModule.dll";
+	constexpr const char* LISTENER_MODULE_DLL = "ShalltearPhysicsListenerModule" SLT_TEST_DLL_SUFFIX;
 
 	class ControllerProbe : public Behavior, public PhysicsListener {
 	public:
@@ -761,6 +763,11 @@ TEST_F(CharacterControllerFixture, DisabledControllerLeavesWorld) {
 
 TEST_F(CharacterControllerFixture, ModuleListenerHearsHit) {
 	SLT_SKIP_WITHOUT_GEOMETRY();
+#ifndef SHALLTEAR_SHARED
+	if (!TestPlatform::StaticModulesShareTypeInfo()) {
+		GTEST_SKIP() << "listener module has its copy of the interface's type info in a static tree";
+	}
+#endif
 	ModuleHandle module = ModuleSystem::Load(Path(LISTENER_MODULE_DLL));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(module));
 	const TypeInfo* probeType = TypeRegistry::FindType(StringHash("ContactProbe"));

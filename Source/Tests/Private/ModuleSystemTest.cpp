@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Graphics/RenderPass.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
@@ -15,8 +17,6 @@
 #include <thread>
 #include <vector>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #undef CreateDirectory
 #undef GetFileSize
 
@@ -24,7 +24,7 @@ using namespace Shalltear;
 
 namespace {
 
-	constexpr const char* SAMPLE_MODULE_DLL = "ShalltearSampleModule.dll";
+	constexpr const char* SAMPLE_MODULE_DLL = "ShalltearSampleModule" SLT_TEST_DLL_SUFFIX;
 
 	using GetTypeCountFn = u32 (*)();
 	using BoxPayloadFn = void (*)(Variant*, i32);
@@ -44,9 +44,9 @@ namespace {
 
 		template <typename Fn>
 		Fn Resolve(ModuleHandle handle, const char* name) {
-			HMODULE image = static_cast<HMODULE>(ModuleSystem::GetNativeHandle(handle));
+			void* image = ModuleSystem::GetNativeHandle(handle);
 			EXPECT_NE(image, nullptr);
-			Fn fn = image ? reinterpret_cast<Fn>(GetProcAddress(image, name)) : nullptr;
+			Fn fn = image ? reinterpret_cast<Fn>(ModuleSystem::FindSymbol(image, name)) : nullptr;
 			EXPECT_NE(fn, nullptr) << "missing export: " << name;
 			return fn;
 		}
@@ -65,8 +65,8 @@ namespace {
 		void OnImageUnloading(const ImageUnloadingEvent& event) {
 			Seen entry;
 			entry.image = event.image;
-			HMODULE image = static_cast<HMODULE>(const_cast<void*>(event.image));
-			auto shutdownRan = image ? reinterpret_cast<bool (*)()>(GetProcAddress(image, "SampleModuleShutdownRan")) : nullptr;
+			const void* image = event.image;
+			auto shutdownRan = image ? reinterpret_cast<bool (*)()>(ModuleSystem::FindSymbol(image, "SampleModuleShutdownRan")) : nullptr;
 			entry.mapped = shutdownRan != nullptr;
 			entry.shutdownRan = shutdownRan ? shutdownRan() : true;
 			entry.typeRegistered = TypeRegistry::FindType(StringHash("SampleReflected")) != nullptr;
@@ -183,7 +183,7 @@ TEST_F(ModuleSystemTest, ImageAnnouncedBeforeTeardown) {
 
 TEST_F(ModuleSystemTest, ARefusedLoadIsAnnouncedToo) {
 	ScopedAnnouncementProbe listener;
-	const ModuleHandle handle = ModuleSystem::Load(Path("ShalltearHotReloadModuleBad.dll"));
+	const ModuleHandle handle = ModuleSystem::Load(Path("ShalltearHotReloadModuleBad" SLT_TEST_DLL_SUFFIX));
 	EXPECT_FALSE(ModuleSystem::IsLoaded(handle));
 	ASSERT_EQ(listener.probe->seen.size(), 1u);
 	EXPECT_NE(listener.probe->seen[0].image, nullptr);
@@ -201,17 +201,17 @@ TEST_F(ModuleSystemTest, RejectsGarbageAndMissingBinaries) {
 	TypeRegistry::RegisterPendingTypes();
 	u32 typesBefore = TypeRegistry::GetTypeCount();
 
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("DoesNotExist.dll"))));
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("DoesNotExist" SLT_TEST_DLL_SUFFIX))));
 
 	{
-		std::ofstream garbage("NotAModule.dll", std::ios::binary | std::ios::trunc);
+		std::ofstream garbage("NotAModule" SLT_TEST_DLL_SUFFIX, std::ios::binary | std::ios::trunc);
 		garbage << "this is not a dll";
 	}
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("NotAModule.dll"))));
-	std::filesystem::remove("NotAModule.dll");
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("NotAModule" SLT_TEST_DLL_SUFFIX))));
+	std::filesystem::remove("NotAModule" SLT_TEST_DLL_SUFFIX);
 
 #ifdef SHALLTEAR_SHARED
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("ShalltearCore.dll"))));
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("ShalltearCore" SLT_TEST_DLL_SUFFIX))));
 #endif
 
 	EXPECT_EQ(TypeRegistry::GetTypeCount(), typesBefore);
@@ -280,15 +280,15 @@ TEST_F(ModuleSystemTest, AbsentQuietBrokenReported) {
 	LogManager::AddSink(sink);
 	ASSERT_TRUE(ArmLoaderSink(sink));
 
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("NothingHasCompiledThisYet.dll"))));
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("NothingHasCompiledThisYet" SLT_TEST_DLL_SUFFIX))));
 	EXPECT_FALSE(ModuleSystem::IsLoaded(
-		ModuleSystem::Load(Path("NothingHasCompiledThisYet.dll"), ModuleLoadPolicy::InPlace)));
+		ModuleSystem::Load(Path("NothingHasCompiledThisYet" SLT_TEST_DLL_SUFFIX), ModuleLoadPolicy::InPlace)));
 
 	{
-		std::ofstream garbage("PresentButBroken.dll", std::ios::binary | std::ios::trunc);
+		std::ofstream garbage("PresentButBroken" SLT_TEST_DLL_SUFFIX, std::ios::binary | std::ios::trunc);
 		garbage << "this is not a dll";
 	}
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("PresentButBroken.dll"))));
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("PresentButBroken" SLT_TEST_DLL_SUFFIX))));
 
 	LogManager::Terminate();
 	EXPECT_EQ(sink->ErrorsMatching("NothingHasCompiledThisYet"), 0u);
@@ -296,14 +296,14 @@ TEST_F(ModuleSystemTest, AbsentQuietBrokenReported) {
 	sink.reset();
 	JobSystem::Terminate();
 
-	std::filesystem::remove("PresentButBroken.dll");
+	std::filesystem::remove("PresentButBroken" SLT_TEST_DLL_SUFFIX);
 }
 
 TEST_F(ModuleSystemTest, RejectsModuleWithMismatchedAbiHash) {
 	TypeRegistry::RegisterPendingTypes();
 	u32 typesBefore = TypeRegistry::GetTypeCount();
 
-	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("ShalltearHotReloadModuleAbi.dll"))));
+	EXPECT_FALSE(ModuleSystem::IsLoaded(ModuleSystem::Load(Path("ShalltearHotReloadModuleAbi" SLT_TEST_DLL_SUFFIX))));
 
 	EXPECT_EQ(ModuleSystem::GetLoadedCount(), 0u);
 	EXPECT_EQ(TypeRegistry::GetTypeCount(), typesBefore);
@@ -311,7 +311,7 @@ TEST_F(ModuleSystemTest, RejectsModuleWithMismatchedAbiHash) {
 }
 
 TEST_F(ModuleSystemTest, AcceptsSameModuleWithHostAbiHash) {
-	ModuleHandle handle = ModuleSystem::Load(Path("ShalltearHotReloadModuleV1.dll"));
+	ModuleHandle handle = ModuleSystem::Load(Path("ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX));
 	ASSERT_TRUE(ModuleSystem::IsLoaded(handle));
 	EXPECT_NE(TypeRegistry::FindType(StringHash("HotReloadBehavior")), nullptr);
 	ModuleSystem::Unload(handle);
@@ -340,7 +340,7 @@ namespace {
 		const std::string prefix = std::string(stem) + "-";
 		for (const auto& entry : it) {
 			const std::string name = entry.path().filename().string();
-			if (entry.path().extension() == ".dll" && name.rfind(prefix, 0) == 0) {
+			if (entry.path().extension() == SLT_TEST_DLL_SUFFIX && name.rfind(prefix, 0) == 0) {
 				++count;
 			}
 		}
@@ -357,7 +357,7 @@ namespace {
 		const std::string prefix = std::string(stem) + "-";
 		for (const auto& entry : it) {
 			const std::string name = entry.path().filename().string();
-			if (entry.path().extension() == ".dll" && name.rfind(prefix, 0) == 0) {
+			if (entry.path().extension() == SLT_TEST_DLL_SUFFIX && name.rfind(prefix, 0) == 0) {
 				names.push_back(str(name));
 			}
 		}
@@ -373,14 +373,11 @@ namespace {
 				std::ofstream seed(at, std::ios::binary);
 				seed << "held";
 			}
-			_handle = ::CreateFileA(at.string().c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-									FILE_ATTRIBUTE_NORMAL, nullptr);
+			_held = TestPlatform::HoldFile(at.string().c_str());
 		}
 
 		~ScopedHeldSlot() {
-			if (_handle != INVALID_HANDLE_VALUE) {
-				::CloseHandle(_handle);
-			}
+			TestPlatform::ReleaseFile(_held);
 			std::error_code ec;
 			std::filesystem::remove(_path, ec);
 		}
@@ -388,10 +385,10 @@ namespace {
 		ScopedHeldSlot(const ScopedHeldSlot&) = delete;
 		ScopedHeldSlot& operator=(const ScopedHeldSlot&) = delete;
 
-		bool Held() const { return _handle != INVALID_HANDLE_VALUE; }
+		bool Held() const { return _held != nullptr; }
 	private:
 		std::filesystem::path _path;
-		HANDLE _handle = INVALID_HANDLE_VALUE;
+		TestPlatform::HeldFile* _held = nullptr;
 	};
 
 } // anonymous namespace
@@ -424,15 +421,18 @@ TEST_F(ModuleSystemTest, HeldSlotSkipped) {
 
 	size_t dash = taken.rfind('-');
 	ASSERT_NE(dash, str::npos);
-	u32 nextIndex = static_cast<u32>(std::stoul(taken.substr(dash + 1, taken.size() - dash - 5))) + 1;
+	u32 nextIndex = static_cast<u32>(std::stoul(taken.substr(dash + 1, taken.size() - dash - sizeof(SLT_TEST_DLL_SUFFIX)))) + 1;
 	std::filesystem::path contested =
-		std::filesystem::path("Library/ModuleCache") / std::format("ShalltearSampleModule-{}.dll", nextIndex);
+		std::filesystem::path("Library/ModuleCache") / std::format("ShalltearSampleModule-{}" SLT_TEST_DLL_SUFFIX, nextIndex);
 
 	ScopedHeldSlot held(contested);
 	ASSERT_TRUE(held.Held());
 
 	ModuleHandle second = ModuleSystem::Load(Path(SAMPLE_MODULE_DLL));
 	EXPECT_TRUE(ModuleSystem::IsLoaded(second));
+	std::ifstream kept(contested, std::ios::binary);
+	EXPECT_EQ(str((std::istreambuf_iterator<char>(kept)), std::istreambuf_iterator<char>()), "held");
+	kept.close();
 	ModuleSystem::Unload(second);
 }
 

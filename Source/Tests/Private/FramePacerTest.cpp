@@ -12,13 +12,7 @@
 #include "ScreenSettings.h"
 #include "Window/FramePacing.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 #include <atomic>
 #include <chrono>
@@ -79,8 +73,6 @@ TEST(FramePacingTest, UnfocusedPausesUnlessRunInBackground) {
 	inputs.runInBackground = false;
 	EXPECT_FALSE(ResolvePacing(inputs).paused);
 }
-
-#ifdef _WIN32
 
 namespace {
 
@@ -163,8 +155,6 @@ namespace {
 			return *project;
 		}
 
-		static HWND Hwnd(Handle<Window> window) { return static_cast<HWND>(window->GetNativeHandle().window); }
-
 		static void RenderFrame() {
 			SceneSystem::UpdateAll();
 			SceneSystem::EndFrame();
@@ -189,19 +179,19 @@ TEST_F(FramePacerFixture, UnfocusedGamePausesUntilFocused) {
 	EXPECT_FALSE(pacer.BeginFrame());
 	std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-	::PostMessageW(Hwnd(_window), WM_SETFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, true);
 	EXPECT_FALSE(pacer.BeginFrame());
 	ASSERT_EQ(WindowSystem::GetFocusedWindow(), _window);
 	EXPECT_TRUE(pacer.BeginFrame());
 	EXPECT_LT(pacer.GetUnscaledDeltaTime(), 0.1f);
 
-	::PostMessageW(Hwnd(_window), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	EXPECT_TRUE(pacer.BeginFrame());
 	EXPECT_FALSE(pacer.BeginFrame());
 
 	Handle<Window> second = WindowSystem::Create(HiddenDesc());
 	ASSERT_TRUE(second.IsValid());
-	::PostMessageW(Hwnd(second), WM_SETFOCUS, 0, 0);
+	TestPlatform::PostFocus(second, true);
 	EXPECT_FALSE(pacer.BeginFrame());
 	EXPECT_TRUE(pacer.BeginFrame());
 }
@@ -308,5 +298,3 @@ TEST_F(FramePacerFixture, VSyncOffKeepsCap) {
 	ASSERT_TRUE(pacer.BeginFrame());
 	EXPECT_GE(Seconds(Time::GetTicks() - start), 0.25 - 0.002);
 }
-
-#endif

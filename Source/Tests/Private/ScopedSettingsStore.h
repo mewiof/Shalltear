@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Settings.h"
 
@@ -13,17 +15,11 @@ namespace Shalltear {
 		explicit ScopedUserDataDirectory(const std::filesystem::path& directory) {
 			std::error_code ec;
 			std::filesystem::create_directories(directory, ec);
-			char* previous = nullptr;
-			size_t length = 0;
-			if (::_dupenv_s(&previous, &length, "LOCALAPPDATA") == 0 && previous) {
-				_previous = previous;
-				_had = true;
-			}
-			std::free(previous);
-			::_putenv_s("LOCALAPPDATA", directory.string().c_str());
+			_previous = TestPlatform::GetEnvironment(TestPlatform::GetUserDataVariable());
+			TestPlatform::SetEnvironment(TestPlatform::GetUserDataVariable(), directory.string().c_str());
 		}
 
-		~ScopedUserDataDirectory() { ::_putenv_s("LOCALAPPDATA", _had ? _previous.c_str() : ""); }
+		~ScopedUserDataDirectory() { TestPlatform::SetEnvironment(TestPlatform::GetUserDataVariable(), _previous); }
 
 		ScopedUserDataDirectory(const ScopedUserDataDirectory&) = delete;
 		ScopedUserDataDirectory& operator=(const ScopedUserDataDirectory&) = delete;

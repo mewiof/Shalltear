@@ -3231,7 +3231,7 @@ namespace {
 			ASSERT_NE(context, nullptr);
 			EditorTheme::ApplyToContext(*context);
 
-			_module = ModuleSystem::Load(Path("ShalltearHotReloadModuleV1.dll"));
+			_module = ModuleSystem::Load(Path("ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX));
 			ASSERT_TRUE(ModuleSystem::IsLoaded(_module));
 			_haveModulePanel = TypeRegistry::FindType(StringHash("HotReloadEditorPanel")) != nullptr;
 		}
@@ -3313,7 +3313,7 @@ namespace {
 		}
 		ASSERT_TRUE(FindByText(context, debuggerHost, "World Bound").IsValid());
 
-		ASSERT_TRUE(ReloadThrough("ShalltearHotReloadModuleV2.dll"));
+		ASSERT_TRUE(ReloadThrough("ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX));
 		context.ClearChildren(leaf);
 		EditorPanel* rebuilt = FindPanelOfType(StringHash("HotReloadEditorPanel"));
 		ASSERT_NE(rebuilt, nullptr);

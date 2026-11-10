@@ -10,6 +10,7 @@
 #include "AudioStream.h"
 #include "AudioStreamer.h"
 #include "AudioWaveform.h"
+#include "TestPlatform.h"
 
 #include "Shalltear/Audio/Audio.h"
 
@@ -1037,7 +1038,9 @@ TEST_F(LocatedClipFixture, ArtifactClipStreamsFromArtifact) {
 	EXPECT_EQ(view.header.sourceMtime, moved);
 	Buffer over(16, MemTag::Asset);
 	EXPECT_FALSE(FileSystem::WriteFile(artifact, over));
-	EXPECT_FALSE(std::filesystem::remove(std::filesystem::path(artifact.ToString()), ec));
+	if (TestPlatform::OpenFileRefusesDelete()) {
+		EXPECT_FALSE(std::filesystem::remove(std::filesystem::path(artifact.ToString()), ec));
+	}
 
 	StreamingMixer heard;
 	StreamingMixer held;

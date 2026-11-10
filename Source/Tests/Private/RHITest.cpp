@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include "Shalltear/Core/Graphics/RHICommandList.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
 #include "Shalltear/Core/Graphics/RHISwapChain.h"
@@ -13,9 +15,6 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 
 using namespace Shalltear;
 
@@ -1620,7 +1619,7 @@ TEST(RHIValidationTest, LoadedLayerIsLogged) {
 	desc.headless = true;
 	desc.enableValidation = true;
 	RHI::Device* validated = RHI::Device::Create(desc);
-	const bool layerLoaded = ::GetModuleHandleA("VkLayer_khronos_validation.dll") != nullptr;
+	const bool layerLoaded = TestPlatform::FindLoadedLibrary("VkLayer_khronos_validation" SLT_TEST_DLL_SUFFIX) != nullptr;
 	if (validated) {
 		RHI::Device::Destroy(validated);
 	}

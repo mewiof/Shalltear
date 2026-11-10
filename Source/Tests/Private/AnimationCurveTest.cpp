@@ -3,6 +3,7 @@
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Math/AnimationCurve.h"
 #include "Shalltear/Core/Memory.h"
+#include "Shalltear/Core/Module/ModuleSystem.h"
 #include "Shalltear/Core/Object.h"
 #include "Shalltear/Core/Reflection/TypeInfo.h"
 #include "Shalltear/Core/Reflection/TypeRegistry.h"
@@ -10,11 +11,6 @@
 #include "Shalltear/Core/Serialization/TextSerializer.h"
 
 #include <limits>
-
-#ifdef SHALLTEAR_SHARED
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 
 using namespace Shalltear;
 
@@ -170,6 +166,6 @@ TEST(AnimationCurveTest, CoreRegistersAndOwnsTheCurvesTypes) {
 	}
 #ifdef SHALLTEAR_SHARED
 	const TypeInfo* curve = TypeRegistry::FindType(StringHash("AnimationCurve"));
-	EXPECT_NE(curve->ownerModule, static_cast<const void*>(::GetModuleHandleW(nullptr)));
+	EXPECT_NE(curve->ownerModule, static_cast<const void*>(ModuleSystem::GetExecutableImage()));
 #endif
 }

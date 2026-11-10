@@ -35,8 +35,8 @@ namespace {
 
 	namespace fs = std::filesystem;
 
-	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1.dll";
-	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2.dll";
+	constexpr const char* V1_DLL = "ShalltearHotReloadModuleV1" SLT_TEST_DLL_SUFFIX;
+	constexpr const char* V2_DLL = "ShalltearHotReloadModuleV2" SLT_TEST_DLL_SUFFIX;
 
 	constexpr const char* PROBE_TARGET = "HotReloadProbe";
 	constexpr const char* PROBE_TARGET_NAME = "Hot Reload Probe Console";

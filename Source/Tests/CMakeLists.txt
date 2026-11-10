@@ -18,6 +18,7 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ${sltWarningsAsErrors})
 include(GoogleTest)
 
 file(GLOB_RECURSE TEST_SOURCES "Private/*.cpp" "Private/*.h")
+shalltear_select_platform_sources(TEST_SOURCES)
 
 add_executable(ShalltearTests ${TEST_SOURCES})
 
@@ -43,7 +44,23 @@ target_include_directories(ShalltearTests PRIVATE
     ${CMAKE_SOURCE_DIR}/Source/Graphs/Private
     ${CMAKE_SOURCE_DIR}/Source/NodeShader/Private)
 
-target_compile_definitions(ShalltearTests PRIVATE SHALLTEAR_LOG_STRIP_LEVEL=0)
+if(WIN32)
+    set(sltTestHostTarget "Windows")
+    set(sltTestPlayerSuffix ".exe")
+else()
+    set(sltTestHostTarget "${CMAKE_SYSTEM_NAME}")
+    set(sltTestPlayerSuffix ".${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+target_compile_definitions(ShalltearTests PRIVATE
+    SHALLTEAR_LOG_STRIP_LEVEL=0
+    SLT_TEST_DLL_SUFFIX="${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    SLT_TEST_EXE_SUFFIX="${CMAKE_EXECUTABLE_SUFFIX}"
+    SLT_TEST_HOST_TARGET="${sltTestHostTarget}"
+    SLT_TEST_PLAYER_SUFFIX="${sltTestPlayerSuffix}")
+if(NOT WIN32)
+    # probes exported for test modules to find by name
+    set_target_properties(ShalltearTests PROPERTIES ENABLE_EXPORTS ON)
+endif()
 
 if(NOT SHALLTEAR_DISABLE_PCH)
     target_precompile_headers(ShalltearTests PRIVATE Private/TestsPCH.h)

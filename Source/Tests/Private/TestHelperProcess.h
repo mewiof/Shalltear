@@ -2,7 +2,6 @@
 
 namespace Shalltear::TestHelpers {
 
-#ifdef _WIN32
 	inline constexpr const char* WINDOW_HOST_FLAG = "--shalltear-window-host";
 	inline constexpr const char* WINDOW_HOST_TITLE = "ShalltearForeignWindowProbe";
 
@@ -58,7 +57,6 @@ namespace Shalltear::TestHelpers {
 	};
 
 	int RunReflectionStartupProbe();
-#endif
 
 	void RestoreNodeShader();
 

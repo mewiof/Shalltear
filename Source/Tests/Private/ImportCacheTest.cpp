@@ -1309,6 +1309,7 @@ TEST_F(ImportCacheInvalidationFixture, EditingAModelInvalidatesItsCachedProducts
 }
 
 TEST_F(ImportCacheInvalidationFixture, ExtractedMaterialKeepsOthersCached) {
+	ScopedImportCostThreshold everything(ScopedImportCostThreshold::CacheEverything);
 	ASSERT_TRUE(_mountedEngine);
 	ASSERT_TRUE(StageFixture("Fox.glb"));
 
@@ -2031,6 +2032,7 @@ namespace {
 	protected:
 		std::filesystem::path _root;
 		bool _mountedEngine = false;
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
 
 		void SetUp() override {
 			static std::atomic<u64> counter{0};

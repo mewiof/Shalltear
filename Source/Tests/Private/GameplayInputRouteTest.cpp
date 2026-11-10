@@ -7,13 +7,7 @@
 #include "Shalltear/Core/Scene/SceneSystem.h"
 #include "Shalltear/Core/Window.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "TestPlatform.h"
 
 using namespace Shalltear;
 
@@ -76,8 +70,6 @@ namespace {
 
 } // namespace
 
-#ifdef _WIN32
-
 class GameplayInputRouteFixture : public ::testing::Test {
 protected:
 	void SetUp() override {
@@ -125,33 +117,22 @@ protected:
 		return desc;
 	}
 
-	HWND Hwnd() const { return static_cast<HWND>(_window->GetNativeHandle().window); }
-
 	void Focus() {
-		::PostMessageW(Hwnd(), WM_SETFOCUS, 0, 0);
+		TestPlatform::PostFocus(_window, true);
 		WindowSystem::PumpEvents();
 		ASSERT_TRUE(WindowSystem::GetFocusedWindow().IsValid());
 	}
 
-	static LPARAM KeyLParam(u16 scancode, bool up = false) {
-		LPARAM lParam = 1;
-		lParam |= static_cast<LPARAM>(scancode & 0xFF) << 16;
-		if (up) {
-			lParam |= (static_cast<LPARAM>(1) << 30) | (static_cast<LPARAM>(1) << 31);
-		}
-		return lParam;
-	}
-
 	void PressGAndTick() {
-		::PostMessageW(Hwnd(), WM_KEYDOWN, 'G', KeyLParam(0x22));
+		TestPlatform::PostKey(_window, Key::G, true);
 		WindowSystem::PumpEvents();
 		SceneSystem::UpdateAll();
 	}
 
 	void PressGAndClickAndTick(i32 x = 40, i32 y = 30) {
-		::PostMessageW(Hwnd(), WM_KEYDOWN, 'G', KeyLParam(0x22));
-		::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
-		::PostMessageW(Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+		TestPlatform::PostKey(_window, Key::G, true);
+		TestPlatform::PostMouseMove(_window, {x, y});
+		TestPlatform::PostMouseButton(_window, MouseButton::Left, true, {x, y});
 		WindowSystem::PumpEvents();
 		SceneSystem::UpdateAll();
 	}
@@ -221,18 +202,18 @@ TEST_F(GameplayInputRouteFixture, ClosedRouteKeepsGamepadAndCursor) {
 TEST_F(GameplayInputRouteFixture, FocusLossClosesRoute) {
 	Input::SetGameplayInputRouted(true);
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(10, 10));
+	TestPlatform::PostMouseMove(_window, {10, 10});
 	WindowSystem::PumpEvents();
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(60, 40));
+	TestPlatform::PostMouseMove(_window, {60, 40});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 	ASSERT_NE(_probe->mouseDelta.x, 0.0f);
 
-	::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+	TestPlatform::PostFocus(_window, false);
 	WindowSystem::PumpEvents();
 	ASSERT_FALSE(WindowSystem::GetFocusedWindow().IsValid());
 
-	::PostMessageW(Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(160, 140));
+	TestPlatform::PostMouseMove(_window, {160, 140});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 
@@ -243,7 +224,7 @@ TEST_F(GameplayInputRouteFixture, FocusLossClosesRoute) {
 
 TEST_F(GameplayInputRouteFixture, WheelBindingFollowsRoute) {
 	Input::SetGameplayInputRouted(true);
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 
@@ -251,7 +232,7 @@ TEST_F(GameplayInputRouteFixture, WheelBindingFollowsRoute) {
 	EXPECT_FLOAT_EQ(_probe->hotbarAxis, 1.0f);
 
 	Input::SetGameplayInputRouted(false);
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 
@@ -331,7 +312,7 @@ protected:
 	u32 Saying(std::string_view needle) const { return _sink->CountMatching(needle); }
 
 	void Unfocus() {
-		::PostMessageW(Hwnd(), WM_KILLFOCUS, 0, 0);
+		TestPlatform::PostFocus(_window, false);
 		WindowSystem::PumpEvents();
 		ASSERT_FALSE(WindowSystem::GetFocusedWindow().IsValid());
 	}
@@ -411,8 +392,6 @@ TEST_F(GameplayRouteLogFixture, ReopeningTheRouteIsReportedToo) {
 	EXPECT_EQ(Opened(), 1u);
 }
 
-#endif
-
 TEST_F(GameplayInputRouteFixture, ClosedPointerRouteStopsMouseOnly) {
 	Input::SetGameplayInputRouted(true);
 	Input::SetGameplayPointerRouted(true);
@@ -487,15 +466,15 @@ TEST_F(GameplayInputRouteFixture, ClosedPointerKeepsCursorAndGamepad) {
 TEST_F(GameplayInputRouteFixture, ClosedPointerRouteStopsWheelAndBinding) {
 	Input::SetGameplayInputRouted(true);
 	Input::SetGameplayPointerRouted(true);
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 	ASSERT_FLOAT_EQ(_probe->wheel.y, 1.0f);
 	ASSERT_FLOAT_EQ(_probe->hotbarAxis, 1.0f);
 
 	Input::SetGameplayPointerRouted(false);
-	::PostMessageW(Hwnd(), WM_KEYDOWN, 'G', KeyLParam(0x22));
-	::PostMessageW(Hwnd(), WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), MAKELPARAM(10, 10));
+	TestPlatform::PostKey(_window, Key::G, true);
+	TestPlatform::PostMouseWheel(_window, {0.0f, 1.0f}, {10, 10});
 	WindowSystem::PumpEvents();
 	SceneSystem::UpdateAll();
 

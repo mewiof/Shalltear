@@ -747,7 +747,8 @@ TEST_F(UIBuilderListTest, RowGrabbedOutsideSelectionDragsOnlyItself) {
 
 	ClickRow("#a");
 	ClickRow("#b", KeyMod::Ctrl);
-	const std::span<const u32> carried = Carried(GrabRow("#c"));
+	const UI::DragPayload payload = GrabRow("#c");
+	const std::span<const u32> carried = Carried(payload);
 	ASSERT_EQ(carried.size(), 1u);
 	EXPECT_EQ(carried[0], 3u);
 }

@@ -6,6 +6,7 @@
 
 #include "Shalltear/Physics3D/CharacterController.h"
 #include "Shalltear/Physics3D/Colliders.h"
+#include "Shalltear/Physics3D/Physics3DAPI.h"
 #include "Shalltear/Physics3D/Rigidbody.h"
 
 namespace Shalltear {
@@ -39,9 +40,10 @@ namespace Shalltear {
 		PhysicsContactPoint contacts[MAX_CONTACTS];
 	};
 
-	class PhysicsListener {
+	class SHALLTEAR_PHYSICS3D_API PhysicsListener {
 	public:
-		virtual ~PhysicsListener() = default;
+		// key function (type info must live in 1 lib for dynamic_cast)
+		virtual ~PhysicsListener();
 
 		virtual void OnCollisionEnter(const Collision& collision) { (void)collision; }
 

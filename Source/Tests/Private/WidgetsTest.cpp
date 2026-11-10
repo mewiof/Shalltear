@@ -802,6 +802,59 @@ TEST(WidgetsTest, MovingTheCaretRestartsItsBlink) {
 	EXPECT_TRUE(waitForTheDark("after the click"));
 }
 
+TEST(WidgetsTest, FocusedEmptyFieldDrawsCaret) {
+	struct Shape {
+		std::string_view align;
+		f32 share;
+		bool multiline;
+	};
+	for (const Shape& shape : {Shape{"left", 0.0f, false}, Shape{"center", 0.5f, false}, Shape{"right", 1.0f, false}, Shape{"center", 0.5f, true}}) {
+		Rig rig;
+		rig.ctx.LoadStyleSheet(str(".slt-textfield { text-align: ") + str(shape.align) + "; }");
+		UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 40.0f));
+		UI::Widgets::TextFieldDesc desc;
+		desc.multiline = shape.multiline;
+		UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+		rig.ctx.Update();
+		const UI::Rect& content = rig.ctx.GetLayout(field).content;
+		EXPECT_EQ(CaretsPainted(rig.ctx, content), 0u) << shape.align << shape.multiline;
+
+		Click(rig.ctx, Center(rig.ctx, field));
+		ASSERT_EQ(rig.ctx.GetFocused(), field);
+		EXPECT_EQ(CaretsPainted(rig.ctx, content), 1u) << shape.align << shape.multiline;
+		EXPECT_FLOAT_EQ(PaintedCaretX(rig.ctx, content), UI::SnapToPixel(content.x + (content.w - 1.0f) * shape.share)) << shape.align << shape.multiline;
+	}
+}
+
+TEST(WidgetsTest, ErasedFieldDrawsCaret) {
+	Rig rig;
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	UI::Widgets::TextFieldDesc desc;
+	desc.text = "12";
+	UI::ElementHandle field = UI::Widgets::TextField(rig.ctx, container, desc);
+	rig.ctx.Update();
+	const UI::Rect& content = rig.ctx.GetLayout(field).content;
+
+	Click(rig.ctx, Center(rig.ctx, field));
+	ASSERT_EQ(rig.ctx.GetFocused(), field);
+	rig.ctx.InjectInput(KeyPress(Key::End));
+	rig.ctx.InjectInput(KeyPress(Key::Backspace));
+	rig.ctx.Update();
+	ASSERT_EQ(rig.ctx.GetTextString(field), "1");
+	EXPECT_FLOAT_EQ(PaintedCaretX(rig.ctx, content), UI::SnapToPixel(content.x + MockFontSystem::ADVANCE));
+
+	rig.ctx.InjectInput(KeyPress(Key::Backspace));
+	rig.ctx.Update();
+	ASSERT_EQ(rig.ctx.GetTextString(field), "");
+	EXPECT_EQ(CaretsPainted(rig.ctx, content), 1u);
+	EXPECT_FLOAT_EQ(PaintedCaretX(rig.ctx, content), UI::SnapToPixel(content.x));
+
+	rig.ctx.InjectInput(TextChar('3'));
+	rig.ctx.Update();
+	ASSERT_EQ(rig.ctx.GetTextString(field), "3");
+	EXPECT_FLOAT_EQ(PaintedCaretX(rig.ctx, content), UI::SnapToPixel(content.x + MockFontSystem::ADVANCE));
+}
+
 TEST(WidgetsTest, TextFieldCommitsOnEnterAndBlur) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));

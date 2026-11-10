@@ -488,25 +488,24 @@ namespace Shalltear::UI {
 					  const Rect& clipRect, const Radii& clipRadii) {
 			ContextImpl& ctx = *state.ctx;
 			TextComponent* text = ctx.GetText(index);
-			if (!text || text->utf8.empty() || !ctx.fontSystem) {
+			Element& element = ctx.E(index);
+			const bool focusedInput = index == ctx.focused && element.textInputIndex != INVALID_UI_INDEX;
+			if (!text || !ctx.fontSystem || (text->utf8.empty() && !focusedInput)) {
 				return;
 			}
 			ctx.EnsureShaped(index);
 			const ShapedRun& run = text->shaped;
-			if (run.glyphs.empty() && run.outlineGlyphs.empty() && run.decorations.empty() &&
-				(index != ctx.focused || ctx.E(index).textInputIndex == INVALID_UI_INDEX)) {
+			if (run.glyphs.empty() && run.outlineGlyphs.empty() && run.decorations.empty() && !focusedInput) {
 				return;
 			}
 
-			Element& element = ctx.E(index);
 			const Style& style = ctx.ComputedS(index);
-			bool isInput = element.textInputIndex != INVALID_UI_INDEX;
 
 			const Vec2 origin = ctx.TextOriginPx(index);
 			const f32 dx = origin.x;
 			const f32 dy = origin.y;
 
-			if (isInput && index == ctx.focused) {
+			if (focusedInput) {
 				TextInputState* input = ctx.GetTextInput(index);
 				if (input) {
 					const f32 lineHeight = run.lineHeight > 0.0f ? run.lineHeight : run.extent.y;
@@ -605,7 +604,7 @@ namespace Shalltear::UI {
 			emitGlyphs(run.glyphs, textColor, false);
 			emitDecorations(false);
 
-			if (isInput && index == ctx.focused) {
+			if (focusedInput) {
 				const TextInputState* input = ctx.GetTextInput(index);
 				const i32 end = static_cast<i32>(text->utf8.size());
 				if (input && !input->completion.empty() && input->cursor == end && input->anchor == end) {

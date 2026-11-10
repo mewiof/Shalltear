@@ -1996,6 +1996,83 @@ TEST_F(UIRenderFixture, CenteredInputInksAboutBoxCenter) {
 	EXPECT_GE(right, size.x - 3);
 }
 
+TEST_F(UIRenderFixture, FocusedEmptyInputInksCaret) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<FontAsset> font = UISystem::GetDefaultFont();
+	if (!font.IsValid()) {
+		GTEST_SKIP() << "engine font not mounted";
+	}
+
+	const Vec2I size{64, 32};
+	UI::ContextDesc desc;
+	desc.sizePx = size;
+	desc.contentScale = 1.0f;
+	UI::Context ctx(desc, UISystem::GetFontSystem());
+	UI::Style style = FixedBox(64.0f, 32.0f);
+	style.textAlignVertical = UI::Align::Center;
+	UI::ElementHandle input = MakeChild(ctx, ctx.GetRoot(), style);
+	ctx.SetText(input, font, 16.0f, Color::White(), "");
+	ctx.SetTextInput(input, true);
+	ctx.Update();
+	ctx.SetFocus(input);
+	ctx.Update();
+	ASSERT_EQ(ctx.GetFocused(), input);
+
+	struct Ink {
+		i32 left;
+		i32 right;
+		i32 top;
+		i32 bottom;
+	};
+	auto inkBounds = [&](Ink& ink) {
+		UI::RenderList list;
+		ctx.BuildRenderList(list);
+		ink = {size.x, -1, size.y, -1};
+		if (list.quads.empty()) {
+			return true;
+		}
+		Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
+		if (!RenderListOffscreen(*RenderSystem::GetDevice(), list, size, texels)) {
+			return false;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(texels.data());
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				if (HalfToFloat(halves[(static_cast<size_t>(y) * size.x + x) * 4 + 3]) > 0.25f) {
+					ink = {std::min(ink.left, x), std::max(ink.right, x), std::min(ink.top, y), std::max(ink.bottom, y)};
+				}
+			}
+		}
+		return true;
+	};
+
+	Ink empty{};
+	if (!inkBounds(empty)) {
+		GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";
+	}
+	const i32 fontLine = static_cast<i32>(UISystem::GetFontSystem()->GetLineHeight(font, 16.0f));
+	ASSERT_GT(fontLine, 0);
+	EXPECT_EQ(empty.left, 0);
+	EXPECT_EQ(empty.right, 0);
+	EXPECT_EQ(empty.bottom - empty.top + 1, fontLine);
+	EXPECT_NEAR(static_cast<f32>(empty.top + empty.bottom + 1) * 0.5f, static_cast<f32>(size.y) * 0.5f, 1.0f);
+
+	InputEvent space{};
+	space.type = InputEventType::Text;
+	space.codepoint = U' ';
+	ctx.InjectInput(space);
+	ctx.Update();
+	ASSERT_EQ(ctx.GetTextString(input), " ");
+	Ink spaced{};
+	ASSERT_TRUE(inkBounds(spaced));
+	EXPECT_GT(spaced.left, empty.left);
+	EXPECT_EQ(spaced.right, spaced.left);
+	EXPECT_EQ(spaced.top, empty.top);
+	EXPECT_EQ(spaced.bottom, empty.bottom);
+}
+
 namespace {
 
 	f32 TurnedRoundedBoxSDF(f32 px, f32 py, const UI::Rect& box, f32 radius, f32 rotation) {

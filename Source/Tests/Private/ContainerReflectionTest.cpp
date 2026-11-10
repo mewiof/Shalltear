@@ -310,15 +310,15 @@ TEST(ContainerReflectionTest, StringResolvesAsPrimitiveNotAsSequence) {
 
 namespace ElementKinds {
 
-	enum class Season : u32 { Spring = 0,
-							  Summer = 1 };
+	enum class HalfYear : u32 { Spring = 0,
+								Summer = 1 };
 
 	class ElementKindComponent : public Object {
 	public:
 		Vector<u8> bytes{GetMemoryResource(MemTag::Core)};
 		Vector<f32> floats{GetMemoryResource(MemTag::Core)};
 		Vector<Vec3> points{GetMemoryResource(MemTag::Core)};
-		Vector<Season> seasons{GetMemoryResource(MemTag::Core)};
+		Vector<HalfYear> seasons{GetMemoryResource(MemTag::Core)};
 
 		SLT_REFLECT_CLASS(ElementKindComponent)
 		SLT_REFLECT_PARENT(Object)
@@ -333,7 +333,7 @@ namespace ElementKinds {
 		out.bytes = {1, 2, 250};
 		out.floats = {1.5f, 2.5f};
 		out.points = {Vec3{1.0f, 2.0f, 3.0f}, Vec3{4.0f, 5.0f, 6.0f}};
-		out.seasons = {Season::Summer, Season::Spring};
+		out.seasons = {HalfYear::Summer, HalfYear::Spring};
 	}
 
 	void ExpectIntact(const ElementKindComponent& actual, const char* via) {
@@ -344,12 +344,12 @@ namespace ElementKinds {
 		ASSERT_EQ(actual.points.size(), 2u) << via;
 		EXPECT_FLOAT_EQ(actual.points[1].z, 6.0f) << via;
 		ASSERT_EQ(actual.seasons.size(), 2u) << via;
-		EXPECT_EQ(actual.seasons[0], Season::Summer) << via;
+		EXPECT_EQ(actual.seasons[0], HalfYear::Summer) << via;
 	}
 
 } // namespace ElementKinds
 
-SLT_REFLECT_ENUM(::ElementKinds::Season)
+SLT_REFLECT_ENUM(::ElementKinds::HalfYear)
 SLT_ENUM_VALUE(Spring)
 SLT_ENUM_VALUE(Summer)
 SLT_END_ENUM()
@@ -382,7 +382,7 @@ namespace StructElements {
 
 	struct Entry {
 		str name;
-		ElementKinds::Season season = ElementKinds::Season::Spring;
+		ElementKinds::HalfYear season = ElementKinds::HalfYear::Spring;
 		Handle<Object> target;
 		f32 weight = 1.0f;
 		Vector<Handle<Object>> extras{GetMemoryResource(MemTag::Core)};
@@ -411,7 +411,7 @@ namespace StructElements {
 	void Fill(EntryListComponent& out, Object& a, Object& b) {
 		out.entries.resize(2);
 		out.entries[0].name = "first";
-		out.entries[0].season = ElementKinds::Season::Summer;
+		out.entries[0].season = ElementKinds::HalfYear::Summer;
 		out.entries[0].target = Handle<Object>(&a);
 		out.entries[0].weight = 0.25f;
 		out.entries[1].name = "second";
@@ -424,7 +424,7 @@ namespace StructElements {
 	void ExpectIntact(const EntryListComponent& actual, const Object& a, const Object& b, const char* via) {
 		ASSERT_EQ(actual.entries.size(), 2u) << via;
 		EXPECT_EQ(actual.entries[0].name, "first") << via;
-		EXPECT_EQ(actual.entries[0].season, ElementKinds::Season::Summer) << via;
+		EXPECT_EQ(actual.entries[0].season, ElementKinds::HalfYear::Summer) << via;
 		EXPECT_EQ(actual.entries[0].target.GetInstanceId(), a.GetInstanceId()) << via;
 		EXPECT_FLOAT_EQ(actual.entries[0].weight, 0.25f) << via;
 		EXPECT_TRUE(actual.entries[0].extras.empty()) << via;

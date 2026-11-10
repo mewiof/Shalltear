@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Memory.h"
 
 #include "MiniaudioShared.h"
+#include "Platform/AudioDevicePlatform.h"
 
 #include <atomic>
 #include <new>
@@ -134,7 +135,11 @@ namespace Shalltear {
 			backend->renderer = &renderer;
 
 			const ma_allocation_callbacks callbacks = MakeMiniaudioAllocationCallbacks();
-			const char* backendName = kind == AudioBackendKind::System ? "WASAPI" : "null";
+			const std::span<const ma_backend> systemBackends = DevicePlatform::GetSystemBackends();
+			const ma_backend nullBackend = ma_backend_null;
+			const ma_backend* backends = kind == AudioBackendKind::System ? systemBackends.data() : &nullBackend;
+			const ma_uint32 backendCount = kind == AudioBackendKind::System ? static_cast<ma_uint32>(systemBackends.size()) : 1;
+			const char* backendName = kind == AudioBackendKind::System ? ma_get_backend_name(backends[0]) : "null";
 
 			ma_result result = ma_log_init(&callbacks, &backend->log);
 			if (result == MA_SUCCESS) {
@@ -145,8 +150,7 @@ namespace Shalltear {
 			ma_context_config contextConfig = ma_context_config_init();
 			contextConfig.pLog = backend->logReady ? &backend->log : nullptr;
 			contextConfig.allocationCallbacks = callbacks;
-			const ma_backend backends[1] = {kind == AudioBackendKind::System ? ma_backend_wasapi : ma_backend_null};
-			result = ma_context_init(backends, 1, &contextConfig, &backend->context);
+			result = ma_context_init(backends, backendCount, &contextConfig, &backend->context);
 			if (result != MA_SUCCESS) {
 				SLT_LOG_WARN("Audio", "the {} backend couldn't create a context: {}", backendName, ma_result_description(result));
 				_backend = backend;
@@ -154,6 +158,9 @@ namespace Shalltear {
 				return false;
 			}
 			backend->contextReady = true;
+			if (kind == AudioBackendKind::System) {
+				backendName = ma_get_backend_name(backend->context.backend);
+			}
 
 			ma_device_config config = ma_device_config_init(ma_device_type_playback);
 			config.playback.format = ma_format_f32;
@@ -166,7 +173,9 @@ namespace Shalltear {
 			config.dataCallback = &OnData;
 			config.notificationCallback = &OnNotification;
 			config.pUserData = backend;
-			config.wasapi.usage = ma_wasapi_usage_pro_audio;
+			if (kind == AudioBackendKind::System) {
+				DevicePlatform::ConfigureDevice(config);
+			}
 
 			result = ma_device_init(&backend->context, &config, &backend->device);
 			if (result == MA_SUCCESS && backend->device.playback.channels > MAX_AUDIO_CHANNELS) {
@@ -245,11 +254,10 @@ namespace Shalltear {
 			if (!_backend || !_backend->deviceReady) {
 				return;
 			}
-			// WASAPI notification thread writes these under this lock. crap API
 			if (_backend->kind == AudioBackendKind::System) {
-				ma_mutex_lock(&_backend->device.wasapi.rerouteLock);
+				DevicePlatform::LockFormat(_backend->device);
 				ReadFormat(*_backend, _format);
-				ma_mutex_unlock(&_backend->device.wasapi.rerouteLock);
+				DevicePlatform::UnlockFormat(_backend->device);
 			} else {
 				ReadFormat(*_backend, _format);
 			}

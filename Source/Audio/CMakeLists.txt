@@ -1,4 +1,5 @@
 file(GLOB_RECURSE AUDIO_SOURCES "Private/*.cpp" "Private/*.c" "Private/*.h")
+shalltear_select_platform_sources(AUDIO_SOURCES)
 
 shalltear_add_package(Audio SOURCES ${AUDIO_SOURCES})
 
@@ -19,9 +20,13 @@ foreach(header IN LISTS AUDIO_GUARDED_HEADERS)
 	endif()
 endforeach()
 
+if(WIN32)
+	target_compile_definitions(Audio PRIVATE MA_ENABLE_WASAPI)
+else()
+	target_compile_definitions(Audio PRIVATE MA_ENABLE_PULSEAUDIO MA_ENABLE_ALSA)
+endif()
 target_compile_definitions(Audio PRIVATE
 	MA_ENABLE_ONLY_SPECIFIC_BACKENDS
-	MA_ENABLE_WASAPI
 	MA_ENABLE_NULL
 	MA_NO_ENCODING
 	MA_NO_RESOURCE_MANAGER

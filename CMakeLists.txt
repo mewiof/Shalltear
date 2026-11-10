@@ -29,8 +29,12 @@ if(SHALLTEAR_WARNINGS_AS_ERRORS)
     set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 endif()
 
+set(slt_targetArgument "")
+if(CMAKE_CXX_COMPILER_TARGET)
+    set(slt_targetArgument --target=${CMAKE_CXX_COMPILER_TARGET})
+endif()
 execute_process(
-    COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine
+    COMMAND ${CMAKE_CXX_COMPILER} ${slt_targetArgument} -dumpmachine
     OUTPUT_VARIABLE SHALLTEAR_COMPILER_TARGET
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
@@ -53,7 +57,7 @@ if(MINGW)
 
     add_link_options($<$<CONFIG:Release>:-Wl,-s>)
 
-    set(SHALLTEAR_CXX_RUNTIME_DLLS "")
+    set(SHALLTEAR_CXX_RUNTIME_FILES "")
     foreach(slt_runtime libc++ libunwind)
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=${slt_runtime}.dll.a
@@ -69,7 +73,42 @@ if(MINGW)
                 "Is ${CMAKE_CXX_COMPILER} a complete "
                 "llvm-mingw toolchain?")
         endif()
-        list(APPEND SHALLTEAR_CXX_RUNTIME_DLLS "${slt_runtimeDll}")
+        list(APPEND SHALLTEAR_CXX_RUNTIME_FILES "${slt_runtimeDll}")
+    endforeach()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(NOT SHALLTEAR_LINUX_PACK)
+        message(FATAL_ERROR
+            "Shalltear: a Linux build needs the pinned sysroot. "
+            "Configure with -DCMAKE_TOOLCHAIN_FILE=CMake/Toolchains/Linux-x64.cmake.")
+    endif()
+
+    set(CMAKE_SHARED_LIBRARY_PREFIX "")
+    set(CMAKE_SHARED_MODULE_PREFIX "")
+    set(CMAKE_STATIC_LIBRARY_PREFIX "")
+
+    # image should export only what a DLL would
+    set(CMAKE_C_VISIBILITY_PRESET hidden)
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    # exported class's inline member should run in calling image (ELF interposition bullshit)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+    set(CMAKE_INSTALL_RPATH "\$ORIGIN")
+
+    add_link_options($<$<CONFIG:Release>:-Wl,-s>)
+    # unresolved symbol should fail the link (as on Windows)
+    add_link_options(-Wl,--no-undefined)
+
+    set(SHALLTEAR_CXX_RUNTIME_FILES "")
+    foreach(slt_runtime libc++.so.1 libc++abi.so.1)
+        set(slt_runtimeFile "${SHALLTEAR_LINUX_PACK}/sysroot/usr/lib/x86_64-linux-gnu/${slt_runtime}")
+        if(NOT EXISTS "${slt_runtimeFile}")
+            message(FATAL_ERROR
+                "Shalltear: ${slt_runtime} was not found at ${slt_runtimeFile}. "
+                "Run python Scripts/fetch_prebuilt.py --toolchain --linux.")
+        endif()
+        list(APPEND SHALLTEAR_CXX_RUNTIME_FILES "${slt_runtimeFile}")
     endforeach()
 endif()
 
@@ -86,7 +125,12 @@ add_compile_definitions($<$<CONFIG:Release>:SHALLTEAR_CONFIG_RELEASE>)
 add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= -fmacro-prefix-map=${CMAKE_BINARY_DIR}/=)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+if(WIN32)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+else()
+    # shared libs = LIBRARY outputs here, must sit beside exes
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # included, not installed because the engine declares packages
@@ -331,13 +375,12 @@ install(DIRECTORY ${SHALLTEAR_GENERATED_PUBLIC_DIR}/ DESTINATION ${SHALLTEAR_INS
 
 install(DIRECTORY EngineAssets DESTINATION ${SHALLTEAR_INSTALL_BIN})
 
-if(EXISTS ${CMAKE_SOURCE_DIR}/External/Prebuilt/dxc/bin/x64/dxcompiler.dll)
-    install(FILES ${CMAKE_SOURCE_DIR}/External/Prebuilt/dxc/bin/x64/dxcompiler.dll
-        DESTINATION ${SHALLTEAR_INSTALL_BIN})
+if(EXISTS ${SHALLTEAR_DXC_LIBRARY})
+    install(FILES ${SHALLTEAR_DXC_LIBRARY} DESTINATION ${SHALLTEAR_INSTALL_BIN})
 endif()
 
-if(SHALLTEAR_CXX_RUNTIME_DLLS)
-    install(FILES ${SHALLTEAR_CXX_RUNTIME_DLLS} DESTINATION ${SHALLTEAR_INSTALL_BIN})
+if(SHALLTEAR_CXX_RUNTIME_FILES)
+    install(FILES ${SHALLTEAR_CXX_RUNTIME_FILES} DESTINATION ${SHALLTEAR_INSTALL_BIN})
 endif()
 
 install(EXPORT ShalltearTargets

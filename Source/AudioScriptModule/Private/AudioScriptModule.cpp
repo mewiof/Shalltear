@@ -190,7 +190,7 @@ namespace AudioScriptModuleImpl {
 
 using namespace AudioScriptModuleImpl;
 
-extern "C" __declspec(dllexport) bool AudioScriptModulePlay(const char* path) {
+extern "C" SLT_API_EXPORT bool AudioScriptModulePlay(const char* path) {
 	Asset* asset = AssetDatabase::LoadAsset(Path(path));
 	if (!asset || !TypeRegistry::IsDerivedFrom(asset->GetType(), AudioResource::GetReflectType())) {
 		return false;
@@ -200,7 +200,7 @@ extern "C" __declspec(dllexport) bool AudioScriptModulePlay(const char* path) {
 	return Audio::Play(Handle<AudioResource>(static_cast<AudioResource*>(asset)), params).IsValid();
 }
 
-extern "C" __declspec(dllexport) void* AudioScriptModuleMakeMixer() {
+extern "C" SLT_API_EXPORT void* AudioScriptModuleMakeMixer() {
 	AudioMixer* mixer = New<AudioMixer>(MemTag::Asset);
 	AudioMixer::Group master;
 	master.id = "Master";
@@ -224,7 +224,7 @@ extern "C" __declspec(dllexport) void* AudioScriptModuleMakeMixer() {
 	return mixer;
 }
 
-extern "C" __declspec(dllexport) void AudioScriptModuleDestroyMixer(void* mixer) {
+extern "C" SLT_API_EXPORT void AudioScriptModuleDestroyMixer(void* mixer) {
 	Delete(static_cast<AudioMixer*>(mixer));
 }
 

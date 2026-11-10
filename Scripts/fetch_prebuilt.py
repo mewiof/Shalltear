@@ -4,20 +4,28 @@
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
+import linux_pack
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 PREBUILT_DIR = ROOT_DIR / "External" / "Prebuilt"
+
+HOST_IS_WINDOWS = os.name == "nt"
 
 DXC_VERSION = "v1.9.2602.24"
 DXC_URL = f"https://github.com/microsoft/DirectXShaderCompiler/releases/download/{DXC_VERSION}/dxc_2026_05_27.zip"
 DXC_SHA256 = "cf658aacf070d3045e31b8f1f8a696c2945f37c1095019481ef7c513368db3b4"
+DXC_LINUX_URL = f"https://github.com/microsoft/DirectXShaderCompiler/releases/download/{DXC_VERSION}/linux_dxc_2026_05_26.x86_64.tar.gz"
+DXC_LINUX_SHA256 = "928b3e9986d11dc4279050e02340950c29bcbd1e5efb9d3ded9669dade37639d"
 
 LAVAPIPE_VERSION = "26.1.3"
 LAVAPIPE_URL = f"https://github.com/pal1000/mesa-dist-win/releases/download/{LAVAPIPE_VERSION}/mesa3d-{LAVAPIPE_VERSION}-release-msvc.7z"
@@ -29,15 +37,25 @@ LLVM_MINGW_URL = (
     f"https://github.com/mstorsjo/llvm-mingw/releases/download/{LLVM_MINGW_VERSION}/{LLVM_MINGW_ARCHIVE}.zip"
 )
 LLVM_MINGW_SHA256 = "1bcf74d06b724aeecaa6412ca85f5b26fb1da770e7cdcefa9263c9c5c3ad34b6"
+LLVM_MINGW_LINUX_ARCHIVE = f"llvm-mingw-{LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64"
+LLVM_MINGW_LINUX_URL = (
+    f"https://github.com/mstorsjo/llvm-mingw/releases/download/{LLVM_MINGW_VERSION}/{LLVM_MINGW_LINUX_ARCHIVE}.tar.xz"
+)
+LLVM_MINGW_LINUX_SHA256 = "2258c745e3155870c80793f3e8c80b28fbde11b9ff73c4c78783635b3440b092"
 
 CMAKE_VERSION = "4.2.0"
 CMAKE_ARCHIVE = f"cmake-{CMAKE_VERSION}-windows-x86_64"
 CMAKE_URL = f"https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/{CMAKE_ARCHIVE}.zip"
 CMAKE_SHA256 = "cf35a516c4f5f4646b301e51c8e24b168cc012c3b1453b8f675303b54eb0ef45"
+CMAKE_LINUX_ARCHIVE = f"cmake-{CMAKE_VERSION}-linux-x86_64"
+CMAKE_LINUX_URL = f"https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/{CMAKE_LINUX_ARCHIVE}.tar.gz"
+CMAKE_LINUX_SHA256 = "bbcebd4c433eab3af03a8c80bb5d84e8dfc3ff8a4ab9d01547b21240c23f7c2c"
 
 NINJA_VERSION = "1.13.2"
 NINJA_URL = f"https://github.com/ninja-build/ninja/releases/download/v{NINJA_VERSION}/ninja-win.zip"
 NINJA_SHA256 = "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65"
+NINJA_LINUX_URL = f"https://github.com/ninja-build/ninja/releases/download/v{NINJA_VERSION}/ninja-linux.zip"
+NINJA_LINUX_SHA256 = "5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6"
 NINJA_COPYING_URL = f"https://raw.githubusercontent.com/ninja-build/ninja/v{NINJA_VERSION}/COPYING"
 NINJA_COPYING_SHA256 = "eb7e9ab9690124c5c9f42bdc81383d886a3dede26345b6ed15bbad7caf81f7ea"
 
@@ -50,19 +68,61 @@ VULKANRT_URL = f"https://sdk.lunarg.com/sdk/download/{VULKANRT_VERSION}/windows/
 VULKANRT_SHA256 = "f8ba79303face4b72a2f302f1a46e8c918995b54fbf24c0c9fc6c3d3ef525dca"
 
 
+ARCHIVES_DIR = None
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        for block in iter(lambda: source.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def download_verified(url: str, expected_sha256: str, dest: Path) -> None:
+    kept = ARCHIVES_DIR / dest.name if ARCHIVES_DIR else None
+    if kept and kept.is_file() and file_sha256(kept) == expected_sha256:
+        print(f"  using {kept}")
+        if kept != dest:
+            shutil.copyfile(kept, dest)
+        return
     print(f"  downloading {url}")
     # LunarG CDN refuses the urllib default
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Shalltear fetch_prebuilt)"})
     with urllib.request.urlopen(request) as response, open(dest, "wb") as out:
         shutil.copyfileobj(response, out)
-    digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+    digest = file_sha256(dest)
     if digest != expected_sha256:
         dest.unlink(missing_ok=True)
         raise RuntimeError(
             f"SHA-256 mismatch for {url}\n  expected {expected_sha256}\n  got      {digest}"
         )
     print(f"  sha256 verified ({digest[:12]}...)")
+    if kept and kept != dest:
+        shutil.copyfile(dest, kept)
+
+
+def extract_tar(archive: Path, target: Path, prefix: str, wanted=None) -> None:
+    with tarfile.open(archive) as tar:
+        for member in tar:
+            name = member.name[2:] if member.name.startswith("./") else member.name
+            if not name.startswith(prefix):
+                continue
+            relative = name[len(prefix):]
+            if not relative or (wanted is not None and not wanted(relative)):
+                continue
+            out = target / relative
+            if member.isdir():
+                out.mkdir(parents=True, exist_ok=True)
+            elif member.issym():
+                out.parent.mkdir(parents=True, exist_ok=True)
+                if out.is_symlink() or out.exists():
+                    out.unlink()
+                os.symlink(member.linkname, out)
+            elif member.isfile():
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(tar.extractfile(member).read())
+                os.chmod(out, member.mode & 0o777)
 
 
 def is_current(target_dir: Path, version: str) -> bool:
@@ -74,7 +134,29 @@ def write_marker(target_dir: Path, version: str) -> None:
     (target_dir / ".fetched").write_text(version + "\n", encoding="utf-8")
 
 
+def fetch_dxc_linux() -> None:
+    target = PREBUILT_DIR / "dxc"
+    if is_current(target, DXC_VERSION):
+        print(f"dxc {DXC_VERSION} already fetched. Skipping")
+        return
+    print(f"fetching dxc {DXC_VERSION}")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "linux_dxc.tar.gz"
+        download_verified(DXC_LINUX_URL, DXC_LINUX_SHA256, archive)
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        extract_tar(archive, target, "", lambda name: name == "lib/libdxcompiler.so" or name.startswith("LICENSE"))
+    if not (target / "lib" / "libdxcompiler.so").exists():
+        raise RuntimeError("lib/libdxcompiler.so not found in the DXC archive. Layout changed?")
+    write_marker(target, DXC_VERSION)
+    print(f"dxc -> {target}")
+
+
 def fetch_dxc() -> None:
+    if not HOST_IS_WINDOWS:
+        fetch_dxc_linux()
+        return
     target = PREBUILT_DIR / "dxc"
     if is_current(target, DXC_VERSION):
         print(f"dxc {DXC_VERSION} already fetched. Skipping")
@@ -166,6 +248,79 @@ def ensure_mingw_license_texts(target: Path) -> None:
             raise RuntimeError(f"SHA-256 mismatch for {source}. Run git checkout {source}")
         print(f"  staging {name} beside COPYING.MinGW-w64.txt")
         shutil.copyfile(source, destination)
+
+
+def fetch_toolchain_linux() -> None:
+    target = PREBUILT_DIR / "llvm-mingw"
+    if is_current(target, LLVM_MINGW_VERSION):
+        print(f"llvm-mingw {LLVM_MINGW_VERSION} already fetched. Skipping")
+        return
+    print(f"fetching llvm-mingw {LLVM_MINGW_VERSION} (84 MB, unpacks to ~620 MB)")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / (LLVM_MINGW_LINUX_ARCHIVE + ".tar.xz")
+        download_verified(LLVM_MINGW_LINUX_URL, LLVM_MINGW_LINUX_SHA256, archive)
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        extract_tar(archive, target, LLVM_MINGW_LINUX_ARCHIVE + "/")
+    if not (target / "bin" / "clang++").exists():
+        raise RuntimeError(f"{target / 'bin' / 'clang++'} is absent after extraction. Layout changed?")
+    write_marker(target, LLVM_MINGW_VERSION)
+    print(f"llvm-mingw -> {target}")
+
+
+def fetch_cmake_linux() -> None:
+    target = PREBUILT_DIR / "cmake"
+    if is_current(target, CMAKE_VERSION):
+        print(f"cmake {CMAKE_VERSION} already fetched. Skipping")
+        return
+    print(f"fetching cmake {CMAKE_VERSION} (58 MB)")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / (CMAKE_LINUX_ARCHIVE + ".tar.gz")
+        download_verified(CMAKE_LINUX_URL, CMAKE_LINUX_SHA256, archive)
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        extract_tar(archive, target, CMAKE_LINUX_ARCHIVE + "/",
+                    lambda name: name in ("bin/cmake", "bin/ctest") or _cmake_wanted(name))
+    if not (target / "bin" / "cmake").exists():
+        raise RuntimeError("bin/cmake not found in the CMake archive. Layout changed?")
+    write_marker(target, CMAKE_VERSION)
+    print(f"cmake -> {target}")
+
+
+def fetch_ninja_linux() -> None:
+    target = PREBUILT_DIR / "ninja"
+    if is_current(target, NINJA_VERSION):
+        print(f"ninja {NINJA_VERSION} already fetched. Skipping")
+        return
+    print(f"fetching ninja {NINJA_VERSION}")
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "ninja-linux.zip"
+        download_verified(NINJA_LINUX_URL, NINJA_LINUX_SHA256, archive)
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        with zipfile.ZipFile(archive) as zf:
+            (target / "ninja").write_bytes(zf.read("ninja"))
+        os.chmod(target / "ninja", 0o755)
+        copying = Path(tmp) / "COPYING"
+        download_verified(NINJA_COPYING_URL, NINJA_COPYING_SHA256, copying)
+        shutil.copyfile(copying, target / "COPYING")
+    write_marker(target, NINJA_VERSION)
+    print(f"ninja -> {target}")
+
+
+def fetch_linux_pack() -> None:
+    clang = PREBUILT_DIR / "llvm-mingw" / "bin" / ("clang.exe" if HOST_IS_WINDOWS else "clang")
+    if not clang.exists():
+        raise RuntimeError(f"{clang} is absent. Run python Scripts/fetch_prebuilt.py --toolchain")
+    with tempfile.TemporaryDirectory() as tmp:
+        def fetch_archive(url, sha256, name):
+            archive = Path(tmp) / name
+            download_verified(url, sha256, archive)
+            return archive
+        linux_pack.fetch(PREBUILT_DIR, fetch_archive, clang)
 
 
 def fetch_toolchain() -> None:
@@ -278,18 +433,35 @@ def main() -> int:
     parser.add_argument("--lavapipe", action="store_true", help="also fetch the CI software Vulkan driver + loader")
     parser.add_argument("--skip-dxc", action="store_true", help="skip the DXC fetch")
     parser.add_argument("--toolchain", action="store_true", help="also fetch llvm-mingw/cmake/ninja (what the SDK bundles)")
+    parser.add_argument("--linux", action="store_true", help="also build the Linux target pack (sysroot + C++ runtime). Needs --toolchain once")
+    parser.add_argument("--archives", type=Path, help="keep downloaded archives in this directory and reuse them")
     args = parser.parse_args()
+
+    global ARCHIVES_DIR
+    if args.archives:
+        ARCHIVES_DIR = args.archives.resolve()
+        ARCHIVES_DIR.mkdir(parents=True, exist_ok=True)
 
     PREBUILT_DIR.mkdir(parents=True, exist_ok=True)
     if not args.skip_dxc:
         fetch_dxc()
     if args.lavapipe:
-        fetch_lavapipe()
-        fetch_vulkan_runtime()
+        if HOST_IS_WINDOWS:
+            fetch_lavapipe()
+            fetch_vulkan_runtime()
+        else:
+            print("lavapipe comes with the distribution's Mesa Vulkan drivers. Skipping")
     if args.toolchain:
-        fetch_toolchain()
-        fetch_cmake()
-        fetch_ninja()
+        if HOST_IS_WINDOWS:
+            fetch_toolchain()
+            fetch_cmake()
+            fetch_ninja()
+        else:
+            fetch_toolchain_linux()
+            fetch_cmake_linux()
+            fetch_ninja_linux()
+    if args.linux or (args.toolchain and not HOST_IS_WINDOWS):
+        fetch_linux_pack()
     return 0
 
 

@@ -8,13 +8,13 @@
 
 using namespace Shalltear;
 
-extern "C" __declspec(dllexport) u32 PhysicsScriptModuleOverlapSphereCount(f32 centerX, f32 centerY, f32 centerZ, f32 radius) {
+extern "C" SLT_API_EXPORT u32 PhysicsScriptModuleOverlapSphereCount(f32 centerX, f32 centerY, f32 centerZ, f32 radius) {
 	Vector<Handle<Collider>> results;
 	return Physics::OverlapSphere(Vec3{centerX, centerY, centerZ}, radius, results);
 }
 
-extern "C" __declspec(dllexport) bool PhysicsScriptModuleRaycastHits(f32 originX, f32 originY, f32 originZ,
-																	 f32 dirX, f32 dirY, f32 dirZ) {
+extern "C" SLT_API_EXPORT bool PhysicsScriptModuleRaycastHits(f32 originX, f32 originY, f32 originZ,
+															  f32 dirX, f32 dirY, f32 dirZ) {
 	RaycastHit hit;
 	return Physics::Raycast(Ray{Vec3{originX, originY, originZ}, Vec3{dirX, dirY, dirZ}}, hit);
 }

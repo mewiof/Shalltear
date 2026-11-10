@@ -38,11 +38,11 @@ namespace VisualEffectsScriptModuleImpl {
 
 SLT_REGISTER_TYPE(VisualEffectsScriptModuleImpl::ParticleEventProbe)
 
-extern "C" __declspec(dllexport) u32 VisualEffectsScriptModuleCount(VisualEffect* effect, const char* system) {
+extern "C" SLT_API_EXPORT u32 VisualEffectsScriptModuleCount(VisualEffect* effect, const char* system) {
 	return effect && system ? effect->GetParticleCount(system) : 0u;
 }
 
-extern "C" __declspec(dllexport) u32 VisualEffectsScriptModuleReadPositions(VisualEffect* effect, const char* system, f32* xyz, u32 capacity) {
+extern "C" SLT_API_EXPORT u32 VisualEffectsScriptModuleReadPositions(VisualEffect* effect, const char* system, f32* xyz, u32 capacity) {
 	if (!effect || !system || !xyz) {
 		return 0;
 	}
@@ -56,7 +56,7 @@ extern "C" __declspec(dllexport) u32 VisualEffectsScriptModuleReadPositions(Visu
 	return read;
 }
 
-extern "C" __declspec(dllexport) u32 VisualEffectsScriptModuleHeard(Component* probe, char* name, u32 room, f32* position, f32* counted) {
+extern "C" SLT_API_EXPORT u32 VisualEffectsScriptModuleHeard(Component* probe, char* name, u32 room, f32* position, f32* counted) {
 	const auto* heard = dynamic_cast<const VisualEffectsScriptModuleImpl::ParticleEventProbe*>(probe);
 	if (!heard || !name || room == 0 || !position || !counted) {
 		return 0;

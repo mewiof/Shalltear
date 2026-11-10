@@ -42,7 +42,7 @@ namespace Shalltear::Profiler {
 			bool ownerKnown = false;
 		};
 
-		static_assert(sizeof(Recorder) == 11688, "Recorder's .bss size changed");
+		static_assert(sizeof(Recorder) == 11680 + 2 * sizeof(std::thread::id), "Recorder's .bss size changed");
 
 		Recorder& GetRecorder() {
 			static Recorder recorder;

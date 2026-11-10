@@ -7,5 +7,5 @@
 #define SLT_API_IMPORT __declspec(dllimport)
 #else
 #define SLT_API_EXPORT __attribute__((visibility("default")))
-#define SLT_API_IMPORT
+#define SLT_API_IMPORT __attribute__((visibility("default")))
 #endif

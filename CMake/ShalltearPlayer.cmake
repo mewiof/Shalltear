@@ -167,7 +167,7 @@ function(_shalltear_add_player_impl MODULE_NAME)
 	endif()
 	if(SHALLTEAR_PLAYER_WINDOWED)
 		set_target_properties(${playerTarget} PROPERTIES WIN32_EXECUTABLE ON)
-		if(NOT MINGW)
+		if(WIN32 AND NOT MINGW)
 			target_link_options(${playerTarget} PRIVATE "-Wl,/ENTRY:mainCRTStartup")
 		endif()
 	endif()
@@ -191,11 +191,11 @@ function(_shalltear_add_player_impl MODULE_NAME)
 	# whole archive around the game lib only
 
 	# game archive is whole so reflection initializers survive linking
-	if(MINGW)
+	if(WIN32 AND NOT MINGW)
+		target_link_options(${playerTarget} PRIVATE "-Wl,/WHOLEARCHIVE:$<TARGET_FILE:${MODULE_NAME}>")
+	else()
 		target_link_options(${playerTarget} PRIVATE
 			"-Wl,--whole-archive" "$<TARGET_FILE:${MODULE_NAME}>" "-Wl,--no-whole-archive")
-	else()
-		target_link_options(${playerTarget} PRIVATE "-Wl,/WHOLEARCHIVE:$<TARGET_FILE:${MODULE_NAME}>")
 	endif()
 
 	if(SHALLTEAR_PLAYER_OUTPUT_DIRECTORY)

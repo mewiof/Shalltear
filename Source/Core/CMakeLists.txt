@@ -82,14 +82,20 @@ target_include_directories(ShalltearCore
         ${SHALLTEAR_VMA_DIR}/include
 )
 
-set(SHALLTEAR_DXC_DLL ${CMAKE_SOURCE_DIR}/External/Prebuilt/dxc/bin/x64/dxcompiler.dll)
-if(EXISTS ${SHALLTEAR_DXC_DLL})
-    add_custom_command(TARGET ShalltearCore POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHALLTEAR_DXC_DLL} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/dxcompiler.dll
-        COMMENT "Staging dxcompiler.dll"
-    )
+if(CMAKE_HOST_WIN32)
+    set(SHALLTEAR_DXC_LIBRARY ${CMAKE_SOURCE_DIR}/External/Prebuilt/dxc/bin/x64/dxcompiler.dll)
 else()
-    message(STATUS "dxcompiler.dll prebuilt not fetched (run: python Scripts/fetch_prebuilt.py)")
+    set(SHALLTEAR_DXC_LIBRARY ${CMAKE_SOURCE_DIR}/External/Prebuilt/dxc/lib/libdxcompiler.so)
+endif()
+set(SHALLTEAR_DXC_LIBRARY ${SHALLTEAR_DXC_LIBRARY} PARENT_SCOPE)
+get_filename_component(slt_dxcName ${SHALLTEAR_DXC_LIBRARY} NAME)
+if(EXISTS ${SHALLTEAR_DXC_LIBRARY} AND NOT CMAKE_CROSSCOMPILING)
+    add_custom_command(TARGET ShalltearCore POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHALLTEAR_DXC_LIBRARY} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${slt_dxcName}
+        COMMENT "Staging ${slt_dxcName}"
+    )
+elseif(NOT CMAKE_CROSSCOMPILING)
+    message(STATUS "${slt_dxcName} prebuilt not fetched (run: python Scripts/fetch_prebuilt.py)")
 endif()
 
 set(SHALLTEAR_STAGED_NOTICES "")
@@ -106,7 +112,7 @@ endforeach()
 add_custom_target(ShalltearNotices ALL DEPENDS ${SHALLTEAR_STAGED_NOTICES})
 
 set(SHALLTEAR_STAGED_CXX_RUNTIME "")
-foreach(runtimeDll ${SHALLTEAR_CXX_RUNTIME_DLLS})
+foreach(runtimeDll ${SHALLTEAR_CXX_RUNTIME_FILES})
     get_filename_component(runtimeName ${runtimeDll} NAME)
     add_custom_command(
         OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${runtimeName}

@@ -1,8 +1,12 @@
 # presence is editor's job -> compatibility is package's
 
 function(shalltear_enforce_toolchain target_name)
+	set(targetArgument "")
+	if(CMAKE_CXX_COMPILER_TARGET)
+		set(targetArgument --target=${CMAKE_CXX_COMPILER_TARGET})
+	endif()
 	execute_process(
-		COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine
+		COMMAND ${CMAKE_CXX_COMPILER} ${targetArgument} -dumpmachine
 		OUTPUT_VARIABLE theirTarget
 		OUTPUT_STRIP_TRAILING_WHITESPACE
 		ERROR_QUIET

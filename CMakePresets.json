@@ -7,6 +7,7 @@
 			"hidden": true,
 			"description": "Pinned llvm-mingw toolchain from Scripts/fetch_prebuilt.py --toolchain. Exists to take the choice away from IDE",
 			"generator": "Ninja",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
 			"environment": {
 				"PATH": "${sourceDir}/External/Prebuilt/llvm-mingw/bin;${sourceDir}/External/Prebuilt/ninja;${sourceDir}/External/Prebuilt/cmake/bin;$penv{PATH}"
 			},
@@ -47,18 +48,74 @@
 			"displayName": "Release (static)",
 			"binaryDir": "${sourceDir}/build-static-release",
 			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "SHALLTEAR_BUILD_SHARED": "OFF" }
+		},
+		{
+			"name": "linux-toolchain",
+			"hidden": true,
+			"description": "Same toolchain + the Linux target pack from Scripts/fetch_prebuilt.py --linux",
+			"generator": "Ninja",
+			"toolchainFile": "${sourceDir}/CMake/Toolchains/Linux-x64.cmake",
+			"cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
+		},
+		{
+			"name": "linux-host",
+			"hidden": true,
+			"inherits": "linux-toolchain",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+		},
+		{
+			"name": "linux-debug",
+			"inherits": "linux-host",
+			"displayName": "Linux Debug (shared)",
+			"binaryDir": "${sourceDir}/build-linux",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "SHALLTEAR_BUILD_SHARED": "ON" }
+		},
+		{
+			"name": "linux-release",
+			"inherits": "linux-host",
+			"displayName": "Linux Release (shared)",
+			"binaryDir": "${sourceDir}/build-linux-release",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "SHALLTEAR_BUILD_SHARED": "ON" }
+		},
+		{
+			"name": "linux-static-debug",
+			"inherits": "linux-host",
+			"displayName": "Linux Debug (static)",
+			"binaryDir": "${sourceDir}/build-linux-static",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "SHALLTEAR_BUILD_SHARED": "OFF" }
+		},
+		{
+			"name": "linux-static-release",
+			"inherits": "linux-toolchain",
+			"displayName": "Linux Release (static)",
+			"description": "Also configures on Windows (Linux players link with it)",
+			"binaryDir": "${sourceDir}/build-linux-static-release",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "SHALLTEAR_BUILD_SHARED": "OFF" }
 		}
 	],
 	"buildPresets": [
 		{ "name": "debug", "configurePreset": "debug" },
 		{ "name": "release", "configurePreset": "release" },
 		{ "name": "static-debug", "configurePreset": "static-debug" },
-		{ "name": "static-release", "configurePreset": "static-release" }
+		{ "name": "static-release", "configurePreset": "static-release" },
+		{ "name": "linux-debug", "configurePreset": "linux-debug" },
+		{ "name": "linux-release", "configurePreset": "linux-release" },
+		{ "name": "linux-static-debug", "configurePreset": "linux-static-debug" },
+		{ "name": "linux-static-release", "configurePreset": "linux-static-release" }
 	],
 	"testPresets": [
 		{ "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
 		{ "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
 		{ "name": "static-debug", "configurePreset": "static-debug", "output": { "outputOnFailure": true } },
-		{ "name": "static-release", "configurePreset": "static-release", "output": { "outputOnFailure": true } }
+		{ "name": "static-release", "configurePreset": "static-release", "output": { "outputOnFailure": true } },
+		{ "name": "linux-debug", "configurePreset": "linux-debug", "output": { "outputOnFailure": true } },
+		{ "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } },
+		{ "name": "linux-static-debug", "configurePreset": "linux-static-debug", "output": { "outputOnFailure": true } },
+		{
+			"name": "linux-static-release",
+			"configurePreset": "linux-static-release",
+			"condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+			"output": { "outputOnFailure": true }
+		}
 	]
 }

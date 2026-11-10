@@ -7,7 +7,6 @@
 #error "Shalltear: Android support isn't yet implemented"
 #elif defined(__linux__)
 #define SLT_PLATFORM_LINUX
-#error "Shalltear: Linux support isn't yet implemented"
 #elif defined(__APPLE__)
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE

@@ -2,13 +2,19 @@
 
 import os
 import shutil
+import signal
+import subprocess
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 PREBUILT_DIR = ROOT_DIR / "External" / "Prebuilt"
 
-CXX_COMPILER = "x86_64-w64-mingw32-clang++"
-C_COMPILER = "x86_64-w64-mingw32-clang"
+HOST_IS_WINDOWS = os.name == "nt"
+EXE = ".exe" if HOST_IS_WINDOWS else ""
+
+# Linux target set by CMake/Toolchains/Linux-x64.cmake
+CXX_COMPILER = "x86_64-w64-mingw32-clang++" if HOST_IS_WINDOWS else "clang++"
+C_COMPILER = "x86_64-w64-mingw32-clang" if HOST_IS_WINDOWS else "clang"
 
 _BIN_DIRECTORIES = (
 	PREBUILT_DIR / "llvm-mingw" / "bin",
@@ -38,6 +44,22 @@ def prepend_to_path(env=None):
 	return added
 
 
+def kill_by_name(names):
+	for name in names:
+		command = ["taskkill", "/IM", name + EXE, "/F"] if HOST_IS_WINDOWS else ["pkill", "-x", name]
+		subprocess.run(command, capture_output=True, text=True)
+
+
+def kill_tree(process):
+	if HOST_IS_WINDOWS:
+		subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
+		return
+	try:
+		os.killpg(process.pid, signal.SIGKILL)
+	except ProcessLookupError:
+		pass
+
+
 def prepare(what="this build"):
 	prepend_to_path()
 	missing = [name for name in (CXX_COMPILER, "cmake", "ninja") if shutil.which(name) is None]
@@ -46,7 +68,7 @@ def prepare(what="this build"):
 			f"{', '.join(missing)} not found.\n"
 			f"  Fetch the pinned toolchain:  {FETCH_HINT}\n"
 			f"  ...or put one on PATH. The compiler must be llvm-mingw's "
-			f"GNU-target driver."
+			f"{'GNU-target driver' if HOST_IS_WINDOWS else 'clang++'}."
 		)
 	return {
 		"compiler": shutil.which(CXX_COMPILER),

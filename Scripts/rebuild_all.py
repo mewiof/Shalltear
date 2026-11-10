@@ -13,7 +13,7 @@ import toolchain
 
 REPO = Path(__file__).resolve().parent.parent
 
-HOLDERS = ("Shalltear.exe", "ShalltearTests.exe")
+HOLDERS = ("Shalltear", "ShalltearTests")
 
 
 def head_commit():
@@ -28,9 +28,7 @@ def head_commit():
 
 
 def kill_holders():
-	for name in HOLDERS:
-		subprocess.run(["taskkill", "/IM", name, "/F"],
-					   capture_output=True, text=True)
+	toolchain.kill_by_name(HOLDERS)
 
 
 def find_trees():

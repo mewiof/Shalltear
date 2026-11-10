@@ -24,7 +24,7 @@ It's in active development. No releases yet, things may (!) change and break.
 
 ## Requirements
 
-- Windows 10 or 11, 64-bit
+- Windows 10 or 11, 64-bit (or Linux, see below)
 - A GPU with Vulkan 1.3 drivers
 - [Git](https://git-scm.com/download/win)
 - [Python 3](https://www.python.org/downloads/) (tick _**Add python.exe to PATH**_ in the installer)
@@ -58,6 +58,29 @@ Build.bat run
 | `Build.bat sdk` | Packages the SDK into `ShalltearSDK\` (Release, shared/static) |
 | `Build.bat shell` | Opens a command prompt with the pinned toolchain on `PATH` |
 | `Build.bat clean` | Deletes `build\` |
+
+## Linux
+
+Editor + game builds work on x86-64 Linux too (X11/XWayland). Building needs glibc 2.34+ (Ubuntu 22.04 or newer), `git` + `python3`:
+
+```sh
+git clone --recursive https://github.com/mewiof/Shalltear.git
+cd Shalltear
+./Build.sh
+./Build.sh run
+```
+
+`Build.sh` takes the same commands as `Build.bat` (no `sdk` yet), builds into `build-linux/`.
+
+A Windows editor can build Linux games too. In `Build.bat shell`:
+
+```bat
+python Scripts\fetch_prebuilt.py --linux
+cmake --preset linux-static-release
+cmake --build --preset linux-static-release
+```
+
+Then pick the **Linux**/**Linux Dedicated Server** target in a build profile.
 
 ## VS Code
 

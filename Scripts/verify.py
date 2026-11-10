@@ -23,11 +23,20 @@ DEFAULT_TIMEOUT = 2400
 CONFIGURE_HINT = ("cmake -B {name} -G Ninja -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ "
 				  "-DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang -DCMAKE_BUILD_TYPE={config} "
 				  "-DSHALLTEAR_BUILD_SHARED={shared}")
+LINUX_PRESETS = {("Release", "OFF"): "linux-static-release", ("Debug", "ON"): "linux-debug"}
+
+TEST_BINARY = "ShalltearTests" + toolchain.EXE
+
+
+def configure_hint(name, config, shared):
+	if toolchain.HOST_IS_WINDOWS:
+		return CONFIGURE_HINT.format(name=name, config=config, shared=shared)
+	return f"cmake --preset {LINUX_PRESETS[(config, shared)]}"
 
 
 def test_trees():
 	return [cache.parent for cache in sorted(REPO.glob("build*/CMakeCache.txt"))
-			if (cache.parent / "bin" / "ShalltearTests.exe").is_file()]
+			if (cache.parent / "bin" / TEST_BINARY).is_file()]
 
 
 def flavor(tree):
@@ -91,7 +100,7 @@ def chunk(patterns, limit=FILTER_LIMIT):
 
 
 def list_tests(tree):
-	out = subprocess.run([str(tree / "bin" / "ShalltearTests.exe"), "--gtest_list_tests"],
+	out = subprocess.run([str(tree / "bin" / TEST_BINARY), "--gtest_list_tests"],
 						 cwd=tree / "bin", capture_output=True, text=True, errors="replace")
 	return parse_listing(out.stdout) if out.returncode == 0 else None
 
@@ -120,12 +129,13 @@ def read_results(log):
 
 def run_binary(tree, arguments, log, timeout):
 	with open(log, "wb") as out:
-		process = subprocess.Popen([str(tree / "bin" / "ShalltearTests.exe"), *arguments],
-								   cwd=tree / "bin", stdout=out, stderr=subprocess.STDOUT)
+		process = subprocess.Popen([str(tree / "bin" / TEST_BINARY), *arguments],
+								   cwd=tree / "bin", stdout=out, stderr=subprocess.STDOUT,
+								   start_new_session=not toolchain.HOST_IS_WINDOWS)
 		try:
 			return process.wait(timeout=timeout)
 		except subprocess.TimeoutExpired:
-			subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
+			toolchain.kill_tree(process)
 			process.wait()
 			return None
 
@@ -199,12 +209,12 @@ def verify(args, out, say):
 			   if tree is None]
 	for name, config, shared in missing:
 		say(f"no {'shared' if shared == 'ON' else 'static'} {config} tree with a test binary. Configure one:")
-		say("  " + CONFIGURE_HINT.format(name=name, config=config, shared=shared))
+		say("  " + configure_hint(name, config, shared))
 	if missing:
 		return 1
 
 	if args.no_build:
-		subprocess.run(["taskkill", "/IM", "ShalltearTests.exe", "/F"], capture_output=True)
+		toolchain.kill_by_name(("ShalltearTests",))
 		for tree in (primary, secondary):
 			stamp = rebuild_all.stamped_commit(tree)
 			if stamp not in (None, head):

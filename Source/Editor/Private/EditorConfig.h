@@ -9,7 +9,7 @@
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Types.h"
 
-#include "Shalltear/Editor/EditorIdleOps.h"
+#include "Shalltear/Editor/EditorPresentPolicy.h"
 
 namespace Shalltear {
 
@@ -106,12 +106,10 @@ namespace Shalltear {
 			SLT_REFLECT_VALUE(GeneralPreferences)
 			SLT_REFLECT_CONSTRUCTIBLE()
 			SLT_REFLECT_FIELD(interactionMode)
-			SLT_REFLECT_FIELD(frameThrottlingMilliseconds, SLT_RANGE(0, EditorIdleOps::CUSTOM_MAX_MILLISECONDS))
 			SLT_REFLECT_FIELD(showSelectionOutline, SLT_HIDDEN)
 			SLT_END_REFLECT()
 
 			InteractionMode interactionMode = InteractionMode::Default;
-			i32 frameThrottlingMilliseconds = EditorIdleOps::DEFAULT_IDLE_MILLISECONDS;
 			bool showSelectionOutline = true;
 		};
 

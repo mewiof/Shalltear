@@ -57,7 +57,7 @@ namespace Shalltear {
 		void OnWindowStateChanged(const WindowStateEvent& event);
 	private:
 		void RunFrame();
-		f64 ComputeIdleSeconds() const;
+		InteractionMode PresentMode() const;
 		void DumpZonesIfDue();
 		void UIUpdate(const FrameStageArgs& stageArgs);
 		void RunFrameBoundary();
@@ -149,8 +149,6 @@ namespace Shalltear {
 		bool _throttleWhenUnfocused = true;
 		bool _throttleAnnounced = false;
 		u32 _throttledFrames = 0;
-		f64 _lastFrameWorkSeconds = 0.0;
-		f64 _lastIdleSeconds = 0.0;
 		std::vector<Profiler::ZoneResult> _zoneWorst;
 		f64 _zoneWorstMs = -1.0;
 		u32 _zoneWorstFrame = 0;

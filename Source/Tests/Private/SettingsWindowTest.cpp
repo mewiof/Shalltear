@@ -918,32 +918,6 @@ TEST_F(SettingsWindowFixture, EveryMutabilityClassHasBadgeAndSentence) {
 	EXPECT_TRUE(SettingsOps::FieldMutabilityLine(*unclassified).empty());
 }
 
-TEST_F(SettingsWindowFixture, FrameThrottlingShowsOnlyUnderCustom) {
-	Settings::Initialize(_paths);
-	auto* live = Settings::DeclareCategory<EditorConfig::GeneralPreferences>("Editor/General", SettingScope::User);
-	ASSERT_NE(live, nullptr);
-	SettingsPresentation::RegisterBuiltIns();
-
-	Handle<EditorPanel> panel = OpenPanel();
-	ASSERT_TRUE(panel.IsValid());
-	Select(*panel.Get(), "Editor/General");
-	Harness harness(panel);
-	harness.Tick();
-	auto shows = [&harness](std::string_view label) { return FieldRowNamed(harness.context, harness.root, label).IsValid(); };
-
-	ASSERT_TRUE(shows("Interaction Mode"));
-	EXPECT_FALSE(shows("Frame Throttling (ms)"));
-
-	live->interactionMode = InteractionMode::Custom;
-	harness.Tick();
-	EXPECT_TRUE(shows("Frame Throttling (ms)"));
-
-	live->interactionMode = InteractionMode::MonitorRefreshRate;
-	harness.Tick();
-	EXPECT_FALSE(shows("Frame Throttling (ms)"));
-	EXPECT_TRUE(shows("Interaction Mode"));
-}
-
 TEST_F(SettingsWindowFixture, RowShowsWhileAnyOfClausesHolds) {
 	Settings::Initialize(_paths);
 	DeclareProbes();

@@ -213,6 +213,7 @@ namespace Shalltear {
 			return false;
 		}
 
+		_presentPolicy.SetMode(PresentMode());
 		_presentPolicy.Install();
 
 		WindowDesc desc;
@@ -571,10 +572,10 @@ namespace Shalltear {
 			const EditorFrameCost::Distribution& ui = epoch.stages[static_cast<u32>(Stage::UI)];
 			const EditorFrameCost::Distribution& render = epoch.stages[static_cast<u32>(Stage::Render)];
 			f64 spanSeconds = static_cast<f64>(epoch.spanTicks) / static_cast<f64>(Time::GetTicksPerSecond());
-			SLT_LOG_INFO("FrameCost", "[epoch {}{}] t={:.1f}s {} frames ({} pointer) | frame {} | ui mean={:.3f} | render mean={:.3f} | idle={:.1f}",
+			SLT_LOG_INFO("FrameCost", "[epoch {}{}] t={:.1f}s {} frames ({} pointer) | frame {} | ui mean={:.3f} | render mean={:.3f}",
 						 epoch.index, epoch.closedAtShutdown ? " SHUTDOWN, partial" : "", spanSeconds,
 						 epoch.frames, epoch.pointerFrames, FormatDistribution(_frameCost, frame),
-						 _frameCost.MeanMs(ui), _frameCost.MeanMs(render), _lastIdleSeconds * 1000.0);
+						 _frameCost.MeanMs(ui), _frameCost.MeanMs(render));
 
 			str line;
 			for (u32 i = 0; i < EditorFrameCost::COUNTER_COUNT; ++i) {
@@ -917,26 +918,8 @@ namespace Shalltear {
 		_zoneWorst.clear();
 	}
 
-	f64 EditorApplication::ComputeIdleSeconds() const {
-		if (_frameDepth != 1 || _smokeFramesRemaining >= 0) {
-			return 0.0;
-		}
-		const EditorConfig::GeneralPreferences preferences = EditorConfig::ReadGeneralPreferences();
-		EditorIdleOps::IdleInputs inputs;
-		inputs.mode = preferences.interactionMode;
-		inputs.customMilliseconds = preferences.frameThrottlingMilliseconds;
-		if (Window* focused = WindowSystem::GetFocusedWindow().Get()) {
-			inputs.refreshRate = focused->GetMonitor().refreshRate;
-		}
-		inputs.lastFrameSeconds = _lastFrameWorkSeconds;
-		inputs.playing = _playMode.IsPlaying();
-		for (u32 button = 0; button < static_cast<u32>(MouseButton::Count) && !inputs.interacting; ++button) {
-			inputs.interacting = Input::IsMouseButtonDown(static_cast<MouseButton>(button));
-		}
-		for (u32 key = 1; key < static_cast<u32>(Key::Count) && !inputs.interacting; ++key) {
-			inputs.interacting = Input::IsKeyDown(static_cast<Key>(key));
-		}
-		return EditorIdleOps::IdleSeconds(inputs);
+	InteractionMode EditorApplication::PresentMode() const {
+		return _smokeFramesRemaining >= 0 ? InteractionMode::NoThrottling : EditorConfig::ReadGeneralPreferences().interactionMode;
 	}
 
 	void EditorApplication::RunFrame() {
@@ -952,6 +935,7 @@ namespace Shalltear {
 		if (_frameDepth == 1) {
 			Profiler::NextFrame();
 			DumpZonesIfDue();
+			_presentPolicy.SetMode(PresentMode());
 			if (_frameIndex++ == _loseDeviceFrame && RenderSystem::IsRenderingAvailable()) {
 				RenderSystem::GetDevice()->SimulateLoss();
 			}
@@ -983,15 +967,12 @@ namespace Shalltear {
 			SLT_PROFILE_ZONE("Editor.Pump");
 			if (throttle) {
 				WindowSystem::WaitEvents(THROTTLE_WAIT_SECONDS);
-			} else if (_lastIdleSeconds = ComputeIdleSeconds(); _lastIdleSeconds > 0.0) {
-				WindowSystem::WaitEvents(_lastIdleSeconds);
 			} else {
 				WindowSystem::PumpEvents();
 			}
 		}
 
 		u64 pumpEndTicks = (measure || measureModal) ? Time::GetTicks() : 0;
-		u64 workStartTicks = Time::GetTicks();
 		bool pointerDown = measure && Input::IsMouseButtonDown(MouseButton::Left);
 		Vec2 pointerDelta = measure ? Input::GetMouseDelta() : Vec2{};
 
@@ -1074,10 +1055,6 @@ namespace Shalltear {
 			}
 		}
 		_frameCostUITicks = 0;
-		if (_frameDepth == 1) {
-			_lastFrameWorkSeconds = static_cast<f64>(Time::GetTicks() - workStartTicks) /
-									static_cast<f64>(Time::GetTicksPerSecond());
-		}
 
 		if (_smokeFramesRemaining == 200) {
 			BuildSmokeUIDocument();

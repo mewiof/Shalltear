@@ -3,7 +3,6 @@
 #include "Shalltear/Core/Containers.h"
 
 #include "Shalltear/Core/Screen.h"
-#include "Shalltear/Editor/EditorIdleOps.h"
 
 #include <algorithm>
 
@@ -237,23 +236,16 @@ namespace Shalltear {
 			category.label = "General";
 			category.tooltip = "How the editor behaves on this computer.";
 			category.audience = SettingsAudience::EditorOnly;
-			category.keywords = "idle throttle throttling frame rate fps vsync gpu cpu power fan battery";
+			category.keywords = "throttle throttling frame rate fps vsync gpu cpu power fan battery";
 			category.order = 5;
 			RegisterCategory("Editor/General", std::move(category));
 
 			SettingsFieldPresentation mode;
 			mode.label = "Interaction Mode";
-			mode.tooltip = "How long the editor can idle between frames when nothing changes. Exists to balance input lag and GPU load. Input ends the idle at once -> "
-						   "play mode never idles. \"Default\" idles up to 4 ms, \"No Throttling\" never idles.";
-			mode.keywords = "idle throttle frame rate fps gpu power default monitor refresh custom";
+			mode.tooltip = "How the editor paces its frames. Exists to balance input lag and GPU load. \"Default\" draws once per display refresh, "
+						   "\"No Throttling\" draws as fast as possible.";
+			mode.keywords = "throttle frame rate fps gpu power default vsync refresh uncapped";
 			RegisterField("Editor/General", "interactionMode", std::move(mode));
-
-			SettingsFieldPresentation throttling;
-			throttling.label = "Frame Throttling (ms)";
-			throttling.tooltip = "Number of milliseconds the editor can idle between frames when Interaction Mode is \"Custom\".";
-			throttling.keywords = "idle custom milliseconds";
-			throttling.shownWhen.push_back({"interactionMode", static_cast<i64>(InteractionMode::Custom)});
-			RegisterField("Editor/General", "frameThrottlingMilliseconds", std::move(throttling));
 		}
 
 		{

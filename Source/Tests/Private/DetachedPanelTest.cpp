@@ -691,20 +691,30 @@ TEST_F(DetachedPanelFixture, WithoutPolicyEveryWindowBlocksOnDisplay) {
 	EXPECT_TRUE(floating.Get()->GetVSyncHint());
 }
 
-TEST_F(DetachedPanelPresentFixture, WindowEditorOpensPresentsWithoutBlocking) {
-	ASSERT_NE(_main.Get(), nullptr);
-	EXPECT_FALSE(_main.Get()->GetVSyncHint());
-}
-
-TEST_F(DetachedPanelPresentFixture, TornOutWindowPresentsUnblocked) {
+TEST_F(DetachedPanelPresentFixture, DefaultModeKeepsWindowsSynced) {
 	Handle<EditorPanel> panel = PanelManager::OpenPanel(DetachTestPanel::GetReflectType(), _main);
 	ASSERT_TRUE(panel.IsValid());
 	Frame();
 	Frame();
+	ASSERT_NE(_main.Get(), nullptr);
+	EXPECT_TRUE(_main.Get()->GetVSyncHint());
 
 	Handle<Window> floating = TearOut();
 	ASSERT_TRUE(floating.IsValid());
-	ASSERT_NE(floating.Get(), nullptr);
+	EXPECT_TRUE(floating.Get()->GetVSyncHint());
+}
+
+TEST_F(DetachedPanelPresentFixture, NoThrottlingUnsyncsOpenAndLaterWindows) {
+	Handle<EditorPanel> panel = PanelManager::OpenPanel(DetachTestPanel::GetReflectType(), _main);
+	ASSERT_TRUE(panel.IsValid());
+	Frame();
+	Frame();
+	Handle<Window> floating = TearOut();
+	ASSERT_TRUE(floating.IsValid());
+
+	_policy.SetMode(InteractionMode::NoThrottling);
+	ASSERT_NE(_main.Get(), nullptr);
+	EXPECT_FALSE(_main.Get()->GetVSyncHint());
 	EXPECT_FALSE(floating.Get()->GetVSyncHint());
 
 	Handle<EditorPanel> second = PanelManager::OpenPanel(DetachTestPanel::GetReflectType(), _main);
@@ -713,8 +723,29 @@ TEST_F(DetachedPanelPresentFixture, TornOutWindowPresentsUnblocked) {
 	Frame();
 	Handle<Window> secondFloating = TearOut(0, ParkedDetach2);
 	ASSERT_TRUE(secondFloating.IsValid());
-	ASSERT_NE(secondFloating.Get(), nullptr);
 	EXPECT_FALSE(secondFloating.Get()->GetVSyncHint());
+
+	_policy.SetMode(InteractionMode::Default);
+	EXPECT_TRUE(_main.Get()->GetVSyncHint());
+	EXPECT_TRUE(floating.Get()->GetVSyncHint());
+	EXPECT_TRUE(secondFloating.Get()->GetVSyncHint());
+}
+
+TEST_F(DetachedPanelPresentFixture, ModeChangeSkipsClosedWindow) {
+	Handle<EditorPanel> panel = PanelManager::OpenPanel(DetachTestPanel::GetReflectType(), _main);
+	ASSERT_TRUE(panel.IsValid());
+	Frame();
+	Frame();
+	Handle<Window> floating = TearOut();
+	ASSERT_TRUE(floating.IsValid());
+
+	WindowSystem::RequestDestroy(floating);
+	Frame();
+	ASSERT_FALSE(floating.IsValid());
+
+	_policy.SetMode(InteractionMode::NoThrottling);
+	ASSERT_NE(_main.Get(), nullptr);
+	EXPECT_FALSE(_main.Get()->GetVSyncHint());
 }
 
 namespace {

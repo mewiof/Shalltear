@@ -40,7 +40,7 @@ namespace Shalltear {
 		// along the view
 		f32 falloffDistance = 100.0f;
 
-		i32 directions = 4;
+		i32 directions = 8;
 
 		bool downsample = true;
 

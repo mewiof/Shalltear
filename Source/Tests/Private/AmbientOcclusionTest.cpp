@@ -171,8 +171,11 @@ namespace {
 			return true;
 		}
 
-		Vec3 CameraPosition() const { return Vec3(0.0f, 3.0f, 7.0f); }
-		Mat4 View() const { return Mat4::LookAt(CameraPosition(), Vec3(0.0f, 0.5f, 0.0f)); }
+		Vec3 _eye{0.0f, 3.0f, 7.0f};
+		Vec3 _lookAt{0.0f, 0.5f, 0.0f};
+
+		Vec3 CameraPosition() const { return _eye; }
+		Mat4 View() const { return Mat4::LookAt(_eye, _lookAt); }
 		Mat4 Projection() const {
 			return Mat4::PerspectiveReverseZ(75.0f, static_cast<f32>(_size.x) / static_cast<f32>(_size.y),
 											 Ops::EDITOR_NEAR_PLANE, Ops::EDITOR_FAR_PLANE);
@@ -220,6 +223,41 @@ namespace {
 		}
 
 		static constexpr Vec3 SLAB_POSITION{2.2f, 3.0f, 3.0f};
+
+		bool AddBoard() {
+			Asset* cubeMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
+			auto* material = static_cast<MaterialAsset*>(AssetDatabase::LoadAsset(Path("project://Matte.mat")));
+			if (!cubeMesh || !material) {
+				return false;
+			}
+			Handle<SceneObject> board = SceneSystem::CreateObject("Board", _scene);
+			board->SetLocalPosition(Vec3(0.1f, 1.5f, 4.0f));
+			board->SetLocalScale(Vec3(0.08f, 3.0f, 0.02f));
+			Handle<MeshRenderer> renderer = board->AddComponent<MeshRenderer>();
+			renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeMesh)));
+			renderer->SetMaterial(0, Handle<MaterialAsset>(material));
+			SceneSystem::EndFrame();
+			return true;
+		}
+
+		static i32 WorstDarkening(const Vector<u8>& reference, const Vector<u8>& occluded, Vec2I size, Vec2I center, i32 half, i32& outLit) {
+			i32 worst = 0;
+			outLit = 0;
+			for (i32 y = center.y - half; y <= center.y + half; ++y) {
+				for (i32 x = center.x - half; x <= center.x + half; ++x) {
+					if (x < 0 || y < 0 || x >= size.x || y >= size.y) {
+						continue;
+					}
+					const i32 base = Texel(reference, size, x, y)[0];
+					if (base < 8) {
+						continue;
+					}
+					++outLit;
+					worst = Math::Max(worst, base - static_cast<i32>(Texel(occluded, size, x, y)[0]));
+				}
+			}
+			return worst;
+		}
 
 		bool Render(std::span<const Handle<RenderPass>> rows, Vector<u8>& outPixels, Vec2I& outSize) {
 			ViewDesc desc;
@@ -462,6 +500,127 @@ TEST_F(AmbientOcclusionRenderFixture, AfterOpaqueDarkensEmissionDefaultDoesNot) 
 	EXPECT_LT(pasted / base, 0.97f) << "emissive " << base << " -> " << pasted;
 }
 
+TEST_F(AmbientOcclusionRenderFixture, FarForegroundLeavesSurfaceUnoccluded) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+	ASSERT_TRUE(AddBoard());
+	_eye = Vec3(0.0f, 1.5f, 7.0f);
+	_lookAt = Vec3(0.0f, 1.5f, 0.0f);
+
+	AmbientOcclusionPass off;
+	off.intensity = 0.0f;
+	const Handle<RenderPass> offRows[] = {Handle<RenderPass>(&off)};
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(offRows, reference, size));
+
+	Vec2I facePixel{};
+	ASSERT_TRUE(Pixel(Vec3(0.0f, 1.5f, 1.0f), facePixel));
+
+	for (i32 arm = 0; arm < 2; ++arm) {
+		AmbientOcclusionPass on;
+		on.radius = 0.5f;
+		on.downsample = arm == 0;
+		const Handle<RenderPass> onRows[] = {Handle<RenderPass>(&on)};
+		Vector<u8> occluded{GetMemoryResource(MemTag::Graphics)};
+		Vec2I occludedSize{};
+		ASSERT_TRUE(Render(onRows, occluded, occludedSize));
+		ASSERT_EQ(size, occludedSize);
+
+		i32 lit = 0;
+		const i32 worst = WorstDarkening(reference, occluded, size, facePixel, 8, lit);
+		ASSERT_EQ(lit, 289) << (on.downsample ? "half" : "full");
+		EXPECT_LE(worst, 2) << (on.downsample ? "half" : "full");
+	}
+}
+
+TEST_F(AmbientOcclusionRenderFixture, GrazingOpenFloorStaysUnoccluded) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+	_eye = Vec3(6.0f, 0.5f, 12.0f);
+	_lookAt = Vec3(-10.0f, 0.2f, 12.0f);
+
+	AmbientOcclusionPass off;
+	off.intensity = 0.0f;
+	const Handle<RenderPass> offRows[] = {Handle<RenderPass>(&off)};
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(offRows, reference, size));
+
+	for (i32 arm = 0; arm < 2; ++arm) {
+		AmbientOcclusionPass on;
+		on.radius = 1.0f;
+		on.downsample = arm == 0;
+		const Handle<RenderPass> onRows[] = {Handle<RenderPass>(&on)};
+		Vector<u8> occluded{GetMemoryResource(MemTag::Graphics)};
+		Vec2I occludedSize{};
+		ASSERT_TRUE(Render(onRows, occluded, occludedSize));
+		ASSERT_EQ(size, occludedSize);
+
+		i32 lit = 0;
+		const i32 worst = WorstDarkening(reference, occluded, size, Vec2I{size.x / 2, size.y / 2}, size.x, lit);
+		ASSERT_GT(lit, 8000) << (on.downsample ? "half" : "full");
+		EXPECT_EQ(worst, 0) << (on.downsample ? "half" : "full");
+	}
+}
+
+TEST_F(AmbientOcclusionRenderFixture, StraightCreaseReadsUniform) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+
+	AmbientOcclusionPass off;
+	off.intensity = 0.0f;
+	const Handle<RenderPass> offRows[] = {Handle<RenderPass>(&off)};
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(offRows, reference, size));
+
+	Vec2I left{};
+	Vec2I right{};
+	ASSERT_TRUE(Pixel(Vec3(0.5f, 0.0f, 1.15f), left));
+	ASSERT_TRUE(Pixel(Vec3(-0.5f, 0.0f, 1.15f), right));
+	ASSERT_EQ(left.y, right.y);
+	ASSERT_GT(right.x - left.x, 12);
+
+	for (i32 arm = 0; arm < 2; ++arm) {
+		AmbientOcclusionPass on;
+		on.radius = 0.4f;
+		on.directions = 2;
+		on.downsample = arm == 0;
+		const Handle<RenderPass> onRows[] = {Handle<RenderPass>(&on)};
+		Vector<u8> occluded{GetMemoryResource(MemTag::Graphics)};
+		Vec2I occludedSize{};
+		ASSERT_TRUE(Render(onRows, occluded, occludedSize));
+		ASSERT_EQ(size, occludedSize);
+
+		i32 darkest = 255;
+		i32 brightest = 0;
+		for (i32 x = left.x; x <= right.x; ++x) {
+			const i32 value = Texel(occluded, size, x, left.y)[0];
+			darkest = Math::Min(darkest, value);
+			brightest = Math::Max(brightest, value);
+		}
+		const i32 base = Texel(reference, size, left.x, left.y)[0];
+		EXPECT_LT(brightest, base - 4) << (on.downsample ? "half" : "full");
+		EXPECT_LE(brightest - darkest, 2) << (on.downsample ? "half " : "full ") << darkest << " -> " << brightest;
+	}
+}
+
 TEST(AmbientOcclusionPlanTest, HalfChainMakesFullExtentTarget) {
 	AmbientOcclusionPass row;
 	row.intensity = 1.0f;
@@ -471,17 +630,20 @@ TEST(AmbientOcclusionPlanTest, HalfChainMakesFullExtentTarget) {
 	row.DeclarePlan(plan);
 
 	ASSERT_EQ(plan.GetTargetCount(), 4u);
-	ASSERT_EQ(plan.GetStepCount(), 4u);
+	ASSERT_EQ(plan.GetStepCount(), 6u);
 	for (u32 i = 0; i < 3; ++i) {
 		EXPECT_EQ(plan.GetTarget(i).divisor, 2) << "target " << i;
 		EXPECT_EQ(plan.GetTarget(i).format, RHI::Format::R8Unorm) << "target " << i;
 	}
 	EXPECT_EQ(plan.GetStep(0).reads[0], PASS_NO_READ);
-	EXPECT_EQ(plan.GetStep(1).reads[0], plan.GetStep(0).target);
-	EXPECT_EQ(plan.GetStep(2).reads[0], plan.GetStep(1).target);
-	EXPECT_EQ(plan.GetStep(3).reads[0], plan.GetStep(2).target);
-	EXPECT_EQ(plan.GetTarget(plan.GetStep(3).target).divisor, 1);
-	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(3).target);
+	for (u32 i = 1; i < 6; ++i) {
+		EXPECT_EQ(plan.GetStep(i).reads[0], plan.GetStep(i - 1).target) << "step " << i;
+	}
+	for (u32 i = 0; i < 5; ++i) {
+		EXPECT_EQ(plan.GetTarget(plan.GetStep(i).target).divisor, 2) << "step " << i;
+	}
+	EXPECT_EQ(plan.GetTarget(plan.GetStep(5).target).divisor, 1);
+	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(5).target);
 }
 
 TEST(AmbientOcclusionPlanTest, AfterOpaqueCompositesInsteadOfProducing) {
@@ -493,10 +655,10 @@ TEST(AmbientOcclusionPlanTest, AfterOpaqueCompositesInsteadOfProducing) {
 	row.DeclarePlan(plan);
 
 	ASSERT_EQ(plan.GetTargetCount(), 4u);
-	ASSERT_EQ(plan.GetStepCount(), 5u);
-	EXPECT_EQ(plan.GetStep(4).target, PASS_SCENE_TARGET);
-	EXPECT_EQ(plan.GetStep(4).reads[0], plan.GetStep(3).target);
-	EXPECT_EQ(plan.GetTarget(plan.GetStep(3).target).divisor, 1);
+	ASSERT_EQ(plan.GetStepCount(), 7u);
+	EXPECT_EQ(plan.GetStep(6).target, PASS_SCENE_TARGET);
+	EXPECT_EQ(plan.GetStep(6).reads[0], plan.GetStep(5).target);
+	EXPECT_EQ(plan.GetTarget(plan.GetStep(5).target).divisor, 1);
 	EXPECT_EQ(plan.GetProduced(), PassProduces::None);
 }
 
@@ -510,9 +672,9 @@ TEST(AmbientOcclusionPlanTest, AfterOpaqueFullResCompositesLastBlur) {
 	row.DeclarePlan(plan);
 
 	ASSERT_EQ(plan.GetTargetCount(), 3u);
-	ASSERT_EQ(plan.GetStepCount(), 4u);
-	EXPECT_EQ(plan.GetStep(3).target, PASS_SCENE_TARGET);
-	EXPECT_EQ(plan.GetStep(3).reads[0], plan.GetStep(2).target);
+	ASSERT_EQ(plan.GetStepCount(), 6u);
+	EXPECT_EQ(plan.GetStep(5).target, PASS_SCENE_TARGET);
+	EXPECT_EQ(plan.GetStep(5).reads[0], plan.GetStep(4).target);
 }
 
 TEST(AmbientOcclusionPlanTest, AfterOpaqueAsksForSceneColor) {
@@ -532,9 +694,9 @@ TEST(AmbientOcclusionPlanTest, AfterOpaqueAtEarlyPointFallsBack) {
 	PassPlan plan(Vec2I{256, 256}, Vec3{});
 	row.DeclarePlan(plan);
 
-	ASSERT_EQ(plan.GetStepCount(), 4u);
-	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(3).target);
-	EXPECT_EQ(plan.GetTarget(plan.GetStep(3).target).divisor, 1);
+	ASSERT_EQ(plan.GetStepCount(), 6u);
+	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(5).target);
+	EXPECT_EQ(plan.GetTarget(plan.GetStep(5).target).divisor, 1);
 }
 
 TEST(AmbientOcclusionPlanTest, DownsampleOffFullExtentNoUpsample) {
@@ -545,11 +707,11 @@ TEST(AmbientOcclusionPlanTest, DownsampleOffFullExtentNoUpsample) {
 	row.DeclarePlan(plan);
 
 	ASSERT_EQ(plan.GetTargetCount(), 3u);
-	ASSERT_EQ(plan.GetStepCount(), 3u);
+	ASSERT_EQ(plan.GetStepCount(), 5u);
 	for (u32 i = 0; i < plan.GetTargetCount(); ++i) {
 		EXPECT_EQ(plan.GetTarget(i).divisor, 1) << "target " << i;
 	}
-	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(2).target);
+	EXPECT_EQ(plan.GetProducedTarget(PassProduces::AmbientOcclusion), plan.GetStep(4).target);
 }
 
 TEST(AmbientOcclusionPlanTest, ZeroIntensityDeclaresNothing) {

@@ -4503,6 +4503,10 @@ namespace Shalltear {
 					viewUniforms.directionalLightCount = 0.0f;
 					viewUniforms.punctualLightCount = 0.0f;
 				}
+			} else if (RHI::TransientAllocation spare = device.AllocateTransient(sizeof(GPULight), 16); spare.IsValid()) {
+				// masked-off light load still executed by damn lavapipe (null address crashes)
+				std::memset(spare.cpu, 0, sizeof(GPULight));
+				viewUniforms.lightAddress = device.GetBufferDeviceAddress(spare.buffer) + spare.offset;
 			}
 
 			const u32 punctualCount = lightCount - directionalCount;

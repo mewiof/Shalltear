@@ -1150,7 +1150,9 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 	namespace {
 
 		str PathKey(std::string_view path) {
-			str key = std::filesystem::path(path).lexically_normal().generic_string();
+			str slashed(path);
+			std::replace(slashed.begin(), slashed.end(), '\\', '/');
+			str key = std::filesystem::path(slashed).lexically_normal().generic_string();
 			for (char& c : key) {
 				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 			}

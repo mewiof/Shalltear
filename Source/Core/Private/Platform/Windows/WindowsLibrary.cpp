@@ -22,6 +22,14 @@ namespace Shalltear::Platform {
 		}
 	}
 
+	bool ClaimLibraryFile(const str&) {
+		// writer already refused by loader's hold on a mapped image file
+		return true;
+	}
+
+	void ReleaseLibraryFile(const str&) {
+	}
+
 	void* FindSymbol(const void* imageBase, const char* name) {
 		if (!imageBase || !name) {
 			return nullptr;

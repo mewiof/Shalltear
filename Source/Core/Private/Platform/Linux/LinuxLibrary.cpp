@@ -7,7 +7,9 @@
 #include <vector>
 
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <link.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 namespace Shalltear::Platform {
@@ -75,9 +77,15 @@ namespace Shalltear::Platform {
 			u32 references = 0;
 		};
 
+		struct ClaimedFile {
+			str path;
+			int descriptor = -1;
+		};
+
 		struct LibraryTable {
 			std::mutex mutex;
 			std::vector<OpenedLibrary> opened;
+			std::vector<ClaimedFile> claimed;
 		};
 
 		LibraryTable& GetTable() {
@@ -166,6 +174,34 @@ namespace Shalltear::Platform {
 		}
 		if (handle) {
 			::dlclose(handle);
+		}
+	}
+
+	bool ClaimLibraryFile(const str& utf8Path) {
+		const int descriptor = ::open(utf8Path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0755);
+		if (descriptor < 0) {
+			return false;
+		}
+		// mapped file truncated by another process = relocated pages zeroed (fucking hell)
+		if (::flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
+			::close(descriptor);
+			return false;
+		}
+		LibraryTable& table = GetTable();
+		std::lock_guard lock(table.mutex);
+		table.claimed.push_back({utf8Path, descriptor});
+		return true;
+	}
+
+	void ReleaseLibraryFile(const str& utf8Path) {
+		LibraryTable& table = GetTable();
+		std::lock_guard lock(table.mutex);
+		for (size_t i = 0; i < table.claimed.size(); ++i) {
+			if (table.claimed[i].path == utf8Path) {
+				::close(table.claimed[i].descriptor);
+				table.claimed.erase(table.claimed.begin() + static_cast<std::ptrdiff_t>(i));
+				return;
+			}
 		}
 	}
 

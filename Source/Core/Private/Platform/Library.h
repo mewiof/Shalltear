@@ -20,6 +20,10 @@ namespace Shalltear::Platform {
 	void* OpenLibrary(const str& utf8Path, str* outError = nullptr);
 	void CloseLibrary(void* imageBase);
 
+	// false while held elsewhere, claimed until ReleaseLibraryFile
+	bool ClaimLibraryFile(const str& utf8Path);
+	void ReleaseLibraryFile(const str& utf8Path);
+
 	// null unless image itself defines name
 	void* FindSymbol(const void* imageBase, const char* name);
 

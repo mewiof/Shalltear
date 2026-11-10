@@ -44,6 +44,7 @@ namespace Shalltear::EditorPlatform {
 	std::string_view GetExecutableSuffix();
 	std::string_view GetSharedLibrarySuffix();
 	char GetSearchPathSeparator();
+	bool FileNamesFoldCase();
 
 	// VS Code launch.json "type" value + a whole "key": value entry
 	std::string_view GetDebuggerType();

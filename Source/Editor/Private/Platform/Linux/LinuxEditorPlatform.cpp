@@ -101,6 +101,10 @@ namespace Shalltear::EditorPlatform {
 		return "Linux";
 	}
 
+	bool FileNamesFoldCase() {
+		return false;
+	}
+
 	std::string_view GetSharedLibrarySuffix() {
 		return ".so";
 	}

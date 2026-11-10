@@ -16,6 +16,7 @@
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
 #include "ChildProcess.h"
+#include "Platform/EditorPlatform.h"
 
 #include <chrono>
 #include <filesystem>
@@ -222,6 +223,9 @@ namespace Shalltear::ProjectOps {
 	bool PathsEqual(const str& a, const str& b) {
 		if (a.size() != b.size()) {
 			return false;
+		}
+		if (!EditorPlatform::FileNamesFoldCase()) {
+			return a == b;
 		}
 		for (size_t i = 0; i < a.size(); ++i) {
 			if (ToLowerAscii(a[i]) != ToLowerAscii(b[i])) {

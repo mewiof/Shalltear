@@ -208,6 +208,10 @@ namespace Shalltear::EditorPlatform {
 		return ';';
 	}
 
+	bool FileNamesFoldCase() {
+		return true;
+	}
+
 	std::string_view GetDebuggerType() {
 		return "cppvsdbg";
 	}

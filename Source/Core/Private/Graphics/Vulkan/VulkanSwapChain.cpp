@@ -12,12 +12,32 @@
 #include <vulkan/vulkan_win32.h>
 
 #include "Shalltear/Core/Memory.h"
+#include "Shalltear/Core/Time.h"
 
 #include <algorithm>
 
 namespace Shalltear::RHI {
 
 	namespace {
+
+		bool SurfaceWaitsForPresent(const SwapChainImpl& impl) {
+			const DeviceImpl& d = *impl.device;
+			if (d.presentWait != PresentWait::V2) {
+				return d.presentWait == PresentWait::V1;
+			}
+			auto getCapabilities = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR>(d.fi.vkGetPhysicalDeviceSurfaceCapabilities2KHR);
+			if (!getCapabilities) {
+				return false;
+			}
+			VkSurfaceCapabilitiesPresentWait2KHR wait{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR};
+			VkSurfaceCapabilitiesPresentId2KHR id{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR};
+			id.pNext = &wait;
+			VkSurfaceCapabilities2KHR capabilities{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR};
+			capabilities.pNext = &id;
+			VkPhysicalDeviceSurfaceInfo2KHR surface{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR};
+			surface.surface = impl.surface;
+			return getCapabilities(d.physicalDevice, &surface, &capabilities) == VK_SUCCESS && id.presentId2Supported && wait.presentWait2Supported;
+		}
 
 		void ReleaseSwapChainImages(SwapChainImpl& impl) {
 			DeviceImpl& d = *impl.device;
@@ -126,7 +146,15 @@ namespace Shalltear::RHI {
 				imageCount = std::min(imageCount, caps.maxImageCount);
 			}
 
+			impl.presentWait = WaitsForDisplay(policy, SurfaceWaitsForPresent(impl));
+			impl.presentId = 0;
+			impl.presentWaitRetryTicks = 0;
+			impl.presentWaitRetrySeconds = PRESENT_WAIT_RETRY_SECONDS;
+
 			VkSwapchainCreateInfoKHR createInfo{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+			if (impl.presentWait && d.presentWait == PresentWait::V2) {
+				createInfo.flags = VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR;
+			}
 			createInfo.surface = impl.surface;
 			createInfo.minImageCount = imageCount;
 			createInfo.imageFormat = chosen.format;
@@ -147,6 +175,7 @@ namespace Shalltear::RHI {
 					SLT_LOG_ERROR("Graphics", "vkCreateSwapchainKHR failed: {}", VkResultName(result));
 				}
 				impl.swapchain = VK_NULL_HANDLE;
+				impl.presentWait = false;
 				return false;
 			}
 
@@ -260,6 +289,77 @@ namespace Shalltear::RHI {
 		if (!CreateSurfaceObjects(impl) || !CreateSwapChainObjects(impl, impl.size, impl.vsync, VK_NULL_HANDLE)) {
 			impl.needsRecreate = true;
 		}
+	}
+
+	bool DeviceImpl::WaitForPresent(SwapChainImpl& swapChain, u64 presentId, f64 refreshSeconds) {
+		const u64 timeoutNs = static_cast<u64>(PresentWaitTimeout(refreshSeconds) * 1.0e9);
+		VkResult result = VK_SUCCESS;
+		if (presentWait == PresentWait::V2) {
+			VkPresentWait2InfoKHR info{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
+			info.presentId = presentId;
+			info.timeout = timeoutNs;
+			result = fd.vkWaitForPresent2KHR(device, swapChain.swapchain, &info);
+		} else {
+			result = fd.vkWaitForPresentKHR(device, swapChain.swapchain, presentId, timeoutNs);
+		}
+		if (result == VK_SUCCESS) {
+			swapChain.presentWaitRetrySeconds = PRESENT_WAIT_RETRY_SECONDS;
+			return true;
+		}
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR) {
+			swapChain.needsRecreate = true;
+			return false;
+		}
+		if (result != VK_TIMEOUT && !NoteLoss(result, "vkWaitForPresentKHR")) {
+			SLT_LOG_WARN("Graphics", "vkWaitForPresentKHR failed: {}", VkResultName(result));
+		}
+		swapChain.presentWaitRetryTicks = Time::GetTicks() + static_cast<u64>(swapChain.presentWaitRetrySeconds * static_cast<f64>(Time::GetTicksPerSecond()));
+		swapChain.presentWaitRetrySeconds = NextPresentWaitRetry(swapChain.presentWaitRetrySeconds);
+		return false;
+	}
+
+	FrameSync DeviceImpl::SyncFrame(std::span<SwapChain* const> presented, f64 refreshSeconds, u64 frameStartTicks) {
+		FrameSync sync;
+		if (presented.empty()) {
+			return sync;
+		}
+		DeviceImpl& d = *presented[0]->_impl->device;
+		SLT_RHI_ASSERT_MAIN_THREAD(&d);
+		SLT_CORE_ASSERT_MSG(!d.inFrame, "SyncFrame must be called after EndFrame");
+
+		const f64 frequency = static_cast<f64>(Time::GetTicksPerSecond());
+		const u64 now = Time::GetTicks();
+		const auto waits = [now](const SwapChainImpl& s) { return s.presentWait && s.swapchain && now >= s.presentWaitRetryTicks; };
+
+		bool anyWaits = false;
+		for (SwapChain* swapChain : presented) {
+			const SwapChainImpl& s = *swapChain->_impl;
+			sync.waitable += s.presentWait ? 1 : 0;
+			anyWaits = anyWaits || waits(s);
+		}
+		const u32 depth = anyWaits ? d.presentQueue.depth : 2;
+		const u32 behind = depth - 1;
+
+		if (d.timelineCounter > behind) {
+			d.WaitForSubmission(d.timelineCounter - behind, UINT64_MAX);
+		}
+		for (SwapChain* swapChain : presented) {
+			SwapChainImpl& s = *swapChain->_impl;
+			if (!d.lost && waits(s) && s.presentId > behind && d.WaitForPresent(s, s.presentId - behind, refreshSeconds)) {
+				++sync.synced;
+			}
+		}
+		if (sync.synced > 0 && frameStartTicks != 0 && frameStartTicks <= now) {
+			const f64 cpu = static_cast<f64>(now - frameStartTicks) / frequency;
+			const f64 work = d.gpuFrameSeconds >= 0.0 ? cpu + d.gpuFrameSeconds : PRESENT_WORK_UNKNOWN;
+			const f64 latency = depth <= 1 ? static_cast<f64>(Time::GetTicks() - frameStartTicks) / frequency : 0.0;
+			d.presentQueue = AdvancePresentQueue(d.presentQueue, work, latency, refreshSeconds);
+		}
+		return sync;
+	}
+
+	FrameSync SyncFrame(std::span<SwapChain* const> presented, f64 refreshSeconds, u64 frameStartTicks) {
+		return DeviceImpl::SyncFrame(presented, refreshSeconds, frameStartTicks);
 	}
 
 	SwapChain* Device::CreateSwapChainForWindow(const NativeSwapChainDesc& desc) {
@@ -384,7 +484,23 @@ namespace Shalltear::RHI {
 		presentInfo.pSwapchains = &impl.swapchain;
 		presentInfo.pImageIndices = &impl.currentImageIndex;
 
+		const u64 presentId = impl.presentId + 1;
+		VkPresentIdKHR id{VK_STRUCTURE_TYPE_PRESENT_ID_KHR};
+		VkPresentId2KHR id2{VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR};
+		if (impl.presentWait && d.presentWait == PresentWait::V2) {
+			id2.swapchainCount = 1;
+			id2.pPresentIds = &presentId;
+			presentInfo.pNext = &id2;
+		} else if (impl.presentWait) {
+			id.swapchainCount = 1;
+			id.pPresentIds = &presentId;
+			presentInfo.pNext = &id;
+		}
+
 		VkResult result = d.fd.vkQueuePresentKHR(d.queue, &presentInfo);
+		if (impl.presentWait && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)) {
+			impl.presentId = presentId;
+		}
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_SURFACE_LOST_KHR) {
 			impl.needsRecreate = true;
 		} else if (result != VK_SUCCESS && !d.NoteLoss(result, "vkQueuePresentKHR")) {

@@ -43,6 +43,7 @@ namespace Shalltear {
 
 			bool inPump = false;
 			bool inModalTick = false;
+			u64 pumpTicks = 0;
 
 			Vector<Window*> windows{GetMemoryResource(MemTag::Platform)};
 			Vector<u64> destroyQueue{GetMemoryResource(MemTag::Platform)};

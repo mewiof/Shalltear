@@ -3,6 +3,7 @@
 #include "Shalltear/Core/Assert.h"
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/Log.h"
+#include "Shalltear/Core/Time.h"
 #include "Shalltear/Core/Window/WindowEvents.h"
 
 #include "Input/InputInternal.h"
@@ -192,6 +193,7 @@ namespace Shalltear {
 			return;
 		}
 
+		state.pumpTicks = Time::GetTicks();
 		if (state.inPump) {
 			return;
 		}

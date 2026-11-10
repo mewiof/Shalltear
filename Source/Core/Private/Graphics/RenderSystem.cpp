@@ -62,6 +62,7 @@
 #include "Graphics/TextureSampling.h"
 #include "Module/EngineStateTable.h"
 #include "Shalltear/Core/Window.h"
+#include "Window/FramePacing.h"
 #include "Window/WindowInternal.h"
 
 #include <algorithm>
@@ -922,6 +923,7 @@ namespace Shalltear {
 			u32 lastDrawCalls = 0;
 			u32 lastTriangles = 0;
 			GraphicsInternal::PresentCounts lastPresents;
+			Vector<RHI::SwapChain*> presentedSwapChains{GetMemoryResource(MemTag::Graphics)};
 
 			u32 frameLightsBinned = 0;
 			u32 frameLightsDropped = 0;
@@ -9391,15 +9393,32 @@ namespace Shalltear {
 
 		device.EndFrame();
 
+		state.presentedSwapChains.clear();
+		f32 refreshRate = 0.0f;
 		for (u32 workIndex = 0; workIndex < workCount; ++workIndex) {
 			auto contextIt = state.windowContexts.find(work[workIndex].window.GetInstanceId());
 			if (contextIt != state.windowContexts.end() && contextIt->second.presentedThisFrame) {
 				contextIt->second.swapChain->Present();
 				++state.lastPresents.windows;
+				state.presentedSwapChains.push_back(contextIt->second.swapChain);
 				if (contextIt->second.swapChain->GetVSync()) {
 					++state.lastPresents.vsyncWindows;
 				}
+				if (const Window* window = work[workIndex].window.Get()) {
+					const f32 hz = window->GetMonitor().refreshRate;
+					if (hz > 0.0f && (refreshRate <= 0.0f || hz < refreshRate)) {
+						refreshRate = hz;
+					}
+				}
 			}
+		}
+		{
+			SLT_PROFILE_ZONE("Render.Sync");
+			const f32 hz = refreshRate > 0.0f ? refreshRate : FramePacingInternal::FALLBACK_REFRESH_RATE;
+			const RHI::FrameSync sync = RHI::SyncFrame({state.presentedSwapChains.data(), state.presentedSwapChains.size()}, 1.0 / static_cast<f64>(hz),
+													   WindowInternal::GetState().pumpTicks);
+			state.lastPresents.displayWaitable = sync.waitable;
+			state.lastPresents.displaySynced = sync.synced;
 		}
 
 		state.lastDrawCalls = exec.drawCalls;

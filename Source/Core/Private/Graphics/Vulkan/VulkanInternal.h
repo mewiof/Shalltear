@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/DeviceLossPolicy.h"
+#include "Graphics/PresentPolicy.h"
 #include "Graphics/Vulkan/VulkanLoader.h"
 
 #include "Shalltear/Core/Assert.h"
@@ -263,6 +264,7 @@ namespace Shalltear::RHI {
 		Vector<UploadRingBlock> uploadRing{GetMemoryResource(MemTag::Graphics)};
 		u32 uploadRingActiveBlock = 0;
 		u64 timelineValue = 0;
+		bool timed = false;
 
 		Vector<VkSemaphore> waitSemaphores{GetMemoryResource(MemTag::Graphics)};
 		Vector<VkSemaphore> signalSemaphores{GetMemoryResource(MemTag::Graphics)};
@@ -286,6 +288,17 @@ namespace Shalltear::RHI {
 		u32 currentImageIndex = 0;
 		bool acquiredThisFrame = false;
 		bool needsRecreate = false;
+
+		bool presentWait = false;
+		u64 presentId = 0;
+		u64 presentWaitRetryTicks = 0;
+		f64 presentWaitRetrySeconds = PRESENT_WAIT_RETRY_SECONDS;
+	};
+
+	enum class PresentWait : u8 {
+		None,
+		V1,
+		V2,
 	};
 
 	struct DeviceImpl {
@@ -311,6 +324,8 @@ namespace Shalltear::RHI {
 		bool tableSupported = false;
 		bool faultInfo = false;
 		bool checkpoints = false;
+		bool surfaceCapabilities2 = false;
+		PresentWait presentWait = PresentWait::None;
 		Vector<char> marks{GetMemoryResource(MemTag::Graphics)};
 		u32 nextMark = 0;
 
@@ -346,6 +361,11 @@ namespace Shalltear::RHI {
 		u32 frameIndex = 0;
 		bool inFrame = false;
 
+		PresentQueue presentQueue;
+		VkQueryPool frameTimestamps = VK_NULL_HANDLE;
+		f64 timestampSeconds = 0.0;
+		f64 gpuFrameSeconds = PRESENT_WORK_UNKNOWN;
+
 		VkCommandPool immediatePool = VK_NULL_HANDLE;
 		VkCommandBuffer immediateBuffer = VK_NULL_HANDLE;
 		VkFence immediateFence = VK_NULL_HANDLE;
@@ -375,6 +395,9 @@ namespace Shalltear::RHI {
 		std::thread::id mainThread;
 
 		bool NoteLoss(VkResult result, const char* call);
+		bool WaitForSubmission(u64 timelineValue, u64 timeoutNs);
+		bool WaitForPresent(SwapChainImpl& swapChain, u64 presentId, f64 refreshSeconds);
+		static FrameSync SyncFrame(std::span<SwapChain* const> presented, f64 refreshSeconds, u64 frameStartTicks);
 		void MarkLost(const char* call);
 		void LogLossCause();
 		bool CreateCore(bool rebuild);

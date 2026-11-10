@@ -524,9 +524,13 @@ namespace Shalltear::RHI {
 		if (!desc.headless && !haveSurfaceExtensions) {
 			return fail("VK_KHR_surface / VK_KHR_win32_surface unavailable");
 		}
+		impl->surfaceCapabilities2 = haveSurfaceExtensions && HasExtension(instanceExtensions, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
 		if (haveSurfaceExtensions) {
 			enabledExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 			enabledExtensions.push_back("VK_KHR_win32_surface");
+		}
+		if (impl->surfaceCapabilities2) {
+			enabledExtensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
 		}
 		bool haveDebugUtils = HasExtension(instanceExtensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		if (impl->validation && haveDebugUtils) {
@@ -639,6 +643,9 @@ namespace Shalltear::RHI {
 			VkPhysicalDeviceProperties2 props{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
 			impl->fi.vkGetPhysicalDeviceProperties2(impl->physicalDevice, &props);
 			impl->maxAnisotropy = props.properties.limits.maxSamplerAnisotropy;
+			impl->timestampSeconds = props.properties.limits.timestampComputeAndGraphics
+										 ? static_cast<f64>(props.properties.limits.timestampPeriod) * 1.0e-9
+										 : 0.0;
 			impl->framebufferColorSamples = static_cast<u32>(props.properties.limits.framebufferColorSampleCounts);
 			impl->framebufferDepthSamples = static_cast<u32>(props.properties.limits.framebufferDepthSampleCounts);
 		}
@@ -711,7 +718,8 @@ namespace Shalltear::RHI {
 		features12.descriptorBindingUpdateUnusedWhilePending = tableFeatures ? VK_TRUE : VK_FALSE;
 
 		Vector<const char*> deviceExtensions{GetMemoryResource(MemTag::Graphics)};
-		if ((!impl->headless || haveSurfaceExtensions) && HasExtension(available, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+		const bool swapchain = (!impl->headless || haveSurfaceExtensions) && HasExtension(available, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		if (swapchain) {
 			deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		}
 		if (impl->faultInfo) {
@@ -722,6 +730,44 @@ namespace Shalltear::RHI {
 		}
 		if (impl->checkpoints) {
 			deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+		}
+
+		VkPhysicalDevicePresentIdFeaturesKHR presentId{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR};
+		VkPhysicalDevicePresentWaitFeaturesKHR presentWait{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR};
+		VkPhysicalDevicePresentId2FeaturesKHR presentId2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR};
+		VkPhysicalDevicePresentWait2FeaturesKHR presentWait2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR};
+		impl->presentWait = PresentWait::None;
+		if (swapchain) {
+			VkPhysicalDeviceFeatures2 supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+			if (impl->surfaceCapabilities2 && HasExtension(available, VK_KHR_PRESENT_ID_2_EXTENSION_NAME) &&
+				HasExtension(available, VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME)) {
+				supported.pNext = &presentId2;
+				presentId2.pNext = &presentWait2;
+				impl->fi.vkGetPhysicalDeviceFeatures2(impl->physicalDevice, &supported);
+				if (presentId2.presentId2 && presentWait2.presentWait2) {
+					impl->presentWait = PresentWait::V2;
+					deviceExtensions.push_back(VK_KHR_PRESENT_ID_2_EXTENSION_NAME);
+					deviceExtensions.push_back(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME);
+				}
+			}
+			if (impl->presentWait == PresentWait::None && HasExtension(available, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
+				HasExtension(available, VK_KHR_PRESENT_WAIT_EXTENSION_NAME)) {
+				supported.pNext = &presentId;
+				presentId.pNext = &presentWait;
+				impl->fi.vkGetPhysicalDeviceFeatures2(impl->physicalDevice, &supported);
+				if (presentId.presentId && presentWait.presentWait) {
+					impl->presentWait = PresentWait::V1;
+					deviceExtensions.push_back(VK_KHR_PRESENT_ID_EXTENSION_NAME);
+					deviceExtensions.push_back(VK_KHR_PRESENT_WAIT_EXTENSION_NAME);
+				}
+			}
+			if (impl->presentWait != PresentWait::None) {
+				VkBaseOutStructure* tail = reinterpret_cast<VkBaseOutStructure*>(&features13);
+				while (tail->pNext) {
+					tail = tail->pNext;
+				}
+				tail->pNext = reinterpret_cast<VkBaseOutStructure*>(supported.pNext);
+			}
 		}
 
 		VkDeviceCreateInfo deviceInfo{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -737,6 +783,9 @@ namespace Shalltear::RHI {
 		}
 		if (!VulkanLoader::LoadDeviceTable(impl->device, impl->fi.vkGetDeviceProcAddr, impl->fd)) {
 			return fail("device function table incomplete");
+		}
+		if (!(impl->presentWait == PresentWait::V2 ? impl->fd.vkWaitForPresent2KHR != nullptr : impl->fd.vkWaitForPresentKHR != nullptr)) {
+			impl->presentWait = PresentWait::None;
 		}
 		impl->fd.vkGetDeviceQueue(impl->device, impl->queueFamily, 0, &impl->queue);
 		if (!tableFeatures && !rebuild) {
@@ -805,6 +854,16 @@ namespace Shalltear::RHI {
 
 		VkPipelineCacheCreateInfo cacheInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
 		SLT_VK_CHECK(*impl, impl->fd.vkCreatePipelineCache(impl->device, &cacheInfo, nullptr, &impl->pipelineCache));
+
+		impl->gpuFrameSeconds = PRESENT_WORK_UNKNOWN;
+		if (impl->timestampSeconds > 0.0) {
+			VkQueryPoolCreateInfo queryInfo{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+			queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+			queryInfo.queryCount = FRAMES_IN_FLIGHT * 2;
+			if (impl->fd.vkCreateQueryPool(impl->device, &queryInfo, nullptr, &impl->frameTimestamps) != VK_SUCCESS) {
+				impl->frameTimestamps = VK_NULL_HANDLE;
+			}
+		}
 		return impl->timeline && impl->immediatePool && impl->immediateFence && impl->pipelineCache;
 	}
 
@@ -846,8 +905,13 @@ namespace Shalltear::RHI {
 			frame.waitSemaphores.clear();
 			frame.signalSemaphores.clear();
 			frame.timelineValue = 0;
+			frame.timed = false;
 		}
 		FlushDeletionQueue(immediateDeletions);
+		if (frameTimestamps) {
+			fd.vkDestroyQueryPool(device, frameTimestamps, nullptr);
+			frameTimestamps = VK_NULL_HANDLE;
+		}
 
 		for (auto& slot : buffers.slots) {
 			BufferResource& resource = slot.resource;
@@ -1102,6 +1166,25 @@ namespace Shalltear::RHI {
 		return lost;
 	}
 
+	bool DeviceImpl::WaitForSubmission(u64 timelineValue, u64 timeoutNs) {
+		if (lost) {
+			return false;
+		}
+		if (timelineValue == 0) {
+			return true;
+		}
+		VkSemaphoreWaitInfo waitInfo{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
+		waitInfo.semaphoreCount = 1;
+		waitInfo.pSemaphores = &timeline;
+		waitInfo.pValues = &timelineValue;
+		const VkResult result = fd.vkWaitSemaphores(device, &waitInfo, timeoutNs);
+		if (result == VK_TIMEOUT) {
+			return false;
+		}
+		SLT_VK_CHECK(*this, result);
+		return result == VK_SUCCESS;
+	}
+
 	void DeviceImpl::MarkLost(const char* call) {
 		if (lost) {
 			return;
@@ -1315,13 +1398,18 @@ namespace Shalltear::RHI {
 
 		FrameContext& frame = impl->frames[impl->frameIndex];
 
-		if (!impl->lost && frame.timelineValue != 0) {
-			VkSemaphoreWaitInfo waitInfo{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
-			waitInfo.semaphoreCount = 1;
-			waitInfo.pSemaphores = &impl->timeline;
-			waitInfo.pValues = &frame.timelineValue;
-			SLT_VK_CHECK(*impl, impl->fd.vkWaitSemaphores(impl->device, &waitInfo, UINT64_MAX));
+		impl->WaitForSubmission(frame.timelineValue, UINT64_MAX);
+
+		const u32 firstTimestamp = impl->frameIndex * 2;
+		if (!impl->lost && frame.timed) {
+			u64 ticks[2] = {};
+			if (impl->fd.vkGetQueryPoolResults(impl->device, impl->frameTimestamps, firstTimestamp, 2, sizeof(ticks), ticks, sizeof(u64),
+											   VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
+				ticks[1] >= ticks[0]) {
+				impl->gpuFrameSeconds = static_cast<f64>(ticks[1] - ticks[0]) * impl->timestampSeconds;
+			}
 		}
+		frame.timed = false;
 
 		if (!impl->lost) {
 			impl->FlushDeletionQueue(frame.deletionQueue);
@@ -1339,6 +1427,10 @@ namespace Shalltear::RHI {
 			VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 			begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 			SLT_VK_CHECK(*impl, impl->fd.vkBeginCommandBuffer(frame.commandBuffer, &begin));
+			if (impl->frameTimestamps) {
+				impl->fd.vkCmdResetQueryPool(frame.commandBuffer, impl->frameTimestamps, firstTimestamp, 2);
+				impl->fd.vkCmdWriteTimestamp2(frame.commandBuffer, VK_PIPELINE_STAGE_2_NONE, impl->frameTimestamps, firstTimestamp);
+			}
 		}
 
 		frame.commandListImpl.boundPipelineIndex = 0;
@@ -1363,6 +1455,10 @@ namespace Shalltear::RHI {
 			return;
 		}
 
+		if (impl->frameTimestamps) {
+			impl->fd.vkCmdWriteTimestamp2(frame.commandBuffer, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, impl->frameTimestamps, impl->frameIndex * 2 + 1);
+			frame.timed = true;
+		}
 		SLT_VK_CHECK(*impl, impl->fd.vkEndCommandBuffer(frame.commandBuffer));
 
 		const bool prologue = impl->HasPendingUploads();

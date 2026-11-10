@@ -28,11 +28,12 @@ namespace Shalltear::RHI {
 	X(vkGetPhysicalDeviceSurfacePresentModesKHR) \
 	X(vkGetPhysicalDeviceSurfaceSupportKHR)
 
-#define SLT_VK_INSTANCE_OPTIONAL_FUNCS(X) \
-	X(vkCreateDebugUtilsMessengerEXT)     \
-	X(vkDestroyDebugUtilsMessengerEXT)    \
-	X(vkCreateWin32SurfaceKHR)            \
-	X(vkGetPhysicalDeviceWin32PresentationSupportKHR)
+#define SLT_VK_INSTANCE_OPTIONAL_FUNCS(X)             \
+	X(vkCreateDebugUtilsMessengerEXT)                 \
+	X(vkDestroyDebugUtilsMessengerEXT)                \
+	X(vkCreateWin32SurfaceKHR)                        \
+	X(vkGetPhysicalDeviceWin32PresentationSupportKHR) \
+	X(vkGetPhysicalDeviceSurfaceCapabilities2KHR)
 
 #define SLT_VK_DEVICE_FUNCS(X)      \
 	X(vkDestroyDevice)              \
@@ -101,13 +102,20 @@ namespace Shalltear::RHI {
 	X(vkCreateShaderModule)         \
 	X(vkDestroyShaderModule)        \
 	X(vkCreateSampler)              \
-	X(vkDestroySampler)
+	X(vkDestroySampler)             \
+	X(vkCreateQueryPool)            \
+	X(vkDestroyQueryPool)           \
+	X(vkGetQueryPoolResults)        \
+	X(vkCmdResetQueryPool)          \
+	X(vkCmdWriteTimestamp2)
 
 #define SLT_VK_DEVICE_OPTIONAL_FUNCS(X) \
 	X(vkSetDebugUtilsObjectNameEXT)     \
 	X(vkGetDeviceFaultInfoEXT)          \
 	X(vkCmdSetCheckpointNV)             \
-	X(vkGetQueueCheckpointDataNV)
+	X(vkGetQueueCheckpointDataNV)       \
+	X(vkWaitForPresentKHR)              \
+	X(vkWaitForPresent2KHR)
 
 	struct VulkanInstanceFunctions {
 #define SLT_VK_DECLARE(name) PFN_##name name = nullptr;

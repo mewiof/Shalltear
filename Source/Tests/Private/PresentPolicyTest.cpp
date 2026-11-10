@@ -1,6 +1,8 @@
 #include "TestsPCH.h"
 
+#include "Graphics/GraphicsSettings.h"
 #include "Graphics/PresentPolicy.h"
+#include "ScreenInternal.h"
 
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/FileSystem.h"
@@ -246,6 +248,12 @@ namespace {
 			SceneSystem::CreateObject("Camera", scene).Get()->AddComponent<Camera>();
 		}
 
+		static GraphicsSettings& Graphics() {
+			GraphicsSettings* graphics = Settings::DeclareCategory<GraphicsSettings>("Graphics", SettingScope::Project);
+			SLT_CORE_ASSERT(graphics != nullptr);
+			return *graphics;
+		}
+
 		static GraphicsInternal::PresentCounts RenderFrame() {
 			WindowSystem::PumpEvents();
 			SceneSystem::UpdateAll();
@@ -256,6 +264,73 @@ namespace {
 	};
 
 } // namespace
+
+TEST_F(PresentSyncFixture, VSyncHintAppliesNextFrame) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> window = CreatePlainWindow();
+	ASSERT_TRUE(window.IsValid());
+	AddCamera();
+
+	GraphicsInternal::PresentCounts presents = RenderFrame();
+	ASSERT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 1u);
+
+	window->SetVSyncHint(false);
+	presents = RenderFrame();
+	EXPECT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 0u);
+
+	window->SetVSyncHint(true);
+	presents = RenderFrame();
+	EXPECT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 1u);
+}
+
+TEST_F(PresentSyncFixture, ProjectVSyncSkipsWindowsWithoutGame) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> window = CreatePlainWindow();
+	ASSERT_TRUE(window.IsValid());
+	AddCamera();
+
+	Graphics().vsync = VSyncMode::Off;
+	GraphicsInternal::PresentCounts presents = RenderFrame();
+	ASSERT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 1u);
+
+	window->SetVSyncHint(false);
+	Graphics().vsync = VSyncMode::On;
+	presents = RenderFrame();
+	EXPECT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 0u);
+}
+
+TEST_F(PresentSyncFixture, ProjectVSyncDrivesGameWindow) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Window> game = ScreenInternal::CreateGameWindow({}, WindowFlags::Hidden);
+	ASSERT_TRUE(game.IsValid());
+	AddCamera();
+
+	GraphicsInternal::PresentCounts presents = RenderFrame();
+	ASSERT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 1u);
+
+	Graphics().vsync = VSyncMode::Off;
+	presents = RenderFrame();
+	EXPECT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 0u);
+
+	game->SetVSyncHint(false);
+	Graphics().vsync = VSyncMode::On;
+	presents = RenderFrame();
+	EXPECT_EQ(presents.windows, 1u);
+	EXPECT_EQ(presents.vsyncWindows, 1u);
+}
 
 TEST_F(PresentSyncFixture, VSyncFramesHoldDisplayCadence) {
 	if (!RenderSystem::IsRenderingAvailable()) {

@@ -113,8 +113,8 @@ namespace Shalltear {
 
 			SettingsFieldPresentation vsync;
 			vsync.label = "V-Sync";
-			vsync.tooltip = "Synchronizes frames with the display's refresh rate (for every window). \"Window Hint\" lets each window decide. "
-							"Changing it causes a one-frame hitch.";
+			vsync.tooltip = "Synchronizes the game's frames with the display's refresh rate (for every window). \"Window Hint\" lets each window decide. "
+							"Used by built games (the editor follows \"Interaction Mode\"). Changing it causes a one-frame hitch.";
 			vsync.keywords = "vertical sync tearing present framerate refresh";
 			RegisterField("Graphics", "vsync", std::move(vsync));
 

@@ -61,6 +61,7 @@
 #include "Graphics/Skinning.h"
 #include "Graphics/TextureSampling.h"
 #include "Module/EngineStateTable.h"
+#include "ScreenInternal.h"
 #include "Shalltear/Core/Window.h"
 #include "Window/FramePacing.h"
 #include "Window/WindowInternal.h"
@@ -7781,7 +7782,7 @@ namespace Shalltear {
 		}
 
 		i32 ResolveVSyncOverride(const RenderState& state) {
-			if (!state.graphicsSettings) {
+			if (!state.graphicsSettings || !ScreenInternal::HasGameWindow()) {
 				return -1;
 			}
 			switch (state.graphicsSettings->vsync) {
@@ -7796,11 +7797,12 @@ namespace Shalltear {
 		}
 
 		void ReconcileGraphicsConfig(RenderState& state) {
-			if (const i32 wanted = ResolveVSyncOverride(state); wanted != state.vsyncOverride) {
-				state.vsyncOverride = wanted;
-				for (auto& [id, context] : state.windowContexts) {
-					if (context.swapChain) {
-						context.swapChain->Recreate(context.swapChain->GetSize(), state.ResolveVSync(context.window));
+			state.vsyncOverride = ResolveVSyncOverride(state);
+			for (auto& [id, context] : state.windowContexts) {
+				if (context.swapChain) {
+					const bool vsync = state.ResolveVSync(context.window);
+					if (vsync != context.swapChain->GetVSync()) {
+						context.swapChain->Recreate(context.swapChain->GetSize(), vsync);
 					}
 				}
 			}

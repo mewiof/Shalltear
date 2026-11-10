@@ -236,6 +236,10 @@ namespace Shalltear {
 			return project && project->runInBackground;
 		}
 
+		bool HasGameWindow() {
+			return _runtime && _runtime->window.IsValid();
+		}
+
 		str DescribeProjectDefaults(const PlayerSettings& project) {
 			return std::format("{}|{}|{}|{}", static_cast<u32>(project.fullScreenMode), project.defaultIsNativeResolution ? 1 : 0,
 							   project.defaultScreenWidth, project.defaultScreenHeight);

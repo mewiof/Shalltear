@@ -173,16 +173,18 @@ namespace Shalltear {
 		if (entry.kind != AssetBrowserOps::EntryKind::File) {
 			return false;
 		}
-		u64 stamp = FileSystem::GetLastWriteTime(
-			FileSystem::Resolve(AssetDatabase::GetMetaPath(Path(VirtualPathOf(entry.relPath)))));
+		const Path meta = FileSystem::Resolve(AssetDatabase::GetMetaPath(Path(VirtualPathOf(entry.relPath))));
+		u64 stamp = FileSystem::GetLastWriteTime(meta);
+		// same stamp for 2 writes within 1 tick of file clock (ugh)
+		size_t size = FileSystem::GetFileSize(meta);
 		auto memo = _hasProducts.find(entry.id);
-		if (memo != _hasProducts.end() && memo->second.stamp == stamp) {
+		if (memo != _hasProducts.end() && memo->second.stamp == stamp && memo->second.size == size) {
 			return memo->second.has;
 		}
 		Vector<AssetBrowserOps::Entry> products{GetMemoryResource(MemTag::Editor)};
 		AssetBrowserOps::ScanProducts(entry.relPath, entry.depth, products);
 		bool has = !products.empty();
-		_hasProducts[entry.id] = {stamp, has};
+		_hasProducts[entry.id] = {stamp, size, has};
 		_foldOutRows.erase(entry.id);
 		return has;
 	}

@@ -146,6 +146,7 @@ namespace Shalltear {
 		HashMap<u64, Vector<AssetBrowserOps::Entry>> _foldOutRows{GetMemoryResource(MemTag::Editor)};
 		struct FoldOutMemo {
 			u64 stamp = 0;
+			size_t size = 0;
 			bool has = false;
 		};
 		HashMap<u64, FoldOutMemo> _hasProducts{GetMemoryResource(MemTag::Editor)};

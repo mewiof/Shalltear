@@ -42,7 +42,7 @@ namespace PassProbes {
 		GridPush push{};
 		const EditorViewportOps::GridBasis basis =
 			EditorViewportOps::GridBasisFor(EditorViewportOps::GridPlaneFor(view, projection));
-		push.invGridProjection = basis.gridFromWorld * (projection * view).Inverse();
+		push.invGridProjection = EditorViewportOps::InverseGridProjection(basis, view, projection, position);
 		push.gridCameraPosition = basis.gridFromWorld.TransformPoint(position);
 		push.cellPixelBudget = 24.0f;
 		push.fadeDistance = 4000.0f;

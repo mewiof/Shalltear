@@ -92,7 +92,7 @@ namespace Shalltear {
 		const Ops::GridBasis basis = Ops::GridBasisFor(Ops::GridPlaneFor(view, projection));
 
 		GridPush push{};
-		push.invGridProjection = basis.gridFromWorld * (projection * view).Inverse();
+		push.invGridProjection = Ops::InverseGridProjection(basis, view, projection, context.GetCameraPosition());
 		push.gridCameraPosition = basis.gridFromWorld.TransformPoint(context.GetCameraPosition());
 		push.cellPixelBudget = CELL_PIXEL_BUDGET;
 		const bool orthographic = Math::Abs(projection(3, 2)) < 1.0e-6f;

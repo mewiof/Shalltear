@@ -6,7 +6,7 @@
 
 // 108/128 push bytes
 struct ShalltearGridPush {
-	float4x4 invGridProjection;
+	float4x4 invGridProjection;	// relative to gridCameraPosition
 	float3 gridCameraPosition;
 	float cellPixelBudget;		// smallest a cell may get in pixels
 	float fadeDistance;
@@ -62,13 +62,15 @@ float2 ShalltearLineCoverage(float2 distancePx, float widthPx) {
 }
 
 // per axis. grazing lattices should antialias along their compression
-float2 ShalltearLatticeDistancePx(float2 coord, float2 deriv, float cell) {
-	float2 distanceCells = abs(frac(coord / cell + 0.5) - 0.5);
+float2 ShalltearLatticeDistancePx(float2 camera, float2 offset, float2 deriv, float cell) {
+	// one sum would round offset away far from origin
+	float2 phase = frac(camera / cell) + offset / cell;
+	float2 distanceCells = abs(frac(phase + 0.5) - 0.5);
 	return distanceCells * (cell / max(deriv, 1.0e-20));
 }
 
-float ShalltearLattice(float2 coord, float2 deriv, float cell, float widthPx) {
-	float2 coverage = ShalltearLineCoverage(ShalltearLatticeDistancePx(coord, deriv, cell), widthPx);
+float ShalltearLattice(float2 camera, float2 offset, float2 deriv, float cell, float widthPx) {
+	float2 coverage = ShalltearLineCoverage(ShalltearLatticeDistancePx(camera, offset, deriv, cell), widthPx);
 	return max(coverage.x, coverage.y);
 }
 
@@ -80,26 +82,28 @@ PSOutput PSMain(VSOutput input) {
 	float4 nearH = mul(gGrid.invGridProjection, float4(input.ndc, 1.0, 1.0));
 	float4 farH = mul(gGrid.invGridProjection, float4(input.ndc, 0.0, 1.0));
 
-	float s = nearH.y / (nearH.y - farH.y);
-	if (!(s >= 0.0 && s <= 1.0)) {
+	float cameraHeight = gGrid.gridCameraPosition.y;
+	float nearHeight = nearH.y + cameraHeight * nearH.w;
+	float farHeight = farH.y + cameraHeight * farH.w;
+	float planeZ = farHeight / (farHeight - nearHeight);
+	if (!(planeZ >= 0.0 && planeZ <= 1.0)) {
 		discard;
 	}
-	float4 hit = lerp(nearH, farH, s);
+	float4 hit = lerp(farH, nearH, planeZ);
 	if (hit.w <= 1.0e-20) {
 		discard;
 	}
-	float3 grid = hit.xyz / hit.w;
+	float2 offset = hit.xz / hit.w;
 
-	float planeZ = 1.0 - s;
 	float slopeBias = SHALLTEAR_GRID_SAMPLE_RADIUS_PX * (abs(ddx(planeZ)) + abs(ddy(planeZ)));
 	float ndcZ = planeZ - planeZ * SHALLTEAR_GRID_DEPTH_BIAS - slopeBias;
 	if (ndcZ <= 0.0) {
 		discard;
 	}
 
-	float2 coord = grid.xz;
-	float2 deriv = float2(length(float2(ddx(coord.x), ddy(coord.x))),
-						  length(float2(ddx(coord.y), ddy(coord.y))));
+	float2 camera = gGrid.gridCameraPosition.xz;
+	float2 deriv = float2(length(float2(ddx(offset.x), ddy(offset.x))),
+						  length(float2(ddx(offset.y), ddy(offset.y))));
 	float footprint = max(max(deriv.x, deriv.y), 1.0e-8);
 
 	float level = log10(footprint * max(gGrid.cellPixelBudget, 1.0));
@@ -117,10 +121,11 @@ PSOutput PSMain(VSOutput input) {
 	float4 midRgba = lerp(majorRgba, minorRgba, levelBlend);
 	float midWidthPx = lerp(gGrid.majorLineWidthPx, gGrid.minorLineWidthPx, levelBlend);
 
-	float fine = ShalltearLattice(coord, deriv, fineCell, gGrid.minorLineWidthPx) * fineWeight;
-	float mid = ShalltearLattice(coord, deriv, midCell, midWidthPx);
-	float coarse = ShalltearLattice(coord, deriv, coarseCell, gGrid.majorLineWidthPx) * coarseWeight;
+	float fine = ShalltearLattice(camera, offset, deriv, fineCell, gGrid.minorLineWidthPx) * fineWeight;
+	float mid = ShalltearLattice(camera, offset, deriv, midCell, midWidthPx);
+	float coarse = ShalltearLattice(camera, offset, deriv, coarseCell, gGrid.majorLineWidthPx) * coarseWeight;
 
+	float2 coord = camera + offset;
 	float2 axis = float2(ShalltearAxis(coord.x, deriv.x, gGrid.majorLineWidthPx),
 						 ShalltearAxis(coord.y, deriv.y, gGrid.majorLineWidthPx));
 
@@ -134,7 +139,7 @@ PSOutput PSMain(VSOutput input) {
 	color = lerp(color, axisAlongZRgba, axis.x * axisAlongZRgba.a);
 	color = lerp(color, axisAlongXRgba, axis.y * axisAlongXRgba.a);
 
-	float ground = length(grid.xz - gGrid.gridCameraPosition.xz);
+	float ground = length(offset);
 	float fade = 1.0 - saturate(ground / max(gGrid.fadeDistance, 1.0));
 	color.a *= fade * fade;
 	if (color.a < 0.002) {

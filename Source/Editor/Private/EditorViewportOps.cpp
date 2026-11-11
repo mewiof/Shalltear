@@ -382,6 +382,10 @@ namespace Shalltear::EditorViewportOps {
 		return out;
 	}
 
+	Mat4 InverseGridProjection(const GridBasis& basis, const Mat4& view, const Mat4& projection, const Vec3& cameraPosition) {
+		return basis.gridFromWorld * (projection * (view * Mat4::Translation(cameraPosition))).Inverse();
+	}
+
 	Vec3 ViewAxisAt(const Viewpoint& viewpoint, const Vec3& point) {
 		const Vec3 forward = viewpoint.rotation * Vec3::Forward();
 		if (viewpoint.orthographic) {

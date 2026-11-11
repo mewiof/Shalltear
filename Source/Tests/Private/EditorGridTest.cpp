@@ -164,7 +164,7 @@ namespace {
 									 Ops::GridPlane plane) {
 			const Ops::GridBasis basis = Ops::GridBasisFor(plane);
 			GridPush push = PassProbes::MakeVisiblePush(view, projection, position);
-			push.invGridProjection = basis.gridFromWorld * (projection * view).Inverse();
+			push.invGridProjection = Ops::InverseGridProjection(basis, view, projection, position);
 			push.gridCameraPosition = basis.gridFromWorld.TransformPoint(position);
 			return RenderPush(push, view, projection, position, true);
 		}
@@ -199,8 +199,9 @@ namespace {
 			return static_cast<u32>(pixels[index]) + pixels[index + 1] + pixels[index + 2];
 		}
 
-		void BuildTopDownCamera(f32 height, Mat4& outView, Mat4& outProjection, Vec3& outPosition) const {
-			outPosition = Vec3(31234.5f, height, 47654.5f);
+		void BuildTopDownCamera(f32 height, Mat4& outView, Mat4& outProjection, Vec3& outPosition,
+								const Vec2& ground = Vec2(31234.5f, 47654.5f)) const {
+			outPosition = Vec3(ground.x, height, ground.y);
 			const Quat rotation = Ops::BuildCameraRotation(45.0f, 90.0f);
 			outView = Ops::BuildViewMatrix(outPosition, rotation);
 			outProjection = Ops::BuildProjection(static_cast<f32>(_size.x) / static_cast<f32>(_size.y));
@@ -242,11 +243,28 @@ namespace {
 			}
 			return lit;
 		}
+
+		static u32 ChangedPixels(const Vector<u8>& a, const Vector<u8>& b, Vec2I size) {
+			u32 changed = 0;
+			for (i32 y = 0; y < size.y; ++y) {
+				for (i32 x = 0; x < size.x; ++x) {
+					const u32 first = Luminance(a, size, x, y);
+					const u32 second = Luminance(b, size, x, y);
+					changed += (first > second ? first - second : second - first) > 12 ? 1u : 0u;
+				}
+			}
+			return changed;
+		}
 	};
 
 	class EditorGridSamplesFixture : public EditorGridFixture, public ::testing::WithParamInterface<i32> {
 	protected:
 		i32 SampleCount() const override { return GetParam(); }
+	};
+
+	class EditorGridViewportFixture : public EditorGridFixture {
+	protected:
+		EditorGridViewportFixture() { _size = Vec2I(1280, 720); }
 	};
 
 } // anonymous namespace
@@ -360,6 +378,56 @@ TEST_F(EditorGridFixture, DecadesDrawSameLineWidth) {
 	}
 }
 
+TEST_F(EditorGridViewportFixture, GridHoldsStillUnderSubpixelMotion) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	struct Pose {
+		Vec3 position;
+		f32 yawDeg;
+		f32 pitchDeg;
+	};
+	const Mat4 projection = Ops::BuildProjection(static_cast<f32>(_size.x) / static_cast<f32>(_size.y));
+	for (const Pose& pose : {Pose{Vec3(-2032.1f, 1814.6f, -2555.9f), 38.5f, 29.1f},
+							 Pose{Vec3(0.3f, 1814.6f, -0.7f), 38.5f, 29.1f}}) {
+		const Quat rotation = Ops::BuildCameraRotation(pose.yawDeg, pose.pitchDeg);
+		const Vec3 nudged = pose.position + rotation * (Vec3::Right() + Vec3::Up()) * 0.001f;
+		ASSERT_FALSE(nudged == pose.position);
+		const Vector<u8> still = RenderGrid(Ops::BuildViewMatrix(pose.position, rotation), projection, pose.position, true);
+		const Vector<u8> moved = RenderGrid(Ops::BuildViewMatrix(nudged, rotation), projection, nudged, true);
+
+		const u32 lit = LitPixelsBelowHorizon(still, _size);
+		ASSERT_GT(lit, 1000u) << pose.position.ToString();
+		EXPECT_LT(ChangedPixels(still, moved, _size), lit / 200) << pose.position.ToString();
+	}
+}
+
+TEST_F(EditorGridFixture, LatticeFarFromOriginMatchesNearOrigin) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	for (f32 height : {2.0f, 7.0f, 30.0f, 90.0f, 400.0f}) {
+		const Vec2 home(2.0f * height + 0.5f, 3.0f * height + 0.5f);
+		Mat4 view, projection;
+		Vec3 position;
+		BuildTopDownCamera(height, view, projection, position, home);
+		const Vector<u8> atHome = RenderGrid(view, projection, position, true);
+		BuildTopDownCamera(height, view, projection, position, home + Vec2(3000.0f, 4000.0f));
+		const Vector<u8> away = RenderGrid(view, projection, position, true);
+
+		u32 lit = 0;
+		u32 dark = 0;
+		for (i32 y = 0; y < _size.y; ++y) {
+			for (i32 x = 0; x < _size.x; ++x) {
+				(Luminance(atHome, _size, x, y) > 12 ? lit : dark) += 1;
+			}
+		}
+		ASSERT_GT(lit, 200u) << height;
+		ASSERT_GT(dark, 200u) << height;
+		EXPECT_LT(ChangedPixels(atHome, away, _size), lit / 200) << height;
+	}
+}
+
 TEST_F(EditorGridFixture, TheLatticeSurvivesAnOrthographicProjection) {
 	if (!Ready()) {
 		GTEST_SKIP() << "no device or no grid shader";
@@ -425,10 +493,6 @@ TEST_P(EditorGridSamplesFixture, FloorOnPlaneDoesNotZFight) {
 	if (RenderSystem::GetSampleCount() != static_cast<u32>(GetParam())) {
 		GTEST_SKIP() << "adapter doesn't offer " << GetParam() << "x on the scene chain";
 	}
-	Mat4 view, projection;
-	Vec3 position;
-	BuildCamera(6.0f, 35.0f, view, projection, position);
-
 	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
 	Asset* materialAsset = AssetDatabase::LoadAsset(Path("engine://Materials/Default.mat"));
 	if (!meshAsset || !materialAsset) {
@@ -443,29 +507,37 @@ TEST_P(EditorGridSamplesFixture, FloorOnPlaneDoesNotZFight) {
 	renderer->SetMesh(Handle<MeshAsset>(cube));
 	renderer->SetMaterial(0, Handle<MaterialAsset>(static_cast<MaterialAsset*>(materialAsset)));
 	floor->SetLocalPosition(Vec3(0.0f, -1.0f, 8.0f));
-	floor->SetLocalScale(Vec3(120.0f, 2.0f, 120.0f));
-	SceneSystem::EndFrame();
 
-	const Vector<u8> floorOnly = RenderGrid(view, projection, position, false);
-	ASSERT_GT(RenderSystem::GetStats().triangles, 0u);
-	const Vector<u8> floorAndGrid = RenderGrid(view, projection, position, true);
+	for (f32 height : {6.0f, 1800.0f}) {
+		Mat4 view, projection;
+		Vec3 position;
+		BuildCamera(height, 35.0f, view, projection, position);
+		floor->SetLocalScale(Vec3(20.0f * height, 2.0f, 20.0f * height));
+		SceneSystem::EndFrame();
 
-	u32 floorPixels = 0;
-	u32 changed = 0;
-	for (i32 y = 0; y < _size.y; ++y) {
-		for (i32 x = 0; x < _size.x; ++x) {
-			const u32 solid = Luminance(floorOnly, _size, x, y);
-			if (solid <= 12) {
-				continue;
+		GridPush push = PassProbes::MakeVisiblePush(view, projection, position);
+		push.fadeDistance = Math::Max(push.fadeDistance, 60.0f * height);
+		const Vector<u8> floorOnly = RenderPush(push, view, projection, position, false);
+		ASSERT_GT(RenderSystem::GetStats().triangles, 0u) << height;
+		const Vector<u8> floorAndGrid = RenderPush(push, view, projection, position, true);
+
+		u32 floorPixels = 0;
+		u32 changed = 0;
+		for (i32 y = 0; y < _size.y; ++y) {
+			for (i32 x = 0; x < _size.x; ++x) {
+				const u32 solid = Luminance(floorOnly, _size, x, y);
+				if (solid <= 12) {
+					continue;
+				}
+				++floorPixels;
+				const u32 both = Luminance(floorAndGrid, _size, x, y);
+				changed += (solid > both ? solid - both : both - solid) > 12 ? 1u : 0u;
 			}
-			++floorPixels;
-			const u32 both = Luminance(floorAndGrid, _size, x, y);
-			changed += (solid > both ? solid - both : both - solid) > 12 ? 1u : 0u;
 		}
-	}
 
-	ASSERT_GT(floorPixels, 5000u);
-	EXPECT_LT(changed, floorPixels / 200);
+		ASSERT_GT(floorPixels, 5000u) << height;
+		EXPECT_LT(changed, floorPixels / 200) << height;
+	}
 
 	AssetDatabase::UnloadAsset(materialAsset);
 	AssetDatabase::UnloadAsset(meshAsset);

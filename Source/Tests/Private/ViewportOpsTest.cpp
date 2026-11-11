@@ -242,6 +242,30 @@ TEST(ViewportOpsGridPlaneTest, BasesAreProperRotations) {
 	EXPECT_EQ(Ops::GridBasisFor(Ops::GridPlane::XZ).alongZ, 2u);
 }
 
+TEST(ViewportOpsGridPlaneTest, InverseProjectionIsCameraRelative) {
+	for (bool orthographic : {false, true}) {
+		Ops::Viewpoint viewpoint;
+		viewpoint.position = Vec3(-2032.1f, 1814.6f, -2555.9f);
+		viewpoint.rotation = Ops::BuildCameraRotation(38.5f, 29.1f);
+		viewpoint.aspect = 16.0f / 9.0f;
+		viewpoint.orthographic = orthographic;
+		const Mat4 view = Ops::BuildViewMatrix(viewpoint);
+		const Mat4 projection = Ops::BuildProjection(viewpoint);
+		const Vec3 target = viewpoint.position + viewpoint.rotation * Vec3(1.5f, -0.5f, 3.0f);
+		const Vec4 clip = projection * (view * Vec4(target, 1.0f));
+		const Vec4 ndc(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w, 1.0f);
+
+		for (Ops::GridPlane plane : {Ops::GridPlane::XZ, Ops::GridPlane::XY, Ops::GridPlane::ZY}) {
+			const Ops::GridBasis basis = Ops::GridBasisFor(plane);
+			const Vec4 unprojected = Ops::InverseGridProjection(basis, view, projection, viewpoint.position) * ndc;
+			const Vec3 expected = basis.gridFromWorld.TransformVector(target - viewpoint.position);
+			EXPECT_NEAR(unprojected.x / unprojected.w, expected.x, 1e-2f) << orthographic;
+			EXPECT_NEAR(unprojected.y / unprojected.w, expected.y, 1e-2f) << orthographic;
+			EXPECT_NEAR(unprojected.z / unprojected.w, expected.z, 1e-2f) << orthographic;
+		}
+	}
+}
+
 TEST(ViewportOpsFramingTest, OrthographicFrameGrowsWithBounds) {
 	const AABB small(Vec3(-1.0f, -1.0f, -1.0f), Vec3(1.0f, 1.0f, 1.0f));
 	const AABB large(Vec3(-10.0f, -10.0f, -10.0f), Vec3(10.0f, 10.0f, 10.0f));

@@ -62,6 +62,9 @@ namespace Shalltear {
 			u32 alongZ = 2;
 		};
 		SHALLTEAR_EDITOR_API GridBasis GridBasisFor(GridPlane plane);
+		// clip -> grid space relative to cameraPosition
+		SHALLTEAR_EDITOR_API Mat4 InverseGridProjection(const GridBasis& basis, const Mat4& view, const Mat4& projection,
+														const Vec3& cameraPosition);
 
 		// sizePx must be the viewport's px size
 		SHALLTEAR_EDITOR_API Ray BuildViewportRay(const Mat4& view, const Mat4& projection,

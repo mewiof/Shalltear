@@ -18,6 +18,9 @@
 
 #ifndef SHALLTEAR_SHARED
 #include "Shalltear/PostProcessing/AmbientOcclusionPass.h"
+#include "Shalltear/PostProcessing/PostProcessPass.h"
+#include "Shalltear/PostProcessing/PostProcessProfile.h"
+#include "Shalltear/PostProcessing/PostProcessVolume.h"
 
 #include "AmbientOcclusionShader.h"
 #endif
@@ -498,6 +501,58 @@ TEST_F(AmbientOcclusionRenderFixture, AfterOpaqueDarkensEmissionDefaultDoesNot) 
 
 	EXPECT_GT(shaded / base, 0.99f) << "emissive " << base << " -> " << shaded;
 	EXPECT_LT(pasted / base, 0.97f) << "emissive " << base << " -> " << pasted;
+}
+
+TEST_F(AmbientOcclusionRenderFixture, AfterOpaqueSurvivesPostRow) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+	ASSERT_TRUE(AddEmissiveMarker());
+
+	Vec2I markerPixel{};
+	ASSERT_TRUE(Pixel(MARKER_POSITION, markerPixel));
+
+	const Guid profileId = AssetDatabase::CreateAsset(Path("project://Assets/BloomOff.slpp"), StringHash("PostProcessProfile"));
+	ASSERT_TRUE(profileId.IsValid());
+	auto* profile = static_cast<PostProcessProfile*>(AssetDatabase::LoadAssetByGuid(profileId));
+	ASSERT_NE(profile, nullptr);
+	profile->bloom = true;
+	profile->bloomIntensity = 0.0f;
+	Handle<PostProcessVolume> volume = SceneSystem::CreateObject("Volume", _scene)->AddComponent<PostProcessVolume>();
+	volume->profile = Handle<PostProcessProfile>(profile);
+	SceneSystem::EndFrame();
+
+	AmbientOcclusionPass composited;
+	composited.radius = 1.0f;
+	composited.afterOpaque = true;
+	composited.point = PassPoint::AfterOpaque;
+	PostProcessPass post;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&composited), Handle<RenderPass>(&post)};
+	Vector<u8> withPost{GetMemoryResource(MemTag::Graphics)};
+	Vec2I withPostSize{};
+	ASSERT_TRUE(Render(rows, withPost, withPostSize));
+
+	const Handle<RenderPass> occlusionOnly[] = {Handle<RenderPass>(&composited)};
+	Vector<u8> alone{GetMemoryResource(MemTag::Graphics)};
+	Vec2I aloneSize{};
+	ASSERT_TRUE(Render(occlusionOnly, alone, aloneSize));
+
+	AmbientOcclusionPass off;
+	off.intensity = 0.0f;
+	const Handle<RenderPass> offRows[] = {Handle<RenderPass>(&off)};
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render(offRows, reference, referenceSize));
+
+	ASSERT_EQ(withPostSize, aloneSize);
+	EXPECT_EQ(withPost, alone);
+	const f32 base = BlockMean(reference, referenceSize, markerPixel.x, markerPixel.y, 1);
+	ASSERT_GT(base, 200.0f);
+	EXPECT_LT(BlockMean(withPost, withPostSize, markerPixel.x, markerPixel.y, 1) / base, 0.97f);
 }
 
 TEST_F(AmbientOcclusionRenderFixture, FarForegroundLeavesSurfaceUnoccluded) {

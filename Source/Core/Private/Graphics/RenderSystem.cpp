@@ -5534,6 +5534,23 @@ namespace Shalltear {
 			exec.drawCalls += RecordSceneColorCopy(*exec.cmd, *exec.device, pass.textures[SOURCE], pass.textures[DESTINATION], pass.work.flag);
 		}
 
+		GraphResourceId DeclareSceneColorCopy(GraphicsInternal::RenderGraph& graph, const char* name, u32 zoneSite, PassWork work,
+											  GraphResourceId sceneTarget, const RHI::TextureDesc& colorDesc) {
+			const bool resolve = _state->msaaSamples > 1;
+			if (!resolve) {
+				EnsureBlitShader();
+			}
+			RHI::TextureDesc copyDesc = colorDesc;
+			copyDesc.usage = copyDesc.usage | RHI::TextureUsage::TransferDst;
+			copyDesc.debugName = "SceneColorCopy";
+			const GraphResourceId copy = graph.CreateTransient(copyDesc);
+			work.flag = resolve;
+			graph.AddPass(name, zoneSite, &PassRecordSceneColorCopy, work);
+			graph.Read(sceneTarget, resolve ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
+			graph.Write(copy, resolve ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
+			return copy;
+		}
+
 		struct GPUDebugViewPush {
 			u32 mode = 0;
 			u32 orthographic = 0;
@@ -6837,7 +6854,6 @@ namespace Shalltear {
 				const bool clearsTarget = cameraRows.composited || !chainWritten;
 				work.flag = clearsTarget;
 
-				u32 colorRequestKey = ROW_KEY_AFTER_LAST;
 				u32 prepassKey = ROW_KEY_AFTER_LAST;
 				PassRequests cameraRequests = PassRequests::None;
 				for (u32 slot = 0; slot < cameraRows.rowCount; ++slot) {
@@ -6848,9 +6864,6 @@ namespace Shalltear {
 					const PassRequests requests = row->GetRequests();
 					cameraRequests |= requests;
 					const u32 key = RowSortKey(row->point, row->position);
-					if (HasFlag(requests, PassRequests::SceneColor)) {
-						colorRequestKey = Math::Min(colorRequestKey, key);
-					}
 					if (HasAnyFlag(requests, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
 						prepassKey = Math::Min(prepassKey, key);
 					}
@@ -6897,16 +6910,6 @@ namespace Shalltear {
 				windowWork.cameras[cameraIndex].firstCaster = casters.first;
 				windowWork.cameras[cameraIndex].casterCount = casters.count;
 
-				GraphResourceId sceneColorCopy = GraphicsInternal::INVALID_GRAPH_RESOURCE;
-				if (colorRequestKey < ROW_KEY_AFTER_LAST) {
-					RHI::TextureDesc copyDesc = cameraHDRDesc;
-					copyDesc.usage = copyDesc.usage | RHI::TextureUsage::TransferDst;
-					copyDesc.debugName = "SceneColorCopy";
-					sceneColorCopy = graph.CreateTransient(copyDesc);
-					if (state.msaaSamples <= 1) {
-						EnsureBlitShader();
-					}
-				}
 				const GraphResourceId opaqueColor = DeclareOpaqueColor(graph, cameraHDRDesc, sceneReads);
 				const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
 				const bool wantsNormals = HasFlag(cameraRequests, PassRequests::SceneNormals);
@@ -6935,21 +6938,13 @@ namespace Shalltear {
 				DeclareProceduralViewSteps(state, graph, procedural, proceduralView);
 
 				u32 nextCameraKey = 0;
-				const bool nothingToEmit = cameraRows.rowCount == 0 && colorRequestKey >= ROW_KEY_AFTER_LAST && !wantsPrepass;
+				const bool nothingToEmit = cameraRows.rowCount == 0 && !wantsPrepass;
 				auto flushCameraRowsBefore = [&](u32 anchorKey) {
 					if (nothingToEmit) {
 						nextCameraKey = anchorKey;
 						return;
 					}
 					for (u32 key = nextCameraKey; key < anchorKey; ++key) {
-						if (key == colorRequestKey) {
-							const bool resolveArm = state.msaaSamples > 1;
-							work.flag = resolveArm;
-							graph.AddPass("Render.Window.ColorCopy", windowCopySite, &PassRecordSceneColorCopy, work);
-							graph.Read(cameraTarget, resolveArm ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
-							graph.Write(sceneColorCopy, resolveArm ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
-							work.flag = clearsTarget;
-						}
 						if (wantsPrepass && key == prepassKey) {
 							DeclarePrepassPasses(state, graph, "Render.Window.Prepass", windowPrepassSite, &PassRecordWindowPrepass,
 												 "Render.Window.PrepassItems", windowPrepassItemsSite, &PassRecordWindowPrepassItems,
@@ -6961,9 +6956,13 @@ namespace Shalltear {
 								continue;
 							}
 							work.element = slot;
+							const GraphResourceId sceneColor =
+								HasFlag(row->GetRequests(), PassRequests::SceneColor)
+									? DeclareSceneColorCopy(graph, "Render.Window.ColorCopy", windowCopySite, work, cameraTarget, cameraHDRDesc)
+									: GraphicsInternal::INVALID_GRAPH_RESOURCE;
 							DeclareRowPasses(state, graph, "Render.Window.Row", windowRowSite, &PassRecordWindowRow,
 											 work, cameraRows.firstRow + slot,
-											 {cameraTarget, cameraDepth, sceneColorCopy, prepassDepth, prepassNormals, worldSkinBuffer});
+											 {cameraTarget, cameraDepth, sceneColor, prepassDepth, prepassNormals, worldSkinBuffer});
 						}
 					}
 					nextCameraKey = anchorKey;
@@ -7112,7 +7111,6 @@ namespace Shalltear {
 				const u32 firstRow = pending.firstRow;
 				const u32 lastRow = pending.firstRow + pending.rowCount;
 
-				u32 colorRequestKey = ROW_KEY_AFTER_LAST;
 				u32 prepassKey = ROW_KEY_AFTER_LAST;
 				PassRequests viewRequests = PassRequests::None;
 				for (u32 index = firstRow; index < lastRow; ++index) {
@@ -7123,9 +7121,6 @@ namespace Shalltear {
 					const PassRequests requests = row->GetRequests();
 					viewRequests |= requests;
 					const u32 key = RowSortKey(row->point, row->position);
-					if (HasFlag(requests, PassRequests::SceneColor)) {
-						colorRequestKey = Math::Min(colorRequestKey, key);
-					}
 					if (HasAnyFlag(requests, PassRequests::SceneDepth | PassRequests::SceneNormals)) {
 						prepassKey = Math::Min(prepassKey, key);
 					}
@@ -7181,17 +7176,6 @@ namespace Shalltear {
 				const RowProductions productions =
 					BuildRowPlans(state, graph, firstRow, lastRow, viewRenderSize, pending.cameraPosition);
 
-				const bool anyColorRequest = colorRequestKey < ROW_KEY_AFTER_LAST;
-				GraphResourceId sceneColorCopy = GraphicsInternal::INVALID_GRAPH_RESOURCE;
-				if (anyColorRequest) {
-					RHI::TextureDesc copyDesc = hdrDesc;
-					copyDesc.usage = copyDesc.usage | RHI::TextureUsage::TransferDst;
-					copyDesc.debugName = "SceneColorCopy";
-					sceneColorCopy = graph.CreateTransient(copyDesc);
-					if (!multisampled) {
-						EnsureBlitShader();
-					}
-				}
 				const GraphResourceId opaqueColor = DeclareOpaqueColor(graph, hdrDesc, sceneReads);
 
 				const bool wantsPrepass = prepassKey < ROW_KEY_AFTER_LAST;
@@ -7226,20 +7210,13 @@ namespace Shalltear {
 				SLT_GRAPH_SITE(viewCopySite, "Render.View.ColorCopy");
 				SLT_GRAPH_SITE(viewPrepassSite, "Render.View.Prepass");
 				SLT_GRAPH_SITE(viewPrepassItemsSite, "Render.View.PrepassItems");
-				const bool nothingToEmit = pending.rowCount == 0 && !anyColorRequest && !wantsPrepass;
+				const bool nothingToEmit = pending.rowCount == 0 && !wantsPrepass;
 				auto flushRowsBefore = [&](u32 anchorKey) {
 					if (nothingToEmit) {
 						nextKey = anchorKey;
 						return;
 					}
 					for (u32 key = nextKey; key < anchorKey; ++key) {
-						if (key == colorRequestKey) {
-							viewWork.flag = multisampled;
-							graph.AddPass("Render.View.ColorCopy", viewCopySite, &PassRecordSceneColorCopy, viewWork);
-							graph.Read(sceneTarget, multisampled ? RHI::ResourceState::TransferSrc : RHI::ResourceState::ShaderResource);
-							graph.Write(sceneColorCopy, multisampled ? RHI::ResourceState::TransferDst : RHI::ResourceState::RenderTarget);
-							viewWork.flag = false;
-						}
 						if (wantsPrepass && key == prepassKey) {
 							DeclarePrepassPasses(state, graph, "Render.View.Prepass", viewPrepassSite, &PassRecordViewPrepass,
 												 "Render.View.PrepassItems", viewPrepassItemsSite, &PassRecordViewPrepassItems, viewWork,
@@ -7251,9 +7228,13 @@ namespace Shalltear {
 								continue;
 							}
 							viewWork.subIndex = index - firstRow;
+							const GraphResourceId sceneColor =
+								HasFlag(row->GetRequests(), PassRequests::SceneColor)
+									? DeclareSceneColorCopy(graph, "Render.View.ColorCopy", viewCopySite, viewWork, sceneTarget, hdrDesc)
+									: GraphicsInternal::INVALID_GRAPH_RESOURCE;
 							DeclareRowPasses(state, graph, "Render.View.Row", viewRowSite, &PassRecordViewRow,
 											 viewWork, index,
-											 {sceneTarget, depth, sceneColorCopy, prepassDepth, prepassNormals,
+											 {sceneTarget, depth, sceneColor, prepassDepth, prepassNormals,
 											  pending.kind == SceneKind::World ? worldSkinBuffer : isolatedSkinBuffer});
 						}
 					}

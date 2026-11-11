@@ -115,6 +115,7 @@ namespace {
 		ViewTargetId _target = INVALID_VIEW_TARGET;
 		Vec2I _size{128, 128};
 		Handle<Scene> _scene;
+		Color _clearColor = Color::Black();
 
 		void InitializeAt(i32 samples) {
 			static std::atomic<u64> counter{0};
@@ -227,7 +228,7 @@ namespace {
 			desc.view = view;
 			desc.projection = projection;
 			desc.cameraPosition = position;
-			desc.clearColor = Color::Black();
+			desc.clearColor = _clearColor;
 			desc.passes = rows;
 			RenderSystem::SubmitView(_target, desc);
 			RenderSystem::RenderAll();
@@ -289,6 +290,51 @@ namespace {
 				}
 			}
 			return mismatched;
+		}
+
+		static u32 TexelsOtherThan(const Vector<u8>& pixels, Vec2I size, Color32 expected) {
+			constexpr i32 TOLERANCE = 2;
+			u32 count = 0;
+			for (i32 y = 0; y < size.y; ++y) {
+				for (i32 x = 0; x < size.x; ++x) {
+					const Color32 texel = TexelAt(pixels, size, x, y);
+					if (std::abs(static_cast<i32>(texel.r) - static_cast<i32>(expected.r)) > TOLERANCE ||
+						std::abs(static_cast<i32>(texel.g) - static_cast<i32>(expected.g)) > TOLERANCE ||
+						std::abs(static_cast<i32>(texel.b) - static_cast<i32>(expected.b)) > TOLERANCE) {
+						++count;
+					}
+				}
+			}
+			return count;
+		}
+
+		void ExpectColorRowReadsEarlierColorRow() {
+			WriteProjectFile("Flat.hlsl", FLAT_SHADER);
+			MaterialAsset* red = LoadMaterial("Red.mat", "Flat.hlsl", "\t\"colors\": { \"tint\": [1, 0, 0, 1] }");
+			ASSERT_NE(red, nullptr);
+			WriteProjectFile("Rotate.hlsl", CHANNEL_ROTATE_SHADER);
+			MaterialAsset* rotate = LoadMaterial("Rotate.mat", "Rotate.hlsl", "\t\"colors\": { \"tint\": [1, 1, 1, 1] }");
+			ASSERT_NE(rotate, nullptr);
+
+			FullScreenPass fill;
+			fill.point = PassPoint::AfterOpaque;
+			fill.material = Handle<MaterialAsset>(red);
+			FullScreenPass first;
+			first.point = PassPoint::BeforePost;
+			first.material = Handle<MaterialAsset>(rotate);
+			FullScreenPass second;
+			second.point = PassPoint::Post;
+			second.material = Handle<MaterialAsset>(rotate);
+
+			const Handle<RenderPass> rows[] = {Handle<RenderPass>(&fill), Handle<RenderPass>(&first), Handle<RenderPass>(&second)};
+			Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+			Vec2I size{};
+			ASSERT_TRUE(Render(rows, pixels, size));
+			EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 255, 0, 255)), 0u);
+
+			const Handle<RenderPass> fillOnly[] = {Handle<RenderPass>(&fill)};
+			ASSERT_TRUE(Render(fillOnly, pixels, size));
+			EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(255, 0, 0, 255)), 0u);
 		}
 
 		static u32 NonBlackTexels(const Vector<u8>& pixels, Vec2I size) {
@@ -446,6 +492,114 @@ TEST_F(FullScreenPassFixture, SingleSampleCopyIsBlit) {
 	ASSERT_EQ(size, referenceSize);
 	ASSERT_GT(NonBlackTexels(pixels, size), 200u);
 	EXPECT_EQ(TexelsNotMatchingTheRotationOf(reference, pixels, size), 0u);
+}
+
+TEST_F(FullScreenPassFixture, ColorRowReadsEarlierColorRow) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ExpectColorRowReadsEarlierColorRow();
+}
+
+TEST_F(FullScreenPassFixture, ResolvedColorRowReadsEarlierColorRow) {
+	InitializeAt(4);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (RenderSystem::GetSampleCount() != 4) {
+		GTEST_SKIP() << "adapter doesn't offer 4x on the scene chain";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ExpectColorRowReadsEarlierColorRow();
+}
+
+TEST_F(FullScreenPassFixture, ColorRowReadsSceneAfterEarlyCopy) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Rotate.hlsl", CHANNEL_ROTATE_SHADER);
+	MaterialAsset* rotate = LoadMaterial("Rotate.mat", "Rotate.hlsl", "\t\"colors\": { \"tint\": [1, 1, 1, 1] }");
+	ASSERT_NE(rotate, nullptr);
+
+	FullScreenPass early;
+	early.point = PassPoint::BeforeOpaque;
+	early.material = Handle<MaterialAsset>(rotate);
+	FullScreenPass late;
+	late.point = PassPoint::Post;
+	late.material = Handle<MaterialAsset>(rotate);
+	_clearColor = Color(1.0f, 0.0f, 0.0f);
+
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&early), Handle<RenderPass>(&late)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 0, 255, 255)), 0u);
+
+	ASSERT_TRUE(Render({}, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(255, 0, 0, 255)), 0u);
+}
+
+TEST_F(FullScreenPassFixture, ColorCopyPerReadingRow) {
+#if defined(SHALLTEAR_CONFIG_RELEASE)
+	GTEST_SKIP() << "zones compiled out in Release";
+#else
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Flat.hlsl", FLAT_SHADER);
+	MaterialAsset* red = LoadMaterial("Red.mat", "Flat.hlsl", "\t\"colors\": { \"tint\": [1, 0, 0, 1] }");
+	ASSERT_NE(red, nullptr);
+	WriteProjectFile("Rotate.hlsl", CHANNEL_ROTATE_SHADER);
+	MaterialAsset* rotate = LoadMaterial("Rotate.mat", "Rotate.hlsl", "\t\"colors\": { \"tint\": [1, 1, 1, 1] }");
+	ASSERT_NE(rotate, nullptr);
+
+	FullScreenPass fill;
+	fill.point = PassPoint::AfterOpaque;
+	fill.material = Handle<MaterialAsset>(red);
+	FullScreenPass first;
+	first.point = PassPoint::BeforePost;
+	first.material = Handle<MaterialAsset>(rotate);
+	FullScreenPass second;
+	second.point = PassPoint::Post;
+	second.material = Handle<MaterialAsset>(rotate);
+	const Handle<RenderPass> oneReader[] = {Handle<RenderPass>(&fill), Handle<RenderPass>(&second)};
+	const Handle<RenderPass> twoReaders[] = {Handle<RenderPass>(&fill), Handle<RenderPass>(&first), Handle<RenderPass>(&second)};
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(oneReader, pixels, size));
+	{
+		ZoneProbe::ZoneScope zones;
+		ASSERT_TRUE(Render(oneReader, pixels, size));
+		Profiler::NextFrame();
+		EXPECT_EQ(ZoneProbe::ZoneCalls("Render.View.ColorCopy"), 1u);
+	}
+	const u32 texturesForOne = RenderSystem::GetStats().liveTextures;
+
+	ASSERT_TRUE(Render(twoReaders, pixels, size));
+	{
+		ZoneProbe::ZoneScope zones;
+		ASSERT_TRUE(Render(twoReaders, pixels, size));
+		Profiler::NextFrame();
+		EXPECT_EQ(ZoneProbe::ZoneCalls("Render.View.ColorCopy"), 2u);
+	}
+	EXPECT_EQ(RenderSystem::GetStats().liveTextures, texturesForOne);
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 255, 0, 255)), 0u);
+#endif
 }
 
 TEST_F(FullScreenPassFixture, PostColorReadsSkinnedScene) {

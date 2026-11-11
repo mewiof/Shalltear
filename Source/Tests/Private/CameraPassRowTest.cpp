@@ -329,3 +329,76 @@ TEST_F(CameraPassRowFixture, ColorRowReadsSkinnedScene) {
 	SceneSystem::UnloadScene(scene);
 	SceneSystem::EndFrame();
 }
+
+TEST_F(CameraPassRowFixture, ColorRowReadsEarlierColorRow) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"))) {
+		GTEST_SKIP() << "Unlit.hlsl unavailable (dxcompiler.dll not staged?)";
+	}
+	ASSERT_TRUE(FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Rotate.hlsl")), CHANNEL_ROTATE_SHADER));
+	Asset* rotate = AssetDatabase::LoadAsset(Path("project://Rotate.hlsl"));
+	ASSERT_NE(rotate, nullptr);
+	ASSERT_TRUE(FileSystem::WriteTextFile(
+		FileSystem::Resolve(Path("project://Rotate.mat")),
+		"{\n\t\"shader\": \"" + rotate->assetId.ToString() + "\",\n\t\"colors\": { \"tint\": [1, 1, 1, 1] }\n}\n"));
+	Asset* material = AssetDatabase::LoadAsset(Path("project://Rotate.mat"));
+	ASSERT_NE(material, nullptr);
+
+	WindowDesc windowDesc;
+	windowDesc.title = "CameraRowChain";
+	windowDesc.clientSize = {128, 128};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+
+	Handle<Scene> scene = SceneSystem::CreateScene("CameraRowChain");
+	Handle<SceneObject> cameraObject = SceneSystem::CreateObject("Camera", scene);
+	Handle<Camera> camera = cameraObject.Get()->AddComponent<Camera>();
+	camera.Get()->SetTargetWindow(window);
+	camera.Get()->SetClearColor(Color(1.0f, 0.0f, 0.0f));
+
+	DriveFrames(3);
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(RenderSystem::ReadbackWindowSceneColor(window, reference, referenceSize));
+
+	FullScreenPass* first = New<FullScreenPass>(MemTag::Asset);
+	FullScreenPass* second = New<FullScreenPass>(MemTag::Asset);
+	ASSERT_NE(first, nullptr);
+	ASSERT_NE(second, nullptr);
+	first->point = PassPoint::BeforePost;
+	first->material = Handle<MaterialAsset>(static_cast<MaterialAsset*>(material));
+	second->point = PassPoint::Post;
+	second->material = Handle<MaterialAsset>(static_cast<MaterialAsset*>(material));
+	camera.Get()->SetPass(0, Handle<RenderPass>(first));
+	camera.Get()->SetPass(1, Handle<RenderPass>(second));
+	DriveFrames(3);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(RenderSystem::ReadbackWindowSceneColor(window, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const u16* before = reinterpret_cast<const u16*>(reference.data());
+	const u16* after = reinterpret_cast<const u16*>(pixels.data());
+	const f32 red = HalfToFloat(before[0]);
+	EXPECT_GT(red, 0.5f);
+	u32 mismatched = 0;
+	for (size_t texel = 0; texel < static_cast<size_t>(size.x) * size.y; ++texel) {
+		if (std::abs(HalfToFloat(after[texel * 4]) - HalfToFloat(before[texel * 4 + 2])) > 1e-3f ||
+			std::abs(HalfToFloat(after[texel * 4 + 1]) - HalfToFloat(before[texel * 4])) > 1e-3f ||
+			std::abs(HalfToFloat(after[texel * 4 + 2]) - HalfToFloat(before[texel * 4 + 1])) > 1e-3f) {
+			++mismatched;
+		}
+	}
+	EXPECT_EQ(mismatched, 0u);
+	EXPECT_NEAR(HalfToFloat(after[1]), red, 1e-3f);
+
+	camera.Get()->SetPass(0, {});
+	camera.Get()->SetPass(1, {});
+	Delete(first);
+	Delete(second);
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}

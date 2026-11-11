@@ -104,6 +104,7 @@ namespace Shalltear::RHI {
 		u32 tableIndex = TABLE_NONE;
 		bool external = false;
 		ResourceState state = ResourceState::Undefined;
+		bool awaitsAcquire = false;
 
 		VkImageView AttachmentView(u32 layer, u32 mip = 0) const {
 			const size_t index = static_cast<size_t>(mip) * arrayLayers + layer;
@@ -451,7 +452,8 @@ namespace Shalltear::RHI {
 	};
 	StateMasks ToStateMasks(ResourceState state, bool isDepth);
 
-	void CmdTransitionImage(DeviceImpl& d, VkCommandBuffer cmd, VkImage image, ResourceState from, ResourceState to, bool isDepth);
+	void CmdTransitionImage(DeviceImpl& d, VkCommandBuffer cmd, VkImage image, ResourceState from, ResourceState to, bool isDepth,
+							bool awaitsAcquire = false);
 
 	void CmdGenerateMips(DeviceImpl& d, VkCommandBuffer cmd, TextureResource& resource);
 

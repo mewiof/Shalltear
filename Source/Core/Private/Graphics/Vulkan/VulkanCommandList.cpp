@@ -15,8 +15,10 @@ namespace Shalltear::RHI {
 		if (resource->state == newState) {
 			return;
 		}
-		CmdTransitionImage(d, _impl->commandBuffer, resource->image, resource->state, newState, IsDepthFormat(resource->format));
+		CmdTransitionImage(d, _impl->commandBuffer, resource->image, resource->state, newState, IsDepthFormat(resource->format),
+						   resource->awaitsAcquire);
 		resource->state = newState;
+		resource->awaitsAcquire = false;
 	}
 
 	void CommandList::TransitionBuffer(BufferHandle buffer, ResourceState newState) {

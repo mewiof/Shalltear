@@ -441,6 +441,7 @@ namespace Shalltear::RHI {
 		TextureResource* resource = d.textures.Resolve(handle);
 		if (resource) {
 			resource->state = ResourceState::Undefined;
+			resource->awaitsAcquire = true;
 		}
 		return handle;
 	}

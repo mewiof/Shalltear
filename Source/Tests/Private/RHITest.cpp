@@ -54,6 +54,48 @@ namespace {
 		std::vector<str> _messages;
 	};
 
+	class ScopedLogCapture {
+	public:
+		ScopedLogCapture() : _sink(std::make_shared<LayerLineSink>()) {
+			_ownsJobSystem = JobSystem::GetWorkerCount() == 0;
+			if (_ownsJobSystem) {
+				JobSystem::Initialize();
+			}
+			LogManager::Initialize({false, false});
+			LogManager::SetGlobalLevel(LogLevel::Trace);
+			LogManager::AddSink(_sink);
+			for (int attempt = 0; attempt < 200 && !_sink->Armed(); ++attempt) {
+				SLT_LOG_INFO("Graphics", "{}", LayerLineSink::SENTINEL);
+				std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			}
+		}
+		~ScopedLogCapture() {
+			LogManager::RemoveSink(_sink);
+			LogManager::Terminate();
+			if (_ownsJobSystem) {
+				JobSystem::Terminate();
+			}
+		}
+
+		ScopedLogCapture(const ScopedLogCapture&) = delete;
+		ScopedLogCapture& operator=(const ScopedLogCapture&) = delete;
+
+		bool Armed() const { return _sink->Armed(); }
+
+		bool Settle(const char* marker) {
+			SLT_LOG_INFO("Graphics", "{}", marker);
+			for (int attempt = 0; attempt < 400 && _sink->CountMatching(marker) == 0; ++attempt) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			}
+			return _sink->CountMatching(marker) == 1;
+		}
+
+		u32 CountMatching(const char* text) const { return _sink->CountMatching(text); }
+	private:
+		std::shared_ptr<LayerLineSink> _sink;
+		bool _ownsJobSystem = false;
+	};
+
 	class RHIFixture : public ::testing::Test {
 	protected:
 		RHI::Device* _device = nullptr;
@@ -1689,4 +1731,96 @@ TEST(RHISwapChainTest, CreateResizeDestroyAgainstHiddenWindow) {
 	}
 	WindowSystem::Terminate();
 	RHI::Device::Destroy(device);
+}
+
+TEST(RHISwapChainTest, AcquiredImageBarrierWaitsForAcquire) {
+	ScopedLogCapture capture;
+	ASSERT_TRUE(capture.Armed());
+
+	const str enables = TestPlatform::GetEnvironment("VK_LAYER_ENABLES");
+	TestPlatform::SetEnvironment("VK_LAYER_ENABLES", "VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT");
+	RHI::DeviceDesc deviceDesc;
+	deviceDesc.enableValidation = true;
+	RHI::Device* device = RHI::Device::Create(deviceDesc);
+	TestPlatform::SetEnvironment("VK_LAYER_ENABLES", enables);
+	if (!device) {
+		GTEST_SKIP() << "no Vulkan device that can present";
+	}
+	if (!TestPlatform::FindLoadedLibrary("VkLayer_khronos_validation" SLT_TEST_DLL_SUFFIX)) {
+		RHI::Device::Destroy(device);
+		GTEST_SKIP() << "validation layer not installed";
+	}
+
+	RHI::BufferDesc bufferDesc;
+	bufferDesc.size = 256;
+	bufferDesc.usage = RHI::BufferUsage::TransferSrc | RHI::BufferUsage::TransferDst;
+	const RHI::BufferHandle source = device->CreateBufferResource(bufferDesc);
+	const RHI::BufferHandle target = device->CreateBufferResource(bufferDesc);
+	RHI::CommandList* control = device->BeginFrame();
+	control->TransitionBuffer(source, RHI::ResourceState::TransferSrc);
+	control->TransitionBuffer(target, RHI::ResourceState::TransferDst);
+	control->CopyBufferRegion(source, target, 0, 0, bufferDesc.size);
+	control->CopyBufferRegion(source, target, 0, 0, bufferDesc.size);
+	device->EndFrame();
+	device->WaitIdle();
+	const bool controlSettled = capture.Settle("rhi-hazard-control");
+	const u32 controlHazards = capture.CountMatching("WRITE_AFTER_WRITE");
+
+	u32 presented = 0;
+	WindowSystem::Initialize();
+	{
+		WindowDesc windowDesc;
+		windowDesc.title = "RHIAcquireSyncTest";
+		windowDesc.clientSize = {160, 120};
+		windowDesc.flags = WindowFlags::Hidden;
+		Handle<Window> window = WindowSystem::Create(windowDesc);
+		RHI::SwapChain* swapChain = nullptr;
+		if (window.IsValid()) {
+			RHI::NativeSwapChainDesc swapDesc;
+			swapDesc.window = window.Get()->GetNativeHandle();
+			swapDesc.sizePx = window.Get()->GetClientSize();
+			swapChain = device->CreateSwapChainForWindow(swapDesc);
+		}
+		for (u32 frame = 0; swapChain && frame < 4; ++frame) {
+			RHI::CommandList* cmd = device->BeginFrame();
+			RHI::TextureHandle backbuffer = swapChain->AcquireNextImage();
+			if (backbuffer.IsValid()) {
+				cmd->TransitionTexture(backbuffer, RHI::ResourceState::RenderTarget);
+				RHI::RenderPassDesc::Attachment attachment;
+				attachment.texture = backbuffer;
+				attachment.clearColor = Color::Blue();
+				RHI::RenderPassDesc pass;
+				pass.colorAttachments = {&attachment, 1};
+				cmd->BeginRenderPass(pass);
+				cmd->EndRenderPass();
+				cmd->TransitionTexture(backbuffer, RHI::ResourceState::Present);
+			}
+			device->EndFrame();
+			if (backbuffer.IsValid()) {
+				swapChain->Present();
+				++presented;
+			}
+		}
+		device->WaitIdle();
+		if (swapChain) {
+			device->DestroySwapChain(swapChain);
+		}
+		if (window.IsValid()) {
+			WindowSystem::RequestDestroy(window);
+			WindowSystem::PumpEvents();
+		}
+	}
+	WindowSystem::Terminate();
+	device->DestroyResource(source);
+	device->DestroyResource(target);
+	RHI::Device::Destroy(device);
+	const bool framesSettled = capture.Settle("rhi-hazard-frames");
+
+	ASSERT_TRUE(controlSettled);
+	ASSERT_TRUE(framesSettled);
+	if (controlHazards == 0) {
+		GTEST_SKIP() << "synchronization validation not active";
+	}
+	ASSERT_GT(presented, 0u);
+	EXPECT_EQ(capture.CountMatching("WRITE_AFTER_READ"), 0u);
 }

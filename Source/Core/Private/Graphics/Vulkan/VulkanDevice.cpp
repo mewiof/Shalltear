@@ -11,6 +11,10 @@
 
 namespace Shalltear::RHI {
 
+	namespace {
+		constexpr VkPipelineStageFlags2 ACQUIRE_WAIT_STAGES = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+	} // anonymous namespace
+
 	VkFormat ToVkFormat(Format format) {
 		switch (format) {
 		case Format::R8Unorm:
@@ -85,7 +89,8 @@ namespace Shalltear::RHI {
 		}
 	}
 
-	void CmdTransitionImage(DeviceImpl& d, VkCommandBuffer cmd, VkImage image, ResourceState from, ResourceState to, bool isDepth) {
+	void CmdTransitionImage(DeviceImpl& d, VkCommandBuffer cmd, VkImage image, ResourceState from, ResourceState to, bool isDepth,
+							bool awaitsAcquire) {
 		if (d.lost) {
 			return;
 		}
@@ -93,7 +98,7 @@ namespace Shalltear::RHI {
 		StateMasks dst = ToStateMasks(to, isDepth);
 
 		VkImageMemoryBarrier2 barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		barrier.srcStageMask = src.stages;
+		barrier.srcStageMask = awaitsAcquire ? src.stages | ACQUIRE_WAIT_STAGES : src.stages;
 		barrier.srcAccessMask = src.access;
 		barrier.dstStageMask = dst.stages;
 		barrier.dstAccessMask = dst.access;
@@ -1477,7 +1482,7 @@ namespace Shalltear::RHI {
 		for (VkSemaphore semaphore : frame.waitSemaphores) {
 			VkSemaphoreSubmitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
 			info.semaphore = semaphore;
-			info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+			info.stageMask = ACQUIRE_WAIT_STAGES;
 			waits.push_back(info);
 		}
 

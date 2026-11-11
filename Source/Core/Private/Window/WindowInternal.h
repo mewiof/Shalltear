@@ -77,6 +77,11 @@ namespace Shalltear {
 			return set.x > 0 && set.y > 0 ? set : window.GetClientSize();
 		}
 
+		inline bool IsUsableIcon(const WindowIconImage& image) {
+			return image.size.x > 0 && image.size.y > 0 &&
+				   image.rgba.size() >= static_cast<size_t>(image.size.x) * static_cast<size_t>(image.size.y) * 4;
+		}
+
 		inline RectI LetterboxRect(Vec2I targetPx, Vec2I contentPx) {
 			if (contentPx.x <= 0 || contentPx.y <= 0 || targetPx.x <= 0 || targetPx.y <= 0) {
 				return RectI{0, 0, targetPx.x, targetPx.y};

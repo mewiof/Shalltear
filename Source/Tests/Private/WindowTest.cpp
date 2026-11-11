@@ -560,6 +560,99 @@ TEST_F(WindowTest, ClipboardTextRoundTrip) {
 
 namespace {
 
+	struct SourceIcon {
+		Vec2I size;
+		std::vector<u8> rgba;
+	};
+
+	SourceIcon MakeIcon(i32 edge) {
+		SourceIcon icon;
+		icon.size = {edge, edge};
+		icon.rgba.resize(static_cast<size_t>(edge) * static_cast<size_t>(edge) * 4);
+		for (size_t texel = 0; texel < icon.rgba.size() / 4; ++texel) {
+			icon.rgba[texel * 4] = static_cast<u8>(edge);
+			icon.rgba[texel * 4 + 1] = static_cast<u8>(texel % 251);
+			icon.rgba[texel * 4 + 2] = static_cast<u8>(255 - edge);
+			icon.rgba[texel * 4 + 3] = static_cast<u8>(64 + texel % 192);
+		}
+		return icon;
+	}
+
+	std::vector<WindowIconImage> ViewsOf(const std::vector<SourceIcon>& icons) {
+		std::vector<WindowIconImage> views;
+		for (const SourceIcon& icon : icons) {
+			views.push_back({icon.size, icon.rgba});
+		}
+		return views;
+	}
+
+	bool MatchesOneOf(const TestPlatform::IconImage& image, const std::vector<SourceIcon>& icons) {
+		for (const SourceIcon& icon : icons) {
+			if (icon.size == image.size && icon.rgba == image.rgba) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+} // anonymous namespace
+
+TEST_F(WindowTest, SetIconReadsBackFromSystem) {
+	Handle<Window> window = WindowSystem::Create(HiddenDesc());
+	ASSERT_TRUE(window.IsValid());
+	EXPECT_TRUE(TestPlatform::ReadWindowIcon(window).empty());
+
+	std::vector<SourceIcon> icons;
+	for (i32 edge : {16, 20, 24, 32, 40, 48, 64, 96}) {
+		icons.push_back(MakeIcon(edge));
+	}
+	const std::vector<WindowIconImage> views = ViewsOf(icons);
+	window->SetIcon(views);
+	const std::vector<TestPlatform::IconImage> read = TestPlatform::ReadWindowIcon(window);
+	ASSERT_FALSE(read.empty());
+	for (const TestPlatform::IconImage& image : read) {
+		EXPECT_TRUE(MatchesOneOf(image, icons)) << image.size.x;
+	}
+
+	std::vector<SourceIcon> replacement;
+	replacement.push_back(MakeIcon(128));
+	window->SetIcon(ViewsOf(replacement));
+	const std::vector<TestPlatform::IconImage> replaced = TestPlatform::ReadWindowIcon(window);
+	ASSERT_FALSE(replaced.empty());
+	for (const TestPlatform::IconImage& image : replaced) {
+		EXPECT_TRUE(MatchesOneOf(image, replacement)) << image.size.x;
+	}
+
+	window->SetIcon({});
+	EXPECT_TRUE(TestPlatform::ReadWindowIcon(window).empty());
+}
+
+TEST_F(WindowTest, SetIconSkipsUnusableImages) {
+	Handle<Window> window = WindowSystem::Create(HiddenDesc());
+	ASSERT_TRUE(window.IsValid());
+
+	std::vector<SourceIcon> valid;
+	valid.push_back(MakeIcon(32));
+	const std::vector<u8> truncated(10, 255);
+	const WindowIconImage images[] = {
+		{{32, 32}, truncated},
+		{{0, 0}, valid[0].rgba},
+		{valid[0].size, valid[0].rgba},
+	};
+
+	window->SetIcon({images, 2});
+	EXPECT_TRUE(TestPlatform::ReadWindowIcon(window).empty());
+
+	window->SetIcon(images);
+	const std::vector<TestPlatform::IconImage> read = TestPlatform::ReadWindowIcon(window);
+	ASSERT_FALSE(read.empty());
+	for (const TestPlatform::IconImage& image : read) {
+		EXPECT_TRUE(MatchesOneOf(image, valid)) << image.size.x;
+	}
+}
+
+namespace {
+
 	constexpr RectI SecondMonitor{-1920, 200, 1920, 1080};
 	constexpr i32 SECOND_RIGHT = SecondMonitor.position.x + SecondMonitor.size.x - 1;
 	constexpr i32 SECOND_BOTTOM = SecondMonitor.position.y + SecondMonitor.size.y - 1;

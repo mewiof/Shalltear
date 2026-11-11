@@ -295,3 +295,33 @@ TEST_F(WindowTest, ResizeEdgeBeatsCaption) {
 							 ScreenPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2)),
 			  HTCAPTION);
 }
+
+TEST_F(WindowTest, SetIconFreesReplacedIcons) {
+	const auto userObjects = [] { return ::GetGuiResources(::GetCurrentProcess(), GR_USEROBJECTS); };
+	const std::vector<u8> rgba(32 * 32 * 4, 200);
+	const WindowIconImage image{{32, 32}, rgba};
+
+	{
+		Handle<Window> warmup = WindowSystem::Create(HiddenDesc());
+		ASSERT_TRUE(warmup.IsValid());
+		WindowSystem::RequestDestroy(warmup);
+		WindowSystem::PumpEvents();
+	}
+	const DWORD before = userObjects();
+	for (int round = 0; round < 4; ++round) {
+		Handle<Window> window = WindowSystem::Create(HiddenDesc());
+		ASSERT_TRUE(window.IsValid());
+		const DWORD bare = userObjects();
+		window->SetIcon({&image, 1});
+		const DWORD set = userObjects();
+		EXPECT_GT(set, bare);
+		window->SetIcon({&image, 1});
+		EXPECT_EQ(userObjects(), set);
+		window->SetIcon({});
+		EXPECT_EQ(userObjects(), bare);
+		window->SetIcon({&image, 1});
+		WindowSystem::RequestDestroy(window);
+		WindowSystem::PumpEvents();
+	}
+	EXPECT_EQ(userObjects(), before);
+}

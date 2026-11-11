@@ -46,7 +46,7 @@ namespace Shalltear::Linux {
 
 	struct X11Atoms {
 		Atom wmProtocols, wmDeleteWindow, wmState, wmChangeState;
-		Atom netWmPing, netWmName, netWmPid, netWmState, netWmStateMaximizedVert, netWmStateMaximizedHorz;
+		Atom netWmPing, netWmName, netWmPid, netWmIcon, netWmState, netWmStateMaximizedVert, netWmStateMaximizedHorz;
 		Atom netWmStateFullscreen, netWmStateHidden, netWmStateAbove, netWmStateSkipTaskbar;
 		Atom netActiveWindow, netFrameExtents, netWmMoveResize, netWorkArea, netClientListStacking;
 		Atom netSupportingWmCheck;
@@ -130,6 +130,7 @@ namespace Shalltear::Linux {
 		bool IsMaximized(const Window::Impl& impl) override;
 
 		void SetTitle(Window::Impl& impl) override;
+		void SetIcon(Window::Impl& impl, std::span<const WindowIconImage> images) override;
 		void SetCursor(Window::Impl& impl) override;
 		void SetCursorMode(Window::Impl& impl, CursorMode previous) override;
 

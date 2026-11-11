@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Window.h"
 
 #include <string_view>
+#include <vector>
 
 namespace TestPlatform {
 
@@ -91,5 +92,14 @@ namespace TestPlatform {
 	bool WaitForExit(LaunchedProcess* process, u32 timeoutMs, i32& outExitCode);
 	bool WaitForWindow(LaunchedProcess* process, std::string_view title, u32 timeoutMs, str& outSeen);
 	bool CloseWindow(LaunchedProcess* process);
+
+	struct IconImage {
+		Vec2I size;
+		std::vector<Shalltear::u8> rgba;
+	};
+	std::vector<IconImage> ReadWindowIcon(Handle<Window> window);
+	std::vector<IconImage> ReadWindowIcon(LaunchedProcess* process);
+	bool ExecutablesCarryIcons();
+	std::vector<IconImage> ReadExecutableIcon(const str& file);
 
 } // namespace TestPlatform

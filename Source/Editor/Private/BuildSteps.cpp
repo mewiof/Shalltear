@@ -16,6 +16,7 @@
 #include "Shalltear/Editor/ScriptProjectOps.h"
 #include "Shalltear/Editor/SettingsOps.h"
 
+#include "BuildIcon.h"
 #include "ChildProcess.h"
 
 #include <chrono>
@@ -319,6 +320,7 @@ namespace Shalltear {
 			commandLine += " -DSHALLTEAR_PLAYER_DEFINES=" + Quote(defines);
 			commandLine += str(" -DSHALLTEAR_PLAYER_DEBUG_SYMBOLS=") +
 						   (ResolvedBool(context, "copyDebugSymbols") ? "ON" : "OFF");
+			commandLine += " -DSHALLTEAR_PLAYER_ICON=" + Quote(context.executableIconFile);
 
 			Vector<PackageOps::PackageManifest> catalogue;
 			Vector<str> packageDiagnostics;
@@ -556,6 +558,9 @@ namespace Shalltear {
 			if (str settings = ReadProjectSettingsDocument(); !settings.empty()) {
 				desc.documents.push_back({PakDocumentKind::ProjectSettings, std::move(settings)});
 			}
+			if (!context.windowIconDocument.empty()) {
+				desc.documents.push_back({PakDocumentKind::Icon, context.windowIconDocument});
+			}
 			Vector<u8> package{GetMemoryResource(MemTag::Editor)};
 			CookOps::CookReport report;
 			if (!CookOps::CookPackage(closure, desc, package, error, &report)) {
@@ -620,6 +625,7 @@ namespace Shalltear {
 		Register("build-number", BuildPhase::PreBuild, &BuildNumberStep, nullptr);
 		Register("pre-build-command", BuildPhase::PreBuild, [](BuildContext& context) { return RunProfileCommand(context, "preBuildCommand", "preBuildCommand"); }, nullptr);
 		Register("boot-manifest", BuildPhase::PreBuild, &BootManifestStep, nullptr);
+		Register("icon", BuildPhase::PreBuild, &BuildIcon::Step, nullptr);
 		Register("configure", BuildPhase::Compile, &ConfigureStep, nullptr);
 		Register("compile", BuildPhase::Compile, &CompileStep, nullptr);
 		Register("cook-content", BuildPhase::Stage, &CookContentStep, nullptr);

@@ -3,6 +3,7 @@
 #include "Shalltear/Editor/BuildPipeline.h"
 #include "Shalltear/Editor/ScriptProjectOps.h"
 
+#include "BuildIcon.h"
 #include "ChildProcess.h"
 #include "Platform/EditorPlatform.h"
 
@@ -35,15 +36,18 @@ namespace Shalltear {
 		symbols.help = "emit a .pdb beside the executable. A Debug configuration produces one either way";
 		symbols.defaultValue = "false";
 		out.push_back(std::move(symbols));
+
+		BuildIcon::DescribeSetting(out);
 	}
 
-	void WindowsTarget::Validate(const str&, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
+	void WindowsTarget::Validate(const str& projectPath, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
 		BuildProfileOps::StaticSDKProbe probe;
 		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
 		if (probe.root.empty()) {
 			AddIssue(out, BuildIssueSeverity::Error, profile.name, "",
 					 "a Shalltear player links the game statically + no STATIC SDK was found. " + probe.fix);
 		}
+		BuildIcon::Validate(projectPath, profile, out);
 	}
 
 	void WindowsTarget::ConfigurePipeline(BuildContext& context) const {
@@ -61,6 +65,8 @@ namespace Shalltear {
 
 		context.runtimeFiles.push_back("libc++.dll");
 		context.runtimeFiles.push_back("libunwind.dll");
+
+		context.executableIconSizes = {16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256};
 	}
 
 	str WindowsTarget::GetLaunchCommand(const BuildContext& context) const {

@@ -23,6 +23,7 @@ namespace Shalltear {
 		std::string_view GetId() const override { return "LinuxServer"; }
 		std::string_view GetDisplayName() const override { return "Linux Dedicated Server"; }
 
+		void DescribeSettings(Vector<BuildSettingDesc>& out) const override;
 		void ConfigurePipeline(BuildContext& context) const override;
 	};
 

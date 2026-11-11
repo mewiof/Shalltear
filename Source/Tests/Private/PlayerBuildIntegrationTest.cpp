@@ -35,6 +35,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <format>
 #include <filesystem>
 #include <fstream>
@@ -344,6 +345,25 @@ void PotionDrinker::OnEnable() {
 	str ReadAllBytes(const std::filesystem::path& path) {
 		std::ifstream file(path, std::ios::binary);
 		return str((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	}
+
+	void WriteSolidTga(const std::filesystem::path& path, u32 edge, const u8 (&rgba)[4]) {
+		str bytes(18, '\0');
+		bytes[2] = 2;
+		bytes[12] = static_cast<char>(edge & 0xFF);
+		bytes[13] = static_cast<char>(edge >> 8);
+		bytes[14] = static_cast<char>(edge & 0xFF);
+		bytes[15] = static_cast<char>(edge >> 8);
+		bytes[16] = 32;
+		bytes[17] = 0x28;
+		for (u32 i = 0; i < edge * edge; ++i) {
+			bytes += static_cast<char>(rgba[2]);
+			bytes += static_cast<char>(rgba[1]);
+			bytes += static_cast<char>(rgba[0]);
+			bytes += static_cast<char>(rgba[3]);
+		}
+		std::ofstream file(path, std::ios::binary | std::ios::trunc);
+		file << bytes;
 	}
 
 	class PlayerBuildIntegrationTest : public ::testing::Test {
@@ -1625,4 +1645,98 @@ TEST_F(PlayerBuildIntegrationTest, PlayerCarriesLoadableCoreTypes) {
 	str run = RunCommand("\"" + playerExe.generic_string() + "\" --frames 4", exitCode);
 	EXPECT_EQ(exitCode, 0) << run;
 	EXPECT_EQ(run.find("unloaded type"), str::npos) << run;
+}
+
+TEST_F(PlayerBuildIntegrationTest, BuiltGameShowsIcon) {
+	constexpr u8 COLOR[4] = {200, 40, 90, 255};
+
+	std::filesystem::path project = _root / "IconProject";
+	std::filesystem::create_directories(project / "Assets");
+	{
+		Config projectFile;
+		projectFile.SetString("Project", "name", "IconProbe");
+		ASSERT_TRUE(projectFile.Save(Path(project.generic_string() + "/Project.ini")));
+	}
+	WriteSolidTga(project / "Assets" / "Icon.tga", 256, COLOR);
+	for (const char* name : {"Iconic", "Plain"}) {
+		BuildProfile profile;
+		profile.name = name;
+		profile.target = SLT_TEST_HOST_TARGET;
+		profile.SetList("scenes", Vector<str>{});
+		profile.SetString("configuration", _config);
+		if (std::string_view(name) == "Iconic") {
+			profile.SetString("icon", "Assets/Icon.tga");
+		}
+		ASSERT_TRUE(BuildProfileOps::SaveProfile(BuildProfileOps::GetProfilePath(project.generic_string(), name), profile));
+	}
+
+	int exitCode = 0;
+	str buildLog = RunCommand("\"" + EditorExecutable() + "\" --project \"" + project.generic_string() +
+								  "\" --build Iconic --build Plain",
+							  exitCode);
+	ASSERT_EQ(exitCode, 0) << buildLog;
+	const std::filesystem::path playerExe = project / "Builds" / "Iconic" / "IconProbe" SLT_TEST_PLAYER_SUFFIX;
+	const std::filesystem::path plainExe = project / "Builds" / "Plain" / "IconProbe" SLT_TEST_PLAYER_SUFFIX;
+	ASSERT_TRUE(std::filesystem::exists(playerExe)) << buildLog;
+	ASSERT_TRUE(std::filesystem::exists(plainExe)) << buildLog;
+
+	const auto isColor = [&COLOR](const TestPlatform::IconImage& image) {
+		for (size_t i = 0; i < image.rgba.size(); i += 4) {
+			if (std::memcmp(image.rgba.data() + i, COLOR, 4) != 0) {
+				return false;
+			}
+		}
+		return !image.rgba.empty();
+	};
+
+	const std::vector<TestPlatform::IconImage> fileIcon = TestPlatform::ReadExecutableIcon(playerExe.generic_string());
+	EXPECT_TRUE(TestPlatform::ReadExecutableIcon(plainExe.generic_string()).empty());
+	if (TestPlatform::ExecutablesCarryIcons()) {
+		ASSERT_FALSE(fileIcon.empty());
+		EXPECT_EQ(fileIcon.front().size, Vec2I(16, 16));
+		EXPECT_EQ(fileIcon.back().size, Vec2I(256, 256));
+		for (const TestPlatform::IconImage& image : fileIcon) {
+			EXPECT_TRUE(isColor(image)) << image.size.x;
+		}
+	} else {
+		EXPECT_TRUE(fileIcon.empty());
+	}
+
+	for (const char* name : {"Iconic", "Plain"}) {
+		PakReader package;
+		str error;
+		ASSERT_TRUE(package.Mount(Path((project / "Builds" / name / "Data" / "Content.slpak").generic_string()), error))
+			<< error;
+		const bool packaged = !package.GetDocument(PakDocumentKind::Icon).empty();
+		EXPECT_EQ(packaged, std::string_view(name) == "Iconic" && !TestPlatform::ExecutablesCarryIcons()) << name;
+	}
+
+	struct Game {
+		TestPlatform::LaunchedProcess* process = nullptr;
+		~Game() { TestPlatform::Terminate(process); }
+	} game;
+	game.process = TestPlatform::Launch("\"" + playerExe.generic_string() +
+										"\" --screen-fullscreen 0 --screen-width 160 --screen-height 120");
+	ASSERT_NE(game.process, nullptr);
+	str windowsSeen;
+	if (!TestPlatform::WaitForWindow(game.process, "IconProbe", 30000, windowsSeen)) {
+		GTEST_SKIP() << (windowsSeen.empty() ? str("\n    <none>") : windowsSeen);
+	}
+
+	std::vector<TestPlatform::IconImage> windowIcon;
+	for (int attempt = 0; attempt < 50 && windowIcon.empty(); ++attempt) {
+		windowIcon = TestPlatform::ReadWindowIcon(game.process);
+		if (windowIcon.empty()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+	}
+	ASSERT_FALSE(windowIcon.empty());
+	for (const TestPlatform::IconImage& image : windowIcon) {
+		EXPECT_TRUE(isColor(image)) << image.size.x;
+	}
+
+	ASSERT_TRUE(TestPlatform::CloseWindow(game.process));
+	i32 gameExitCode = 1;
+	ASSERT_TRUE(TestPlatform::WaitForExit(game.process, 60000, gameExitCode));
+	EXPECT_EQ(gameExitCode, 0);
 }

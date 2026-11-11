@@ -4,6 +4,7 @@
 #include "Game/BuildStamp.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
+#include "Shalltear/Core/Asset/PakFormat.h"
 #include "Shalltear/Core/Event.h"
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
@@ -84,6 +85,37 @@ namespace Shalltear {
 			return FileSystem::GetExecutablePath().GetDirectory();
 		}
 
+		void ApplyPackagedIcon(Window& window) {
+			str document;
+			if (!AssetDatabase::ReadPackageDocument(PakDocumentKind::Icon, document)) {
+				return;
+			}
+			const u8* bytes = reinterpret_cast<const u8*>(document.data());
+			Vector<WindowIconImage> images{GetMemoryResource(MemTag::Core)};
+			size_t at = 0;
+			while (at < document.size()) {
+				PakIconImage header{};
+				if (document.size() - at < sizeof(header)) {
+					break;
+				}
+				std::memcpy(&header, bytes + at, sizeof(header));
+				at += sizeof(header);
+				const u64 texels = static_cast<u64>(header.width) * header.height;
+				if (header.width == 0 || header.height == 0 || texels > (document.size() - at) / 4) {
+					break;
+				}
+				const size_t texelBytes = static_cast<size_t>(texels) * 4;
+				images.push_back(WindowIconImage{Vec2I(static_cast<i32>(header.width), static_cast<i32>(header.height)),
+												 std::span<const u8>(bytes + at, texelBytes)});
+				at += texelBytes;
+			}
+			if (at != document.size()) {
+				SLT_LOG_WARN("Player", "package's icon is malformed (default icon used)");
+				return;
+			}
+			window.SetIcon(images);
+		}
+
 	} // anonymous namespace
 
 	static int RunGame(const PlayerOptions& options) {
@@ -127,6 +159,7 @@ namespace Shalltear {
 			SLT_LOG_FATAL("Player", "main window creation failed");
 			return 1;
 		}
+		ApplyPackagedIcon(*window.Get());
 
 		PlayerWindowPolicy quitPolicy;
 		quitPolicy.Subscribe();

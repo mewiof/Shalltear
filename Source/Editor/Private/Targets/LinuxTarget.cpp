@@ -2,6 +2,7 @@
 
 #include "Shalltear/Editor/BuildPipeline.h"
 
+#include "BuildIcon.h"
 #include "ChildProcess.h"
 #include "Platform/EditorPlatform.h"
 
@@ -28,6 +29,17 @@ namespace Shalltear {
 			return (IsHost() ? "Run " : "Run `python Scripts/fetch_prebuilt.py --linux` -> ") + str(BUILD);
 		}
 
+		void DescribeSymbols(Vector<BuildSettingDesc>& out) {
+			BuildSettingDesc symbols;
+			symbols.key = "copyDebugSymbols";
+			symbols.type = BuildSettingType::Bool;
+			symbols.merge = BuildMergePolicy::Replace;
+			symbols.label = "Copy Debug Symbols";
+			symbols.help = "emit a .debug file beside the executable. A Debug configuration has symbols either way";
+			symbols.defaultValue = "false";
+			out.push_back(std::move(symbols));
+		}
+
 	} // anonymous namespace
 
 	bool LinuxTarget::IsAvailable(str& outReason) const {
@@ -45,23 +57,18 @@ namespace Shalltear {
 	}
 
 	void LinuxTarget::DescribeSettings(Vector<BuildSettingDesc>& out) const {
-		BuildSettingDesc symbols;
-		symbols.key = "copyDebugSymbols";
-		symbols.type = BuildSettingType::Bool;
-		symbols.merge = BuildMergePolicy::Replace;
-		symbols.label = "Copy Debug Symbols";
-		symbols.help = "emit a .debug file beside the executable. A Debug configuration has symbols either way";
-		symbols.defaultValue = "false";
-		out.push_back(std::move(symbols));
+		DescribeSymbols(out);
+		BuildIcon::DescribeSetting(out);
 	}
 
-	void LinuxTarget::Validate(const str&, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
+	void LinuxTarget::Validate(const str& projectPath, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
 		BuildProfileOps::StaticSDKProbe probe;
 		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
 		if (probe.root.empty()) {
 			AddIssue(out, BuildIssueSeverity::Error, profile.name, "",
 					 "a Shalltear player links the game statically + no STATIC SDK built for Linux was found. " + MissingSDK(probe));
 		}
+		BuildIcon::Validate(projectPath, profile, out);
 	}
 
 	void LinuxTarget::ConfigurePipeline(BuildContext& context) const {
@@ -77,6 +84,8 @@ namespace Shalltear {
 
 		context.defines.push_back("SLT_PLAYER");
 
+		context.windowIconSizes = {16, 24, 32, 48, 64, 128, 256};
+
 		if (!IsHost()) {
 			context.Log("built on " + str(EditorPlatform::GetHostPlatformName()) +
 						" (no executable bit). Run `chmod +x` on the executable on Linux");
@@ -90,11 +99,16 @@ namespace Shalltear {
 		return QuoteCommandArgument(context.stagingDir + "/" + context.executableName + str(EXECUTABLE_SUFFIX));
 	}
 
+	void LinuxServerTarget::DescribeSettings(Vector<BuildSettingDesc>& out) const {
+		DescribeSymbols(out);
+	}
+
 	void LinuxServerTarget::ConfigurePipeline(BuildContext& context) const {
 		LinuxTarget::ConfigurePipeline(context);
 
 		context.entrySource = "ServerMain.cpp";
 		context.windowedSubsystem = false;
+		context.windowIconSizes.clear();
 		for (str& define : context.defines) {
 			if (define == "SLT_PLAYER") {
 				define = "SLT_SERVER";

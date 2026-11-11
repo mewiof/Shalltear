@@ -23,6 +23,8 @@ namespace Shalltear {
 		Handle<Window> self;
 		WindowFlags flags = WindowFlags::None;
 		str title;
+		HICON bigIcon = nullptr;
+		HICON smallIcon = nullptr;
 		Vec2I minClientSize;
 		Vec2I maxClientSize;
 		f32 scale = 1.0f;
@@ -83,6 +85,7 @@ namespace Shalltear {
 		Window* WindowFromHwnd(HWND hwnd);
 		void ApplyCursorLock(Window::Impl& impl);
 		void ReleaseCursorLock(Window::Impl& impl);
+		void ReleaseIcons(Window::Impl& impl);
 
 		Key TranslateVirtualKey(WPARAM wParam, LPARAM lParam);
 		u16 ExtractScancode(LPARAM lParam);

@@ -13,6 +13,7 @@
 #include "Asset/PakReader.h"
 
 #include <atomic>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -28,16 +29,43 @@ namespace {
 		std::string_view GetId() const override { return "Docs"; }
 		std::string_view GetDisplayName() const override { return "Docs"; }
 		bool IsAvailable(str&) const override { return true; }
-		void DescribeSettings(Vector<BuildSettingDesc>&) const override {}
+		void DescribeSettings(Vector<BuildSettingDesc>& out) const override {
+			if (windowIcon) {
+				BuildSettingDesc icon;
+				icon.key = "icon";
+				icon.type = BuildSettingType::Path;
+				out.push_back(std::move(icon));
+			}
+		}
 		void Validate(const str&, const ResolvedProfile&, Vector<BuildIssue>&) const override {}
 		void ConfigurePipeline(BuildContext& context) const override {
 			context.entrySource = "PlayerMain.cpp";
 			context.sdkRoot = sdkRoot;
+			if (windowIcon) {
+				context.windowIconSizes = {16, 32};
+			}
 		}
 		str GetLaunchCommand(const BuildContext&) const override { return {}; }
 
 		str sdkRoot;
+		bool windowIcon = false;
 	};
+
+	str SolidTga(u32 edge, const u8 (&rgba)[4]) {
+		str bytes(18, '\0');
+		bytes[2] = 2;
+		bytes[12] = static_cast<char>(edge);
+		bytes[14] = static_cast<char>(edge);
+		bytes[16] = 32;
+		bytes[17] = 0x28;
+		for (u32 i = 0; i < edge * edge; ++i) {
+			bytes += static_cast<char>(rgba[2]);
+			bytes += static_cast<char>(rgba[1]);
+			bytes += static_cast<char>(rgba[0]);
+			bytes += static_cast<char>(rgba[3]);
+		}
+		return bytes;
+	}
 
 	class BuildDocumentsFixture : public ::testing::Test {
 	protected:
@@ -208,10 +236,41 @@ TEST_F(BuildDocumentsFixture, DefaultSettingsCarryNoDocument) {
 	str error;
 	ASSERT_TRUE(reader.Mount(Path(Package().generic_string()), error)) << error;
 	EXPECT_TRUE(reader.GetDocument(PakDocumentKind::ProjectSettings).empty());
+	EXPECT_TRUE(reader.GetDocument(PakDocumentKind::Icon).empty());
 	EXPECT_FALSE(reader.GetDocument(PakDocumentKind::BootManifest).empty());
 
 	ASSERT_EQ(pipeline.GetResult().profiles.size(), 1u);
 	EXPECT_EQ(pipeline.GetResult().profiles[0].warningCount, 0u) << Issues(pipeline);
+}
+
+TEST_F(BuildDocumentsFixture, BuildPacksWindowIcon) {
+	constexpr u8 COLOR[4] = {40, 160, 220, 255};
+	_target.windowIcon = true;
+	WriteFile(_root / "Assets" / "Icon.tga", SolidTga(64, COLOR));
+	WriteProfile({{"icon", "Assets/Icon.tga"}});
+
+	BuildPipeline pipeline;
+	Build(pipeline);
+	ASSERT_EQ(pipeline.GetState(), BuildState::Succeeded) << Issues(pipeline);
+
+	PakReader reader;
+	str error;
+	ASSERT_TRUE(reader.Mount(Path(Package().generic_string()), error)) << error;
+	const str document(reader.GetDocument(PakDocumentKind::Icon));
+	ASSERT_EQ(document.size(), 2 * sizeof(PakIconImage) + 16 * 16 * 4 + 32 * 32 * 4);
+
+	size_t at = 0;
+	for (u32 edge : {16u, 32u}) {
+		PakIconImage header{};
+		std::memcpy(&header, document.data() + at, sizeof(header));
+		at += sizeof(header);
+		EXPECT_EQ(header.width, edge);
+		EXPECT_EQ(header.height, edge);
+		for (size_t texel = 0; texel < static_cast<size_t>(edge) * edge; ++texel) {
+			ASSERT_EQ(std::memcmp(document.data() + at + texel * 4, COLOR, 4), 0) << edge << " " << texel;
+		}
+		at += static_cast<size_t>(edge) * edge * 4;
+	}
 }
 
 TEST_F(BuildDocumentsFixture, ManifestlessCookFailsBuild) {

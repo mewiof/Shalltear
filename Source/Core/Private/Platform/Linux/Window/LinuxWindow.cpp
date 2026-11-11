@@ -317,6 +317,13 @@ namespace Shalltear {
 		GetDisplayServer()->SetTitle(*_impl);
 	}
 
+	void Window::SetIcon(std::span<const WindowIconImage> images) {
+		SLT_WINDOW_ASSERT_MAIN_THREAD();
+		if (_impl) {
+			GetDisplayServer()->SetIcon(*_impl, images);
+		}
+	}
+
 	str Window::GetTitle() const {
 		return _impl ? _impl->title : str{};
 	}

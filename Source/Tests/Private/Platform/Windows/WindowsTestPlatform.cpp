@@ -637,4 +637,125 @@ namespace TestPlatform {
 		return process && process->window && ::PostMessageW(process->window, WM_CLOSE, 0, 0) != 0;
 	}
 
+	namespace {
+
+		bool ReadIcon(HICON icon, IconImage& out) {
+			ICONINFO info{};
+			if (!icon || !::GetIconInfo(icon, &info)) {
+				return false;
+			}
+			bool read = false;
+			BITMAP bitmap{};
+			if (info.hbmColor && ::GetObjectW(info.hbmColor, sizeof(bitmap), &bitmap) != 0) {
+				BITMAPINFO header{};
+				header.bmiHeader.biSize = sizeof(header.bmiHeader);
+				header.bmiHeader.biWidth = bitmap.bmWidth;
+				header.bmiHeader.biHeight = -bitmap.bmHeight;
+				header.bmiHeader.biPlanes = 1;
+				header.bmiHeader.biBitCount = 32;
+				header.bmiHeader.biCompression = BI_RGB;
+				std::vector<u8> bgra(static_cast<size_t>(bitmap.bmWidth) * static_cast<size_t>(bitmap.bmHeight) * 4);
+				HDC dc = ::CreateCompatibleDC(nullptr);
+				read = ::GetDIBits(dc, info.hbmColor, 0, static_cast<UINT>(bitmap.bmHeight), bgra.data(), &header,
+								   DIB_RGB_COLORS) == bitmap.bmHeight;
+				::DeleteDC(dc);
+				out.size = {bitmap.bmWidth, bitmap.bmHeight};
+				out.rgba.resize(bgra.size());
+				for (size_t i = 0; i < bgra.size(); i += 4) {
+					out.rgba[i] = bgra[i + 2];
+					out.rgba[i + 1] = bgra[i + 1];
+					out.rgba[i + 2] = bgra[i];
+					out.rgba[i + 3] = bgra[i + 3];
+				}
+			}
+			if (info.hbmColor) {
+				::DeleteObject(info.hbmColor);
+			}
+			if (info.hbmMask) {
+				::DeleteObject(info.hbmMask);
+			}
+			return read;
+		}
+
+		std::vector<IconImage> ReadIcons(HWND hwnd) {
+			std::vector<IconImage> out;
+			if (!hwnd) {
+				return out;
+			}
+			const std::pair<WPARAM, int> kinds[] = {{ICON_BIG, GCLP_HICON}, {ICON_SMALL, GCLP_HICONSM}};
+			for (const auto& [message, classIndex] : kinds) {
+				DWORD_PTR result = 0;
+				::SendMessageTimeoutW(hwnd, WM_GETICON, message, 0, SMTO_ABORTIFHUNG, 2000, &result);
+				HICON icon = reinterpret_cast<HICON>(result);
+				if (!icon) {
+					icon = reinterpret_cast<HICON>(::GetClassLongPtrW(hwnd, classIndex));
+				}
+				IconImage image;
+				if (ReadIcon(icon, image)) {
+					out.push_back(std::move(image));
+				}
+			}
+			return out;
+		}
+
+		struct IconGroup {
+			const u8* bytes = nullptr;
+			DWORD size = 0;
+		};
+
+		BOOL CALLBACK FindIconGroup(HMODULE module, LPCWSTR type, LPWSTR name, LONG_PTR user) {
+			IconGroup& group = *reinterpret_cast<IconGroup*>(user);
+			HRSRC found = ::FindResourceW(module, name, type);
+			HGLOBAL loaded = found ? ::LoadResource(module, found) : nullptr;
+			group.bytes = loaded ? static_cast<const u8*>(::LockResource(loaded)) : nullptr;
+			group.size = found ? ::SizeofResource(module, found) : 0;
+			return FALSE;
+		}
+
+	} // anonymous namespace
+
+	std::vector<IconImage> ReadWindowIcon(Handle<Window> window) {
+		return window.IsValid() ? ReadIcons(static_cast<HWND>(window->GetNativeHandle().window)) : std::vector<IconImage>{};
+	}
+
+	std::vector<IconImage> ReadWindowIcon(LaunchedProcess* process) {
+		return process ? ReadIcons(process->window) : std::vector<IconImage>{};
+	}
+
+	bool ExecutablesCarryIcons() {
+		return true;
+	}
+
+	std::vector<IconImage> ReadExecutableIcon(const str& file) {
+		std::vector<IconImage> out;
+		HMODULE module = ::LoadLibraryExW(StringUtil::UTF8ToWide(file).c_str(), nullptr,
+										  LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+		if (!module) {
+			return out;
+		}
+		IconGroup group;
+		::EnumResourceNamesW(module, reinterpret_cast<LPCWSTR>(RT_GROUP_ICON), &FindIconGroup, reinterpret_cast<LONG_PTR>(&group));
+		const u32 count = group.bytes && group.size >= 6 ? static_cast<u32>(group.bytes[4] | (group.bytes[5] << 8)) : 0;
+		for (u32 i = 0; i < count && 6 + 14 * static_cast<size_t>(i + 1) <= group.size; ++i) {
+			const u8* entry = group.bytes + 6 + 14 * static_cast<size_t>(i);
+			const WORD id = static_cast<WORD>(entry[12] | (entry[13] << 8));
+			const int edge = entry[0] == 0 ? 256 : entry[0];
+			HRSRC found = ::FindResourceW(module, MAKEINTRESOURCEW(id), reinterpret_cast<LPCWSTR>(RT_ICON));
+			HGLOBAL loaded = found ? ::LoadResource(module, found) : nullptr;
+			BYTE* bytes = loaded ? static_cast<BYTE*>(::LockResource(loaded)) : nullptr;
+			HICON icon = bytes ? ::CreateIconFromResourceEx(bytes, ::SizeofResource(module, found), TRUE, 0x00030000, edge,
+															edge, LR_DEFAULTCOLOR)
+							   : nullptr;
+			IconImage image;
+			if (ReadIcon(icon, image)) {
+				out.push_back(std::move(image));
+			}
+			if (icon) {
+				::DestroyIcon(icon);
+			}
+		}
+		::FreeLibrary(module);
+		return out;
+	}
+
 } // namespace TestPlatform

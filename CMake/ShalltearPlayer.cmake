@@ -87,6 +87,25 @@ ${anchorCalls}	}
 	set(${OUT_LINK_TARGETS} "${linkTargets}" PARENT_SCOPE)
 endfunction()
 
+function(_shalltear_add_player_icon TARGET_NAME ICON_FILE)
+	get_filename_component(toolchainBin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+	find_program(windres NAMES x86_64-w64-mingw32-windres llvm-windres windres
+		HINTS "${toolchainBin}" NO_DEFAULT_PATH NO_CACHE)
+	if(NOT windres)
+		message(FATAL_ERROR "Shalltear: '${TARGET_NAME}' has an icon + no windres was found beside ${CMAKE_CXX_COMPILER}.")
+	endif()
+
+	set(iconDir "${CMAKE_CURRENT_BINARY_DIR}/ShalltearGenerated/Icon")
+	configure_file("${ICON_FILE}" "${iconDir}/Icon.ico" COPYONLY)
+	file(GENERATE OUTPUT "${iconDir}/Icon.rc" CONTENT "1 ICON \"Icon.ico\"\n")
+	add_custom_command(OUTPUT "${iconDir}/Icon.res.o"
+		COMMAND "${windres}" --output-format=coff --input=Icon.rc --output=Icon.res.o
+		WORKING_DIRECTORY "${iconDir}"
+		DEPENDS "${iconDir}/Icon.rc" "${iconDir}/Icon.ico"
+		VERBATIM)
+	target_sources(${TARGET_NAME} PRIVATE "${iconDir}/Icon.res.o")
+endfunction()
+
 function(_shalltear_add_player_impl MODULE_NAME)
 	cmake_parse_arguments(SLT_PLAYER "EDITOR" "OUTPUT_DIRECTORY" "SOURCES" ${ARGN})
 
@@ -151,6 +170,9 @@ function(_shalltear_add_player_impl MODULE_NAME)
 	_shalltear_write_package_umbrellas(${MODULE_NAME} "${playerPackageTargets}")
 
 	add_executable(${playerTarget} ${playerEntrySources} "${playerPackageSource}")
+	if(WIN32 AND SHALLTEAR_PLAYER_ICON)
+		_shalltear_add_player_icon(${playerTarget} "${SHALLTEAR_PLAYER_ICON}")
+	endif()
 
 	_shalltear_write_build_stamp(${MODULE_NAME} TRUE ${playerTarget})
 

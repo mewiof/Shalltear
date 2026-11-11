@@ -254,8 +254,19 @@ namespace Shalltear {
 
 	enum class PakDocumentKind : u32 {
 		BootManifest = 1,
-		ProjectSettings = 2
+		ProjectSettings = 2,
+		Icon = 3
 	};
+
+	// Icon document = PakIconImage + WindowIconImage texels per image
+	struct PakIconImage {
+		u32 width;
+		u32 height;
+	};
+	static_assert(sizeof(PakIconImage) == 8);
+	static_assert(offsetof(PakIconImage, width) == 0);
+	static_assert(offsetof(PakIconImage, height) == 4);
+	static_assert(std::has_unique_object_representations_v<PakIconImage>);
 
 	struct PakDocumentEntry {
 		u32 kind;

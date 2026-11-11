@@ -14,7 +14,12 @@ namespace Shalltear::Win32 {
 
 	namespace {
 		constexpr const wchar_t* WINDOW_CLASS_NAME = L"ShalltearWindow";
-	}
+
+		BOOL CALLBACK LoadFirstIcon(HMODULE module, LPCWSTR, LPWSTR name, LONG_PTR user) {
+			*reinterpret_cast<HICON*>(user) = ::LoadIconW(module, name);
+			return FALSE;
+		}
+	} // anonymous namespace
 
 	BackendState& GetBackendState() {
 		static BackendState state;
@@ -33,10 +38,14 @@ namespace Shalltear::WindowBackend {
 
 		::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
+		HICON icon = nullptr;
+		::EnumResourceNamesW(backend.hinstance, RT_GROUP_ICON, &LoadFirstIcon, reinterpret_cast<LONG_PTR>(&icon));
+
 		WNDCLASSEXW windowClass{};
 		windowClass.cbSize = sizeof(windowClass);
 		windowClass.lpfnWndProc = WndProc;
 		windowClass.hInstance = backend.hinstance;
+		windowClass.hIcon = icon;
 		windowClass.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
 		windowClass.hbrBackground = static_cast<HBRUSH>(::GetStockObject(BLACK_BRUSH));
 		windowClass.lpszClassName = WINDOW_CLASS_NAME;

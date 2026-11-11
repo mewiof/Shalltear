@@ -82,6 +82,7 @@ namespace Shalltear {
 			virtual bool IsMaximized(const Window::Impl& impl) = 0;
 
 			virtual void SetTitle(Window::Impl& impl) = 0;
+			virtual void SetIcon(Window::Impl& impl, std::span<const WindowIconImage> images) = 0;
 			virtual void SetCursor(Window::Impl& impl) = 0;
 			virtual void SetCursorMode(Window::Impl& impl, CursorMode previous) = 0;
 

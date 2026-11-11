@@ -134,6 +134,7 @@ namespace Shalltear::Linux {
 		atoms.netWmPing = atom("_NET_WM_PING");
 		atoms.netWmName = atom("_NET_WM_NAME");
 		atoms.netWmPid = atom("_NET_WM_PID");
+		atoms.netWmIcon = atom("_NET_WM_ICON");
 		atoms.netWmState = atom("_NET_WM_STATE");
 		atoms.netWmStateMaximizedVert = atom("_NET_WM_STATE_MAXIMIZED_VERT");
 		atoms.netWmStateMaximizedHorz = atom("_NET_WM_STATE_MAXIMIZED_HORZ");
@@ -813,6 +814,39 @@ namespace Shalltear::Linux {
 		x.XChangeProperty(display, w.handle, atoms.netWmName, atoms.utf8String, 8, PropModeReplace,
 						  reinterpret_cast<const unsigned char*>(impl.title.data()), static_cast<int>(impl.title.size()));
 		x.XStoreName(display, w.handle, impl.title.c_str());
+	}
+
+	void X11Server::SetIcon(Window::Impl& impl, std::span<const WindowIconImage> images) {
+		X11Window& w = Native(impl);
+		size_t total = 0;
+		for (const WindowIconImage& image : images) {
+			if (WindowInternal::IsUsableIcon(image)) {
+				total += 2 + static_cast<size_t>(image.size.x) * static_cast<size_t>(image.size.y);
+			}
+		}
+		if (total == 0) {
+			x.XDeleteProperty(display, w.handle, atoms.netWmIcon);
+			return;
+		}
+		// Xlib format 32 data = long (8 bytes on 64 bit)
+		Vector<long> cardinals{GetMemoryResource(MemTag::Platform)};
+		cardinals.reserve(total);
+		for (const WindowIconImage& image : images) {
+			if (!WindowInternal::IsUsableIcon(image)) {
+				continue;
+			}
+			cardinals.push_back(image.size.x);
+			cardinals.push_back(image.size.y);
+			const size_t count = static_cast<size_t>(image.size.x) * static_cast<size_t>(image.size.y);
+			for (size_t i = 0; i < count; ++i) {
+				const u8* texel = image.rgba.data() + i * 4;
+				const u32 argb = (static_cast<u32>(texel[3]) << 24) | (static_cast<u32>(texel[0]) << 16) |
+								 (static_cast<u32>(texel[1]) << 8) | static_cast<u32>(texel[2]);
+				cardinals.push_back(static_cast<long>(argb));
+			}
+		}
+		x.XChangeProperty(display, w.handle, atoms.netWmIcon, XA_CARDINAL, 32, PropModeReplace,
+						  reinterpret_cast<const unsigned char*>(cardinals.data()), static_cast<int>(cardinals.size()));
 	}
 
 	NativeWindowHandle X11Server::GetNativeHandle(const Window::Impl& impl) {

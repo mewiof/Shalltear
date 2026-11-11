@@ -11,6 +11,7 @@
 #include "Shalltear/Core/Window/Monitor.h"
 
 #include <optional>
+#include <span>
 #include <string_view>
 
 namespace Shalltear {
@@ -91,6 +92,12 @@ namespace Shalltear {
 		WindowState state = WindowState::Normal;
 	};
 
+	struct WindowIconImage {
+		Vec2I size;
+		// rgba8, straight alpha, top row first
+		std::span<const u8> rgba;
+	};
+
 	class SHALLTEAR_CORE_API Window : public Object {
 	public:
 		~Window() override;
@@ -121,6 +128,7 @@ namespace Shalltear {
 		bool IsMaximized() const;
 		void SetTitle(std::string_view utf8);
 		str GetTitle() const;
+		void SetIcon(std::span<const WindowIconImage> images);
 		WindowFlags GetFlags() const;
 
 		void SetCursor(SystemCursor cursor);

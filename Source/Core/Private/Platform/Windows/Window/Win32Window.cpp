@@ -44,6 +44,60 @@ namespace Shalltear::Win32 {
 			return HasFlag(impl.flags, WindowFlags::Borderless);
 		}
 
+		const WindowIconImage* PickIcon(std::span<const WindowIconImage> images, i32 edgePx) {
+			const WindowIconImage* best = nullptr;
+			i32 bestEdge = 0;
+			for (const WindowIconImage& image : images) {
+				if (!WindowInternal::IsUsableIcon(image)) {
+					continue;
+				}
+				const i32 edge = std::max(image.size.x, image.size.y);
+				const bool fits = edge >= edgePx;
+				const bool bestFits = bestEdge >= edgePx;
+				if (!best || (fits && (!bestFits || edge < bestEdge)) || (!fits && !bestFits && edge > bestEdge)) {
+					best = &image;
+					bestEdge = edge;
+				}
+			}
+			return best;
+		}
+
+		HICON CreateIconFrom(const WindowIconImage& image) {
+			BITMAPV5HEADER header{};
+			header.bV5Size = sizeof(header);
+			header.bV5Width = image.size.x;
+			header.bV5Height = -image.size.y;
+			header.bV5Planes = 1;
+			header.bV5BitCount = 32;
+			header.bV5Compression = BI_BITFIELDS;
+			header.bV5RedMask = 0x00FF0000;
+			header.bV5GreenMask = 0x0000FF00;
+			header.bV5BlueMask = 0x000000FF;
+			header.bV5AlphaMask = 0xFF000000;
+			void* bits = nullptr;
+			HBITMAP color = ::CreateDIBSection(nullptr, reinterpret_cast<const BITMAPINFO*>(&header), DIB_RGB_COLORS, &bits,
+											   nullptr, 0);
+			if (!color) {
+				return nullptr;
+			}
+			u8* texels = static_cast<u8*>(bits);
+			const size_t count = static_cast<size_t>(image.size.x) * static_cast<size_t>(image.size.y);
+			for (size_t i = 0; i < count; ++i) {
+				texels[i * 4 + 0] = image.rgba[i * 4 + 2];
+				texels[i * 4 + 1] = image.rgba[i * 4 + 1];
+				texels[i * 4 + 2] = image.rgba[i * 4 + 0];
+				texels[i * 4 + 3] = image.rgba[i * 4 + 3];
+			}
+			HBITMAP mask = ::CreateBitmap(image.size.x, image.size.y, 1, 1, nullptr);
+			ICONINFO info{TRUE, 0, 0, mask, color};
+			HICON icon = mask ? ::CreateIconIndirect(&info) : nullptr;
+			if (mask) {
+				::DeleteObject(mask);
+			}
+			::DeleteObject(color);
+			return icon;
+		}
+
 		int FrameThickness(HWND hwnd) {
 			UINT dpi = ::GetDpiForWindow(hwnd);
 			return ::GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi) + ::GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
@@ -425,6 +479,15 @@ namespace Shalltear::Win32 {
 		}
 		InputInternal::ShiftMouseOrigin(-impl.wrapOffset);
 		impl.wrapOffset = {};
+	}
+
+	void ReleaseIcons(Window::Impl& impl) {
+		for (HICON* icon : {&impl.bigIcon, &impl.smallIcon}) {
+			if (*icon) {
+				::DestroyIcon(*icon);
+				*icon = nullptr;
+			}
+		}
 	}
 
 	LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -842,6 +905,7 @@ namespace Shalltear::WindowBackend {
 			::KillTimer(impl->hwnd, MODAL_TICK_TIMER_ID);
 			::DestroyWindow(impl->hwnd);
 		}
+		ReleaseIcons(*impl);
 		WindowInternalAccess::GetImpl(window) = nullptr;
 		Delete(impl);
 	}
@@ -1105,6 +1169,23 @@ namespace Shalltear {
 		}
 		_impl->title = str(utf8);
 		::SetWindowTextW(_impl->hwnd, StringUtil::UTF8ToWide(utf8).c_str());
+	}
+
+	void Window::SetIcon(std::span<const WindowIconImage> images) {
+		SLT_WINDOW_ASSERT_MAIN_THREAD();
+		if (!_impl) {
+			return;
+		}
+		const UINT dpi = ::GetDpiForWindow(_impl->hwnd);
+		const WindowIconImage* bigImage = PickIcon(images, ::GetSystemMetricsForDpi(SM_CXICON, dpi));
+		const WindowIconImage* smallImage = PickIcon(images, ::GetSystemMetricsForDpi(SM_CXSMICON, dpi));
+		HICON bigIcon = bigImage ? CreateIconFrom(*bigImage) : nullptr;
+		HICON smallIcon = smallImage ? CreateIconFrom(*smallImage) : nullptr;
+		::SendMessageW(_impl->hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon));
+		::SendMessageW(_impl->hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+		ReleaseIcons(*_impl);
+		_impl->bigIcon = bigIcon;
+		_impl->smallIcon = smallIcon;
 	}
 
 	str Window::GetTitle() const {

@@ -1191,4 +1191,70 @@ namespace TestPlatform {
 		return true;
 	}
 
+	namespace {
+
+		std::vector<IconImage> ReadNetWmIcon(const XApi* x, Display* display, ::Window window) {
+			std::vector<IconImage> out;
+			if (!x || !display || window == 0) {
+				return out;
+			}
+			const Atom iconAtom = x->internAtom(display, "_NET_WM_ICON", 0);
+			Atom type = 0;
+			int format = 0;
+			unsigned long items = 0;
+			unsigned long left = 0;
+			unsigned char* data = nullptr;
+			if (x->getWindowProperty(display, window, iconAtom, 0, 1L << 24, 0, XA_CARDINAL, &type, &format, &items, &left,
+									 &data) != 0 ||
+				!data) {
+				return out;
+			}
+			const unsigned long* values = reinterpret_cast<const unsigned long*>(data);
+			unsigned long at = 0;
+			while (at + 2 <= items) {
+				const unsigned long width = values[at];
+				const unsigned long height = values[at + 1];
+				at += 2;
+				if (width == 0 || height == 0 || width * height > items - at) {
+					break;
+				}
+				IconImage image;
+				image.size = {static_cast<i32>(width), static_cast<i32>(height)};
+				image.rgba.resize(width * height * 4);
+				for (unsigned long i = 0; i < width * height; ++i) {
+					const unsigned long argb = values[at + i];
+					image.rgba[i * 4] = static_cast<u8>(argb >> 16);
+					image.rgba[i * 4 + 1] = static_cast<u8>(argb >> 8);
+					image.rgba[i * 4 + 2] = static_cast<u8>(argb);
+					image.rgba[i * 4 + 3] = static_cast<u8>(argb >> 24);
+				}
+				at += width * height;
+				out.push_back(std::move(image));
+			}
+			x->freeData(data);
+			return out;
+		}
+
+	} // anonymous namespace
+
+	std::vector<IconImage> ReadWindowIcon(Handle<Window> window) {
+		Target target;
+		if (!Resolve(window, target)) {
+			return {};
+		}
+		return ReadNetWmIcon(target.x, target.display, target.window);
+	}
+
+	std::vector<IconImage> ReadWindowIcon(LaunchedProcess* process) {
+		return process ? ReadNetWmIcon(GetX(), process->display, process->window) : std::vector<IconImage>{};
+	}
+
+	bool ExecutablesCarryIcons() {
+		return false;
+	}
+
+	std::vector<IconImage> ReadExecutableIcon(const str&) {
+		return {};
+	}
+
 } // namespace TestPlatform

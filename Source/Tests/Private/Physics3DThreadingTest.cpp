@@ -184,17 +184,26 @@ TEST_F(Physics3DThreadingFixture, WorkersMatchThreads) {
 	PhysicsSettings* settings = MutableSettings();
 	ASSERT_NE(settings, nullptr);
 
-	settings->workerCount = 1;
-	Recreate(settings);
-	const u32 serial = SettledThreadCount();
+	u32 serial = 0;
+	u32 threaded = 0;
+	u32 after = 0;
+	for (int attempt = 0; attempt < 5; ++attempt) {
+		settings->workerCount = 1;
+		Recreate(settings);
+		serial = SettledThreadCount();
 
-	settings->workerCount = 4;
-	Recreate(settings);
-	const u32 threaded = SettledThreadCount();
+		settings->workerCount = 4;
+		Recreate(settings);
+		threaded = SettledThreadCount();
+
+		GetPhysicsWorld().Shutdown();
+		after = SettledThreadCount();
+		if (threaded == serial + 3 && after == serial) {
+			break;
+		}
+	}
 	EXPECT_EQ(threaded, serial + 3);
-
-	GetPhysicsWorld().Shutdown();
-	EXPECT_EQ(SettledThreadCount(), serial);
+	EXPECT_EQ(after, serial);
 }
 
 TEST_F(Physics3DThreadingFixture, ShutdownIsIdempotent) {

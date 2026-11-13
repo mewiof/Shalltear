@@ -4339,6 +4339,70 @@ TEST_F(ShadowViewFixture, FlickerKeepsDroppedLightDropped) {
 	SceneSystem::UnloadScene(scene);
 }
 
+TEST_F(ShadowViewFixture, NearPlaneDecidesCloseCasterShadow) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+
+	Handle<Scene> scene = SceneSystem::CreateScene("NearPlane");
+	Handle<SceneObject> lightObject = SceneSystem::CreateObject("Spot", scene);
+	lightObject->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, -1.0f, 0.001f).Normalized()));
+	Handle<Light> spot = lightObject->AddComponent<Light>();
+	spot->SetLightType(LightType::Spot);
+	spot->SetSpotAngleDeg(100.0f);
+	spot->SetRange(12.0f);
+	spot->SetIntensity(400.0f);
+	spot->SetCastShadows(true);
+
+	Handle<SceneObject> receiver = SceneSystem::CreateObject("Receiver", scene);
+	receiver->SetLocalPosition(Vec3(0.0f, -3.0f, 0.0f));
+	receiver->SetLocalScale(Vec3(10.0f, 1.0f, 10.0f));
+	receiver->AddComponent<MeshRenderer>()->SetMesh(cube);
+
+	Handle<SceneObject> blocker = SceneSystem::CreateObject("Blocker", scene);
+	blocker->SetLocalPosition(Vec3(0.0f, -0.1f, 0.0f));
+	blocker->SetLocalScale(Vec3(0.08f, 0.08f, 0.08f));
+	Handle<MeshRenderer> blockerRenderer = blocker->AddComponent<MeshRenderer>();
+	blockerRenderer->SetMesh(cube);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	const Vec3 eye(0.5f, 3.0f, -5.0f);
+	const Vec3 lookAt(0.0f, -2.5f, 0.0f);
+	Vec2I size{};
+	Vector<u8> defaultNear{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> closeNear{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> notCasting{GetMemoryResource(MemTag::Graphics)};
+
+	RenderFrom(target, eye, lookAt, defaultNear, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+
+	spot->SetShadowNearPlane(0.02f);
+	RenderFrom(target, eye, lookAt, closeNear, size);
+	blockerRenderer->SetCastShadows(ShadowCasting::Off);
+	RenderFrom(target, eye, lookAt, notCasting, size);
+
+	EXPECT_LE(Differing(defaultNear, notCasting, size), 8u);
+	const ShadowDelta delta = CompareFrames(closeNear, notCasting, size);
+	EXPECT_GT(delta.darker, 200u);
+	EXPECT_EQ(delta.brighter, 0u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
 TEST_F(ShadowViewFixture, TransparentReceiveSettingApplies) {
 	Vector<u8> receiving{GetMemoryResource(MemTag::Graphics)};
 	Vector<u8> notReceiving{GetMemoryResource(MemTag::Graphics)};

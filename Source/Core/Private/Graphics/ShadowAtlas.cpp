@@ -29,11 +29,9 @@ namespace Shalltear::GraphicsInternal {
 			Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f),
 			Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f)};
 
-		constexpr f32 PUNCTUAL_NEAR = 0.2f;
-
-		Mat4 PunctualProjection(f32 fovYDegrees, f32 range) {
+		Mat4 PunctualProjection(f32 fovYDegrees, f32 range, f32 nearPlane) {
 			const f32 far = std::max(range, 0.01f);
-			const f32 near = std::min(PUNCTUAL_NEAR, far * 0.5f);
+			const f32 near = std::min(std::max(nearPlane, Light::MIN_SHADOW_NEAR_PLANE), far * 0.5f);
 			return Mat4::PerspectiveReverseZ(fovYDegrees, 1.0f, near, far);
 		}
 
@@ -184,20 +182,20 @@ namespace Shalltear::GraphicsInternal {
 	}
 
 	PunctualView BuildSpotView(const Vec3& position, const Vec3& direction,
-							   f32 outerAngleDeg, f32 range, u32 tileResolution) {
+							   f32 outerAngleDeg, f32 range, u32 tileResolution, f32 nearPlane) {
 		PunctualView out;
 		const u32 resolution = std::max(tileResolution, 1u);
 		const f32 fov = std::clamp(outerAngleDeg, 1.0f, 179.0f);
 		const Vec3 forward = direction.Normalized();
 		out.view = Mat4::LookAt(position, position + forward, Vec3::Up());
-		out.projection = PunctualProjection(fov, range);
+		out.projection = PunctualProjection(fov, range, nearPlane);
 		out.viewProjection = out.projection * out.view;
 		out.worldTexelSizePerUnit = 2.0f * std::tan(fov * 0.5f * Math::DEG_TO_RAD) / static_cast<f32>(resolution);
 		return out;
 	}
 
 	PunctualView BuildPointFaceView(const Vec3& position, u32 face, f32 range,
-									u32 tileResolution, u32 pcfTaps) {
+									u32 tileResolution, u32 pcfTaps, f32 nearPlane) {
 		PunctualView out;
 		const u32 index = face % POINT_SHADOW_FACES;
 		const u32 resolution = std::max(tileResolution, 1u);
@@ -206,7 +204,7 @@ namespace Shalltear::GraphicsInternal {
 		const f32 fov = 2.0f * std::atan(halfTangent) * (180.0f / Math::PI);
 
 		out.view = Mat4::LookAt(position, position + FaceDirection[index], FaceUp[index]);
-		out.projection = PunctualProjection(fov, range);
+		out.projection = PunctualProjection(fov, range, nearPlane);
 		out.viewProjection = out.projection * out.view;
 		out.worldTexelSizePerUnit = 2.0f * halfTangent / static_cast<f32>(resolution);
 		return out;

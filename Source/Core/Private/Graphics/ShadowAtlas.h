@@ -46,6 +46,7 @@ namespace Shalltear::GraphicsInternal {
 		f32 strength = 1.0f;
 		f32 depthBias = 0.0f;
 		f32 normalBias = 0.0f;
+		f32 nearPlane = Light::DEFAULT_SHADOW_NEAR_PLANE;
 		f32 importance = 0.0f;
 		u32 tileSize = MIN_PUNCTUAL_TILE;
 		u32 layerMask = ~0u;
@@ -78,10 +79,12 @@ namespace Shalltear::GraphicsInternal {
 	};
 
 	SHALLTEAR_CORE_API PunctualView BuildSpotView(const Vec3& position, const Vec3& direction,
-												  f32 outerAngleDeg, f32 range, u32 tileResolution);
+												  f32 outerAngleDeg, f32 range, u32 tileResolution,
+												  f32 nearPlane = Light::DEFAULT_SHADOW_NEAR_PLANE);
 
 	SHALLTEAR_CORE_API PunctualView BuildPointFaceView(const Vec3& position, u32 face, f32 range,
-													   u32 tileResolution, u32 pcfTaps);
+													   u32 tileResolution, u32 pcfTaps,
+													   f32 nearPlane = Light::DEFAULT_SHADOW_NEAR_PLANE);
 
 	SHALLTEAR_CORE_API u32 PointFaceOf(const Vec3& fromLight);
 

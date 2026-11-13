@@ -401,6 +401,23 @@ TEST(ShadowAtlasTest, FittedRequestsAlwaysPack) {
 	EXPECT_GT(dropped, 0u);
 }
 
+TEST(ShadowAtlasTest, NearPlaneAdmitsCloseCaster) {
+	const Vec3 light(1.0f, 2.0f, 3.0f);
+	const Vec3 down(0.0f, -1.0f, 0.0f);
+	const Vec3 close = light + down * 0.05f;
+	EXPECT_FALSE(InsideMap(Project(BuildSpotView(light, down, 60.0f, 8.0f, 512).viewProjection, close)));
+	EXPECT_TRUE(InsideMap(Project(BuildSpotView(light, down, 60.0f, 8.0f, 512, 0.02f).viewProjection, close)));
+
+	const u32 face = PointFaceOf(down);
+	EXPECT_FALSE(InsideMap(Project(BuildPointFaceView(light, face, 8.0f, 512, 9).viewProjection, close)));
+	EXPECT_TRUE(InsideMap(Project(BuildPointFaceView(light, face, 8.0f, 512, 9, 0.02f).viewProjection, close)));
+
+	const Vec3 touching = light + down * (Light::MIN_SHADOW_NEAR_PLANE * 0.5f);
+	EXPECT_FALSE(InsideMap(Project(BuildSpotView(light, down, 60.0f, 8.0f, 512, 0.0f).viewProjection, touching)));
+	const Vec3 far = light + down * 7.0f;
+	EXPECT_TRUE(InsideMap(Project(BuildSpotView(light, down, 60.0f, 8.0f, 512, 100.0f).viewProjection, far)));
+}
+
 TEST(ShadowAtlasTest, KeptShadowSurvivesSmallImportanceSwap) {
 	std::array<u64, 2> kept = KeptPair(1.1f, 1.0f, {});
 	ASSERT_EQ(kept, (std::array<u64, 2>{1, 2}));

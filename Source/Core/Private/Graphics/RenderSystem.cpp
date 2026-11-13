@@ -3315,6 +3315,7 @@ namespace Shalltear {
 				candidate.shadowStrength = Math::Clamp(light->GetShadowStrength(), 0.0f, 1.0f);
 				candidate.shadowBias = Math::Max(light->GetShadowBias(), 0.0f);
 				candidate.shadowNormalBias = Math::Max(light->GetShadowNormalBias(), 0.0f);
+				candidate.shadowNearPlane = light->GetShadowNearPlane();
 				candidate.stableKey = light->GetInstanceId();
 				candidate.renderingLayerMask = light->GetRenderingLayerMask();
 				candidate.shadowLayerMask = light->GetShadowLayerMask();
@@ -3722,6 +3723,7 @@ namespace Shalltear {
 				request.strength = candidate.shadowStrength;
 				request.depthBias = candidate.shadowBias;
 				request.normalBias = candidate.shadowNormalBias;
+				request.nearPlane = candidate.shadowNearPlane;
 				request.layerMask = candidate.shadowLayerMask;
 				const f32 coverage = GraphicsInternal::ShadowScreenCoverage(projection, cameraPosition,
 																			candidate.position, candidate.range);
@@ -3769,9 +3771,10 @@ namespace Shalltear {
 					const GraphicsInternal::PunctualView built =
 						request.type == LightType::Point
 							? GraphicsInternal::BuildPointFaceView(request.position, face, request.range,
-																   static_cast<u32>(granted[face].size.x), state.shadowPcfTaps)
+																   static_cast<u32>(granted[face].size.x), state.shadowPcfTaps,
+																   request.nearPlane)
 							: GraphicsInternal::BuildSpotView(request.position, request.direction, request.outerAngleDeg,
-															  request.range, static_cast<u32>(granted[face].size.x));
+															  request.range, static_cast<u32>(granted[face].size.x), request.nearPlane);
 					punctualTiles[mapCount] = granted[face];
 					punctualBias[mapCount] = Vec2(request.depthBias, request.normalBias);
 					state.punctualViews.push_back(built);

@@ -13,6 +13,7 @@
 #include "Shalltear/Editor/AssetBrowserOps.h"
 #include "Shalltear/Editor/AssetOpeners.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
+#include "Shalltear/Editor/EditorDialogs.h"
 #include "Shalltear/Editor/EditorExtensions.h"
 #include "Shalltear/Editor/EditorDragData.h"
 #include "Shalltear/Editor/EditorEvents.h"
@@ -27,6 +28,8 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <mutex>
+#include <thread>
 
 using namespace Shalltear;
 using namespace UITest;
@@ -3177,6 +3180,74 @@ TEST_F(AssetBrowserPanelTest, CreateMenuNestsTypesUnderCategory) {
 	ASSERT_TRUE(build.context.IsAlive(document));
 	ClickAt(build.context, *panel.Get(), CenterOf(build.context, document));
 	EXPECT_TRUE(std::filesystem::exists(_root / "Assets" / "New UI Document.slxml"));
+}
+
+TEST_F(AssetBrowserPanelTest, ImportNewAssetCopiesIntoShownFolder) {
+	const std::filesystem::path outside = _root.parent_path() / ("shalltear_pick_" + _root.filename().string());
+	std::filesystem::create_directories(outside);
+	const str first = (outside / "first.txt").string();
+	const str second = (outside / "second.txt").string();
+	FileSystem::WriteTextFile(Path((outside / "first.txt").generic_string()), "1");
+	FileSystem::WriteTextFile(Path((outside / "second.txt").generic_string()), "2");
+	WriteSource("project://Assets/Textures/keep.txt", "k");
+	AssetDatabase::ScanProjectDirectory();
+
+	std::mutex askedMutex;
+	Vector<EditorDialogs::FileDialogDesc> asked{GetMemoryResource(MemTag::Debug)};
+	EditorDialogs::SetFileDialog([&](const EditorDialogs::FileDialogDesc& desc, Vector<str>& out, str&) {
+		std::lock_guard lock(askedMutex);
+		asked.push_back(desc);
+		out.push_back(first);
+		out.push_back(second);
+		return true;
+	});
+
+	Handle<EditorPanel> panel = OpenBrowser();
+	ASSERT_TRUE(panel.IsValid());
+	Variant folder{str("Assets/Textures")};
+	ASSERT_TRUE(SetField(panel.Get(), panel.Get()->GetType(), StringHash("selectedFolder"), &folder));
+	PanelBuild build{BrowserContextDesc()};
+	BuildAndSettle(*panel.Get(), build);
+
+	auto importThroughMenu = [&]() {
+		UI::ElementHandle add = ControlWearing(build.context, build.root, EditorIcons::GetGlyph(EditorIcons::Glyph::Add),
+											   StringHash("slt-button"));
+		ASSERT_TRUE(build.context.IsAlive(add));
+		ClickAt(build.context, *panel.Get(), CenterOf(build.context, add));
+		ASSERT_EQ(build.context.GetOpenPopupCount(), 1u);
+		UI::ElementHandle item = MenuRowNamed(build.context, build.context.GetOpenPopup(0), "Import New Asset...");
+		ASSERT_TRUE(build.context.IsAlive(item));
+		ClickAt(build.context, *panel.Get(), CenterOf(build.context, item));
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+		while (EditorDialogs::GetPendingPickCount() > 0 && std::chrono::steady_clock::now() < deadline) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			EditorDialogs::Drain();
+		}
+		ASSERT_EQ(EditorDialogs::GetPendingPickCount(), 0u);
+		panel.Get()->OnTick(0.016f);
+		build.context.Update();
+	};
+
+	importThroughMenu();
+	EXPECT_TRUE(std::filesystem::exists(_root / "Assets" / "Textures" / "first.txt"));
+	EXPECT_TRUE(std::filesystem::exists(_root / "Assets" / "Textures" / "second.txt"));
+	EXPECT_TRUE(std::filesystem::exists(first));
+	EXPECT_TRUE(HasText(build.context, build.root, "first.txt"));
+	EXPECT_EQ(EditorSelection::GetSelectedAsset(), AssetDatabase::LookupGuid(Path("project://Assets/Textures/second.txt")));
+
+	importThroughMenu();
+	EXPECT_TRUE(std::filesystem::exists(_root / "Assets" / "Textures" / "first 1.txt"));
+	EXPECT_EQ(EditorSelection::GetSelectedAsset(), AssetDatabase::LookupGuid(Path("project://Assets/Textures/second 1.txt")));
+	EditorDialogs::SetFileDialog({});
+
+	ASSERT_EQ(asked.size(), 2u);
+	EXPECT_EQ(asked[0].title, "Import New Asset");
+	EXPECT_TRUE(asked[0].multiple);
+	EXPECT_TRUE(asked[0].physicalFolder.empty());
+	EXPECT_EQ(asked[1].physicalFolder, outside.string());
+
+	std::error_code ec;
+	std::filesystem::remove_all(outside, ec);
 }
 
 TEST_F(AssetBrowserPanelTest, CellResizeKeepsColumnsSameFrame) {

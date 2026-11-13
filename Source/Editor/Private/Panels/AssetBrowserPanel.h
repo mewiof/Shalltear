@@ -134,6 +134,7 @@ namespace Shalltear {
 		void OpenFoldOutContextMenu(UI::Context& context, const AssetBrowserOps::Entry& entry);
 		void OpenCreateMenu(UI::Context& context, Vec2 anchorPx);
 		void BuildCreateItems(UI::Context& context, Vector<UI::Widgets::MenuItem>& out);
+		void ImportNewAsset(UI::Context& context);
 		Path SelectedFolderVirtual() const;
 		void CreateAssetInSelectedFolder(StringHash assetTypeId, const str& fileName, u32 templateIndex);
 
@@ -181,6 +182,7 @@ namespace Shalltear {
 		f32 _fileListCellWidthPx = 0.0f;
 		f32 _fileListCellHeightPx = 0.0f;
 		UI::Context* _buildContext = nullptr;
+		str _lastImportFolder;
 		UI::ElementHandle _contentRoot;
 
 		AssetBrowserOps::FolderHistory _history;

@@ -8,6 +8,10 @@
 #include <span>
 #include <string_view>
 
+namespace Shalltear::EditorDialogs {
+	struct FileDialogDesc;
+}
+
 namespace Shalltear::EditorPlatform {
 
 	struct SpawnOptions {
@@ -34,6 +38,9 @@ namespace Shalltear::EditorPlatform {
 	bool TryWaitProcess(void* process, i32& outExitCode);
 	void KillProcess(void* process);
 	void ReleaseProcess(void* process);
+
+	// modal until closed, never call from main thread
+	bool RunOpenFileDialog(const EditorDialogs::FileDialogDesc& desc, Vector<str>& outPaths, str& outError);
 
 	bool OpenWithDefaultApplication(const str& path);
 	bool RevealInFileManager(const str& path, bool isDirectory);

@@ -19,3 +19,7 @@ if(NOT SHALLTEAR_DISABLE_PCH)
 endif()
 
 target_link_libraries(ShalltearEditor PUBLIC ShalltearCore)
+
+if(WIN32)
+    target_link_libraries(ShalltearEditor PRIVATE ole32 uuid)
+endif()

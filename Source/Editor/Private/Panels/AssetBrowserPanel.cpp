@@ -15,6 +15,7 @@
 
 #include "Shalltear/Editor/AssetOpeners.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
+#include "Shalltear/Editor/EditorDialogs.h"
 #include "Shalltear/Editor/EditorDragData.h"
 #include "Shalltear/Editor/EditorEvents.h"
 #include "Shalltear/Editor/EditorIcons.h"
@@ -72,6 +73,22 @@ namespace Shalltear {
 
 		str VirtualPathOf(const str& relPath) {
 			return relPath.empty() ? str("project://") : "project://" + relPath;
+		}
+
+		str ImportExternalFiles(std::span<const str> paths, const str& folderRelPath) {
+			str last;
+			u32 imported = 0;
+			for (const str& path : paths) {
+				str created = AssetBrowserOps::ImportExternalFile(Path(path), Path(VirtualPathOf(folderRelPath)));
+				if (!created.empty()) {
+					last = std::move(created);
+					++imported;
+				}
+			}
+			if (imported > 0) {
+				SLT_LOG_INFO("Editor", "Asset Browser: imported {} file(s) into '{}'", imported, folderRelPath);
+			}
+			return last;
 		}
 
 		bool IsVariantRow(const AssetBrowserOps::Entry& entry) {
@@ -558,14 +575,7 @@ namespace Shalltear {
 		if (folder.empty()) {
 			return;
 		}
-		u32 imported = 0;
-		for (const str& path : event.paths) {
-			if (!AssetBrowserOps::ImportExternalFile(Path(path), Path(VirtualPathOf(folder))).empty()) {
-				++imported;
-			}
-		}
-		if (imported > 0) {
-			SLT_LOG_INFO("Editor", "Asset Browser: imported {} file(s) into '{}'", imported, folder);
+		if (!ImportExternalFiles(event.paths, folder).empty()) {
 			Rescan();
 		}
 	}
@@ -1798,6 +1808,33 @@ namespace Shalltear {
 		create.children = std::move(children);
 		create.enabled = !create.children.empty();
 		out.push_back(std::move(create));
+
+		UI::Widgets::MenuItem import;
+		import.label = "Import New Asset...";
+		import.onSelect = [this, contextPtr]() { ImportNewAsset(*contextPtr); };
+		out.push_back(std::move(import));
+	}
+
+	void AssetBrowserPanel::ImportNewAsset(UI::Context& context) {
+		const str folder = selectedFolder.empty() ? str(ProjectLayout::GetContentRoots().front()) : selectedFolder;
+		EditorDialogs::FileDialogDesc desc;
+		desc.title = "Import New Asset";
+		desc.physicalFolder = _lastImportFolder;
+		desc.multiple = true;
+		Handle<AssetBrowserPanel> self(this);
+		EditorDialogs::PickFiles(context, std::move(desc), [self, folder](std::span<const str> paths) {
+			const str last = ImportExternalFiles(paths, folder);
+			AssetBrowserPanel* panel = self.Get();
+			if (!panel) {
+				return;
+			}
+			const str& first = paths.front();
+			panel->_lastImportFolder = first.substr(0, std::min(first.find_last_of("/\\"), first.size()));
+			if (!last.empty()) {
+				panel->Rescan();
+				panel->SelectOnlyFile(last);
+			}
+		});
 	}
 
 	void AssetBrowserPanel::OpenCreateMenu(UI::Context& context, Vec2 anchorPx) {

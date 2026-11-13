@@ -12,6 +12,7 @@
 #include "Shalltear/Editor/MaterialInspectorOps.h"
 #include "Shalltear/Editor/EditorAssetOps.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
+#include "Shalltear/Editor/EditorDialogs.h"
 #include "Shalltear/Editor/EditorChromeOps.h"
 #include "Shalltear/Editor/EditorConsole.h"
 #include "Shalltear/Editor/EditorDocuments.h"
@@ -1115,6 +1116,7 @@ namespace Shalltear {
 		EditorPreviewStore::Drain();
 		ReflectionProbeBake::Drain();
 		EditorVariantCompiles::Drain();
+		EditorDialogs::Drain();
 
 		{
 			UIScreenDesc nowhere;

@@ -394,4 +394,53 @@ TEST_F(SpringBoneFixture, ObjectChainTakesTurnedOwnerAsBase) {
 	EXPECT_NEAR(tip.y, SEGMENT * TAILS, 2e-3f);
 }
 
+TEST_F(SpringBoneFixture, HingeAxisKeepsSwingInPlane) {
+	SkeletonAsset* skeleton = MakeChain();
+	Handle<SpringBone> free = MakeTail(skeleton, "free");
+	Handle<SpringBone> hinged = MakeTail(skeleton, "hinged");
+	Handle<SpringBone> turned = MakeTail(skeleton, "turned");
+	turned->GetOwner()->SetLocalRotation(Quat::AngleAxis(90.0f, Vec3(1.0f, 0.0f, 0.0f)));
+	hinged->SetHingeAxis(SpringBoneHingeAxis::Z);
+	turned->SetHingeAxis(SpringBoneHingeAxis::Z);
+	for (Handle<SpringBone> spring : {free, hinged, turned}) {
+		spring->SetStiffness(0.0f);
+		spring->SetDamping(0.2f);
+		spring->SetGravity(Vec3(0.0f, -9.81f, 6.0f));
+	}
+	f32 hingedOff = 0.0f;
+	f32 turnedOff = 0.0f;
+	for (u32 frame = 0; frame < 120; ++frame) {
+		for (Handle<SpringBone> spring : {free, hinged, turned}) {
+			spring->Simulate(1.0f / 60.0f);
+		}
+		for (u32 bone = 1; bone <= TAILS; ++bone) {
+			hingedOff = Math::Max(hingedOff, std::abs(BoneWorld(hinged, bone).z));
+			turnedOff = Math::Max(turnedOff, std::abs(BoneWorld(turned, bone).y));
+			EXPECT_NEAR(Vec3::Distance(BoneWorld(hinged, bone), BoneWorld(hinged, bone - 1)), SEGMENT, 1e-3f) << bone;
+		}
+	}
+	EXPECT_LT(hingedOff, 1e-4f);
+	EXPECT_LT(turnedOff, 1e-4f);
+	EXPECT_GT(BoneWorld(free, TAILS).z, 0.1f);
+	EXPECT_LT(BoneWorld(hinged, TAILS).y, -0.4f);
+	EXPECT_GT(BoneWorld(turned, TAILS).z, 0.4f);
+}
+
+TEST_F(SpringBoneFixture, HingeAxisCarriesChainAlongAxis) {
+	SkeletonAsset* skeleton = MakeChain();
+	Handle<SpringBone> free = MakeTail(skeleton, "free");
+	Handle<SpringBone> hinged = MakeTail(skeleton, "hinged");
+	hinged->SetHingeAxis(SpringBoneHingeAxis::Z);
+	for (Handle<SpringBone> spring : {free, hinged}) {
+		spring->SetStiffness(0.0f);
+		spring->SetDamping(0.2f);
+		spring->Simulate(0.0f);
+		spring->GetOwner()->SetWorldPosition(Vec3(0.0f, 0.0f, 0.5f));
+		Run(spring, 4.0f / 60.0f);
+	}
+	EXPECT_NEAR(BoneWorld(hinged, TAILS).z, 0.5f, 1e-4f);
+	EXPECT_NEAR(BoneWorld(hinged, TAILS).x, SEGMENT * TAILS, 1e-4f);
+	EXPECT_GT(std::abs(BoneWorld(free, TAILS).z - 0.5f), 0.05f);
+}
+
 #endif

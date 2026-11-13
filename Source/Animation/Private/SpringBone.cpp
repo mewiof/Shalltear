@@ -307,12 +307,16 @@ namespace Shalltear {
 		const f32 keep = 1.0f - Math::Clamp01(_damping);
 		const f32 maxAngle = Math::Clamp(_maxAngleDeg, 0.0f, 180.0f) * Math::DEG_TO_RAD;
 		const Vec3 fall = _gravity * (step * step);
+		const bool hinged = _hingeAxis != SpringBoneHingeAxis::None;
+		const Vec3 hingeLocal(_hingeAxis == SpringBoneHingeAxis::X ? 1.0f : 0.0f, _hingeAxis == SpringBoneHingeAxis::Y ? 1.0f : 0.0f,
+							  _hingeAxis == SpringBoneHingeAxis::Z ? 1.0f : 0.0f);
 		Vector<Vec3> rest{GetMemoryResource(MemTag::Scene)};
 		rest.resize(count);
 		for (u32 s = 0; s < steps; ++s) {
 			const f32 t = static_cast<f32>(s + 1) / static_cast<f32>(steps);
 			const Vec3 rootAt = Vec3::Lerp(_rootFrom, positions[0], t);
 			const Quat turnAt = Quat::Slerp(_rootRotationFrom, rootRotation, t);
+			const Vec3 hinge = turnAt * hingeLocal;
 			for (size_t j = 0; j < count; ++j) {
 				rest[j] = rootAt + turnAt * _offsets[j];
 			}
@@ -339,6 +343,15 @@ namespace Shalltear {
 						const Quat back = Quat::Slerp(Quat::Identity(), RotationBetween(direction, goalDirection), 1.0f - maxAngle / angle);
 						direction = back * direction;
 					}
+				}
+				if (hinged) {
+					const f32 along = Vec3::Dot(goalDirection, hinge);
+					Vec3 across = direction - hinge * Vec3::Dot(direction, hinge);
+					if (across.LengthSquared() < 1e-12f) {
+						across = goalDirection - hinge * along;
+					}
+					const f32 reach = std::sqrt(Math::Max(length * length - along * along, 0.0f));
+					direction = hinge * along + (across.LengthSquared() < 1e-12f ? Vec3{} : across.Normalized() * reach);
 				}
 				next = parent.position + direction.Normalized() * length;
 				for (const Handle<SpringBoneCollider>& handle : _colliders) {

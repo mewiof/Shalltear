@@ -20,11 +20,25 @@ namespace Shalltear {
 		Capsule = 1,
 	};
 
+	enum class SpringBoneHingeAxis : u8 {
+		None = 0,
+		X = 1,
+		Y = 2,
+		Z = 3,
+	};
+
 } // namespace Shalltear
 
 SLT_REFLECT_ENUM(::Shalltear::SpringBoneColliderShape)
 SLT_ENUM_VALUE(Sphere)
 SLT_ENUM_VALUE(Capsule)
+SLT_END_ENUM()
+
+SLT_REFLECT_ENUM(::Shalltear::SpringBoneHingeAxis)
+SLT_ENUM_VALUE(None)
+SLT_ENUM_VALUE(X)
+SLT_ENUM_VALUE(Y)
+SLT_ENUM_VALUE(Z)
 SLT_END_ENUM()
 
 namespace Shalltear {
@@ -69,6 +83,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_damping, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_gravity)
 		SLT_REFLECT_FIELD(_maxAngleDeg, SLT_RANGE(0.0f, 180.0f))
+		SLT_REFLECT_FIELD(_hingeAxis)
 		SLT_REFLECT_FIELD(_radius, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_weight, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_stepRate, SLT_RANGE(15.0f, 240.0f))
@@ -96,6 +111,10 @@ namespace Shalltear {
 		// widest swing from animated direction
 		f32 GetMaxAngleDeg() const { return _maxAngleDeg; }
 		void SetMaxAngleDeg(f32 degrees) { _maxAngleDeg = degrees; }
+
+		// swing axis in chain root's local space
+		SpringBoneHingeAxis GetHingeAxis() const { return _hingeAxis; }
+		void SetHingeAxis(SpringBoneHingeAxis axis) { _hingeAxis = axis; }
 
 		// bone thickness for collisions
 		f32 GetRadius() const { return _radius; }
@@ -144,6 +163,7 @@ namespace Shalltear {
 		f32 _damping = 0.1f;
 		Vec3 _gravity{};
 		f32 _maxAngleDeg = 60.0f;
+		SpringBoneHingeAxis _hingeAxis = SpringBoneHingeAxis::None;
 		f32 _radius = 0.02f;
 		f32 _weight = 1.0f;
 		f32 _stepRate = 60.0f;

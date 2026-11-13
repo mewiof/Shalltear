@@ -60,6 +60,7 @@ namespace Shalltear {
 		Vec3 _center{};
 	};
 
+	// without Skeleton on owner, chain = owner + objects below
 	class SHALLTEAR_ANIMATION_API SpringBone : public Component {
 	public:
 		SLT_REFLECT_COMPONENT(SpringBone, Component)
@@ -123,6 +124,8 @@ namespace Shalltear {
 	private:
 		struct Joint {
 			u32 bone = 0;
+			Handle<SceneObject> object;
+			u32 children = 0;
 			i32 parent = -1;
 			i32 firstChild = -1;
 			Vec3 position{};
@@ -134,6 +137,7 @@ namespace Shalltear {
 		};
 
 		bool Bind(const SkeletonAsset& skeleton);
+		bool BindObjects(SceneObject& owner);
 
 		str _rootBone;
 		f32 _stiffness = 0.1f;

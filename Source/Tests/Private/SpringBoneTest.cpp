@@ -104,6 +104,27 @@ namespace {
 			return (object->GetWorldMatrix() * rig->GetModelPose()[bone]).TransformPoint(Vec3{});
 		}
 
+		Handle<SpringBone> MakeObjectTail(const char* name, u32 links = TAILS) {
+			Handle<SceneObject> object = SceneSystem::CreateObject(name, _scene);
+			Handle<SceneObject> parent = object;
+			for (u32 i = 0; i < links; ++i) {
+				Handle<SceneObject> link = SceneSystem::CreateObject("Link", _scene, parent);
+				link->SetLocalPosition(Vec3(SEGMENT, 0.0f, 0.0f));
+				parent = link;
+			}
+			Handle<SpringBone> spring = object->AddComponent<SpringBone>();
+			spring->SetMaxAngleDeg(180.0f);
+			return spring;
+		}
+
+		static Handle<SceneObject> Link(Handle<SpringBone> spring, u32 link) {
+			Handle<SceneObject> object = spring->GetOwner();
+			for (u32 i = 0; i < link; ++i) {
+				object = object->GetChild(0);
+			}
+			return object;
+		}
+
 		static void Run(Handle<SpringBone> spring, f32 seconds, f32 delta = 1.0f / 60.0f) {
 			const u32 frames = static_cast<u32>(std::lround(seconds / delta));
 			for (u32 frame = 0; frame < frames; ++frame) {
@@ -288,6 +309,89 @@ TEST_F(SpringBoneFixture, UnknownRootLeavesPose) {
 	spring->SetGravity(Vec3(0.0f, -9.81f, 0.0f));
 	Run(spring, 0.5f);
 	EXPECT_NEAR(BoneWorld(spring, TAILS).y, 0.0f, 1e-6f);
+}
+
+TEST_F(SpringBoneFixture, ObjectChainMatchesBoneChain) {
+	Handle<SpringBone> bones = MakeTail(MakeChain(), "bones");
+	Handle<SpringBone> objects = MakeObjectTail("objects");
+	for (Handle<SpringBone> spring : {bones, objects}) {
+		spring->SetStiffness(0.05f);
+		spring->SetDamping(0.05f);
+		spring->SetGravity(Vec3(0.0f, -4.0f, 0.0f));
+		spring->Simulate(0.0f);
+	}
+	f32 widest = 0.0f;
+	f32 swung = 0.0f;
+	for (u32 frame = 1; frame <= 90; ++frame) {
+		const f32 time = static_cast<f32>(frame) / 60.0f;
+		const Vec3 at(0.0f, 0.3f * std::sin(2.0f * Math::PI * time), 0.0f);
+		for (Handle<SpringBone> spring : {bones, objects}) {
+			spring->GetOwner()->SetWorldPosition(at);
+			spring->Simulate(1.0f / 60.0f);
+		}
+		for (u32 link = 0; link <= TAILS; ++link) {
+			widest = Math::Max(widest, Vec3::Distance(BoneWorld(bones, link), Link(objects, link)->GetWorldPosition()));
+		}
+		swung = Math::Max(swung, Vec3::Distance(Link(objects, TAILS)->GetWorldPosition(), at + Vec3(SEGMENT * TAILS, 0.0f, 0.0f)));
+	}
+	EXPECT_LT(widest, 1e-4f);
+	EXPECT_GT(swung, 0.05f);
+}
+
+TEST_F(SpringBoneFixture, ObjectChainFollowsHierarchyChanges) {
+	Handle<SpringBone> spring = MakeObjectTail("growing", 1);
+	spring->SetStiffness(0.0f);
+	spring->SetDamping(0.2f);
+	spring->SetGravity(Vec3(0.0f, -9.81f, 0.0f));
+	Run(spring, 2.0f);
+	EXPECT_LT(Link(spring, 1)->GetWorldPosition().y, -0.19f);
+
+	Handle<SceneObject> tip = SceneSystem::CreateObject("Tip", _scene, Link(spring, 1));
+	tip->SetLocalPosition(Vec3(SEGMENT, 0.0f, 0.0f));
+	Run(spring, 2.0f);
+	EXPECT_LT(tip->GetWorldPosition().y, -0.39f);
+	spring->SetGravity(Vec3(30.0f, 0.0f, 0.0f));
+	Run(spring, 0.15f);
+	const Vec3 upper = Link(spring, 1)->GetWorldPosition() - spring->GetOwner()->GetWorldPosition();
+	const Vec3 lower = tip->GetWorldPosition() - Link(spring, 1)->GetWorldPosition();
+	EXPECT_NEAR(lower.Length(), SEGMENT, 1e-3f);
+	EXPECT_LT(Vec3::Dot(upper.Normalized(), lower.Normalized()), 0.999f);
+
+	SceneSystem::Destroy(Link(spring, 1));
+	SceneSystem::EndFrame();
+	ASSERT_EQ(spring->GetOwner()->GetChildCount(), 0u);
+	const Quat held = spring->GetOwner()->GetLocalRotation();
+	Run(spring, 0.5f);
+	EXPECT_EQ(spring->GetOwner()->GetLocalRotation(), held);
+}
+
+TEST_F(SpringBoneFixture, ObjectChainWeightZeroRestoresRotations) {
+	Handle<SpringBone> spring = MakeObjectTail("restored");
+	spring->SetStiffness(0.0f);
+	spring->SetGravity(Vec3(0.0f, -9.81f, 0.0f));
+	Run(spring, 1.0f);
+	EXPECT_LT(Link(spring, TAILS)->GetWorldPosition().y, -0.1f);
+	spring->SetWeight(0.0f);
+	spring->Simulate(1.0f / 60.0f);
+	for (u32 link = 0; link <= TAILS; ++link) {
+		EXPECT_EQ(Link(spring, link)->GetLocalRotation(), Quat::Identity()) << link;
+	}
+	EXPECT_NEAR(Link(spring, TAILS)->GetWorldPosition().x, SEGMENT * TAILS, 1e-5f);
+}
+
+TEST_F(SpringBoneFixture, ObjectChainTakesTurnedOwnerAsBase) {
+	Handle<SpringBone> spring = MakeObjectTail("turned");
+	spring->SetStiffness(0.3f);
+	spring->SetDamping(0.3f);
+	Run(spring, 0.5f);
+	const Quat bent = Quat::AngleAxis(90.0f, Vec3(0.0f, 0.0f, 1.0f));
+	for (u32 frame = 0; frame < 180; ++frame) {
+		spring->GetOwner()->SetLocalRotation(bent);
+		spring->Simulate(1.0f / 60.0f);
+	}
+	const Vec3 tip = Link(spring, TAILS)->GetWorldPosition();
+	EXPECT_NEAR(tip.x, 0.0f, 2e-3f);
+	EXPECT_NEAR(tip.y, SEGMENT * TAILS, 2e-3f);
 }
 
 #endif

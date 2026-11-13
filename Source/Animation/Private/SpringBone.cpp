@@ -51,12 +51,6 @@ namespace Shalltear {
 			return a + ab * t;
 		}
 
-		bool SameTransform(const BoneTransform& a, const BoneTransform& b) {
-			return a.position.x == b.position.x && a.position.y == b.position.y && a.position.z == b.position.z &&
-				   a.rotation.x == b.rotation.x && a.rotation.y == b.rotation.y && a.rotation.z == b.rotation.z &&
-				   a.rotation.w == b.rotation.w && a.scale.x == b.scale.x && a.scale.y == b.scale.y && a.scale.z == b.scale.z;
-		}
-
 		Vec3 PushOut(Vec3 point, const SpringBoneCollider& collider, f32 boneRadius) {
 			const SceneObject* owner = collider.GetOwner().Get();
 			if (!owner) {
@@ -178,30 +172,93 @@ namespace Shalltear {
 		return _joints.size() > 1;
 	}
 
+	bool SpringBone::BindObjects(SceneObject& owner) {
+		bool bound = _boundSkeleton == 0 && !_joints.empty() && _joints[0].object.Get() == &owner;
+		for (size_t j = 0; bound && j < _joints.size(); ++j) {
+			const Joint& joint = _joints[j];
+			const SceneObject* object = joint.object.Get();
+			bound = object && object->GetChildCount() == joint.children &&
+					(j == 0 || object->GetParent() == _joints[static_cast<size_t>(joint.parent)].object);
+		}
+		if (bound) {
+			return _joints.size() > 1;
+		}
+		_boundSkeleton = 0;
+		_joints.clear();
+		_primed = false;
+		_joints.emplace_back().object = Handle<SceneObject>(&owner);
+		for (size_t j = 0; j < _joints.size(); ++j) {
+			const SceneObject* object = _joints[j].object.Get();
+			const u32 children = object->GetChildCount();
+			_joints[j].children = children;
+			for (u32 child = 0; child < children; ++child) {
+				if (_joints[j].firstChild < 0) {
+					_joints[j].firstChild = static_cast<i32>(_joints.size());
+				}
+				Joint& joint = _joints.emplace_back();
+				joint.object = object->GetChild(child);
+				joint.parent = static_cast<i32>(j);
+			}
+		}
+		return _joints.size() > 1;
+	}
+
 	void SpringBone::Simulate(f32 deltaSeconds) {
 		SceneObject* owner = GetOwner().Get();
-		Skeleton* rig = owner ? owner->GetComponent<Skeleton>().Get() : nullptr;
-		const SkeletonAsset* skeleton = rig ? rig->GetSkeleton().Get() : nullptr;
-		if (!skeleton || !Bind(*skeleton)) {
+		if (!owner) {
 			return;
 		}
-		rig->UpdatePose();
-		const std::span<const BoneTransform> local = rig->GetLocalPose();
-		const std::span<const Mat4> model = rig->GetModelPose();
-		if (local.size() < skeleton->GetBoneCount() || model.size() < skeleton->GetBoneCount()) {
-			return;
+		Skeleton* rig = owner->GetComponent<Skeleton>().Get();
+		std::span<const BoneTransform> local;
+		Mat4 above = Mat4::Identity();
+		if (rig) {
+			const SkeletonAsset* skeleton = rig->GetSkeleton().Get();
+			if (!skeleton || !Bind(*skeleton)) {
+				return;
+			}
+			rig->UpdatePose();
+			local = rig->GetLocalPose();
+			const std::span<const Mat4> model = rig->GetModelPose();
+			if (local.size() < skeleton->GetBoneCount() || model.size() < skeleton->GetBoneCount()) {
+				return;
+			}
+			const i16 rootParent = skeleton->parents[_joints[0].bone];
+			const Mat4 world = owner->GetWorldMatrix();
+			above = rootParent >= 0 ? world * model[static_cast<size_t>(rootParent)] : world;
+		} else {
+			if (!BindObjects(*owner)) {
+				return;
+			}
+			if (const SceneObject* parent = owner->GetParent().Get()) {
+				above = parent->GetWorldMatrix();
+			}
 		}
 
 		const size_t count = _joints.size();
 		for (Joint& joint : _joints) {
-			if (!joint.wrote || !SameTransform(local[joint.bone], joint.written)) {
-				joint.base = local[joint.bone];
+			BoneTransform current;
+			if (rig) {
+				current = local[joint.bone];
+			} else {
+				const SceneObject* object = joint.object.Get();
+				current = BoneTransform{object->GetLocalPosition(), object->GetLocalRotation(), object->GetLocalScale()};
+			}
+			if (!joint.wrote || !(current.rotation == joint.written.rotation)) {
+				joint.base = current;
+			} else {
+				joint.base.position = current.position;
+				joint.base.scale = current.scale;
 			}
 		}
+		auto write = [rig](Joint& joint, const BoneTransform& pose) {
+			if (rig) {
+				rig->SetBoneLocalPose(joint.bone, pose);
+			} else if (SceneObject* object = joint.object.Get(); !(object->GetLocalRotation() == pose.rotation)) {
+				object->SetLocalRotation(pose.rotation);
+			}
+			joint.written = pose;
+		};
 
-		const i16 rootParent = skeleton->parents[_joints[0].bone];
-		const Mat4 world = owner->GetWorldMatrix();
-		const Mat4 above = rootParent >= 0 ? world * model[static_cast<size_t>(rootParent)] : world;
 		Vector<Mat4> animated{GetMemoryResource(MemTag::Scene)};
 		animated.resize(count);
 		Vector<Vec3> positions{GetMemoryResource(MemTag::Scene)};
@@ -315,11 +372,12 @@ namespace Shalltear {
 		if (weight <= 0.0f) {
 			for (Joint& joint : _joints) {
 				if (joint.wrote) {
-					rig->SetBoneLocalPose(joint.bone, joint.base);
-					joint.written = joint.base;
+					write(joint, joint.base);
 				}
 			}
-			rig->UpdatePose();
+			if (rig) {
+				rig->UpdatePose();
+			}
 			return;
 		}
 
@@ -347,11 +405,12 @@ namespace Shalltear {
 			finals[j] = final;
 			BoneTransform written = joint.base;
 			written.rotation = (parentFinal.Inverse() * final).Normalized();
-			rig->SetBoneLocalPose(joint.bone, written);
-			joint.written = written;
+			write(joint, written);
 			joint.wrote = true;
 		}
-		rig->UpdatePose();
+		if (rig) {
+			rig->UpdatePose();
+		}
 	}
 
 } // namespace Shalltear

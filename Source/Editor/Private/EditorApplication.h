@@ -107,6 +107,7 @@ namespace Shalltear {
 		bool _quitConfirmed = false;
 		i32 _smokeFramesRemaining = -1;
 		i32 _loseDeviceFrame = -1;
+		u32 _failedRebuilds = 0;
 		i32 _frameIndex = 0;
 		i32 _frameDepth = 0;
 		str _modulePath;

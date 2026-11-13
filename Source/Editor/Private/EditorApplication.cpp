@@ -143,6 +143,10 @@ namespace Shalltear {
 			if (std::strcmp(argv[i], "--lose-device") == 0 && i + 1 < argc) {
 				_loseDeviceFrame = std::atoi(argv[++i]);
 			}
+			if (std::strcmp(argv[i], "--fail-rebuilds") == 0 && i + 1 < argc) {
+				const i32 parsed = std::atoi(argv[++i]);
+				_failedRebuilds = parsed > 0 ? static_cast<u32>(parsed) : 0;
+			}
 		}
 	}
 
@@ -939,7 +943,7 @@ namespace Shalltear {
 			DumpZonesIfDue();
 			_presentPolicy.SetMode(PresentMode());
 			if (_frameIndex++ == _loseDeviceFrame && RenderSystem::IsRenderingAvailable()) {
-				RenderSystem::GetDevice()->SimulateLoss();
+				RenderSystem::GetDevice()->SimulateLoss(_failedRebuilds);
 			}
 		}
 		SLT_PROFILE_ZONE("Editor.Frame");

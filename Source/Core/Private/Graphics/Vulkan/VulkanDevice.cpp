@@ -489,6 +489,9 @@ namespace Shalltear::RHI {
 			DestroyCore();
 			return false;
 		};
+		auto failCall = [&](const char* call, VkResult result) {
+			return fail((str(call) + " returned " + VkResultName(result)).c_str());
+		};
 
 		u32 layerCount = 0;
 		VulkanLoader::Get_vkEnumerateInstanceLayerProperties()(&layerCount, nullptr);
@@ -564,7 +567,7 @@ namespace Shalltear::RHI {
 
 		VkResult result = VulkanLoader::Get_vkCreateInstance()(&instanceInfo, nullptr, &impl->instance);
 		if (result != VK_SUCCESS) {
-			return fail(VkResultName(result));
+			return failCall("vkCreateInstance", result);
 		}
 		if (!VulkanLoader::LoadInstanceTable(impl->instance, impl->fi)) {
 			return fail("instance function table incomplete");
@@ -789,7 +792,7 @@ namespace Shalltear::RHI {
 
 		result = impl->fi.vkCreateDevice(impl->physicalDevice, &deviceInfo, nullptr, &impl->device);
 		if (result != VK_SUCCESS) {
-			return fail(VkResultName(result));
+			return failCall("vkCreateDevice", result);
 		}
 		if (!VulkanLoader::LoadDeviceTable(impl->device, impl->fi.vkGetDeviceProcAddr, impl->fd)) {
 			return fail("device function table incomplete");
@@ -1127,8 +1130,13 @@ namespace Shalltear::RHI {
 		return _impl->lost;
 	}
 
-	void Device::SimulateLoss() {
+	u32 Device::GetFailedRebuildCount() const {
+		return _impl->failedRebuilds;
+	}
+
+	void Device::SimulateLoss(u32 failedRebuilds) {
 		SLT_RHI_ASSERT_MAIN_THREAD(_impl);
+		_impl->simulatedFailures = failedRebuilds;
 		_impl->MarkLost(nullptr);
 	}
 
@@ -1147,21 +1155,32 @@ namespace Shalltear::RHI {
 		impl->ReleaseObjects();
 		impl->DestroyCore();
 		impl->lost = false;
-		if (!impl->CreateCore(true) || !impl->RestoreObjects()) {
+		const auto lostAt = impl->lostAt;
+		bool rebuilt = false;
+		if (impl->simulatedFailures > 0) {
+			--impl->simulatedFailures;
+			impl->rebuildFailure = "simulated";
+		} else {
+			rebuilt = impl->CreateCore(true) && impl->RestoreObjects();
+		}
+		if (!rebuilt) {
 			impl->ReleaseObjects();
 			impl->DestroyCore();
 			const bool lostAgain = impl->lost;
 			impl->lost = true;
+			impl->lostAt = lostAt;
 			if (!lostAgain) {
 				impl->nextRebuild = started + std::chrono::milliseconds(REBUILD_RETRY_MS);
 			}
-			if (!impl->rebuildFailureLogged) {
-				impl->rebuildFailureLogged = true;
-				SLT_LOG_WARN("Graphics", "couldn't rebuild device ({}). Retrying", impl->rebuildFailure ? impl->rebuildFailure : "unknown");
+			++impl->failedRebuilds;
+			if (LogsFailedRebuild(impl->failedRebuilds)) {
+				SLT_LOG_WARN("Graphics", "couldn't rebuild device ({}, {} attempt(s) in {} s). Retrying", impl->rebuildFailure, impl->failedRebuilds,
+							 std::chrono::duration_cast<std::chrono::seconds>(started - lostAt).count());
 			}
 			return false;
 		}
 
+		impl->failedRebuilds = 0;
 		impl->deadPipelineWarned = false;
 		const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
 		SLT_LOG_INFO("Graphics", "device rebuilt in {} ms ({} buffer(s), {} texture(s), {} sampler(s), {} swapchain(s))", elapsed.count(),
@@ -1201,8 +1220,8 @@ namespace Shalltear::RHI {
 		}
 		lost = true;
 		lossSimulated = call == nullptr;
-		rebuildFailureLogged = false;
 		const auto now = std::chrono::steady_clock::now();
+		lostAt = now;
 		if (lossSimulated) {
 			nextRebuild = now;
 			SLT_LOG_WARN("Graphics", "device loss simulated");

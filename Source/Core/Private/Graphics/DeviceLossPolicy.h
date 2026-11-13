@@ -2,6 +2,8 @@
 
 #include "Shalltear/Core/Types.h"
 
+#include <bit>
+
 namespace Shalltear::RHI {
 
 	inline constexpr u64 LOSS_WINDOW_MS = 60'000;
@@ -14,6 +16,10 @@ namespace Shalltear::RHI {
 			return 0;
 		}
 		return lossesInWindow == 2 ? 5'000 : LOSS_WINDOW_MS;
+	}
+
+	inline constexpr bool LogsFailedRebuild(u32 failedRebuilds) noexcept {
+		return std::has_single_bit(failedRebuilds);
 	}
 
 	struct LossHistory {

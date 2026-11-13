@@ -15,6 +15,7 @@
 #include "Shalltear/Core/Window.h"
 
 #include <atomic>
+#include <bit>
 #include <cstring>
 
 using namespace Shalltear;
@@ -490,6 +491,8 @@ TEST_F(DeviceRecoveryFixture, FramesWaitForDriverThenResume) {
 	EXPECT_EQ(events.restored, 0u);
 	EXPECT_EQ(litTexels(true), ~0u);
 	EXPECT_LT(blindMs / BLIND_FRAMES, 5.0);
+	const u32 failed = device->GetFailedRebuildCount();
+	EXPECT_GE(failed, 1u);
 
 	missing.Restore();
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -498,6 +501,7 @@ TEST_F(DeviceRecoveryFixture, FramesWaitForDriverThenResume) {
 		render();
 	}
 	ASSERT_FALSE(device->IsLost());
+	EXPECT_EQ(device->GetFailedRebuildCount(), 0u);
 	render();
 	EXPECT_EQ(events.restored, 1u);
 	EXPECT_EQ(litTexels(true), leftBefore);
@@ -505,7 +509,7 @@ TEST_F(DeviceRecoveryFixture, FramesWaitForDriverThenResume) {
 	EXPECT_NE(sphere->vertexBufferAddress, 0u);
 
 	const LogSink& seen = log.Delivered();
-	EXPECT_EQ(seen.Count("couldn't rebuild device"), 1u) << seen.Joined();
+	EXPECT_EQ(seen.Count("couldn't rebuild device"), static_cast<u32>(std::bit_width(failed))) << seen.Joined();
 	EXPECT_EQ(seen.CountAtLeast(LogLevel::Error), 0u) << seen.Joined();
 
 	RenderSystem::DestroyViewTarget(target);

@@ -109,7 +109,8 @@ namespace Shalltear::RHI {
 		bool IsLost() const;
 		// on success re-upload contents, re-read device addresses + recreate pipelines
 		bool Recover();
-		void SimulateLoss();
+		u32 GetFailedRebuildCount() const;
+		void SimulateLoss(u32 failedRebuilds = 0);
 	private:
 		Device() = default;
 		~Device() = default;

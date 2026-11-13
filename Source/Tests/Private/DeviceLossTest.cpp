@@ -11,6 +11,7 @@
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Window.h"
 
+#include <bit>
 #include <cstring>
 
 using namespace Shalltear;
@@ -184,6 +185,23 @@ TEST(DeviceLossPolicyTest, RelapsingDeviceStaysUnderResetLimit) {
 		}
 		EXPECT_LT(worst, BUGCHECK_RESETS - 1) << hangMs;
 	}
+}
+
+TEST(DeviceLossPolicyTest, FailedRebuildLogStaysShort) {
+	const u32 hour = static_cast<u32>(3'600'000 / RHI::REBUILD_RETRY_MS);
+	u32 lines = 0;
+	u32 last = 0;
+	for (u32 failed = 1; failed <= hour; ++failed) {
+		if (!RHI::LogsFailedRebuild(failed)) {
+			continue;
+		}
+		EXPECT_LE(failed, std::max(1u, last * 2));
+		last = failed;
+		++lines;
+	}
+	EXPECT_GT(lines, 8u);
+	EXPECT_LT(lines, 16u);
+	EXPECT_GT(last * 2, hour);
 }
 
 TEST_F(DeviceLossFixture, HandlesSurviveRebuild) {
@@ -508,6 +526,8 @@ TEST_F(DeviceLossFixture, RebuildWaitsForMissingDriver) {
 	EXPECT_EQ(_device->GetVideoMemoryInfo().budgetBytes, 0u);
 	EXPECT_EQ(_device->GetSupportedSampleCounts(RHI::Format::RGBA8Unorm, RHI::TextureUsage::RenderTarget), 1u);
 	_device->WaitIdle();
+	const u32 failed = _device->GetFailedRebuildCount();
+	EXPECT_GE(failed, 1u);
 
 	missing.Restore();
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -520,8 +540,9 @@ TEST_F(DeviceLossFixture, RebuildWaitsForMissingDriver) {
 	}
 	ASSERT_TRUE(rebuilt);
 	EXPECT_GT(attempts, 5u);
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
 	const LogSink& seen = log.Delivered();
-	EXPECT_EQ(seen.Count("couldn't rebuild device"), 1u) << seen.Joined();
+	EXPECT_EQ(seen.Count("couldn't rebuild device (vkCreateInstance returned "), static_cast<u32>(std::bit_width(failed))) << seen.Joined();
 	EXPECT_EQ(seen.Count("device rebuilt"), 1u) << seen.Joined();
 	EXPECT_EQ(seen.CountAtLeast(LogLevel::Error), 0u) << seen.Joined();
 
@@ -538,6 +559,66 @@ TEST_F(DeviceLossFixture, RebuildWaitsForMissingDriver) {
 	_device->DestroyResource(sampled);
 	_device->DestroyResource(storage);
 	_device->DestroyResource(late);
+	FlushDeletes(*_device);
+}
+
+TEST_F(DeviceLossFixture, FailedRebuildsCountUntilRebuilt) {
+	RHI::TextureHandle sampled = MakeSampled(*_device, 4);
+	ASSERT_TRUE(sampled.IsValid());
+	const Vector<u8> pixels = Ramp(4 * 4 * 4, 9);
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
+
+	ScopedLog log;
+	constexpr u32 FAILURES = 3;
+	_device->SimulateLoss(FAILURES);
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
+	EXPECT_FALSE(_device->Recover());
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 1u);
+	EXPECT_FALSE(_device->Recover());
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 1u);
+
+	RHI::CommandList* cmd = _device->BeginFrame();
+	cmd->TransitionTexture(sampled, RHI::ResourceState::TransferSrc);
+	EXPECT_TRUE(_device->AllocateTransient(1024).IsValid());
+	_device->EndFrame();
+	_device->WaitIdle();
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+	u32 highest = 1;
+	bool rebuilt = false;
+	while (!rebuilt && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		rebuilt = _device->Recover();
+		const u32 failed = _device->GetFailedRebuildCount();
+		if (!rebuilt) {
+			EXPECT_TRUE(_device->IsLost());
+			EXPECT_GE(failed, highest);
+			highest = failed;
+		}
+	}
+	ASSERT_TRUE(rebuilt);
+	EXPECT_EQ(highest, FAILURES);
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
+	const LogSink& seen = log.Delivered();
+	EXPECT_EQ(seen.Count("couldn't rebuild device (simulated, 1 attempt(s) in 0 s). Retrying"), 1u) << seen.Joined();
+	EXPECT_EQ(seen.Count("couldn't rebuild device (simulated, 2 attempt(s) in "), 1u) << seen.Joined();
+	EXPECT_EQ(seen.Count("couldn't rebuild device"), 2u) << seen.Joined();
+	EXPECT_EQ(seen.Count("device rebuilt"), 1u) << seen.Joined();
+	EXPECT_EQ(seen.CountAtLeast(LogLevel::Error), 0u) << seen.Joined();
+
+	EXPECT_EQ(_device->GetTextureState(sampled), RHI::ResourceState::TransferSrc);
+	_device->UploadTexture(sampled, {pixels.data(), pixels.size()});
+	Vector<u8> read{GetMemoryResource(MemTag::Graphics)};
+	read.assign(pixels.size(), 0);
+	_device->ReadbackTexture(sampled, {read.data(), read.size()});
+	EXPECT_EQ(std::memcmp(read.data(), pixels.data(), pixels.size()), 0);
+
+	_device->SimulateLoss();
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
+	ASSERT_TRUE(_device->Recover());
+	EXPECT_EQ(_device->GetFailedRebuildCount(), 0u);
+
+	_device->DestroyResource(sampled);
 	FlushDeletes(*_device);
 }
 

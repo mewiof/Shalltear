@@ -895,6 +895,14 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	EXPECT_FALSE(memoryReport(lostLog).empty()) << lostLog;
 	EXPECT_EQ(memoryReport(lostLog), memoryReport(secondLog));
 
+	str blindLog = RunCommand("\"" + playerExe.generic_string() + "\" --frames 12 --lose-device 4 --fail-rebuilds 1000", exitCode);
+	ASSERT_EQ(exitCode, 0) << blindLog;
+	EXPECT_NE(blindLog.find("couldn't rebuild device (simulated, 1 attempt(s) in 0 s). Retrying"), str::npos) << blindLog;
+	EXPECT_EQ(blindLog.find("device rebuilt in"), str::npos) << blindLog;
+	EXPECT_NE(blindLog.find(PLAYER_MARKER), str::npos) << blindLog;
+	EXPECT_EQ(errors(blindLog), errors(secondLog)) << blindLog;
+	EXPECT_EQ(memoryReport(blindLog), memoryReport(secondLog));
+
 	str ninjaFile = FileSystem::ReadTextFile(
 		Path(BuildPipeline::GetIntermediateDirectory(Root(), "Windows") + "/build.ninja"), MemTag::Editor);
 	ASSERT_FALSE(ninjaFile.empty());

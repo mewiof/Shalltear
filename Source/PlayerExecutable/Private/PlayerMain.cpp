@@ -39,6 +39,7 @@ namespace Shalltear {
 		struct PlayerOptions {
 			i32 frames = -1;
 			i32 loseDeviceFrame = -1;
+			u32 failedRebuilds = 0;
 			bool console = false;
 			ScreenLaunch screen;
 		};
@@ -54,6 +55,9 @@ namespace Shalltear {
 					options.console = true;
 				} else if (std::strcmp(argv[i], "--lose-device") == 0 && i + 1 < argc) {
 					options.loseDeviceFrame = number(argv[++i]);
+				} else if (std::strcmp(argv[i], "--fail-rebuilds") == 0 && i + 1 < argc) {
+					const i32 parsed = number(argv[++i]);
+					options.failedRebuilds = parsed > 0 ? static_cast<u32>(parsed) : 0;
 				} else if (std::strcmp(argv[i], "--screen-width") == 0 && i + 1 < argc) {
 					options.screen.width = number(argv[++i]);
 				} else if (std::strcmp(argv[i], "--screen-height") == 0 && i + 1 < argc) {
@@ -183,7 +187,7 @@ namespace Shalltear {
 				continue;
 			}
 			if (frameIndex++ == options.loseDeviceFrame && RenderSystem::IsRenderingAvailable()) {
-				RenderSystem::GetDevice()->SimulateLoss();
+				RenderSystem::GetDevice()->SimulateLoss(options.failedRebuilds);
 			}
 			Time::BeginFrame(pacer.GetUnscaledDeltaTime());
 

@@ -333,11 +333,13 @@ namespace Shalltear::RHI {
 
 		bool lost = false;
 		bool lossSimulated = false;
-		bool rebuildFailureLogged = false;
 		bool deadPipelineWarned = false;
-		const char* rebuildFailure = nullptr;
+		str rebuildFailure;
+		u32 failedRebuilds = 0;
+		u32 simulatedFailures = 0;
 		LossHistory losses;
 		std::chrono::steady_clock::time_point created = std::chrono::steady_clock::now();
+		std::chrono::steady_clock::time_point lostAt{};
 		std::chrono::steady_clock::time_point nextRebuild{};
 		f32 maxAnisotropy = 1.0f;
 		bool fillModeNonSolid = false;

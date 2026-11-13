@@ -1,5 +1,7 @@
 #include "TestsPCH.h"
 
+#include "TestPlatform.h"
+
 #include <algorithm>
 #include <array>
 
@@ -12,6 +14,7 @@
 #include "Shalltear/Core/Graphics/ObjectShadow.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
+#include "Shalltear/Core/Math/HalfFloat.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/UI.h"
@@ -85,7 +88,7 @@ namespace {
 		bool _projectMounted = false;
 		std::filesystem::path _root;
 
-		void InitializeAt(i32 samples) {
+		void InitializeAt(i32 samples, bool validated = false) {
 			static std::atomic<u64> counter{0};
 			u64 stamp = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count());
 			_root = std::filesystem::temp_directory_path() /
@@ -95,6 +98,12 @@ namespace {
 			SettingsPaths paths;
 			paths.project = Path((_root / "ProjectSettings.ini").generic_string());
 			Settings::Initialize(paths);
+			if (validated) {
+				GraphicsSettings* graphics =
+					Settings::DeclareCategory<GraphicsSettings>("Graphics", SettingScope::Project, true);
+				ASSERT_NE(graphics, nullptr);
+				graphics->validation = true;
+			}
 
 			std::filesystem::path engineAssets = FindRepoDir("EngineAssets");
 			if (!engineAssets.empty()) {
@@ -1895,6 +1904,62 @@ TEST_F(MSAAViewFixture, PipelinesCompiledOncePerCount) {
 
 	EXPECT_EQ(renderAtLevel(1), afterHigh);
 	EXPECT_EQ(RenderSystem::GetSampleCount(), 4u);
+}
+
+TEST_F(MSAAViewFixture, WindowResolvesAfterCountRaised) {
+	InitializeAt(1, true);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	if (!TestPlatform::FindLoadedLibrary("VkLayer_khronos_validation" SLT_TEST_DLL_SUFFIX)) {
+		GTEST_SKIP() << "validation layer not installed";
+	}
+	ScopedValidationWatch watch;
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Window");
+	Handle<Camera> camera = SceneSystem::CreateObject("Camera", scene)->AddComponent<Camera>();
+	camera->SetClearColor(Color(0.0f, 0.0f, 1.0f, 1.0f));
+	WindowDesc windowDesc;
+	windowDesc.title = "MSAAViewTest";
+	windowDesc.clientSize = {256, 128};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+
+	auto* profile = static_cast<GraphicsProfile*>(AssetDatabase::LoadAsset(Path("project://Assets/Msaa.slprofile")));
+	ASSERT_NE(profile, nullptr);
+	auto blueAt = [&](i32 samples) {
+		profile->msaa = samples;
+		for (int frame = 0; frame < 3; ++frame) {
+			WindowSystem::PumpEvents();
+			SceneSystem::UpdateAll();
+			SceneSystem::EndFrame();
+			RenderSystem::RenderAll();
+		}
+		Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		if (!RenderSystem::ReadbackWindowSceneColor(window, pixels, size) || size != Vec2I{256, 128}) {
+			return false;
+		}
+		const u16* texel = reinterpret_cast<const u16*>(pixels.data()) + (64 * 256 + 128) * 4;
+		return Math::HalfToFloat(texel[0]) < 0.1f && Math::HalfToFloat(texel[2]) > 0.5f;
+	};
+
+	EXPECT_TRUE(blueAt(1));
+	ASSERT_EQ(RenderSystem::GetSampleCount(), 1u);
+	const bool raised = blueAt(4);
+	const u32 samples = RenderSystem::GetSampleCount();
+	const bool lowered = blueAt(1);
+	AssetDatabase::UnloadAsset(profile);
+	if (samples <= 1) {
+		GTEST_SKIP() << "adapter doesn't offer 4x on the scene chain";
+	}
+	EXPECT_TRUE(raised);
+	EXPECT_TRUE(lowered);
+	EXPECT_EQ(RenderSystem::GetSampleCount(), 1u);
+
+	ASSERT_TRUE(watch.Settle());
+	EXPECT_EQ(watch.Errors(), 0u) << watch.FirstMessage();
 }
 
 TEST_F(MSAAViewFixture, RenderScaleShrinksSceneChain) {

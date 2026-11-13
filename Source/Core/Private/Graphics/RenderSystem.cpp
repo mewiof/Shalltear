@@ -8580,10 +8580,8 @@ namespace Shalltear {
 					RHI::TextureDesc colorDesc;
 					colorDesc.size = renderSize;
 					colorDesc.format = SCENE_COLOR_FORMAT;
-					colorDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferSrc;
-					if (state.msaaSamples > 1) {
-						colorDesc.usage = colorDesc.usage | RHI::TextureUsage::TransferDst;
-					}
+					colorDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferSrc |
+									  RHI::TextureUsage::TransferDst;
 					colorDesc.debugName = "SceneColorHDR";
 					context.sceneColor = device.CreateTextureResource(colorDesc);
 					context.targetSize = renderSize;

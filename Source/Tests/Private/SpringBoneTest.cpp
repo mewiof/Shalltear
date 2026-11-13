@@ -443,4 +443,69 @@ TEST_F(SpringBoneFixture, HingeAxisCarriesChainAlongAxis) {
 	EXPECT_GT(std::abs(BoneWorld(free, TAILS).z - 0.5f), 0.05f);
 }
 
+TEST_F(SpringBoneFixture, GustSwaysChainAlongVector) {
+	Handle<SpringBone> spring = MakeTail(MakeChain(), "gusty");
+	spring->SetStiffness(0.1f);
+	spring->SetDamping(0.1f);
+	spring->SetGust(Vec3(0.0f, 0.0f, 8.0f));
+	spring->SetGustFrequency(2.0f);
+	f32 lowest = 0.0f;
+	f32 highest = 0.0f;
+	f32 aside = 0.0f;
+	for (u32 frame = 0; frame < 360; ++frame) {
+		spring->Simulate(1.0f / 60.0f);
+		const Vec3 tip = BoneWorld(spring, TAILS);
+		lowest = Math::Min(lowest, tip.z);
+		highest = Math::Max(highest, tip.z);
+		aside = Math::Max(aside, std::abs(tip.y));
+	}
+	EXPECT_LT(lowest, -0.01f);
+	EXPECT_GT(highest, 0.01f);
+	EXPECT_LT(aside, 1e-4f);
+}
+
+TEST_F(SpringBoneFixture, GustSameAtAnyFrameRate) {
+	SkeletonAsset* skeleton = MakeChain();
+	Handle<SpringBone> sixtyFour = MakeTail(skeleton, "sixty-four");
+	Handle<SpringBone> twoFiftySix = MakeTail(skeleton, "two-fifty-six");
+	Handle<SpringBone> thirtyTwo = MakeTail(skeleton, "thirty-two");
+	for (Handle<SpringBone> spring : {sixtyFour, twoFiftySix, thirtyTwo}) {
+		spring->SetStiffness(0.05f);
+		spring->SetDamping(0.05f);
+		spring->SetGust(Vec3(0.0f, 0.0f, 8.0f));
+		spring->SetGustFrequency(2.0f);
+		spring->SetStepRate(64.0f);
+		spring->Simulate(0.0f);
+	}
+	Run(sixtyFour, 1.5f, 1.0f / 64.0f);
+	Run(twoFiftySix, 1.5f, 1.0f / 256.0f);
+	Run(thirtyTwo, 1.5f, 1.0f / 32.0f);
+	const Vec3 reference = BoneWorld(sixtyFour, TAILS);
+	EXPECT_LT(Vec3::Distance(reference, BoneWorld(twoFiftySix, TAILS)), 1e-3f);
+	EXPECT_LT(Vec3::Distance(reference, BoneWorld(thirtyTwo, TAILS)), 1e-3f);
+	EXPECT_GT(std::abs(reference.z), 0.01f);
+}
+
+TEST_F(SpringBoneFixture, GustsDifferByPlace) {
+	SkeletonAsset* skeleton = MakeChain();
+	Handle<SpringBone> here = MakeTail(skeleton, "here");
+	Handle<SpringBone> same = MakeTail(skeleton, "same");
+	Handle<SpringBone> there = MakeTail(skeleton, "there", Vec3(10.0f, 0.0f, 0.0f));
+	f32 apart = 0.0f;
+	for (Handle<SpringBone> spring : {here, same, there}) {
+		spring->SetStiffness(0.1f);
+		spring->SetDamping(0.1f);
+		spring->SetGust(Vec3(0.0f, 0.0f, 8.0f));
+		spring->SetGustFrequency(2.0f);
+	}
+	for (u32 frame = 0; frame < 240; ++frame) {
+		for (Handle<SpringBone> spring : {here, same, there}) {
+			spring->Simulate(1.0f / 60.0f);
+		}
+		apart = Math::Max(apart, std::abs(BoneWorld(here, TAILS).z - BoneWorld(there, TAILS).z));
+		ASSERT_EQ(BoneWorld(here, TAILS).z, BoneWorld(same, TAILS).z) << frame;
+	}
+	EXPECT_GT(apart, 0.01f);
+}
+
 #endif

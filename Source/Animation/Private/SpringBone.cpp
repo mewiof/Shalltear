@@ -51,6 +51,22 @@ namespace Shalltear {
 			return a + ab * t;
 		}
 
+		f32 GustLattice(i64 cell) {
+			u64 bits = static_cast<u64>(cell) * 0x9E3779B97F4A7C15ull;
+			bits ^= bits >> 32;
+			bits *= 0xD6E8FEB86659FD93ull;
+			bits ^= bits >> 32;
+			return static_cast<f32>(bits >> 40) * (2.0f / 16777215.0f) - 1.0f;
+		}
+
+		f32 GustNoise(f64 at) {
+			const f64 cell = std::floor(at);
+			const f32 t = static_cast<f32>(at - cell);
+			const f32 blend = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+			const i64 index = static_cast<i64>(cell);
+			return Math::Lerp(GustLattice(index), GustLattice(index + 1), blend);
+		}
+
 		Vec3 PushOut(Vec3 point, const SpringBoneCollider& collider, f32 boneRadius) {
 			const SceneObject* owner = collider.GetOwner().Get();
 			if (!owner) {
@@ -288,6 +304,7 @@ namespace Shalltear {
 				_joints[j].swing = Quat::Identity();
 			}
 			_accumulator = 0.0f;
+			_gustClock = 0.0;
 			_rootFrom = positions[0];
 			_rootRotationFrom = rootRotation;
 			_primed = true;
@@ -307,6 +324,9 @@ namespace Shalltear {
 		const f32 keep = 1.0f - Math::Clamp01(_damping);
 		const f32 maxAngle = Math::Clamp(_maxAngleDeg, 0.0f, 180.0f) * Math::DEG_TO_RAD;
 		const Vec3 fall = _gravity * (step * step);
+		const Vec3 gust = _gust * (step * step);
+		const bool gusty = gust.LengthSquared() > 0.0f;
+		const f64 gustRate = static_cast<f64>(Math::Max(_gustFrequency, 0.0f));
 		const bool hinged = _hingeAxis != SpringBoneHingeAxis::None;
 		const Vec3 hingeLocal(_hingeAxis == SpringBoneHingeAxis::X ? 1.0f : 0.0f, _hingeAxis == SpringBoneHingeAxis::Y ? 1.0f : 0.0f,
 							  _hingeAxis == SpringBoneHingeAxis::Z ? 1.0f : 0.0f);
@@ -317,6 +337,7 @@ namespace Shalltear {
 			const Vec3 rootAt = Vec3::Lerp(_rootFrom, positions[0], t);
 			const Quat turnAt = Quat::Slerp(_rootRotationFrom, rootRotation, t);
 			const Vec3 hinge = turnAt * hingeLocal;
+			_gustClock += static_cast<f64>(step);
 			for (size_t j = 0; j < count; ++j) {
 				rest[j] = rootAt + turnAt * _offsets[j];
 			}
@@ -330,6 +351,10 @@ namespace Shalltear {
 				const Quat inherited = parent.parent >= 0 ? _joints[static_cast<size_t>(parent.parent)].swing : Quat::Identity();
 				const Vec3 goal = parent.position + inherited * offset;
 				Vec3 next = joint.position + (joint.position - joint.previous) * keep + (goal - joint.position) * stiffness + fall;
+				if (gusty) {
+					const Vec3& place = rest[j];
+					next += gust * GustNoise(_gustClock * gustRate + static_cast<f64>(place.x * 0.31f + place.y * 0.17f + place.z * 0.23f));
+				}
 
 				const Vec3 goalDirection = goal - parent.position;
 				Vec3 direction = next - parent.position;

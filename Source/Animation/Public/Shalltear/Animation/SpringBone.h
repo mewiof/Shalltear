@@ -82,6 +82,8 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_stiffness, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_damping, SLT_RANGE(0.0f, 1.0f))
 		SLT_REFLECT_FIELD(_gravity)
+		SLT_REFLECT_FIELD(_gust)
+		SLT_REFLECT_FIELD(_gustFrequency, SLT_RANGE(0.0f, 10.0f))
 		SLT_REFLECT_FIELD(_maxAngleDeg, SLT_RANGE(0.0f, 180.0f))
 		SLT_REFLECT_FIELD(_hingeAxis)
 		SLT_REFLECT_FIELD(_radius, SLT_RANGE(0.0f, 1.0f))
@@ -107,6 +109,13 @@ namespace Shalltear {
 
 		Vec3 GetGravity() const { return _gravity; }
 		void SetGravity(const Vec3& gravity) { _gravity = gravity; }
+
+		// peak acceleration, scaled by smooth noise over time + position
+		Vec3 GetGust() const { return _gust; }
+		void SetGust(const Vec3& gust) { _gust = gust; }
+
+		f32 GetGustFrequency() const { return _gustFrequency; }
+		void SetGustFrequency(f32 hertz) { _gustFrequency = hertz; }
 
 		// widest swing from animated direction
 		f32 GetMaxAngleDeg() const { return _maxAngleDeg; }
@@ -162,6 +171,8 @@ namespace Shalltear {
 		f32 _stiffness = 0.1f;
 		f32 _damping = 0.1f;
 		Vec3 _gravity{};
+		Vec3 _gust{};
+		f32 _gustFrequency = 0.5f;
 		f32 _maxAngleDeg = 60.0f;
 		SpringBoneHingeAxis _hingeAxis = SpringBoneHingeAxis::None;
 		f32 _radius = 0.02f;
@@ -173,6 +184,7 @@ namespace Shalltear {
 		Vector<Vec3> _offsets{GetMemoryResource(MemTag::Scene)};
 		u64 _boundSkeleton = 0;
 		f32 _accumulator = 0.0f;
+		f64 _gustClock = 0.0;
 		bool _primed = false;
 		bool _warnedRoot = false;
 		Vec3 _rootFrom{};

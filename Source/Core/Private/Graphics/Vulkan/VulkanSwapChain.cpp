@@ -153,7 +153,9 @@ namespace Shalltear::RHI {
 			createInfo.imageColorSpace = chosen.colorSpace;
 			createInfo.imageExtent = extent;
 			createInfo.imageArrayLayers = 1;
-			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+									(caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+			impl.copyable = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
 			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			createInfo.preTransform = caps.currentTransform;
 			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -195,7 +197,8 @@ namespace Shalltear::RHI {
 				resource.allocation = VK_NULL_HANDLE;
 				resource.size = Vec2I{static_cast<i32>(extent.width), static_cast<i32>(extent.height)};
 				resource.format = impl.format;
-				resource.usage = TextureUsage::RenderTarget | TextureUsage::TransferDst;
+				resource.usage = TextureUsage::RenderTarget | TextureUsage::TransferDst |
+								 (impl.copyable ? TextureUsage::TransferSrc : TextureUsage::None);
 				resource.external = true;
 				resource.state = ResourceState::Undefined;
 				impl.imageHandles.push_back(TextureHandle{index, generation});

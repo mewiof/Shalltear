@@ -21,6 +21,7 @@
 #include "Shalltear/Core/UI/WidgetRegistry.h"
 
 #include "Asset/AssetMigration.h"
+#include "Graphics/FrameCapture.h"
 #include "Module/EngineStateTable.h"
 #include "Platform/Library.h"
 #include "Scene/SceneMigration.h"
@@ -190,6 +191,7 @@ namespace Shalltear {
 			removed += AssetCues::UnregisterOwnedBy(image);
 			removed += FramePasses::UnregisterOwnedBy(image);
 			removed += TextureCodecs::UnregisterOwnedBy(image);
+			GraphicsInternal::DropCaptureCallbacks();
 			return removed;
 		}
 

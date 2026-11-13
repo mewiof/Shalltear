@@ -445,6 +445,11 @@ namespace Shalltear {
 		return Path(Platform::GetUserHomeDirectory());
 	}
 
+	Path FileSystem::GetUserPicturesDirectory() {
+		const str directory = Platform::GetUserPicturesDirectory();
+		return directory.empty() ? Path{} : Path(directory);
+	}
+
 	Path FileSystem::GetExecutablePath() {
 		return Path(Platform::GetExecutablePath());
 	}

@@ -33,6 +33,20 @@ namespace {
 		ADD_FAILURE() << "mechanism tier pass recorded";
 	}
 
+	struct StatePeek {
+		RHI::Device* device = nullptr;
+		RHI::TextureHandle texture;
+		RHI::ResourceState seen = RHI::ResourceState::Undefined;
+	};
+
+	StatePeek* _statePeek = nullptr;
+
+	void RecordNothing(GraphExecution&, const GraphPass&) {}
+
+	void RecordStatePeek(GraphExecution&, const GraphPass&) {
+		_statePeek->seen = _statePeek->device->GetTextureState(_statePeek->texture);
+	}
+
 	void DeclarePass(RenderGraph& graph, const char* name) {
 		graph.AddPass(name, 0, &NeverRecorded, PassWork{});
 	}
@@ -746,6 +760,57 @@ TEST(RenderGraphBufferDeviceTest, SharedBufferWritesOrdered) {
 	graph.DestroyPool();
 	device->DestroyResource(pipeline);
 	device->DestroyResource(values);
+	for (int i = 0; i < 2; ++i) {
+		device->BeginFrame();
+		device->EndFrame();
+	}
+	device->WaitIdle();
+	RHI::Device::Destroy(device);
+}
+
+TEST(RenderGraphTextureDeviceTest, LaterReadRestoresFinalState) {
+	RHI::DeviceDesc deviceDesc;
+	deviceDesc.headless = true;
+	RHI::Device* device = RHI::Device::Create(deviceDesc);
+	if (!device) {
+		GTEST_SKIP() << "no Vulkan ICD available";
+	}
+	RHI::TextureDesc desc;
+	desc.size = {16, 16};
+	desc.format = RHI::Format::RGBA8Unorm;
+	desc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferSrc;
+	RHI::TextureHandle texture = device->CreateTextureResource(desc);
+	ASSERT_TRUE(texture.IsValid());
+	StatePeek peek;
+	peek.device = device;
+	peek.texture = texture;
+	_statePeek = &peek;
+
+	RenderGraph graph;
+	RHI::CommandList* cmd = device->BeginFrame();
+	graph.Begin(device);
+	const GraphResourceId resource = graph.Import(texture, true, RHI::ResourceState::ShaderResource);
+	graph.AddPass("Draw", 0, &RecordNothing, PassWork{});
+	graph.Write(resource, RHI::ResourceState::RenderTarget);
+	graph.AddPass("Peek", 0, &RecordStatePeek, PassWork{});
+	graph.Write(graph.CreateVirtual(true), RHI::ResourceState::Undefined);
+	graph.AddPass("Copy", 0, &RecordNothing, PassWork{});
+	graph.Read(resource, RHI::ResourceState::TransferSrc);
+	graph.Write(graph.CreateVirtual(true), RHI::ResourceState::Undefined);
+	graph.Compile();
+	GraphExecution exec;
+	exec.cmd = cmd;
+	exec.device = device;
+	graph.Execute(exec);
+	_statePeek = nullptr;
+	EXPECT_EQ(graph.GetExecutedPassCount(), 3u);
+	EXPECT_EQ(peek.seen, RHI::ResourceState::ShaderResource);
+	EXPECT_EQ(device->GetTextureState(texture), RHI::ResourceState::ShaderResource);
+	device->EndFrame();
+	device->WaitIdle();
+
+	graph.DestroyPool();
+	device->DestroyResource(texture);
 	for (int i = 0; i < 2; ++i) {
 		device->BeginFrame();
 		device->EndFrame();

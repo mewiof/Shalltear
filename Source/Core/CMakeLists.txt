@@ -9,7 +9,7 @@ target_compile_definitions(ShalltearCore PRIVATE SHALLTEAR_CORE_BUILD)
 
 if(WIN32)
     target_compile_definitions(ShalltearCore PUBLIC _WIN32_WINNT=0x0A00)
-    target_link_libraries(ShalltearCore PRIVATE user32 gdi32 shell32 shcore dwmapi)
+    target_link_libraries(ShalltearCore PRIVATE user32 gdi32 shell32 ole32 shcore dwmapi)
 endif()
 
 find_package(Git QUIET)

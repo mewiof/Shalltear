@@ -72,6 +72,7 @@ namespace Shalltear::RHI {
 
 		Vec2I GetTextureSize(TextureHandle texture) const;
 		Format GetTextureFormat(TextureHandle texture) const;
+		TextureUsage GetTextureUsage(TextureHandle texture) const;
 		ResourceState GetTextureState(TextureHandle texture) const;
 
 		// copy completes with the next submit

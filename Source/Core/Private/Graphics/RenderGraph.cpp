@@ -369,8 +369,9 @@ namespace Shalltear::GraphicsInternal {
 			}
 			++_executedPasses;
 
-			for (GraphResourceId id = 0; id < static_cast<GraphResourceId>(_resources.size()); ++id) {
-				if (_sinkLastWriter[id] == static_cast<i32>(passIndex)) {
+			for (u16 i = 0; i < pass.accessCount; ++i) {
+				const GraphResourceId id = _accesses[pass.firstAccess + i].resource;
+				if (_sinkLastWriter[id] >= 0 && static_cast<i32>(passIndex) >= _sinkLastWriter[id]) {
 					cmd.TransitionTexture(_resources[id].texture, _resources[id].finalState);
 				}
 			}

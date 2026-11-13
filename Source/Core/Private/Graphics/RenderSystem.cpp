@@ -48,6 +48,7 @@
 #include "Shalltear/Core/Graphics/CubeFace.h"
 #include "Graphics/CameraViewport.h"
 #include "Graphics/DeviceContent.h"
+#include "Graphics/FrameCapture.h"
 #include "Graphics/FramePassInternal.h"
 #include "Graphics/GraphicsSettings.h"
 #include "Graphics/LightCulling.h"
@@ -605,6 +606,21 @@ namespace Shalltear {
 				Vector<Handle<SceneObject>> objects{GetMemoryResource(MemTag::Graphics)};
 			};
 			PickSlot pickSlots[PICK_SLOTS];
+
+			struct FrameCapture {
+				Handle<Window> window;
+				ViewTargetId target = INVALID_VIEW_TARGET;
+				RHI::BufferHandle readback;
+				Vec2I size{};
+				RHI::Format format = RHI::Format::Unknown;
+				u64 requestedFrame = 0;
+				u64 copiedFrame = 0;
+				bool copied = false;
+				bool failed = false;
+				GraphicsInternal::CaptureDelivery deliver;
+				GraphicsInternal::CaptureFollowUp followUp;
+			};
+			Vector<FrameCapture> frameCaptures{GetMemoryResource(MemTag::Graphics)};
 			RHI::BufferHandle pickRing;
 			u64 renderedFrames = 0;
 
@@ -2742,6 +2758,57 @@ namespace Shalltear {
 			capture.haveSH = false;
 			for (u32 slot = 0; slot < RHI::FRAMES_IN_FLIGHT; ++slot) {
 				capture.slotPending[slot] = false;
+			}
+		}
+
+		constexpr u64 CAPTURE_PATIENCE_FRAMES = 30;
+
+		void ReleaseCaptureResources(RenderState& state, RenderState::FrameCapture& capture) {
+			if (capture.readback.IsValid()) {
+				state.device->DestroyResource(capture.readback);
+				capture.readback = {};
+			}
+			if (capture.target != INVALID_VIEW_TARGET) {
+				RenderSystem::DestroyViewTarget(capture.target);
+				capture.target = INVALID_VIEW_TARGET;
+			}
+		}
+
+		void AnswerFrameCaptures(RenderState& state, RHI::Device& device) {
+			if (state.frameCaptures.empty()) {
+				return;
+			}
+			Vector<RenderState::FrameCapture> captures{GetMemoryResource(MemTag::Graphics)};
+			captures.swap(state.frameCaptures);
+			for (RenderState::FrameCapture& capture : captures) {
+				if (capture.followUp) {
+					if (!capture.followUp()) {
+						state.frameCaptures.push_back(std::move(capture));
+					}
+					continue;
+				}
+				const bool ready = capture.copied && capture.copiedFrame + RHI::FRAMES_IN_FLIGHT <= state.renderedFrames;
+				const bool stale = !capture.copied && (capture.failed || capture.requestedFrame + CAPTURE_PATIENCE_FRAMES < state.renderedFrames);
+				if (!ready && !stale) {
+					state.frameCaptures.push_back(std::move(capture));
+					continue;
+				}
+				Vector<u8> rgba8{GetMemoryResource(MemTag::Graphics)};
+				bool captured = false;
+				if (ready && !device.IsLost()) {
+					if (const u8* mapped = static_cast<const u8*>(device.GetMappedPointer(capture.readback))) {
+						const size_t bytes = static_cast<size_t>(capture.size.x) * static_cast<size_t>(capture.size.y) * 4;
+						captured = GraphicsInternal::ToRGBA8({mapped, bytes}, capture.format, capture.size, rgba8);
+					}
+				}
+				ReleaseCaptureResources(state, capture);
+				if (capture.deliver) {
+					capture.followUp = capture.deliver(captured, std::move(rgba8), capture.size);
+					capture.deliver = {};
+				}
+				if (capture.followUp) {
+					state.frameCaptures.push_back(std::move(capture));
+				}
 			}
 		}
 
@@ -6028,6 +6095,40 @@ namespace Shalltear {
 			}
 		}
 
+		void PassRecordFrameCapture(GraphExecution& exec, const GraphPass& pass) {
+			RenderState& state = *_state;
+			if (pass.work.subIndex >= state.frameCaptures.size()) {
+				return;
+			}
+			RenderState::FrameCapture& capture = state.frameCaptures[pass.work.subIndex];
+			RHI::Device& device = *state.device;
+			const RHI::TextureHandle source = pass.textures[0];
+			const Vec2I size = device.GetTextureSize(source);
+			const RHI::Format format = device.GetTextureFormat(source);
+			const bool copyable = HasAnyFlag(device.GetTextureUsage(source), RHI::TextureUsage::TransferSrc);
+			const bool rgba8 = format == RHI::Format::RGBA8Unorm || format == RHI::Format::RGBA8SRGB ||
+							   format == RHI::Format::BGRA8Unorm || format == RHI::Format::BGRA8SRGB;
+			if (capture.copied || !copyable || !rgba8 || size.x <= 0 || size.y <= 0) {
+				capture.failed = !capture.copied;
+				return;
+			}
+			RHI::BufferDesc desc;
+			desc.size = static_cast<u64>(size.x) * static_cast<u64>(size.y) * 4;
+			desc.usage = RHI::BufferUsage::TransferDst;
+			desc.access = RHI::MemoryAccess::Readback;
+			desc.debugName = "FrameCapture";
+			capture.readback = device.CreateBufferResource(desc);
+			if (!capture.readback.IsValid()) {
+				capture.failed = true;
+				return;
+			}
+			exec.cmd->CopyTextureToBuffer(source, capture.readback);
+			capture.size = size;
+			capture.format = format;
+			capture.copied = true;
+			capture.copiedFrame = state.renderedFrames;
+		}
+
 		void PassRecordOverlay(GraphExecution& exec, const GraphPass& pass) {
 			enum : u32 { BACKBUFFER = 0 };
 			RenderState& state = *_state;
@@ -6109,6 +6210,24 @@ namespace Shalltear {
 #else
 #define SLT_GRAPH_SITE(variable, name) static const u32 variable = ::Shalltear::Profiler::RegisterSite(name)
 #endif
+
+		void DeclareFrameCaptures(RenderState& state, GraphicsInternal::RenderGraph& graph, Handle<Window> window,
+								  ViewTargetId target, GraphResourceId source, const PassWork& work) {
+			for (u32 index = 0; index < state.frameCaptures.size(); ++index) {
+				const RenderState::FrameCapture& capture = state.frameCaptures[index];
+				const bool mine = target != INVALID_VIEW_TARGET ? capture.target == target
+																: capture.target == INVALID_VIEW_TARGET && capture.window == window;
+				if (!mine || capture.copied || capture.failed || capture.followUp) {
+					continue;
+				}
+				PassWork captureWork = work;
+				captureWork.subIndex = index;
+				SLT_GRAPH_SITE(captureSite, "Render.Capture");
+				graph.AddPass("Render.Capture", captureSite, &PassRecordFrameCapture, captureWork);
+				graph.Read(source, RHI::ResourceState::TransferSrc);
+				graph.Write(graph.CreateVirtual(true), RHI::ResourceState::Undefined);
+			}
+		}
 
 		constexpr u32 RowSortKey(PassPoint point, FrameStagePosition position) {
 			return static_cast<u32>(point) * 3u + static_cast<u32>(position);
@@ -7493,6 +7612,7 @@ namespace Shalltear {
 				graph.AddPass("Render.Window.TargetPresent", targetPresentSite, &PassRecordTargetPresent, work);
 				graph.Read(hdrColor, RHI::ResourceState::ShaderResource);
 				graph.Write(result, RHI::ResourceState::RenderTarget);
+				DeclareFrameCaptures(state, graph, {}, targetWork.target, result, work);
 			}
 
 			if (anyOffscreenWork) {
@@ -7544,7 +7664,7 @@ namespace Shalltear {
 					RHI::TextureDesc frameDesc;
 					frameDesc.size = frameSize;
 					frameDesc.format = context.swapChain->GetFormat();
-					frameDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled;
+					frameDesc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferSrc;
 					frameDesc.debugName = "WindowFrame";
 					context.frameColor = device.CreateTextureResource(frameDesc);
 					context.frameColorSize = frameSize;
@@ -7624,6 +7744,10 @@ namespace Shalltear {
 					SLT_GRAPH_SITE(windowOverlaySite, "Render.Window.Overlay");
 					graph.AddPass("Render.Window.Overlay", windowOverlaySite, &PassRecordOverlay, work);
 					graph.Write(frameId, RHI::ResourceState::RenderTarget);
+				}
+
+				if (backbufferReady) {
+					DeclareFrameCaptures(state, graph, windowWork.window, INVALID_VIEW_TARGET, frameId, work);
 				}
 
 				if (backbufferReady && letterboxed) {
@@ -8381,6 +8505,10 @@ namespace Shalltear {
 				}
 			},
 			nullptr, &_FRAME_STAGE_OWNER);
+		FrameStages::Register(
+			FrameStage::EndFrame, FrameStagePosition::Early,
+			[](const FrameStageArgs&, void*) { GraphicsInternal::DeliverFinishedCaptures(); },
+			nullptr, &_FRAME_STAGE_OWNER);
 
 		SLT_RENDER_SYSTEM_ANCHORS(SLT_ANCHOR_TYPE)
 
@@ -8510,6 +8638,7 @@ namespace Shalltear {
 
 		EventBus::GetGlobal().UnsubscribeAll(state.GetInstanceId());
 		FrameStages::UnregisterOwnedBy(&_FRAME_STAGE_OWNER);
+		GraphicsInternal::DropCaptureCallbacks();
 		MemoryManager::SetVramProvider(nullptr);
 
 		for (ExtractionLane* lane : state.extractionLanes) {
@@ -8556,6 +8685,13 @@ namespace Shalltear {
 				state.device->DestroyResource(state.pickRing);
 				state.pickRing = {};
 			}
+
+			for (RenderState::FrameCapture& capture : state.frameCaptures) {
+				if (capture.readback.IsValid()) {
+					state.device->DestroyResource(capture.readback);
+				}
+			}
+			state.frameCaptures.clear();
 
 			for (auto& [id, target] : state.viewTargets) {
 				if (target.color.IsValid()) {
@@ -9386,7 +9522,8 @@ namespace Shalltear {
 
 		const bool anyFramePass = GraphicsInternal::GetFramePassCount() > 0;
 
-		if (workCount == 0 && state.pendingViews.empty() && !anyColdView && !anyOffscreenWork && !anyFramePass) {
+		if (workCount == 0 && state.pendingViews.empty() && !anyColdView && !anyOffscreenWork && !anyFramePass &&
+			state.frameCaptures.empty()) {
 			state.lastDrawCalls = 0;
 			state.lastTriangles = 0;
 			state.lastLightsBinned = 0;
@@ -9425,6 +9562,7 @@ namespace Shalltear {
 		++state.renderedFrames;
 		AnswerFinishedPicks(state, device);
 		AnswerSkyReadbacks(state, device);
+		AnswerFrameCaptures(state, device);
 
 		{
 			SLT_PROFILE_ZONE("Render.Build");
@@ -9790,5 +9928,63 @@ namespace Shalltear {
 		}
 
 	} // namespace ModuleInternal
+
+	namespace GraphicsInternal {
+
+		void RequestWindowCapture(Handle<Window> window, CaptureDelivery deliver) {
+			if (!RenderSystem::IsRenderingAvailable() || !window.IsValid()) {
+				if (deliver) {
+					deliver(false, Vector<u8>{GetMemoryResource(MemTag::Graphics)}, {});
+				}
+				return;
+			}
+			RenderState::FrameCapture& capture = _state->frameCaptures.emplace_back();
+			capture.window = window;
+			capture.requestedFrame = _state->renderedFrames;
+			capture.deliver = std::move(deliver);
+		}
+
+		void RequestCamerasCapture(std::span<const Handle<Camera>> cameras, Vec2I size, CaptureDelivery deliver) {
+			const ViewTargetId target = cameras.empty() ? INVALID_VIEW_TARGET : RenderSystem::CreateViewTarget(size);
+			if (target == INVALID_VIEW_TARGET) {
+				if (deliver) {
+					deliver(false, Vector<u8>{GetMemoryResource(MemTag::Graphics)}, {});
+				}
+				return;
+			}
+			RenderSystem::SubmitCameras(target, cameras);
+			RenderState::FrameCapture& capture = _state->frameCaptures.emplace_back();
+			capture.target = target;
+			capture.requestedFrame = _state->renderedFrames;
+			capture.deliver = std::move(deliver);
+		}
+
+		void RequestSceneCapture(Vec2I size, CaptureDelivery deliver) {
+			if (!_state) {
+				RequestCamerasCapture({}, size, std::move(deliver));
+				return;
+			}
+			RequestCamerasCapture({_state->cameras.data(), _state->cameras.size()}, size, std::move(deliver));
+		}
+
+		bool ToRGBA8(std::span<const u8> texels, RHI::Format format, Vec2I size, Vector<u8>& out) {
+			const size_t count = size.x > 0 && size.y > 0 ? static_cast<size_t>(size.x) * static_cast<size_t>(size.y) : 0;
+			const bool bgra = format == RHI::Format::BGRA8Unorm || format == RHI::Format::BGRA8SRGB;
+			const bool rgba = format == RHI::Format::RGBA8Unorm || format == RHI::Format::RGBA8SRGB;
+			if (count == 0 || (!bgra && !rgba) || texels.size() < count * 4) {
+				return false;
+			}
+			out.resize(count * 4);
+			for (size_t i = 0; i < count; ++i) {
+				const u8* texel = texels.data() + i * 4;
+				out[i * 4 + 0] = bgra ? texel[2] : texel[0];
+				out[i * 4 + 1] = texel[1];
+				out[i * 4 + 2] = bgra ? texel[0] : texel[2];
+				out[i * 4 + 3] = 255;
+			}
+			return true;
+		}
+
+	} // namespace GraphicsInternal
 
 } // namespace Shalltear

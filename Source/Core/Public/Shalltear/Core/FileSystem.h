@@ -100,6 +100,8 @@ namespace Shalltear {
 
 		static Path GetUserHomeDirectory();
 
+		static Path GetUserPicturesDirectory();
+
 		static Path GetExecutablePath();
 	};
 

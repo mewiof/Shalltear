@@ -10,6 +10,7 @@ namespace Shalltear::Platform {
 
 	str GetUserDataDirectory();
 	str GetUserHomeDirectory();
+	str GetUserPicturesDirectory();
 
 	bool AcquireStandardOutput(bool createConsole);
 	void PrepareConsoleOutput();

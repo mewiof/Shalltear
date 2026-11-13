@@ -439,6 +439,11 @@ namespace Shalltear::RHI {
 		return resource ? resource->format : Format::Unknown;
 	}
 
+	TextureUsage Device::GetTextureUsage(TextureHandle texture) const {
+		TextureResource* resource = _impl->textures.Resolve(texture);
+		return resource ? resource->usage : TextureUsage::None;
+	}
+
 	ResourceState Device::GetTextureState(TextureHandle texture) const {
 		TextureResource* resource = _impl->textures.Resolve(texture);
 		return resource ? resource->state : ResourceState::Undefined;

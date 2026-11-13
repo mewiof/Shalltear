@@ -1,6 +1,10 @@
 #include "Platform/Process.h"
 
+#include "Platform/XDGUserDirs.h"
+
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <vector>
 
 #include <unistd.h>
@@ -27,6 +31,21 @@ namespace Shalltear::Platform {
 		}
 		const str home = GetUserHomeDirectory();
 		return home.empty() ? str() : home + "/.config";
+	}
+
+	str GetUserPicturesDirectory() {
+		const str home = GetUserHomeDirectory();
+		const str config = GetUserDataDirectory();
+		str text;
+		if (!config.empty()) {
+			std::ifstream file(config + "/user-dirs.dirs");
+			text.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+		}
+		str pictures = ParseXDGUserDir(text, "XDG_PICTURES_DIR", home);
+		if (pictures.empty() && !home.empty()) {
+			pictures = home + "/Pictures";
+		}
+		return pictures;
 	}
 
 } // namespace Shalltear::Platform

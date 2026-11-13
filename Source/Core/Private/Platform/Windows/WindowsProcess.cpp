@@ -2,6 +2,8 @@
 
 #include "Platform/Windows/WindowsHeaders.h"
 
+#include <shlobj.h>
+
 #include "Shalltear/Core/StringUtil.h"
 
 #include <cstdio>
@@ -48,6 +50,16 @@ namespace Shalltear::Platform {
 
 	str GetUserHomeDirectory() {
 		return ReadEnvironmentPath(L"USERPROFILE");
+	}
+
+	str GetUserPicturesDirectory() {
+		// FOLDERID_Pictures (without linking uuid)
+		constexpr GUID Pictures = {0x33E28130, 0x4E1E, 0x4676, {0x83, 0x5A, 0x98, 0x39, 0x5C, 0x3B, 0xC3, 0xBB}};
+		PWSTR wide = nullptr;
+		const HRESULT result = ::SHGetKnownFolderPath(Pictures, KF_FLAG_DEFAULT, nullptr, &wide);
+		const std::u8string utf8 = SUCCEEDED(result) && wide ? std::filesystem::path(wide).generic_u8string() : std::u8string();
+		::CoTaskMemFree(wide);
+		return str(reinterpret_cast<const char*>(utf8.data()), utf8.size());
 	}
 
 	bool AcquireStandardOutput(bool createConsole) {

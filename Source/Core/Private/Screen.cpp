@@ -241,6 +241,10 @@ namespace Shalltear {
 			return project ? project->backgroundFrameRate : 0;
 		}
 
+		Handle<Window> GetGameWindow() {
+			return GameWindow() ? _runtime->window : Handle<Window>{};
+		}
+
 		bool HasGameWindow() {
 			return _runtime && _runtime->window.IsValid();
 		}

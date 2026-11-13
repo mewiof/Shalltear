@@ -2,43 +2,43 @@
 # 1 line per declaration the codemod would rewrite
 
 [run]
-translation_units = 898
+translation_units = 901
 parse_failures = 0
-named_declarations_seen = 196459
-dictionary_sha256 = 901b7c911d8545834a841e7f9539a95815bd4fdf4f6168a3efeabca2598fdedc
+named_declarations_seen = 197084
+dictionary_sha256 = 88c0c3c92e31a33cd1ce51cb9e1c75bf36d679771ec3691180333989efeb576d
 
 [dispositions]
-finding = 1111
-conforming = 84464
+finding = 1107
+conforming = 84747
 unresolved = 197
-nonIdentifier = 44259
-noBindingRow = 50803
+nonIdentifier = 44390
+noBindingRow = 50958
 styleNotBound = 0
 vendor = 14
-generated = 12602
+generated = 12646
 reserved = 32
 kept = 16
 foreignNamespace = 42
-foreignOverride = 2919
-TOTAL = 196459
+foreignOverride = 2935
+TOTAL = 197084
 balances = True
 
 [unmapped_cursor_kinds]
 # reached no binding row. A kind here that OUGHT to be renamed is
 # an unhandled case (not a skip). Check this list before each phase
-DECL_REF_EXPR = 17643
-CALL_EXPR = 11249
-CONSTRUCTOR = 6882
-CXX_BASE_SPECIFIER = 4310
-NAMESPACE_REF = 2923
-UNEXPOSED_EXPR = 2913
-TEMPLATE_REF = 1903
+DECL_REF_EXPR = 17681
+CALL_EXPR = 11291
+CONSTRUCTOR = 6904
+CXX_BASE_SPECIFIER = 4320
+NAMESPACE_REF = 2936
+UNEXPOSED_EXPR = 2919
+TEMPLATE_REF = 1920
 MEMBER_REF_EXPR = 1174
 TYPE_REF = 660
-OVERLOADED_DECL_REF = 482
-USING_DECLARATION = 375
+OVERLOADED_DECL_REF = 485
+USING_DECLARATION = 378
 MEMBER_REF = 216
-NAMESPACE_ALIAS = 70
+NAMESPACE_ALIAS = 71
 SIZE_OF_PACK_EXPR = 2
 CONCEPT_DECL = 1
 
@@ -316,9 +316,9 @@ Source/Core/Private/Graphics/Exposure.h:17	functions	Pascal	PhysicalCameraEV100 
 Source/Core/Private/Graphics/Exposure.h:21	members	camel	fixedEV100 -> fixedEv100
 Source/Core/Private/Graphics/Exposure.h:25	parameters	camel	cameraEV100 -> cameraEv100
 Source/Core/Private/Graphics/Exposure.h:28	parameters	camel	cameraEV100 -> cameraEv100
-Source/Core/Private/Graphics/RenderSystem.cpp:331	members	camel	captureWS -> captureWs
-Source/Core/Private/Graphics/RenderSystem.cpp:348	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
-Source/Core/Private/Graphics/RenderSystem.cpp:871	members	camel	haveSH -> haveSh
+Source/Core/Private/Graphics/RenderSystem.cpp:333	members	camel	captureWS -> captureWs
+Source/Core/Private/Graphics/RenderSystem.cpp:350	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
+Source/Core/Private/Graphics/RenderSystem.cpp:888	members	camel	haveSH -> haveSh
 Source/Core/Private/Graphics/SceneRequests.h:29	namedValues	Pascal	VIEW_RECORD -> ViewRecord
 Source/Core/Private/Graphics/SpirvReflect.cpp:65	enumMembers	Pascal	ExecutionModelGLCompute -> ExecutionModelGlCompute
 Source/Core/Private/Graphics/TextureAsset.cpp:466	namedValues	Pascal	FILTER_NAMES -> FilterNames
@@ -327,9 +327,9 @@ Source/Core/Private/Graphics/TextureAsset.cpp:474	namedValues	Pascal	SHAPE_NAMES
 Source/Core/Private/Graphics/TextureAsset.cpp:479	namedValues	Pascal	TYPE_NAMES -> TypeNames
 Source/Core/Private/Graphics/TextureAsset.cpp:480	namedValues	Pascal	COMPRESSION_NAMES -> CompressionNames
 Source/Core/Private/Graphics/Vulkan/VulkanDevice.cpp:1177	parameters	camel	timeoutNs -> timeoutNS
-Source/Core/Private/Graphics/Vulkan/VulkanInternal.h:344	members	camel	textureCompressionBC -> textureCompressionBc
-Source/Core/Private/Graphics/Vulkan/VulkanInternal.h:398	parameters	camel	timeoutNs -> timeoutNS
-Source/Core/Private/Module/ModuleSystem.cpp:79	functions	Pascal	ToUtf8 -> ToUTF8
+Source/Core/Private/Graphics/Vulkan/VulkanInternal.h:346	members	camel	textureCompressionBC -> textureCompressionBc
+Source/Core/Private/Graphics/Vulkan/VulkanInternal.h:400	parameters	camel	timeoutNs -> timeoutNS
+Source/Core/Private/Module/ModuleSystem.cpp:80	functions	Pascal	ToUtf8 -> ToUTF8
 Source/Core/Private/Platform/Windows/WindowsGamepads.cpp:20	members	camel	thumbLX -> thumbLx
 Source/Core/Private/Platform/Windows/WindowsGamepads.cpp:21	members	camel	thumbLY -> thumbLy
 Source/Core/Private/Platform/Windows/WindowsGamepads.cpp:22	members	camel	thumbRX -> thumbRx
@@ -366,10 +366,6 @@ Source/Core/Public/Shalltear/Core/UI/Style.h:88	functions	Pascal	has_value -> Ha
 Source/Core/Public/Shalltear/Core/UI/Style.h:92	functions	Pascal	value_or -> ValueOr
 Source/Core/Public/Shalltear/Core/UI/Style.h:93	functions	Pascal	reset -> Reset
 Source/Editor/Private/AuthoringDefaults.cpp:42	namedValues	Pascal	DEFAULT_SKYBOX -> DefaultSkybox
-Source/Editor/Private/BuildIcon.cpp:173	functions	Pascal	MakeCrcTable -> MakeCRCTable
-Source/Editor/Private/BuildIcon.cpp:185	namedValues	Pascal	CRC_TABLE -> CRCTable
-Source/Editor/Private/BuildIcon.cpp:187	functions	Pascal	Crc32 -> CRC32
-Source/Editor/Private/BuildIcon.cpp:410	functions	Pascal	WritePng -> WritePNG
 Source/Editor/Private/CurveEditor.cpp:31	namedValues	Pascal	WRAP_MODES -> WrapModes
 Source/Editor/Private/EditorCommands.cpp:609	namedValues	Pascal	LIVE_SCOPE -> LiveScope
 Source/Editor/Private/EditorShell.cpp:62	namedValues	Pascal	GRAPHICS_API_LABEL -> GraphicsAPILabel

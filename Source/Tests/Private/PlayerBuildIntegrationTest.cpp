@@ -566,6 +566,8 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	WriteFile("Assets/UI/Hud.slss", HUD_SHEET);
 	WriteFile("Assets/UI/HudSlot.slxml", HUD_SLOT_DOCUMENT);
 	WriteFile("Assets/UI/Hud.slxml", HUD_DOCUMENT);
+	WriteFile("Assets/Strings.csv", "key,en\ngreeting,Hello\n");
+	WriteFile("Assets/Data.csv", "id,value\n1,2\n");
 	WriteFile("Source/HudComponent.h", HUD_COMPONENT_HEADER);
 	WriteFile("Source/HudComponent.cpp", HUD_COMPONENT_SOURCE);
 
@@ -673,6 +675,10 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 
 	const Guid qualityProfileGuid = AssetDatabase::LookupGuid(Path("project://Assets/High.slprofile"));
 	ASSERT_TRUE(qualityProfileGuid.IsValid());
+	const Guid stringTableGuid = AssetDatabase::LookupGuid(Path("project://Assets/Strings.csv"));
+	const Guid dataGuid = AssetDatabase::LookupGuid(Path("project://Assets/Data.csv"));
+	ASSERT_TRUE(stringTableGuid.IsValid());
+	ASSERT_TRUE(dataGuid.IsValid());
 
 	ASSERT_TRUE(FileSystem::WriteTextFile(Path(Root() + "/ProjectSettings.ini"),
 										  str("[Graphics]\nadapter = 99\nqualityProfiles = ") +
@@ -686,6 +692,14 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 	BuildResult result = Build({"Windows"});
 	ASSERT_EQ(result.profiles.size(), 1u);
 	ASSERT_EQ(result.profiles[0].outcome, BuildOutcome::Succeeded) << DescribeFailure(result);
+	u32 notTables = 0;
+	for (const BuildIssue& issue : result.profiles[0].issues) {
+		if (issue.severity == BuildIssueSeverity::Warning &&
+			issue.message == "'project://Assets/Data.csv' isn't a string table (not cooked)") {
+			++notTables;
+		}
+	}
+	EXPECT_EQ(notTables, 1u);
 
 	EXPECT_EQ(result.profiles[0].buildNumber, 1u);
 
@@ -763,6 +777,18 @@ TEST_F(PlayerBuildIntegrationTest, PipelineRunsStaticPlayer) {
 				ASSERT_NE(profileRow, nullptr);
 				EXPECT_TRUE(profileRow->isRoot);
 				EXPECT_TRUE(profileRow->rootPath.empty());
+			}
+
+			{
+				const CookOps::CookReportAsset* tableRow = nullptr;
+				for (const CookOps::CookReportAsset& line : report.assets) {
+					if (line.guid == stringTableGuid) {
+						tableRow = &line;
+					}
+					EXPECT_NE(line.guid, dataGuid);
+				}
+				ASSERT_NE(tableRow, nullptr);
+				EXPECT_TRUE(tableRow->isRoot);
 			}
 		}
 	}

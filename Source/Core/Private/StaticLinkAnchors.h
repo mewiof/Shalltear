@@ -25,7 +25,8 @@
 	X(VectorAsset)                    \
 	X(UIPanelSettings)                \
 	X(ObjectPass)                     \
-	X(FullScreenPass)
+	X(FullScreenPass)                 \
+	X(StringTableAsset)
 
 #define SLT_RENDER_SYSTEM_ANCHORS(X) \
 	X(Camera)                        \
@@ -43,4 +44,5 @@
 #define SLT_SETTINGS_ANCHORS(X) \
 	X(GraphicsSettings)         \
 	X(PlayerSettings)           \
-	X(ScreenSettings)
+	X(ScreenSettings)           \
+	X(LocalizationSettings)

@@ -10,6 +10,7 @@
 #include "Shalltear/Core/Reflection/Walk.h"
 
 #include "Graphics/GraphicsSettings.h"
+#include "Localization/LocalizationSettings.h"
 #include "ScreenSettings.h"
 #include "Module/EngineStateTable.h"
 #include "StaticLinkAnchors.h"

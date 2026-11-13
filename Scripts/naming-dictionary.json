@@ -134,7 +134,8 @@
 		"UFBX_*",
 		"HRESULT",
 		"WM_*",
-		"Get_vk*"
+		"Get_vk*",
+		"is_transparent"
 	],
 	"frozenPaths": [
 		"EngineAssets/Shaders/**",

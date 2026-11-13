@@ -28,6 +28,7 @@
 #include "Shalltear/Core/Window.h"
 #include "Shalltear/Core/Screen.h"
 #include "Shalltear/Core/Input.h"
+#include "Shalltear/Core/Localization.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/FullScreenPass.h"

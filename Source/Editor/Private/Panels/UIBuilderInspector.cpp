@@ -91,6 +91,11 @@ namespace Shalltear {
 					return UIDocumentOps::SetRichText(document, index, value == "true", error);
 				});
 			});
+			FieldRow(context, parent, "text-key", node.textKey, font, [this, index](std::string_view value) {
+				EditDocument("Set Text Key", EditShape::Fields, [&](UIDocumentAsset& document, str& error) {
+					return UIDocumentOps::SetTextKey(document, index, value, error);
+				});
+			});
 		}
 		for (const UIDocumentAttribute& attribute : node.attributes) {
 			FieldRow(context, parent, attribute.name, attribute.value, font,

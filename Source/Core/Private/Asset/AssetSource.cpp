@@ -32,6 +32,19 @@ namespace Shalltear {
 		return true;
 	}
 
+	void PackageAssetSource::FindOfType(StringHash typeId, Vector<Guid>& out) const {
+		if (!_reader.IsMounted()) {
+			return;
+		}
+		for (u32 index = 0; index < _reader.GetAssetCount(); ++index) {
+			const PakAssetEntry* entry = _reader.GetAsset(index);
+			const PakTypeEntry* type = entry ? _reader.GetType(entry->typeIndex) : nullptr;
+			if (type && type->typeNameHash == typeId.GetValue()) {
+				out.push_back(entry->guid);
+			}
+		}
+	}
+
 	Asset* PackageAssetSource::Load(const Guid& guid) {
 		SLT_PROFILE_ZONE("Asset.LoadCooked");
 

@@ -747,6 +747,10 @@ namespace Shalltear::UIDocumentOps {
 		return SetField(document, node, error, [enabled](UIDocumentNode& target) { target.richText = enabled; });
 	}
 
+	bool SetTextKey(UIDocumentAsset& document, u32 node, std::string_view key, str& error) {
+		return SetField(document, node, error, [key](UIDocumentNode& target) { target.textKey = str(key); });
+	}
+
 	bool SetStyle(UIDocumentAsset& document, u32 node, std::string_view style, str& error) {
 		return SetField(document, node, error, [style](UIDocumentNode& target) { target.style = str(style); });
 	}

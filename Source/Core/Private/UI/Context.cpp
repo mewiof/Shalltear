@@ -1,6 +1,7 @@
 #include "UI/UIInternal.h"
 
 #include "Shalltear/Core/Graphics/SpriteAsset.h"
+#include "Shalltear/Core/Localization.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Profiler.h"
 #include "Shalltear/Core/Time.h"
@@ -69,6 +70,7 @@ namespace Shalltear::UI {
 		}
 		events.erase(index);
 		models.erase(index);
+		textKeys.erase(index);
 		icons.erase(index);
 		scrollShown.erase(index);
 
@@ -1648,6 +1650,7 @@ namespace Shalltear::UI {
 		if (index == INVALID_UI_INDEX) {
 			return;
 		}
+		_impl->textKeys.erase(index);
 		Element& element = _impl->E(index);
 		TextComponent& text = _impl->AcquireText(index);
 		const bool stringMoved = std::string_view(text.utf8.data(), text.utf8.size()) != utf8;
@@ -1677,10 +1680,15 @@ namespace Shalltear::UI {
 		if (index == INVALID_UI_INDEX) {
 			return;
 		}
-		TextComponent* text = _impl->GetText(index);
+		_impl->textKeys.erase(index);
+		_impl->WriteTextString(index, utf8);
+	}
+
+	void ContextImpl::WriteTextString(u32 index, std::string_view utf8) {
+		TextComponent* text = GetText(index);
 		if (!text) {
-			_impl->AcquireText(index).utf8.assign(utf8.begin(), utf8.end());
-			_impl->MarkLayoutDirtyUpwards(index);
+			AcquireText(index).utf8.assign(utf8.begin(), utf8.end());
+			MarkLayoutDirtyUpwards(index);
 			return;
 		}
 		if (std::string_view(text->utf8.data(), text->utf8.size()) == utf8) {
@@ -1688,12 +1696,55 @@ namespace Shalltear::UI {
 		}
 		text->utf8.assign(utf8.begin(), utf8.end());
 		text->ResetCaches();
-		if (TextInputState* input = _impl->GetTextInput(index)) {
+		if (TextInputState* input = GetTextInput(index)) {
 			input->cursor = std::min(input->cursor, static_cast<i32>(text->utf8.size()));
 			input->anchor = std::min(input->anchor, static_cast<i32>(text->utf8.size()));
 			input->completion.clear();
 		}
-		_impl->MarkContentDirty(index);
+		MarkContentDirty(index);
+	}
+
+	void ContextImpl::ResolveTextKey(u32 index, const TextKeyBinding& binding) {
+		str text;
+		if (!Localization::TryTranslate(binding.key, text)) {
+			text = binding.fallback.empty() ? binding.key : binding.fallback;
+		}
+		WriteTextString(index, text);
+	}
+
+	void ContextImpl::RefreshTextKeys() {
+		if (textKeys.empty()) {
+			return;
+		}
+		const u32 generation = Localization::GetGeneration();
+		if (generation == textKeyGeneration) {
+			return;
+		}
+		textKeyGeneration = generation;
+		for (const auto& [index, binding] : textKeys) {
+			ResolveTextKey(index, binding);
+		}
+	}
+
+	void Context::SetTextKey(ElementHandle handle, std::string_view key, std::string_view fallback) {
+		const u32 index = _impl->ResolveIndex(handle);
+		if (index == INVALID_UI_INDEX) {
+			return;
+		}
+		if (key.empty()) {
+			_impl->textKeys.erase(index);
+			return;
+		}
+		ContextImpl::TextKeyBinding& binding = _impl->textKeys[index];
+		binding.key.assign(key.begin(), key.end());
+		binding.fallback.assign(fallback.begin(), fallback.end());
+		_impl->ResolveTextKey(index, binding);
+	}
+
+	str Context::GetTextKey(ElementHandle handle) const {
+		const u32 index = _impl->ResolveIndex(handle);
+		auto found = index == INVALID_UI_INDEX ? _impl->textKeys.end() : _impl->textKeys.find(index);
+		return found == _impl->textKeys.end() ? str{} : found->second.key;
 	}
 
 	void Context::SetRichText(ElementHandle handle, bool enabled) {
@@ -2258,6 +2309,7 @@ namespace Shalltear::UI {
 
 	void Context::SettleLayout() {
 		SLT_PROFILE_ZONE("UI.Settle");
+		_impl->RefreshTextKeys();
 		_impl->FlushInherit();
 		if (_impl->fontSystem && _impl->fontSystem->GetMetricsGeneration() != _impl->metricsGeneration) {
 			_impl->metricsGeneration = _impl->fontSystem->GetMetricsGeneration();

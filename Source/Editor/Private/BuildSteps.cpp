@@ -534,6 +534,14 @@ namespace Shalltear {
 			if (fromSettings > 0) {
 				context.Log("seeded " + std::to_string(fromSettings) + " asset(s) listed in the project's settings");
 			}
+			Vector<str> failedImports{GetMemoryResource(MemTag::Editor)};
+			const u32 byType = CookOps::CollectAlwaysCookedRoots(roots, &failedImports);
+			if (byType > 0) {
+				context.Log("seeded " + std::to_string(byType) + " always cooked asset(s) (string tables)");
+			}
+			for (const str& path : failedImports) {
+				context.AddIssue(BuildIssueSeverity::Warning, "", "'" + path + "' isn't a string table (not cooked)");
+			}
 
 			AssetDatabase::CollectGarbage();
 

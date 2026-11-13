@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Asset/Asset.h"
 #include "Shalltear/Core/Asset/AssetDatabase.h"
+#include "Shalltear/Core/Asset/AssetImporter.h"
 #include "Shalltear/Core/Assert.h"
 #include "Shalltear/Core/BuildInfo.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
@@ -588,6 +589,36 @@ namespace Shalltear {
 			}
 			Delete(probe);
 			return true;
+		}
+
+		u32 CollectAlwaysCookedRoots(Vector<Guid>& out, Vector<str>* failedImports) {
+			u32 appended = 0;
+			AssetImporterRegistry::ForEachImporter([&out, &appended, failedImports](StringHash typeId, IAssetImporter* importer, std::string_view) {
+				if (!importer || !importer->IsAlwaysCooked()) {
+					return;
+				}
+				Vector<Guid> found{GetMemoryResource(MemTag::Editor)};
+				AssetDatabase::FindAssets(typeId, found);
+				for (const Guid& guid : found) {
+					if (std::find(out.begin(), out.end(), guid) != out.end()) {
+						continue;
+					}
+					Asset* loaded = AssetDatabase::LoadAssetByGuid(guid);
+					const bool imported = loaded && loaded->GetAssetTypeId() == typeId;
+					if (loaded) {
+						AssetDatabase::UnloadAsset(loaded);
+					}
+					if (!imported) {
+						if (failedImports) {
+							failedImports->push_back(AssetDatabase::LookupPath(guid).ToString());
+						}
+						continue;
+					}
+					out.push_back(guid);
+					++appended;
+				}
+			});
+			return appended;
 		}
 
 		bool ComputeClosure(const Vector<Guid>& sceneRoots, CookClosure& out, str& outError) {

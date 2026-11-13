@@ -41,6 +41,8 @@ namespace Shalltear {
 			return _reader.IsMounted() && _reader.FindAsset(guid) != PAK_INVALID_INDEX;
 		}
 		Asset* Load(const Guid& guid) override;
+
+		void FindOfType(StringHash typeId, Vector<Guid>& out) const;
 	private:
 		PakReader _reader;
 		str _path;

@@ -11,6 +11,7 @@
 #include "Shalltear/Editor/AssetOpeners.h"
 #include "Shalltear/Editor/MaterialInspectorOps.h"
 #include "Shalltear/Editor/EditorAssetOps.h"
+#include "Shalltear/Core/Localization.h"
 #include "Shalltear/Editor/EditorAssetWatch.h"
 #include "Shalltear/Editor/EditorDialogs.h"
 #include "Shalltear/Editor/EditorChromeOps.h"
@@ -1102,6 +1103,13 @@ namespace Shalltear {
 		f32 deltaSeconds = Time::GetUnscaledDeltaTime();
 
 		EditorAssetWatch::PollChanges();
+		for (const Path& changed : EditorAssetWatch::GetChangedThisFrame()) {
+			const IAssetImporter* importer = AssetImporterRegistry::FindByExtension(changed.GetExtension());
+			if (importer && importer->GetAssetType() == StringTableAsset::GetReflectType()->name) {
+				Localization::ReloadTables();
+				break;
+			}
+		}
 		EditorAssetOps::ReloadChanged(EditorAssetWatch::GetChangedThisFrame(),
 									  [this](const Path& path, std::function<void()> reload) {
 										  UI::Context* context = UISystem::GetContext(_mainWindow);

@@ -55,6 +55,7 @@ namespace Shalltear {
 		Vector<UIDocumentAttribute> attributes{GetMemoryResource(MemTag::Asset)};
 
 		str text;
+		str textKey;
 	};
 
 	struct SHALLTEAR_CORE_API UIDocumentNode {
@@ -64,6 +65,7 @@ namespace Shalltear {
 		u8 classCount = 0;
 		str style;
 		str text;
+		str textKey;
 		bool richText = true;
 
 		Vector<UIDocumentAttribute> attributes{GetMemoryResource(MemTag::Asset)};

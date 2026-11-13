@@ -53,7 +53,10 @@ namespace Shalltear::UI {
 			Widgets::ButtonDesc desc;
 			desc.label = args.Get("text");
 			desc.richText = args.richText;
-			return {Widgets::Button(context, parent, desc), {}};
+			const ElementHandle button = Widgets::Button(context, parent, desc);
+			const Element* pod = context.GetElement(button);
+			const ElementHandle label = pod && pod->firstChild != INVALID_UI_INDEX ? context.MakeHandle(pod->firstChild) : ElementHandle{};
+			return {button, {}, label};
 		}
 
 		constexpr std::string_view CheckboxClasses[] = {"slt-checkbox"};

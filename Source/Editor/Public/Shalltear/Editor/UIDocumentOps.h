@@ -58,6 +58,7 @@ namespace Shalltear {
 		SHALLTEAR_EDITOR_API bool SetId(UIDocumentAsset& document, u32 node, std::string_view id, str& error);
 		SHALLTEAR_EDITOR_API bool SetText(UIDocumentAsset& document, u32 node, std::string_view text, str& error);
 		SHALLTEAR_EDITOR_API bool SetRichText(UIDocumentAsset& document, u32 node, bool enabled, str& error);
+		SHALLTEAR_EDITOR_API bool SetTextKey(UIDocumentAsset& document, u32 node, std::string_view key, str& error);
 		SHALLTEAR_EDITOR_API bool SetStyle(UIDocumentAsset& document, u32 node, std::string_view style, str& error);
 		SHALLTEAR_EDITOR_API bool SetClasses(UIDocumentAsset& document, u32 node, std::span<const std::string_view> classes,
 											 str& error);

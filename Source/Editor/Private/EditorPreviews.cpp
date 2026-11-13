@@ -172,6 +172,8 @@ namespace Shalltear {
 
 			PlantBadge(StringHash("SkeletonAsset"), AssetSkeleton, ColorToken::AssetAnimation, onlyAbsent);
 			PlantBadge(StringHash("SkinAsset"), AssetSkin, ColorToken::AssetAnimation, onlyAbsent);
+
+			PlantBadge(StringHash("StringTableAsset"), SpaceWorld, ColorToken::AssetFont, onlyAbsent);
 		}
 
 	} // anonymous namespace

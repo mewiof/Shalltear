@@ -69,6 +69,9 @@ namespace Shalltear {
 		static Guid LookupGuid(const Path& path);
 		static Path LookupPath(const Guid& assetId);
 
+		// sorted, from project index/mounted package
+		static void FindAssets(StringHash typeId, Vector<Guid>& out);
+
 		static void GetProducts(const Guid& sourceGuid, Vector<AssetProduct>& out);
 
 		static Guid GetProductSource(const Guid& productGuid);

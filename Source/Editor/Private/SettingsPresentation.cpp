@@ -240,6 +240,22 @@ namespace Shalltear {
 
 		{
 			SettingsCategoryPresentation category;
+			category.label = "Localization";
+			category.tooltip = "Languages for text drawn from string tables (all .csv string tables in the project used).";
+			category.audience = SettingsAudience::EditorAndPlayer;
+			category.keywords = "language locale translation string table text key csv";
+			category.order = 14;
+			RegisterCategory("Localization", std::move(category));
+
+			SettingsFieldPresentation fallback;
+			fallback.label = "Default Language";
+			fallback.tooltip = "Language used for keys the current language has no text for (a code from a table's header, such as en).";
+			fallback.keywords = "fallback language default locale english";
+			RegisterField("Localization", "defaultLanguage", std::move(fallback));
+		}
+
+		{
+			SettingsCategoryPresentation category;
 			category.label = "General";
 			category.tooltip = "How the editor behaves on this computer.";
 			category.audience = SettingsAudience::EditorOnly;

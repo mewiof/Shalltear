@@ -1638,6 +1638,21 @@ TEST_F(UIBuilderOpsTest, RichTextWrittenOnlyWhenOff) {
 	EXPECT_FALSE(UIDocumentOps::SetRichText(parsed.document, 99, false, error));
 }
 
+TEST_F(UIBuilderOpsTest, TextKeyWrittenOnlyWhereTextShows) {
+	Parsed parsed(R"(<ui version="1">
+	<panel id="root"><label id="title">Menu</label><checkbox id="tick"/></panel>
+</ui>)");
+	ASSERT_TRUE(parsed.ok) << parsed.error;
+	str error;
+	ASSERT_TRUE(UIDocumentOps::SetTextKey(parsed.document, IndexOfId(parsed.document, "title"), "menu.title", error)) << error;
+	EXPECT_NE(parsed.document.Write().find("text-key=\"menu.title\""), str::npos) << parsed.document.Write();
+	EXPECT_FALSE(UIDocumentOps::SetTextKey(parsed.document, IndexOfId(parsed.document, "tick"), "menu.tick", error));
+	EXPECT_NE(error.find("text-key"), str::npos) << error;
+	EXPECT_TRUE(parsed.document.root.children[1].textKey.empty());
+	ASSERT_TRUE(UIDocumentOps::SetTextKey(parsed.document, IndexOfId(parsed.document, "title"), "", error)) << error;
+	EXPECT_EQ(parsed.document.Write().find("text-key"), str::npos);
+}
+
 TEST_F(UIBuilderOpsTest, InlineStyleWritesNoNewline) {
 	Parsed parsed(R"(<ui version="1">
 	<panel id="root" style="width: 1px"/>

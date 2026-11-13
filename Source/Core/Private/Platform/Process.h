@@ -12,6 +12,9 @@ namespace Shalltear::Platform {
 	str GetUserHomeDirectory();
 	str GetUserPicturesDirectory();
 
+	// raw OS form ("en-US", "ru_RU.UTF-8")
+	str GetUserLanguage();
+
 	bool AcquireStandardOutput(bool createConsole);
 	void PrepareConsoleOutput();
 

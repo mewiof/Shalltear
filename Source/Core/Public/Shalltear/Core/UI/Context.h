@@ -213,6 +213,10 @@ namespace Shalltear::UI {
 		// tags like <b>/<color=#f00> parsed (never in a text input)
 		void SetRichText(ElementHandle handle, bool enabled);
 		str GetTextString(ElementHandle handle) const;
+
+		// fallback shown when no table has key
+		void SetTextKey(ElementHandle handle, std::string_view key, std::string_view fallback = {});
+		str GetTextKey(ElementHandle handle) const;
 		void ClearText(ElementHandle handle);
 
 		void SetTextInput(ElementHandle handle, bool enabled);

@@ -33,6 +33,7 @@ namespace Shalltear {
 		constexpr std::string_view AttrTemplate = "template";
 		constexpr std::string_view AttrElementId = "element-id";
 		constexpr std::string_view AttrRichText = "enable-rich-text";
+		constexpr std::string_view AttrTextKey = "text-key";
 
 		constexpr std::string_view TagRoot = "ui";
 		constexpr std::string_view TagSheet = "sheet";
@@ -229,6 +230,10 @@ namespace Shalltear {
 					error = Refuse(in, str("'") + str(attribute.name) + str("' can't be overridden. Vary an instance's appearance with a selector"));
 					return false;
 				}
+				if (attribute.name == AttrTextKey) {
+					out.textKey = str(attribute.value);
+					continue;
+				}
 				out.attributes.push_back(UIDocumentAttribute{str(attribute.name), str(attribute.value)});
 			}
 			if (out.elementId.empty()) {
@@ -240,7 +245,7 @@ namespace Shalltear {
 				return false;
 			}
 			out.text = str(in.text);
-			if (out.attributes.empty() && out.text.empty()) {
+			if (out.attributes.empty() && out.text.empty() && out.textKey.empty()) {
 				error = Refuse(in, "overrides nothing (give it an attribute to set or text content to use)");
 				return false;
 			}
@@ -303,6 +308,16 @@ namespace Shalltear {
 					out.classCount = static_cast<u8>(seen);
 				} else if (isInstance && attribute.name == AttrTemplate) {
 					out.templateName = str(attribute.value);
+				} else if (!isInstance && attribute.name == AttrTextKey) {
+					if (widget && !DeclaredAttribute(widget, "text")) {
+						error = Refuse(in, str("attribute '") + str(AttrTextKey) + str("' needs text (<") + str(in.name) + str("> has none)"));
+						return false;
+					}
+					if (attribute.value.empty()) {
+						error = Refuse(in, str("attribute '") + str(AttrTextKey) + str("' is empty"));
+						return false;
+					}
+					out.textKey = str(attribute.value);
 				} else if (!isInstance && attribute.name == AttrRichText) {
 					if (widget && !DeclaredAttribute(widget, "text")) {
 						error = Refuse(in, str("attribute '") + str(AttrRichText) + str("' needs text (<") + str(in.name) + str("> has none)"));
@@ -417,6 +432,9 @@ namespace Shalltear {
 			if (!in.richText) {
 				out.attributes.push_back({AttrRichText, "false"});
 			}
+			if (!in.textKey.empty()) {
+				out.attributes.push_back({AttrTextKey, in.textKey});
+			}
 			for (const UIDocumentAttribute& attribute : in.attributes) {
 				out.attributes.push_back({attribute.name, attribute.value});
 			}
@@ -428,6 +446,9 @@ namespace Shalltear {
 				node.attributes.push_back({AttrElementId, block.elementId});
 				for (const UIDocumentAttribute& attribute : block.attributes) {
 					node.attributes.push_back({attribute.name, attribute.value});
+				}
+				if (!block.textKey.empty()) {
+					node.attributes.push_back({AttrTextKey, block.textKey});
 				}
 				node.text = block.text;
 				out.children.push_back(std::move(node));
@@ -899,6 +920,10 @@ namespace Shalltear {
 						error = RefuseOverride(node, block, str("<") + target.tag + str("> is a widget and can't have text content"));
 						ok = false;
 					}
+					if (ok && !block.textKey.empty() && widget && !DeclaredAttribute(widget, "text")) {
+						error = RefuseOverride(node, block, str("<") + target.tag + str("> has no text for '") + str(AttrTextKey) + str("'"));
+						ok = false;
+					}
 				});
 				if (!ok) {
 					return false;
@@ -1081,6 +1106,8 @@ namespace Shalltear {
 
 			UI::ElementHandle element;
 			UI::ElementHandle contentParent;
+			UI::ElementHandle textElement;
+			str textFallback;
 			if (widget) {
 				Vector<UI::WidgetAttributeValue> values{GetMemoryResource(MemTag::Asset)};
 				values.reserve(node.attributes.size());
@@ -1115,10 +1142,17 @@ namespace Shalltear {
 				}
 				element = built.element;
 				contentParent = built.contentParent.IsValid() ? built.contentParent : element;
+				textElement = context.IsAlive(built.textElement) ? built.textElement : element;
+				for (const UI::WidgetAttributeValue& value : values) {
+					if (value.name == "text") {
+						textFallback = value.value;
+					}
+				}
 			} else {
 				element = context.CreateElement();
 				context.AppendChild(parent, element);
 				contentParent = element;
+				textElement = element;
 			}
 
 			RecordMapping(scope, node, element);
@@ -1165,6 +1199,17 @@ namespace Shalltear {
 			if (!text.empty()) {
 				context.SetRichText(element, node.richText);
 				context.SetTextString(element, text);
+			}
+			std::string_view textKey = node.textKey;
+			for (u32 i = 0; i < overrides.count; ++i) {
+				if (!overrides.blocks[i]->textKey.empty()) {
+					textKey = overrides.blocks[i]->textKey;
+					break;
+				}
+			}
+			if (!textKey.empty()) {
+				context.SetRichText(textElement, node.richText);
+				context.SetTextKey(textElement, textKey, widget ? std::string_view(textFallback) : text);
 			}
 
 			InstantiateScope childScope{scope.document, scope.overrides, nullptr, scope.expanding, scope.depth, scope.mapping};

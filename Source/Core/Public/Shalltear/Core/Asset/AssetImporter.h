@@ -62,6 +62,9 @@ namespace Shalltear {
 		}
 		virtual void DeserializeSettings(const JSONValue& in) { (void)in; }
 
+		// cooked into all builds, looked up by type (not reference)
+		virtual bool IsAlwaysCooked() const { return false; }
+
 		// opt in by overriding all 4
 
 		virtual bool CanCreateAsset() const { return false; }

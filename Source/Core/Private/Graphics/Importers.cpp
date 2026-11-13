@@ -7,6 +7,7 @@
 #include "Shalltear/Core/Graphics/RenderPass.h"
 #include "Shalltear/Core/Graphics/ShaderAsset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Localization.h"
 #include "Shalltear/Core/StringHash.h"
 #include "Shalltear/Core/UI/FontAsset.h"
 #include "Shalltear/Core/UI/StyleSheetAsset.h"
@@ -58,6 +59,10 @@ namespace Shalltear::GraphicsImporters {
 			static VectorAssetImporter importer;
 			return importer;
 		}
+		StringTableImporter& GetStringTableImporter() {
+			static StringTableImporter importer;
+			return importer;
+		}
 
 	} // anonymous namespace
 
@@ -72,6 +77,7 @@ namespace Shalltear::GraphicsImporters {
 		AssetImporterRegistry::Register(StringHash("StyleSheetAsset"), &GetStyleSheetImporter(), {".slss"});
 		AssetImporterRegistry::Register(StringHash("UIPanelSettings"), &GetUIPanelSettingsImporter(), {".slpanel"});
 		AssetImporterRegistry::Register(StringHash("VectorAsset"), &GetVectorImporter(), {".svg"});
+		AssetImporterRegistry::Register(StringHash("StringTableAsset"), &GetStringTableImporter(), {".csv"});
 	}
 
 	void UnregisterAll() {
@@ -85,6 +91,7 @@ namespace Shalltear::GraphicsImporters {
 		AssetImporterRegistry::Unregister(&GetStyleSheetImporter());
 		AssetImporterRegistry::Unregister(&GetUIPanelSettingsImporter());
 		AssetImporterRegistry::Unregister(&GetVectorImporter());
+		AssetImporterRegistry::Unregister(&GetStringTableImporter());
 	}
 
 } // namespace Shalltear::GraphicsImporters

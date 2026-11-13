@@ -15,6 +15,7 @@
 #include "Shalltear/Core/Graphics/SkinAsset.h"
 #include "Shalltear/Core/Graphics/SpriteAsset.h"
 #include "Shalltear/Core/Graphics/TextureAsset.h"
+#include "Shalltear/Core/Localization.h"
 #include "Shalltear/Core/Log.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Profiler.h"
@@ -33,6 +34,7 @@
 #include "Asset/ImportArtifact.h"
 #include "Asset/ImportArtifactStore.h"
 #include "FileAccessRecorder.h"
+#include "Localization/LocalizationInternal.h"
 #include "Module/EngineStateTable.h"
 #include "Shalltear/Core/Serialization/HandleResolver.h"
 #include "Shalltear/Core/Serialization/JSON.h"
@@ -1130,6 +1132,7 @@ namespace Shalltear {
 	}
 
 	void AssetDatabase::Terminate() {
+		LocalizationInternal::Terminate();
 		auto& data = GetData();
 		std::lock_guard lock(data.mutex);
 		if (!data.initialized) {
@@ -1492,6 +1495,26 @@ namespace Shalltear {
 		std::lock_guard lock(data.mutex);
 		auto it = data.guidToPath.find(assetId);
 		return (it != data.guidToPath.end()) ? Path(it->second) : Path();
+	}
+
+	void AssetDatabase::FindAssets(StringHash typeId, Vector<Guid>& out) {
+		out.clear();
+		auto& data = GetData();
+		std::lock_guard lock(data.mutex);
+		if (!data.initialized) {
+			return;
+		}
+		if (data.package.IsMounted()) {
+			data.package.FindOfType(typeId, out);
+		} else {
+			for (const auto& [path, guid] : data.pathToGuid) {
+				const IAssetImporter* importer = FindImporterFor(Path(path));
+				if (importer && importer->GetAssetType() == typeId) {
+					out.push_back(guid);
+				}
+			}
+		}
+		std::sort(out.begin(), out.end());
 	}
 
 	void AssetDatabase::GetProducts(const Guid& sourceGuid, Vector<AssetProduct>& out) {

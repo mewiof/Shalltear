@@ -115,6 +115,9 @@ namespace Shalltear {
 
 		SHALLTEAR_EDITOR_API bool ComputeClosure(const Vector<Guid>& sceneRoots, CookClosure& out, str& outError);
 
+		// assets of IsAlwaysCooked importers, appended unless listed or failing import
+		SHALLTEAR_EDITOR_API u32 CollectAlwaysCookedRoots(Vector<Guid>& out, Vector<str>* failedImports = nullptr);
+
 		SHALLTEAR_EDITOR_API bool CookPackage(const CookClosure& closure, const PakWriteDesc& desc, Vector<u8>& out,
 											  str& outError, CookReport* outReport = nullptr);
 

@@ -59,6 +59,8 @@ namespace Shalltear {
 		struct WidgetResult {
 			ElementHandle element;
 			ElementHandle contentParent;
+			// element with text attribute, target of text-key
+			ElementHandle textElement;
 		};
 
 		using WidgetFactoryFn = WidgetResult (*)(Context& context, ElementHandle parent, const WidgetArgs& args);

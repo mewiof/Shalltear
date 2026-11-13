@@ -2,45 +2,46 @@
 # 1 line per declaration the codemod would rewrite
 
 [run]
-translation_units = 901
+translation_units = 907
 parse_failures = 0
-named_declarations_seen = 197084
-dictionary_sha256 = 88c0c3c92e31a33cd1ce51cb9e1c75bf36d679771ec3691180333989efeb576d
+named_declarations_seen = 198220
+dictionary_sha256 = 709ae7477c94c8f97428384456f1c8217fffa4b0597c8002b16ac662810dc9cf
 
 [dispositions]
 finding = 1107
-conforming = 84747
+conforming = 85332
 unresolved = 197
-nonIdentifier = 44390
-noBindingRow = 50958
+nonIdentifier = 44600
+noBindingRow = 51218
 styleNotBound = 0
-vendor = 14
-generated = 12646
+vendor = 15
+generated = 12710
 reserved = 32
 kept = 16
 foreignNamespace = 42
-foreignOverride = 2935
-TOTAL = 197084
+foreignOverride = 2951
+TOTAL = 198220
 balances = True
 
 [unmapped_cursor_kinds]
 # reached no binding row. A kind here that OUGHT to be renamed is
 # an unhandled case (not a skip). Check this list before each phase
-DECL_REF_EXPR = 17681
-CALL_EXPR = 11291
-CONSTRUCTOR = 6904
-CXX_BASE_SPECIFIER = 4320
-NAMESPACE_REF = 2936
-UNEXPOSED_EXPR = 2919
-TEMPLATE_REF = 1920
+DECL_REF_EXPR = 17756
+CALL_EXPR = 11361
+CONSTRUCTOR = 6939
+CXX_BASE_SPECIFIER = 4341
+NAMESPACE_REF = 2963
+UNEXPOSED_EXPR = 2923
+TEMPLATE_REF = 1940
 MEMBER_REF_EXPR = 1174
-TYPE_REF = 660
+TYPE_REF = 666
 OVERLOADED_DECL_REF = 485
 USING_DECLARATION = 378
 MEMBER_REF = 216
-NAMESPACE_ALIAS = 71
+NAMESPACE_ALIAS = 72
 SIZE_OF_PACK_EXPR = 2
 CONCEPT_DECL = 1
+UNEXPOSED_DECL = 1
 
 [unresolved]
 unregistered all-caps run 'ACES': register it or rename = 1
@@ -316,9 +317,9 @@ Source/Core/Private/Graphics/Exposure.h:17	functions	Pascal	PhysicalCameraEV100 
 Source/Core/Private/Graphics/Exposure.h:21	members	camel	fixedEV100 -> fixedEv100
 Source/Core/Private/Graphics/Exposure.h:25	parameters	camel	cameraEV100 -> cameraEv100
 Source/Core/Private/Graphics/Exposure.h:28	parameters	camel	cameraEV100 -> cameraEv100
-Source/Core/Private/Graphics/RenderSystem.cpp:333	members	camel	captureWS -> captureWs
-Source/Core/Private/Graphics/RenderSystem.cpp:350	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
-Source/Core/Private/Graphics/RenderSystem.cpp:888	members	camel	haveSH -> haveSh
+Source/Core/Private/Graphics/RenderSystem.cpp:335	members	camel	captureWS -> captureWs
+Source/Core/Private/Graphics/RenderSystem.cpp:352	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
+Source/Core/Private/Graphics/RenderSystem.cpp:897	members	camel	haveSH -> haveSh
 Source/Core/Private/Graphics/SceneRequests.h:29	namedValues	Pascal	VIEW_RECORD -> ViewRecord
 Source/Core/Private/Graphics/SpirvReflect.cpp:65	enumMembers	Pascal	ExecutionModelGLCompute -> ExecutionModelGlCompute
 Source/Core/Private/Graphics/TextureAsset.cpp:466	namedValues	Pascal	FILTER_NAMES -> FilterNames
@@ -351,11 +352,11 @@ Source/Core/Private/Platform/Windows/WindowsGamepads.cpp:51	enumMembers	Pascal	P
 Source/Core/Private/Screen.cpp:25	namedValues	Pascal	PLAYER_CATEGORY -> PlayerCategory
 Source/Core/Private/Screen.cpp:26	namedValues	Pascal	SCREEN_CATEGORY -> ScreenCategory
 Source/Core/Private/UI/StyleSheetParser.cpp:57	namedValues	Pascal	NAMED_COLORS -> NamedColors
-Source/Core/Private/UI/UIInternal.h:30	namedValues	Pascal	INITIAL_TEXT_COLOR -> InitialTextColor
-Source/Core/Private/UI/UIInternal.h:31	namedValues	Pascal	INITIAL_OUTLINE_COLOR -> InitialOutlineColor
-Source/Core/Private/UI/WidgetRegistry.cpp:95	constants	CONST	ScaleModeValues -> SCALE_MODE_VALUES
-Source/Core/Private/UI/WidgetRegistry.cpp:97	constants	CONST	FillMethodValues -> FILL_METHOD_VALUES
-Source/Core/Private/UI/WidgetRegistry.cpp:99	constants	CONST	FillOriginValues -> FILL_ORIGIN_VALUES
+Source/Core/Private/UI/UIInternal.h:31	namedValues	Pascal	INITIAL_TEXT_COLOR -> InitialTextColor
+Source/Core/Private/UI/UIInternal.h:32	namedValues	Pascal	INITIAL_OUTLINE_COLOR -> InitialOutlineColor
+Source/Core/Private/UI/WidgetRegistry.cpp:128	constants	CONST	ScaleModeValues -> SCALE_MODE_VALUES
+Source/Core/Private/UI/WidgetRegistry.cpp:130	constants	CONST	FillMethodValues -> FILL_METHOD_VALUES
+Source/Core/Private/UI/WidgetRegistry.cpp:132	constants	CONST	FillOriginValues -> FILL_ORIGIN_VALUES
 Source/Core/Public/Shalltear/Core/Graphics/RHITypes.h:54	enumMembers	Pascal	BC5Unorm -> Bc5Unorm
 Source/Core/Public/Shalltear/Core/Graphics/RHITypes.h:55	enumMembers	Pascal	BC7Unorm -> Bc7Unorm
 Source/Core/Public/Shalltear/Core/Graphics/RHITypes.h:56	enumMembers	Pascal	BC7SRGB -> Bc7SRGB

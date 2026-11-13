@@ -62,6 +62,19 @@ namespace Shalltear::Platform {
 		return str(reinterpret_cast<const char*>(utf8.data()), utf8.size());
 	}
 
+	str GetUserLanguage() {
+		ULONG count = 0;
+		ULONG size = 0;
+		if (::GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &size) && size > 1) {
+			std::wstring names(size, L'\0');
+			if (::GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, names.data(), &size) && count > 0) {
+				return StringUtil::WideToUTF8(names.c_str());
+			}
+		}
+		wchar_t name[LOCALE_NAME_MAX_LENGTH];
+		return ::GetUserDefaultLocaleName(name, LOCALE_NAME_MAX_LENGTH) > 0 ? StringUtil::WideToUTF8(name) : str{};
+	}
+
 	bool AcquireStandardOutput(bool createConsole) {
 		HANDLE existing = ::GetStdHandle(STD_OUTPUT_HANDLE);
 		if (existing != nullptr && existing != INVALID_HANDLE_VALUE &&

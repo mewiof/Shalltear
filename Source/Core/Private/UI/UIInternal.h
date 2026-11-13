@@ -358,6 +358,16 @@ namespace Shalltear::UI {
 		static std::shared_ptr<void> GetModel(const Context& context, ElementHandle handle, const void* type);
 		HashMap<u32, IconComponent> icons{GetMemoryResource(MemTag::UI)};
 
+		struct TextKeyBinding {
+			str key;
+			str fallback;
+		};
+		HashMap<u32, TextKeyBinding> textKeys{GetMemoryResource(MemTag::UI)};
+		u32 textKeyGeneration = 0;
+		void WriteTextString(u32 index, std::string_view utf8);
+		void ResolveTextKey(u32 index, const TextKeyBinding& binding);
+		void RefreshTextKeys();
+
 		HashMap<u32, ScrollBand> scrollShown{GetMemoryResource(MemTag::UI)};
 		Vector<ElementHandle> scrollMoved{GetMemoryResource(MemTag::UI)};
 

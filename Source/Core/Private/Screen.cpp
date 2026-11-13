@@ -33,6 +33,8 @@ namespace Shalltear {
 				return "Maximized Window";
 			case FullScreenMode::Windowed:
 				return "Windowed";
+			case FullScreenMode::ExclusiveFullScreen:
+				return "Exclusive Fullscreen";
 			}
 			return "?";
 		}
@@ -46,6 +48,15 @@ namespace Shalltear {
 
 		PlayerSettings* Project() {
 			return Settings::DeclareCategory<PlayerSettings>(PLAYER_CATEGORY, SettingScope::Project);
+		}
+
+		bool ApplyDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate) {
+			return WindowBackend::SetDisplayMode(monitorId, sizePx, refreshRate, false);
+		}
+
+		ScreenInternal::DisplayModeSwitch& ModeSwitch() {
+			static ScreenInternal::DisplayModeSwitch modeSwitch{&ApplyDisplayMode, &WindowBackend::RestoreDisplayMode};
+			return modeSwitch;
 		}
 
 		ScreenSettings* Saved() {
@@ -67,11 +78,58 @@ namespace Shalltear {
 
 			bool warnedNowhere = false;
 
+			bool exclusive = false;
+			bool resumeExclusive = false;
+			bool warnedExclusive = false;
+			u64 exclusiveMonitor = 0;
+
 			void Subscribe() {
 				EventBus& bus = EventBus::GetGlobal();
 				Handle<ScreenRuntime> self(this);
 				WindowEvents::Resized.Subscribe(bus, self, &ScreenRuntime::OnResized);
 				WindowEvents::Destroying.Subscribe(bus, self, &ScreenRuntime::OnDestroying);
+				WindowEvents::Focus.Subscribe(bus, self, &ScreenRuntime::OnFocus);
+			}
+
+			void OnFocus(const WindowFocusEvent& event) {
+				Window* game = window.Get();
+				if (event.window != window || !game || mode != FullScreenMode::ExclusiveFullScreen) {
+					return;
+				}
+				if (!event.focused && exclusive) {
+					LeaveExclusive();
+					resumeExclusive = true;
+					game->Minimize();
+				} else if (event.focused && resumeExclusive) {
+					resumeExclusive = false;
+					if (game->IsMinimized()) {
+						game->Restore();
+					}
+					Apply(mode, nativeResolution, resolution);
+				}
+			}
+
+			bool EnterExclusive(const Window& game, Vec2I wanted) {
+				const MonitorInfo& monitor = game.GetMonitor();
+				const u64 monitorId = exclusive ? exclusiveMonitor : monitor.id;
+				const Vec2I size = wanted.x > 0 && wanted.y > 0 ? wanted : monitor.bounds.size;
+				const ScreenInternal::DisplayModeSwitch& modeSwitch = ModeSwitch();
+				if (!modeSwitch.set || !modeSwitch.set(monitorId, size, monitor.refreshRate)) {
+					return false;
+				}
+				exclusive = true;
+				exclusiveMonitor = monitorId;
+				return true;
+			}
+
+			void LeaveExclusive() {
+				if (!exclusive) {
+					return;
+				}
+				exclusive = false;
+				if (const ScreenInternal::DisplayModeSwitch& modeSwitch = ModeSwitch(); modeSwitch.restore) {
+					modeSwitch.restore(exclusiveMonitor);
+				}
 			}
 
 			void OnResized(const WindowResizedEvent& event) {
@@ -88,6 +146,8 @@ namespace Shalltear {
 				if (event.window != window) {
 					return;
 				}
+				LeaveExclusive();
+				resumeExclusive = false;
 				Persist();
 				window = {};
 			}
@@ -131,6 +191,10 @@ namespace Shalltear {
 				mode = toMode;
 				nativeResolution = toNative;
 				resolution = toResolution;
+				if (toMode != FullScreenMode::ExclusiveFullScreen) {
+					LeaveExclusive();
+					resumeExclusive = false;
+				}
 				WindowPlacement placement = game->GetPlacement();
 				switch (toMode) {
 				case FullScreenMode::Windowed:
@@ -147,6 +211,21 @@ namespace Shalltear {
 					break;
 				case FullScreenMode::MaximizedWindow:
 					placement.state = WindowState::Maximized;
+					game->SetPlacement(placement);
+					WindowInternal::SetRenderSize(*game, toNative ? Vec2I{} : toResolution);
+					break;
+				case FullScreenMode::ExclusiveFullScreen:
+					if (EnterExclusive(*game, toNative ? Vec2I{} : toResolution)) {
+						placement.state = WindowState::Fullscreen;
+						game->SetPlacement(placement);
+						WindowInternal::SetRenderSize(*game, {});
+						break;
+					}
+					if (!warnedExclusive) {
+						warnedExclusive = true;
+						SLT_LOG_WARN("Screen", "exclusive fullscreen isn't available here, display mode can't change (Fullscreen Window used)");
+					}
+					placement.state = WindowState::Fullscreen;
 					game->SetPlacement(placement);
 					WindowInternal::SetRenderSize(*game, toNative ? Vec2I{} : toResolution);
 					break;
@@ -226,6 +305,7 @@ namespace Shalltear {
 				return;
 			}
 			FrameStages::UnregisterOwnedBy(&_FRAME_STAGE_OWNER);
+			_runtime->LeaveExclusive();
 			EventBus::GetGlobal().UnsubscribeAll(_runtime->GetInstanceId());
 			Delete(_runtime);
 			_runtime = nullptr;
@@ -320,6 +400,14 @@ namespace Shalltear {
 			});
 		}
 
+		void SetDisplayModeSwitch(const DisplayModeSwitch& modeSwitch) {
+			ModeSwitch() = modeSwitch.set ? modeSwitch : DisplayModeSwitch{&ApplyDisplayMode, &WindowBackend::RestoreDisplayMode};
+		}
+
+		bool CanSwitchDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate) {
+			return WindowBackend::SetDisplayMode(monitorId, sizePx, refreshRate, true);
+		}
+
 		Handle<Window> CreateGameWindow(const ScreenLaunch& launch, WindowFlags extraFlags) {
 			const PlayerSettings defaults;
 			const PlayerSettings* declared = Project();
@@ -369,7 +457,8 @@ namespace Shalltear {
 			WindowPlacement placement;
 			placement.position = position;
 			placement.clientSize = client;
-			placement.state = choice.mode == FullScreenMode::FullScreenWindow ? WindowState::Fullscreen : WindowState::Normal;
+			const bool coversMonitor = choice.mode == FullScreenMode::FullScreenWindow || choice.mode == FullScreenMode::ExclusiveFullScreen;
+			placement.state = coversMonitor ? WindowState::Fullscreen : WindowState::Normal;
 			game->SetPlacement(placement);
 			if (choice.mode != FullScreenMode::Windowed && !choice.nativeResolution) {
 				WindowInternal::SetRenderSize(*game, choice.resolution);
@@ -378,6 +467,7 @@ namespace Shalltear {
 				_runtime->mode = choice.mode;
 				_runtime->nativeResolution = choice.nativeResolution;
 				_runtime->resolution = choice.mode == FullScreenMode::Windowed ? client : choice.resolution;
+				_runtime->resumeExclusive = choice.mode == FullScreenMode::ExclusiveFullScreen;
 			}
 
 			if (!HasFlag(extraFlags, WindowFlags::Hidden)) {

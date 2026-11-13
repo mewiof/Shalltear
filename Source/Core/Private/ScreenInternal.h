@@ -43,4 +43,14 @@ namespace Shalltear::ScreenInternal {
 
 	SHALLTEAR_CORE_API Handle<Window> CreateGameWindow(const ScreenLaunch& launch, WindowFlags extraFlags);
 
+	struct DisplayModeSwitch {
+		bool (*set)(u64 monitorId, Vec2I sizePx, f32 refreshRate) = nullptr;
+		void (*restore)(u64 monitorId) = nullptr;
+	};
+
+	// test seam over OS mode change
+	SHALLTEAR_CORE_API void SetDisplayModeSwitch(const DisplayModeSwitch& modeSwitch);
+
+	SHALLTEAR_CORE_API bool CanSwitchDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate);
+
 } // namespace Shalltear::ScreenInternal

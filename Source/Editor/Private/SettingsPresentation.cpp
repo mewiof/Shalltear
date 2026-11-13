@@ -199,7 +199,8 @@ namespace Shalltear {
 
 			SettingsFieldPresentation mode;
 			mode.label = "Fullscreen Mode";
-			mode.tooltip = "Window mode the game starts in. Fullscreen Window covers the monitor without a frame, Maximized Window "
+			mode.tooltip = "Window mode the game starts in. Fullscreen Window covers the monitor without a frame, Exclusive Fullscreen "
+						   "also switches the monitor to the chosen resolution while the game has focus, Maximized Window "
 						   "keeps the title bar, Windowed opens a centered window (of the size below). A mode players pick in "
 						   "the game/with Alt+Enter is used at the next launch (until this setting changes).";
 			mode.keywords = "fullscreen borderless windowed maximized startup";

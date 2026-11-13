@@ -140,6 +140,9 @@ namespace Shalltear {
 
 		void EnumerateMonitors(Vector<MonitorInfo>& outMonitors);
 		void EnumerateDisplayModes(u64 monitorId, Vector<WindowInternal::DisplayMode>& outModes);
+		// with testOnly, driver queried and mode left unchanged
+		bool SetDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate, bool testOnly);
+		void RestoreDisplayMode(u64 monitorId);
 		Handle<Window> WindowAtPoint(Vec2I screenPx, Handle<Window> ignore);
 
 		bool SetClipboardText(std::string_view utf8);

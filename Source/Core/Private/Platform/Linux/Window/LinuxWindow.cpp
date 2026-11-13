@@ -168,6 +168,13 @@ namespace Shalltear::WindowBackend {
 		}
 	}
 
+	bool SetDisplayMode(u64, Vec2I, f32, bool) {
+		return false;
+	}
+
+	void RestoreDisplayMode(u64) {
+	}
+
 	Handle<Window> WindowAtPoint(Vec2I screenPx, Handle<Window> ignore) {
 		return _server ? _server->WindowAtPoint(screenPx, ignore) : Handle<Window>{};
 	}

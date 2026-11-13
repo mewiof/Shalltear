@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <vector>
 
 using namespace Shalltear;
 
@@ -351,4 +352,121 @@ TEST_F(ScreenFixture, ResolutionsIncludeMonitorsOnceEach) {
 		EXPECT_FALSE(a.width == b.width && a.height == b.height && a.refreshRate == b.refreshRate);
 		EXPECT_GE(a.width, b.width);
 	}
+}
+
+namespace {
+
+	struct ModeCalls {
+		std::vector<Vec2I> sets;
+		u32 restores = 0;
+		bool refuse = false;
+	};
+	ModeCalls* _modeCalls = nullptr;
+
+	bool RecordSet(u64, Vec2I size, f32) {
+		_modeCalls->sets.push_back(size);
+		return !_modeCalls->refuse;
+	}
+
+	void RecordRestore(u64) {
+		++_modeCalls->restores;
+	}
+
+	struct StandInModeSwitch {
+		ModeCalls calls;
+		StandInModeSwitch() {
+			_modeCalls = &calls;
+			ScreenInternal::SetDisplayModeSwitch({&RecordSet, &RecordRestore});
+		}
+		~StandInModeSwitch() {
+			ScreenInternal::SetDisplayModeSwitch({});
+			_modeCalls = nullptr;
+		}
+	};
+
+	void Focus(Handle<Window> window, bool focused) {
+		WindowEvents::Focus.Publish(EventBus::GetGlobal(), WindowFocusEvent{window, focused});
+	}
+
+} // namespace
+
+TEST_F(ScreenFixture, ExclusiveSwitchesModeWhileFocused) {
+	if (!TestPlatform::ChangesDisplayModes()) {
+		GTEST_SKIP() << "this host can't change display modes";
+	}
+	StandInModeSwitch modes;
+	Player().fullScreenMode = FullScreenMode::ExclusiveFullScreen;
+	Player().defaultIsNativeResolution = false;
+	Player().defaultScreenWidth = 1280;
+	Player().defaultScreenHeight = 720;
+	Handle<Window> window = CreateHidden();
+	ASSERT_TRUE(window.IsValid());
+	EXPECT_TRUE(modes.calls.sets.empty());
+	EXPECT_EQ(window->GetPlacement().state, WindowState::Fullscreen);
+	EXPECT_EQ(WindowInternal::GetRenderSizeOverride(*window.Get()), Vec2I(1280, 720));
+
+	Focus(window, true);
+	ASSERT_EQ(modes.calls.sets.size(), 1u);
+	EXPECT_EQ(modes.calls.sets[0], Vec2I(1280, 720));
+	EXPECT_EQ(WindowInternal::GetRenderSizeOverride(*window.Get()), Vec2I{});
+	EXPECT_EQ(window->GetPlacement().state, WindowState::Fullscreen);
+	EXPECT_TRUE(Screen::IsFullScreen());
+
+	Focus(window, false);
+	EXPECT_EQ(modes.calls.restores, 1u);
+	EXPECT_EQ(window->GetPlacement().state, WindowState::Minimized);
+	Focus(window, true);
+	ASSERT_EQ(modes.calls.sets.size(), 2u);
+	EXPECT_EQ(window->GetPlacement().state, WindowState::Fullscreen);
+
+	Screen::SetFullScreenMode(FullScreenMode::Windowed);
+	EndFrame();
+	EXPECT_EQ(modes.calls.restores, 2u);
+	Focus(window, false);
+	Focus(window, true);
+	EXPECT_EQ(modes.calls.restores, 2u);
+	EXPECT_EQ(modes.calls.sets.size(), 2u);
+	Close(window);
+	EXPECT_EQ(modes.calls.restores, 2u);
+}
+
+TEST_F(ScreenFixture, ExclusiveRestoresDisplayOnClose) {
+	StandInModeSwitch modes;
+	Player().fullScreenMode = FullScreenMode::ExclusiveFullScreen;
+	Handle<Window> window = CreateHidden();
+	ASSERT_TRUE(window.IsValid());
+	Focus(window, true);
+	ASSERT_EQ(modes.calls.sets.size(), 1u);
+	EXPECT_EQ(modes.calls.sets[0], window->GetMonitor().bounds.size);
+	Close(window);
+	EXPECT_EQ(modes.calls.restores, 1u);
+	EXPECT_NE(PlayerDocument().find("ExclusiveFullScreen"), str::npos) << PlayerDocument();
+}
+
+TEST_F(ScreenFixture, RefusedExclusiveCoversMonitorAtRenderSize) {
+	StandInModeSwitch modes;
+	modes.calls.refuse = true;
+	Player().fullScreenMode = FullScreenMode::ExclusiveFullScreen;
+	Player().defaultIsNativeResolution = false;
+	Player().defaultScreenWidth = 1280;
+	Player().defaultScreenHeight = 720;
+	Handle<Window> window = CreateHidden();
+	ASSERT_TRUE(window.IsValid());
+	Focus(window, true);
+	EXPECT_EQ(modes.calls.sets.size(), 1u);
+	EXPECT_EQ(window->GetPlacement().state, WindowState::Fullscreen);
+	EXPECT_EQ(WindowInternal::GetRenderSizeOverride(*window.Get()), Vec2I(1280, 720));
+	EXPECT_EQ(Screen::GetFullScreenMode(), FullScreenMode::ExclusiveFullScreen);
+	Close(window);
+	EXPECT_EQ(modes.calls.restores, 0u);
+}
+
+TEST_F(ScreenFixture, DriverAcceptsCurrentDisplayMode) {
+	std::span<const MonitorInfo> monitors = WindowSystem::GetMonitors();
+	ASSERT_FALSE(monitors.empty());
+	const MonitorInfo& monitor = monitors[0];
+	EXPECT_EQ(ScreenInternal::CanSwitchDisplayMode(monitor.id, monitor.bounds.size, monitor.refreshRate),
+			  TestPlatform::ChangesDisplayModes())
+		<< monitor.bounds.size.x << "x" << monitor.bounds.size.y << " at " << monitor.refreshRate;
+	EXPECT_FALSE(ScreenInternal::CanSwitchDisplayMode(monitor.id, {7, 3}, 0.0f));
 }

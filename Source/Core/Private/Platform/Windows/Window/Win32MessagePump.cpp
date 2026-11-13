@@ -8,6 +8,7 @@
 #include "Shalltear/Core/StringUtil.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace Shalltear::Win32 {
@@ -246,6 +247,61 @@ namespace Shalltear::WindowBackend {
 			}
 			return a.refreshRate > b.refreshRate;
 		});
+	}
+
+	namespace {
+
+		bool DeviceOf(u64 monitorId, MONITORINFOEXW& info) {
+			const Vector<MonitorInfo>& monitors = WindowInternal::GetState().monitors;
+			const Vector<void*>& handles = GetBackendState().monitorHandles;
+			for (size_t i = 0; i < monitors.size() && i < handles.size(); ++i) {
+				if (monitors[i].id == monitorId) {
+					info.cbSize = sizeof(info);
+					return ::GetMonitorInfoW(static_cast<HMONITOR>(handles[i]), &info) != FALSE;
+				}
+			}
+			return false;
+		}
+
+	} // anonymous namespace
+
+	bool SetDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate, bool testOnly) {
+		MONITORINFOEXW info{};
+		DEVMODEW current{};
+		current.dmSize = sizeof(current);
+		if (!DeviceOf(monitorId, info) || !::EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &current)) {
+			return false;
+		}
+		const DWORD wantedHz = static_cast<DWORD>(std::lround(refreshRate));
+		DEVMODEW best{};
+		bool found = false;
+		DEVMODEW mode{};
+		mode.dmSize = sizeof(mode);
+		for (DWORD index = 0; ::EnumDisplaySettingsW(info.szDevice, index, &mode); ++index) {
+			if (static_cast<i32>(mode.dmPelsWidth) != sizePx.x || static_cast<i32>(mode.dmPelsHeight) != sizePx.y ||
+				mode.dmBitsPerPel != current.dmBitsPerPel) {
+				continue;
+			}
+			const bool exact = wantedHz > 1 && mode.dmDisplayFrequency == wantedHz;
+			const bool bestExact = found && wantedHz > 1 && best.dmDisplayFrequency == wantedHz;
+			if (!found || exact || (!bestExact && mode.dmDisplayFrequency > best.dmDisplayFrequency)) {
+				best = mode;
+				found = true;
+			}
+		}
+		if (!found) {
+			return false;
+		}
+		best.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+		const DWORD flags = testOnly ? CDS_TEST : CDS_FULLSCREEN;
+		return ::ChangeDisplaySettingsExW(info.szDevice, &best, nullptr, flags, nullptr) == DISP_CHANGE_SUCCESSFUL;
+	}
+
+	void RestoreDisplayMode(u64 monitorId) {
+		MONITORINFOEXW info{};
+		if (DeviceOf(monitorId, info)) {
+			::ChangeDisplaySettingsExW(info.szDevice, nullptr, nullptr, 0, nullptr);
+		}
 	}
 
 	Handle<Window> WindowAtPoint(Vec2I screenPx, Handle<Window> ignore) {

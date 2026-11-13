@@ -16,6 +16,7 @@ namespace Shalltear {
 		FullScreenWindow = 0,
 		MaximizedWindow,
 		Windowed,
+		ExclusiveFullScreen,
 	};
 
 } // namespace Shalltear
@@ -24,6 +25,7 @@ SLT_REFLECT_ENUM(::Shalltear::FullScreenMode)
 SLT_ENUM_VALUE(FullScreenWindow)
 SLT_ENUM_VALUE(MaximizedWindow)
 SLT_ENUM_VALUE(Windowed)
+SLT_ENUM_VALUE(ExclusiveFullScreen)
 SLT_END_ENUM()
 
 namespace Shalltear {

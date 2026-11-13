@@ -60,6 +60,7 @@ namespace TestPlatform {
 	const char* GetCommonImportName();
 	str MakeCompilerAlias(const str& compilerPath, const str& directory);
 	bool MonitorsAlwaysReportRefreshRate();
+	bool ChangesDisplayModes();
 
 	str FindSystemFont(std::string_view fileName);
 	bool SystemFontsCover(char32_t codepoint);

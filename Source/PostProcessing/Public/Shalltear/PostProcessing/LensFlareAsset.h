@@ -121,6 +121,14 @@ namespace Shalltear {
 		f32 rotationVariation = 180.0f;
 		f32 scaleVariation = 1.0f;
 
+		bool radialDistortion = false;
+		Vec2 distortionTargetSize{1.0f, 1.0f};
+		// time: distance from flare/center, value: blend toward target size
+		AnimationCurve distortionCurve{{Keyframe{.time = 0.0f, .value = 0.0f, .inTangent = 1.0f, .outTangent = 1.0f},
+										Keyframe{.time = 1.0f, .value = 1.0f, .inTangent = 1.0f, .outTangent = 1.0f}},
+									   GetMemoryResource(MemTag::Asset)};
+		bool distortionRelativeToCenter = false;
+
 		SLT_REFLECT_VALUE(LensFlareElement)
 		SLT_REFLECT_FIELD(enabled)
 		SLT_REFLECT_FIELD(shape)
@@ -160,6 +168,10 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(positionVariation)
 		SLT_REFLECT_FIELD(rotationVariation)
 		SLT_REFLECT_FIELD(scaleVariation)
+		SLT_REFLECT_FIELD(radialDistortion, SLT_HEADER("Radial Distortion"))
+		SLT_REFLECT_FIELD(distortionTargetSize)
+		SLT_REFLECT_SUBOBJECT(distortionCurve)
+		SLT_REFLECT_FIELD(distortionRelativeToCenter)
 		SLT_END_REFLECT()
 	};
 

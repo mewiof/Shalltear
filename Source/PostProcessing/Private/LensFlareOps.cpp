@@ -33,6 +33,22 @@ namespace Shalltear::LensFlareOps {
 			return HashUnit(seed, index, channel) * 2.0f - 1.0f;
 		}
 
+		Vec2 TurnRay(Vec2 ray, f32 angularOffsetDeg, f32 aspect) {
+			if (angularOffsetDeg == 0.0f) {
+				return ray;
+			}
+			const Vec2 square = RotateClockwise({ray.x * aspect, ray.y}, angularOffsetDeg * Math::DEG_TO_RAD);
+			return {square.x / aspect, square.y};
+		}
+
+		f32 DistortionRadius(const LensFlareElement& element, const ProjectedFlare& flare, f32 position, f32 aspect, Vec2 center) {
+			if (element.distortionRelativeToCenter) {
+				return Math::Clamp01(center.Length());
+			}
+			const Vec2 along = TurnRay({-flare.screen.x * position, -flare.screen.y * position}, element.angularOffset, aspect);
+			return Math::Clamp01(0.5f * Math::Max(std::abs(along.x), std::abs(along.y)));
+		}
+
 		f32 SpotFacing(const FlareInput& flare, const Vec3& toCamera) {
 			const f32 cosOuter = std::cos(flare.spotAngleDeg * 0.5f * Math::DEG_TO_RAD);
 			const f32 cosInner = std::cos(flare.innerSpotAngleDeg * 0.5f * Math::DEG_TO_RAD);
@@ -159,9 +175,12 @@ namespace Shalltear::LensFlareOps {
 			return;
 		}
 
-		Vec2 baseHalf = element.size * (SIZE_UNIT * element.scale * flare.scale);
+		const f32 sizeScale = SIZE_UNIT * element.scale * flare.scale;
+		Vec2 baseHalf = element.size * sizeScale;
+		Vec2 targetHalf = element.distortionTargetSize * sizeScale;
 		if (element.shape == LensFlareShape::Image && element.preserveAspectRatio && textureAspect > 0.0f) {
 			baseHalf.x = baseHalf.y * textureAspect;
+			targetHalf.x = targetHalf.y * textureAspect;
 		}
 
 		Color base = element.tint;
@@ -185,7 +204,7 @@ namespace Shalltear::LensFlareOps {
 		for (u32 copy = 0; copy < copies; ++copy) {
 			const f32 t = copies >= 2 ? static_cast<f32>(copy) / static_cast<f32>(copies - 1) : 0.5f;
 			f32 position = element.position;
-			Vec2 half = baseHalf;
+			f32 sizeFactor = 1.0f;
 			f32 rotationDeg = element.rotation;
 			Vec2 offset = element.positionOffset;
 			Color color = base;
@@ -199,7 +218,7 @@ namespace Shalltear::LensFlareOps {
 					break;
 				case LensFlareDistribution::Curve:
 					position += spread * EvaluateOr(&element.positionCurve, t, t);
-					half = half * Math::Max(EvaluateOr(&element.scaleCurve, t, 1.0f), 0.0f);
+					sizeFactor = Math::Max(EvaluateOr(&element.scaleCurve, t, 1.0f), 0.0f);
 					rotationDeg += EvaluateOr(&element.rotationCurve, t, 0.0f) * 180.0f;
 					color = color * element.colors.Evaluate(t);
 					break;
@@ -211,7 +230,7 @@ namespace Shalltear::LensFlareOps {
 					color.r *= boost;
 					color.g *= boost;
 					color.b *= boost;
-					half = half * Math::Max(1.0f + Signed(element.seed, copy, 1) * element.scaleVariation, 0.0f);
+					sizeFactor = Math::Max(1.0f + Signed(element.seed, copy, 1) * element.scaleVariation, 0.0f);
 					color = color * element.colors.Evaluate(HashUnit(element.seed, copy, 2));
 					const f32 slot = copies >= 2 ? element.lengthSpread / static_cast<f32>(copies - 1) : element.lengthSpread;
 					position += (copies >= 2 ? spread * t : 0.0f) + Signed(element.seed, copy, 3) * slot * element.positionVariation.x;
@@ -222,14 +241,19 @@ namespace Shalltear::LensFlareOps {
 				}
 			}
 
-			Vec2 ray{-flare.screen.x * position * element.translationScale.x, -flare.screen.y * position * element.translationScale.y};
-			if (element.angularOffset != 0.0f) {
-				const Vec2 square = RotateClockwise({ray.x * aspect, ray.y}, element.angularOffset * Math::DEG_TO_RAD);
-				ray = {square.x / aspect, square.y};
-			}
+			const Vec2 ray = TurnRay({-flare.screen.x * position * element.translationScale.x,
+									  -flare.screen.y * position * element.translationScale.y},
+									 element.angularOffset, aspect);
 
 			Quad quad;
 			quad.center = flare.screen + ray + offset;
+			Vec2 half = baseHalf;
+			if (element.radialDistortion) {
+				const f32 radius = DistortionRadius(element, flare, position, aspect, quad.center);
+				const f32 blend = Math::Clamp01(EvaluateOr(&element.distortionCurve, radius, radius));
+				half = baseHalf + (targetHalf - baseHalf) * blend;
+			}
+			half = half * sizeFactor;
 			quad.halfSize = half;
 			quad.rotation = rotationDeg * Math::DEG_TO_RAD - autoAngle;
 			quad.color = color;

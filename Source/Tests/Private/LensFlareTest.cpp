@@ -367,6 +367,83 @@ TEST(LensFlareOpsTest, AutoRotateFacesLight) {
 	EXPECT_NEAR(quads[0].rotation, 15.0f * Math::DEG_TO_RAD - 0.5f * Math::PI, 1e-5f);
 }
 
+TEST(LensFlareOpsTest, RadialDistortionGrowsAwayFromFlare) {
+	Ops::ProjectedFlare flare;
+	flare.screen = Vec2(0.6f, 0.0f);
+	LensFlareElement element = Circle();
+	element.radialDistortion = true;
+	element.distortionTargetSize = Vec2(4.0f, 2.0f);
+	Vector<Ops::Quad> quads{GetMemoryResource(MemTag::Debug)};
+	for (f32 position : {0.0f, 1.0f, 2.0f}) {
+		element.position = position;
+		quads.clear();
+		Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+		ASSERT_EQ(quads.size(), 1u);
+		const f32 blend = 0.5f * 0.6f * position;
+		EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT * (1.0f + 3.0f * blend), 1e-5f) << position;
+		EXPECT_NEAR(quads[0].halfSize.y, Ops::SIZE_UNIT * (1.0f + 1.0f * blend), 1e-5f) << position;
+	}
+
+	element.position = 2.0f;
+	element.distortionCurve = AnimationCurve{{Keyframe{.time = 0.0f, .value = 0.0f}, Keyframe{.time = 0.5f, .value = 1.0f}}};
+	quads.clear();
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT * 4.0f, 1e-5f);
+
+	element.radialDistortion = false;
+	quads.clear();
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT, 1e-6f);
+}
+
+TEST(LensFlareOpsTest, CenterRelativeDistortionReadsScreenRadius) {
+	Ops::ProjectedFlare flare;
+	flare.screen = Vec2(0.6f, 0.8f);
+	LensFlareElement element = Circle();
+	element.radialDistortion = true;
+	element.distortionRelativeToCenter = true;
+	element.distortionTargetSize = Vec2(3.0f, 3.0f);
+	Vector<Ops::Quad> quads{GetMemoryResource(MemTag::Debug)};
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT * 3.0f, 1e-5f);
+
+	element.position = 1.0f;
+	quads.clear();
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT, 1e-5f);
+
+	element.position = 0.5f;
+	quads.clear();
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 1u);
+	EXPECT_NEAR(quads[0].halfSize.x, Ops::SIZE_UNIT * 2.0f, 1e-5f);
+}
+
+TEST(LensFlareOpsTest, CopyScaleAppliesAfterDistortion) {
+	Ops::ProjectedFlare flare;
+	flare.screen = Vec2(0.8f, 0.0f);
+	LensFlareElement element = Circle();
+	element.multiple = true;
+	element.count = 2;
+	element.distribution = LensFlareDistribution::Curve;
+	element.lengthSpread = 0.5f;
+	element.positionCurve = AnimationCurve{{Keyframe{.time = 0.0f, .value = 0.0f, .inTangent = 1.0f, .outTangent = 1.0f},
+											Keyframe{.time = 1.0f, .value = 1.0f, .inTangent = 1.0f, .outTangent = 1.0f}}};
+	element.scaleCurve = AnimationCurve{{Keyframe{.time = 0.0f, .value = 2.0f}, Keyframe{.time = 1.0f, .value = 2.0f}}};
+	element.radialDistortion = true;
+	element.distortionTargetSize = Vec2(5.0f, 5.0f);
+	Vector<Ops::Quad> quads{GetMemoryResource(MemTag::Debug)};
+	Ops::ExpandElement(element, flare, 1.0f, 0.0f, quads);
+	ASSERT_EQ(quads.size(), 2u);
+	EXPECT_NEAR(quads[0].halfSize.x, 2.0f * Ops::SIZE_UNIT, 1e-5f);
+	const f32 blend = 0.5f * 0.8f * 1.0f;
+	EXPECT_NEAR(quads[1].halfSize.x, 2.0f * Ops::SIZE_UNIT * (1.0f + 4.0f * blend), 1e-4f);
+}
+
 TEST(LensFlareOpsTest, DisabledElementDrawsNothing) {
 	LensFlareElement element = Circle();
 	element.enabled = false;
@@ -451,6 +528,10 @@ TEST(LensFlareRowTest, AssetRoundTripsThroughItsDocument) {
 	ghosts.distribution = LensFlareDistribution::Curve;
 	ghosts.scaleCurve = AnimationCurve{{Keyframe{.time = 0.0f, .value = 0.5f}, Keyframe{.time = 1.0f, .value = 3.0f}}};
 	ghosts.seed = 42;
+	ghosts.radialDistortion = true;
+	ghosts.distortionTargetSize = Vec2(2.5f, 0.5f);
+	ghosts.distortionCurve = AnimationCurve{{Keyframe{.time = 0.0f, .value = 0.25f}, Keyframe{.time = 1.0f, .value = 0.75f}}};
+	ghosts.distortionRelativeToCenter = true;
 	ASSERT_TRUE(written.Export(file));
 
 	LensFlareAsset read;
@@ -468,6 +549,11 @@ TEST(LensFlareRowTest, AssetRoundTripsThroughItsDocument) {
 	EXPECT_TRUE(read.elements[1].multiple);
 	EXPECT_EQ(read.elements[1].count, 7);
 	EXPECT_EQ(read.elements[1].distribution, LensFlareDistribution::Curve);
+	EXPECT_TRUE(read.elements[1].radialDistortion);
+	EXPECT_NEAR(read.elements[1].distortionTargetSize.x, 2.5f, 1e-5f);
+	EXPECT_NEAR(read.elements[1].distortionCurve.Evaluate(1.0f), 0.75f, 1e-5f);
+	EXPECT_TRUE(read.elements[1].distortionRelativeToCenter);
+	EXPECT_FALSE(read.elements[0].radialDistortion);
 	EXPECT_EQ(read.elements[1].scaleCurve, written.elements[1].scaleCurve);
 	EXPECT_EQ(read.elements[1].seed, 42);
 

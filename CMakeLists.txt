@@ -154,6 +154,7 @@ add_subdirectory(Source/PostProcessing)
 add_subdirectory(Source/Audio)
 # packages load at project open
 add_subdirectory(Source/VisualEffects)
+add_subdirectory(Source/Network)
 add_subdirectory(Source/Graphs)
 add_subdirectory(Source/NodeShader)
 add_subdirectory(Source/Editor)

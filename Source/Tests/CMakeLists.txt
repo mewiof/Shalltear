@@ -118,6 +118,11 @@ if(TARGET VisualEffects)
     endif()
 endif()
 
+if(TARGET Network)
+    target_link_libraries(ShalltearTests PRIVATE Network)
+    target_include_directories(ShalltearTests PRIVATE ${CMAKE_SOURCE_DIR}/Source/Network/Private)
+endif()
+
 if(TARGET ShalltearSampleModule)
     add_dependencies(ShalltearTests ShalltearSampleModule)
 endif()

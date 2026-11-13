@@ -12,22 +12,22 @@ namespace Shalltear {
 
 		constexpr u32 MAX_SCOPE_DEPTH = 8;
 
-		struct ResolverTls {
+		struct ResolverTLS {
 			HandleResolverScope scopes[MAX_SCOPE_DEPTH];
 			u32 depth = 0;
 			HandleObserverFn observer = nullptr;
 			void* observerUser = nullptr;
 		};
 
-		thread_local ResolverTls _localTls;
+		thread_local ResolverTLS _localTLS;
 
-		ResolverTls* LocalTls() noexcept { return &_localTls; }
+		ResolverTLS* LocalTLS() noexcept { return &_localTLS; }
 
 		struct ResolverHooks {
 			std::atomic<HandleToGuidFn> toGuid{nullptr};
 			std::atomic<GuidToHandleFn> toHandle{nullptr};
 
-			ResolverTls* (*tlsFor)() noexcept = nullptr;
+			ResolverTLS* (*tlsFor)() noexcept = nullptr;
 		};
 
 		ResolverHooks* _boundHooks = nullptr;
@@ -39,11 +39,11 @@ namespace Shalltear {
 			return local;
 		}
 
-		ResolverTls& Tls() noexcept {
+		ResolverTLS& TLS() noexcept {
 			if (_boundHooks && _boundHooks->tlsFor) {
 				return *_boundHooks->tlsFor();
 			}
-			return _localTls;
+			return _localTLS;
 		}
 
 	} // anonymous namespace
@@ -68,7 +68,7 @@ namespace Shalltear {
 			*outPointeeType = StringHash();
 		}
 
-		ResolverTls& tls = Tls();
+		ResolverTLS& tls = TLS();
 		if (tls.depth > 0) {
 			const HandleResolverScope& scope = tls.scopes[tls.depth - 1];
 			if (scope.toGuid && scope.toGuid(scope.user, instanceId, outGuid, outPointeeType)) {
@@ -84,13 +84,13 @@ namespace Shalltear {
 	}
 
 	void HandleResolver::SetObserver(HandleObserverFn fn, void* user) noexcept {
-		ResolverTls& tls = Tls();
+		ResolverTLS& tls = TLS();
 		tls.observer = fn;
 		tls.observerUser = user;
 	}
 
 	u64 HandleResolver::ToHandle(const Guid& guid, StringHash pointeeType) noexcept {
-		ResolverTls& tls = Tls();
+		ResolverTLS& tls = TLS();
 		if (tls.observer) {
 			tls.observer(tls.observerUser, guid, pointeeType);
 		}
@@ -111,7 +111,7 @@ namespace Shalltear {
 	}
 
 	void HandleResolver::PushScope(const HandleResolverScope& scope) noexcept {
-		ResolverTls& tls = Tls();
+		ResolverTLS& tls = TLS();
 		SLT_CORE_ASSERT_MSG(tls.depth < MAX_SCOPE_DEPTH, "HandleResolver scope stack overflow");
 		if (tls.depth >= MAX_SCOPE_DEPTH) {
 			return;
@@ -120,7 +120,7 @@ namespace Shalltear {
 	}
 
 	void HandleResolver::PopScope() noexcept {
-		ResolverTls& tls = Tls();
+		ResolverTLS& tls = TLS();
 		SLT_CORE_ASSERT_MSG(tls.depth > 0, "HandleResolver::PopScope without a matching PushScope");
 		if (tls.depth > 0) {
 			--tls.depth;
@@ -128,14 +128,14 @@ namespace Shalltear {
 	}
 
 	u32 HandleResolver::GetScopeDepth() noexcept {
-		return Tls().depth;
+		return TLS().depth;
 	}
 
 	namespace ModuleInternal {
 
 		void CaptureHandleResolverEngineState(EngineStateTable& table) {
 			ResolverHooks& hooks = GetHooks();
-			hooks.tlsFor = &LocalTls;
+			hooks.tlsFor = &LocalTLS;
 			table.handleResolver = &hooks;
 		}
 

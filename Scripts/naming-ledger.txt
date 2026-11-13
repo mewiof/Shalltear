@@ -2,39 +2,39 @@
 # 1 line per declaration the codemod would rewrite
 
 [run]
-translation_units = 907
+translation_units = 924
 parse_failures = 0
-named_declarations_seen = 198220
-dictionary_sha256 = 709ae7477c94c8f97428384456f1c8217fffa4b0597c8002b16ac662810dc9cf
+named_declarations_seen = 200468
+dictionary_sha256 = 2c3a7812a1076152fca7f28c05705ddb122d3cb0a64b13447b9e227e515f065a
 
 [dispositions]
 finding = 1107
-conforming = 85332
+conforming = 86661
 unresolved = 197
-nonIdentifier = 44600
-noBindingRow = 51218
+nonIdentifier = 44984
+noBindingRow = 51667
 styleNotBound = 0
 vendor = 15
-generated = 12710
-reserved = 32
+generated = 12781
+reserved = 33
 kept = 16
 foreignNamespace = 42
-foreignOverride = 2951
-TOTAL = 198220
+foreignOverride = 2965
+TOTAL = 200468
 balances = True
 
 [unmapped_cursor_kinds]
 # reached no binding row. A kind here that OUGHT to be renamed is
 # an unhandled case (not a skip). Check this list before each phase
-DECL_REF_EXPR = 17756
-CALL_EXPR = 11361
-CONSTRUCTOR = 6939
-CXX_BASE_SPECIFIER = 4341
-NAMESPACE_REF = 2963
-UNEXPOSED_EXPR = 2923
-TEMPLATE_REF = 1940
+DECL_REF_EXPR = 17853
+CALL_EXPR = 11473
+CONSTRUCTOR = 6996
+CXX_BASE_SPECIFIER = 4369
+NAMESPACE_REF = 3019
+UNEXPOSED_EXPR = 2936
+TEMPLATE_REF = 2004
 MEMBER_REF_EXPR = 1174
-TYPE_REF = 666
+TYPE_REF = 688
 OVERLOADED_DECL_REF = 485
 USING_DECLARATION = 378
 MEMBER_REF = 216
@@ -317,11 +317,11 @@ Source/Core/Private/Graphics/Exposure.h:17	functions	Pascal	PhysicalCameraEV100 
 Source/Core/Private/Graphics/Exposure.h:21	members	camel	fixedEV100 -> fixedEv100
 Source/Core/Private/Graphics/Exposure.h:25	parameters	camel	cameraEV100 -> cameraEv100
 Source/Core/Private/Graphics/Exposure.h:28	parameters	camel	cameraEV100 -> cameraEv100
-Source/Core/Private/Graphics/RenderSystem.cpp:335	members	camel	captureWS -> captureWs
-Source/Core/Private/Graphics/RenderSystem.cpp:352	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
-Source/Core/Private/Graphics/RenderSystem.cpp:897	members	camel	haveSH -> haveSh
+Source/Core/Private/Graphics/RenderSystem.cpp:336	members	camel	captureWS -> captureWs
+Source/Core/Private/Graphics/RenderSystem.cpp:353	namedValues	Pascal	DEFAULT_AMBIENT -> DefaultAmbient
+Source/Core/Private/Graphics/RenderSystem.cpp:935	members	camel	haveSH -> haveSh
 Source/Core/Private/Graphics/SceneRequests.h:29	namedValues	Pascal	VIEW_RECORD -> ViewRecord
-Source/Core/Private/Graphics/SpirvReflect.cpp:65	enumMembers	Pascal	ExecutionModelGLCompute -> ExecutionModelGlCompute
+Source/Core/Private/Graphics/SpirvReflect.cpp:66	enumMembers	Pascal	ExecutionModelGLCompute -> ExecutionModelGlCompute
 Source/Core/Private/Graphics/TextureAsset.cpp:466	namedValues	Pascal	FILTER_NAMES -> FilterNames
 Source/Core/Private/Graphics/TextureAsset.cpp:471	namedValues	Pascal	ADDRESS_NAMES -> AddressNames
 Source/Core/Private/Graphics/TextureAsset.cpp:474	namedValues	Pascal	SHAPE_NAMES -> ShapeNames
@@ -1251,7 +1251,7 @@ Source/Tests/Private/NodeShaderSkyTest.cpp:79	namedValues	Pascal	SKY_NAMES -> Sk
 Source/Tests/Private/NodeShaderSkyTest.cpp:311	namedValues	Pascal	PIXEL_A -> PixelA
 Source/Tests/Private/NodeShaderSkyTest.cpp:312	namedValues	Pascal	PIXEL_B -> PixelB
 Source/Tests/Private/NodeShaderTestUtil.h:80	parameters	camel	defaultJson -> defaultJSON
-Source/Tests/Private/OffscreenViewTest.cpp:2718	functions	Pascal	SRGBToLinear -> sRGBToLinear
+Source/Tests/Private/OffscreenViewTest.cpp:2824	functions	Pascal	SRGBToLinear -> sRGBToLinear
 Source/Tests/Private/PanelUnsavedTest.cpp:101	functions	Pascal	Ui -> UI
 Source/Tests/Private/Platform/Windows/PESubsystem.h:8	namespaces	Pascal	PESubsystem -> PeSubsystem
 Source/Tests/Private/PlatformBoundaryTest.cpp:15	namedValues	Pascal	PLATFORM_TOKENS -> PlatformTokens

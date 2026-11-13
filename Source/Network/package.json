@@ -1,0 +1,8 @@
+{
+	"name": "dev.shalltear.network",
+	"version": "1.0.0",
+	"displayName": "Network",
+	"description": "TCP/UDP sockets, TLS streams and an HTTP client (completions delivered on the main thread).",
+	"kind": "engine",
+	"stage": "EndFrame"
+}

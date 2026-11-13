@@ -192,7 +192,7 @@ namespace {
 			return true;
 		}
 
-		f32 BloomShare(f32 scale, bool gamma) {
+		f32 BloomShare(f32 scale) {
 			if (_scene.IsValid()) {
 				SceneSystem::UnloadScene(_scene);
 				SceneSystem::EndFrame();
@@ -218,7 +218,6 @@ namespace {
 			if (!Render(rows, pixels, size, Color(0.0f, 0.0f, 0.0f))) {
 				return -1.0f;
 			}
-			auto value = [gamma](u8 byte) { return gamma ? static_cast<f32>(byte) / 255.0f : ByteToLinear(byte); };
 			f32 source = 0.0f;
 			f32 spread = 0.0f;
 			for (i32 y = 0; y < size.y; ++y) {
@@ -227,7 +226,7 @@ namespace {
 					if (before > 200) {
 						source += 1.0f;
 					} else {
-						spread += value(Texel(pixels, size, x, y)[0]) - value(before);
+						spread += ByteToLinear(Texel(pixels, size, x, y)[0]) - ByteToLinear(before);
 					}
 				}
 			}
@@ -939,8 +938,8 @@ TEST_F(PostProcessRenderFixture, BloomShareIgnoresSourceSize) {
 	if (!CompilerAvailable()) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable";
 	}
-	const f32 lamp = BloomShare(0.6f, false);
-	const f32 glint = BloomShare(0.12f, false);
+	const f32 lamp = BloomShare(0.6f);
+	const f32 glint = BloomShare(0.12f);
 	ASSERT_GT(lamp, 0.0f);
 	EXPECT_NEAR(glint, lamp, 0.25f * lamp) << glint << " -> " << lamp;
 }
@@ -952,10 +951,97 @@ TEST_F(GammaPostProcessFixture, GammaBloomKeepsGlintsSmall) {
 	if (!CompilerAvailable()) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable";
 	}
-	const f32 lamp = BloomShare(0.6f, true);
-	const f32 glint = BloomShare(0.12f, true);
+	const f32 lamp = BloomShare(0.6f);
+	const f32 glint = BloomShare(0.12f);
 	ASSERT_GT(lamp, 0.0f);
 	EXPECT_LT(glint, 0.6f * lamp) << glint << " -> " << lamp;
+}
+
+TEST_F(GammaPostProcessFixture, GammaBloomAddsInLinearLight) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const Color gray(0.25f, 0.25f, 0.25f);
+	ASSERT_TRUE(AddBrightQuad(12.0f));
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize, gray));
+	const u8 surround = Texel(reference, referenceSize, 0, 0)[0];
+	EXPECT_NEAR(static_cast<f32>(surround), 64.0f, 1.0f);
+
+	PostProcessProfile* profile = MakeProfile("LinearAdd.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->bloom = true;
+	profile->bloomIntensity = 1.0f;
+	profile->bloomThreshold = 0.9f;
+	AddVolume(profile);
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> full{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> half{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, full, size, gray));
+	profile->bloomIntensity = 0.5f;
+	ASSERT_TRUE(Render(rows, half, size, gray));
+	ASSERT_EQ(size, referenceSize);
+
+	u32 checked = 0;
+	f32 worst = 0.0f;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			const u8 lit = Texel(full, size, x, y)[0];
+			if (Texel(reference, referenceSize, x, y)[0] != surround || lit < surround + 60 || lit > 230) {
+				continue;
+			}
+			const f32 added = ByteToLinear(lit) - ByteToLinear(surround);
+			const f32 expected = LinearToByte(ByteToLinear(surround) + 0.5f * added);
+			worst = std::max(worst, std::abs(static_cast<f32>(Texel(half, size, x, y)[0]) - expected));
+			++checked;
+		}
+	}
+	EXPECT_GT(checked, 50u);
+	EXPECT_LT(worst, 2.5f) << checked;
+}
+
+TEST_F(GammaPostProcessFixture, GammaVignetteAndGradeUseLinearLight) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize));
+
+	PostProcessProfile* profile = MakeProfile("GammaGraded.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->vignette = true;
+	profile->vignetteIntensity = 0.4f;
+	profile->vignetteSmoothness = 0.2f;
+	profile->colorGrading = true;
+	profile->postExposure = -1.0f;
+	AddVolume(profile);
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size));
+	ASSERT_EQ(size, referenceSize);
+
+	const std::array<Vec2I, 5> probes = VignetteProbes(size);
+	for (const Vec2I& probe : {probes[0], probes[2], probes[3], probes[4]}) {
+		const f32 scale = 0.5f * VignetteFactor(size, probe, 0.4f, 0.2f);
+		SCOPED_TRACE(::testing::Message() << "at " << probe.x << ',' << probe.y);
+		ExpectScaled(Texel(reference, referenceSize, probe.x, probe.y), Texel(pixels, size, probe.x, probe.y), Vec3(scale, scale, scale));
+	}
+	const u8 before = Texel(reference, referenceSize, size.x / 2, size.y / 2)[0];
+	const u8 after = Texel(pixels, size, size.x / 2, size.y / 2)[0];
+	EXPECT_NEAR(static_cast<f32>(before), 153.0f, 1.0f);
+	EXPECT_GT(after, before / 2 + 20);
 }
 
 TEST_F(PostProcessRenderFixture, ViewsResolveOwnVolumes) {

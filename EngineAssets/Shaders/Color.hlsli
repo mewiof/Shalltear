@@ -1,16 +1,24 @@
 #ifndef SHALLTEAR_COLOR_HLSLI
 #define SHALLTEAR_COLOR_HLSLI
 
+float3 ShalltearLinearToSrgbUnclamped(float3 c) {
+	c = max(c, 0.0);
+	return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
+}
+
+float3 ShalltearSrgbToLinearUnclamped(float3 c) {
+	c = max(c, 0.0);
+	return select(c <= 0.04045, c / 12.92, pow((c + 0.055) / 1.055, 2.4));
+}
+
 // SRGB curve because UI colors round trip through
 float3 ShalltearLinearToSrgb(float3 c) {
-	c = saturate(c);
-	return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
+	return ShalltearLinearToSrgbUnclamped(saturate(c));
 }
 
 // later encode should leave them unchanged
 float3 ShalltearSrgbToLinear(float3 c) {
-	c = saturate(c);
-	return select(c <= 0.04045, c / 12.92, pow((c + 0.055) / 1.055, 2.4));
+	return ShalltearSrgbToLinearUnclamped(saturate(c));
 }
 
 // must match ShaderReflection.h's SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID

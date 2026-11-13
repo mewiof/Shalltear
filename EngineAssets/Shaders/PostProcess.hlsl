@@ -178,6 +178,12 @@ float4 PSMain(VSOutput input) : SV_Target {
 
 	float3 color = sltSceneColor.Sample(sltSceneSampler, input.uv).rgb;
 
+	bool decoded = gShalltearGammaColorSpace &&
+				   (gPost.bloomTintAndIntensity.w > 0.0 || gPost.extentAndStep.w > 0.5 || gPost.gradeAddress != 0);
+	if (decoded) {
+		color = ShalltearSrgbToLinearUnclamped(color);
+	}
+
 	// bloom added before grade (filters should tint it too)
 	if (gPost.bloomTintAndIntensity.w > 0.0) {
 		float3 bloom = ShalltearBloomUpsample(sltPassInput0, input.uv, sourceTexel);
@@ -198,5 +204,5 @@ float4 PSMain(VSOutput input) : SV_Target {
 		color = ShalltearPostGradeColor(color, vk::RawBufferLoad<ShalltearPostGrade>(gPost.gradeAddress, 16));
 	}
 
-	return float4(color, 1.0);
+	return float4(decoded ? ShalltearLinearToSrgbUnclamped(color) : color, 1.0);
 }

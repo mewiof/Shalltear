@@ -5308,6 +5308,207 @@ TEST_F(ShadowViewFixture, NestedObjectShadowTakesSubtree) {
 	AssetDatabase::UnloadAsset(meshAsset);
 }
 
+namespace {
+
+	constexpr f32 FACETED_RADIUS = 0.5f;
+
+	MeshAsset* MakeFacetedSphere(u32 rings) {
+		MeshAsset* mesh = New<MeshAsset>(MemTag::Asset);
+		const u32 segments = rings * 2;
+		for (u32 ring = 0; ring <= rings; ++ring) {
+			const f32 polar = static_cast<f32>(ring) / static_cast<f32>(rings) * Math::PI;
+			for (u32 segment = 0; segment <= segments; ++segment) {
+				const f32 azimuth = static_cast<f32>(segment) / static_cast<f32>(segments) * Math::TAU;
+				const Vec3 normal(std::sin(polar) * std::sin(azimuth), std::cos(polar), std::sin(polar) * std::cos(azimuth));
+				MeshVertex vertex;
+				vertex.position = normal * FACETED_RADIUS;
+				vertex.normal = normal;
+				vertex.tangent = Vec3(std::cos(azimuth), 0.0f, -std::sin(azimuth));
+				mesh->vertices.push_back(vertex);
+				mesh->bounds.Encapsulate(vertex.position);
+			}
+		}
+		const u32 stride = segments + 1;
+		for (u32 ring = 0; ring < rings; ++ring) {
+			for (u32 segment = 0; segment < segments; ++segment) {
+				const u32 current = ring * stride + segment;
+				const u32 next = current + stride;
+				if (ring != 0) {
+					mesh->indices.insert(mesh->indices.end(), {current, next, current + 1});
+				}
+				if (ring != rings - 1) {
+					mesh->indices.insert(mesh->indices.end(), {current + 1, next, next + 1});
+				}
+			}
+		}
+		SubMesh whole;
+		whole.indexCount = static_cast<u32>(mesh->indices.size());
+		whole.bounds = mesh->bounds;
+		mesh->submeshes.push_back(whole);
+		mesh->NotifyLoaded();
+		return mesh;
+	}
+
+	struct LitSide {
+		u32 texels = 0;
+		u32 shadowed = 0;
+	};
+
+	struct FacetedFrames {
+		Vector<u8> shadowed{GetMemoryResource(MemTag::Graphics)};
+		Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+		Vector<u8> ambient{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		Mat4 inverseViewProjection;
+		Vec3 eye;
+		Vec3 travel;
+	};
+
+	LitSide MeasureLitSide(const FacetedFrames& frames, const Vec3& center) {
+		LitSide side;
+		const f32 inner = FACETED_RADIUS * 0.94f;
+		for (i32 y = 0; y < frames.size.y; ++y) {
+			for (i32 x = 0; x < frames.size.x; ++x) {
+				const f32 ndcX = (static_cast<f32>(x) + 0.5f) / static_cast<f32>(frames.size.x) * 2.0f - 1.0f;
+				const f32 ndcY = 1.0f - (static_cast<f32>(y) + 0.5f) / static_cast<f32>(frames.size.y) * 2.0f;
+				const Vec4 through = frames.inverseViewProjection * Vec4(ndcX, ndcY, 0.5f, 1.0f);
+				const Vec3 ray = (Vec3(through.x, through.y, through.z) * (1.0f / through.w) - frames.eye).Normalized();
+				const Vec3 offset = frames.eye - center;
+				const f32 along = Vec3::Dot(offset, ray);
+				const f32 discriminant = along * along - Vec3::Dot(offset, offset) + inner * inner;
+				if (discriminant <= 0.0f) {
+					continue;
+				}
+				const Vec3 normal = offset + ray * (-along - std::sqrt(discriminant));
+				if (Vec3::Dot(normal, frames.travel) >= 0.0f) {
+					continue;
+				}
+				const size_t texel = (static_cast<size_t>(y) * frames.size.x + x) * 4;
+				f32 light = 0.0f;
+				f32 received = 0.0f;
+				for (size_t channel = 0; channel < 3; ++channel) {
+					const f32 base = sRGBToLinear(frames.ambient[texel + channel]);
+					light += sRGBToLinear(frames.unshadowed[texel + channel]) - base;
+					received += sRGBToLinear(frames.shadowed[texel + channel]) - base;
+				}
+				if (light <= 3e-3f) {
+					continue;
+				}
+				++side.texels;
+				side.shadowed += received < 0.9f * light ? 1u : 0u;
+			}
+		}
+		return side;
+	}
+
+} // anonymous namespace
+
+TEST_F(ShadowViewFixture, ObjectShadowNormalOffsetLightsGrazingFacets) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile([](GraphicsProfile& profile) {
+		UseTicketCascades(profile);
+		profile.shadowAtlasSize = 4096;
+	});
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	MeshAsset* faceted = MakeFacetedSphere(8);
+	Handle<Scene> scene = SceneSystem::CreateScene("ObjectShadowOffset");
+	const Handle<SceneObject> sunObject = BuildHeroGround(scene, cube);
+	const Handle<Light> sun = sunObject->GetComponent<Light>();
+
+	FacetedFrames frames;
+	frames.travel = sunObject->TransformDirection(Vec3::Forward()).Normalized();
+	const Vec3 side = Vec3::Cross(frames.travel, Vec3::Up()).Normalized();
+	const Vec3 over = Vec3::Cross(side, frames.travel).Normalized();
+	const Vec3 middle(0.0f, 1.5f, 0.0f);
+	const Vec3 centers[2] = {middle - side * 0.9f, middle + side * 0.9f};
+	Handle<ObjectShadow> shadows[2];
+	for (u32 i = 0; i < 2; ++i) {
+		Handle<SceneObject> hero = SceneSystem::CreateObject("Hero", scene);
+		hero->SetLocalPosition(centers[i]);
+		hero->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(faceted));
+		shadows[i] = hero->AddComponent<ObjectShadow>();
+	}
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({640, 320});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	frames.eye = middle + (over - frames.travel * 0.35f).Normalized() * 4.0f;
+	const Mat4 view = Mat4::LookAt(frames.eye, middle);
+	const Mat4 projection = Mat4::PerspectiveReverseZ(30.0f, 2.0f, 0.1f, 500.0f);
+	frames.inverseViewProjection = (projection * view).Inverse();
+	auto render = [&](Vector<u8>& pixels) {
+		ViewDesc desc;
+		desc.view = view;
+		desc.projection = projection;
+		desc.cameraPosition = frames.eye;
+		desc.clearColor = Color::Black();
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		ASSERT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, frames.size));
+	};
+	auto release = [&] {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		SceneSystem::EndFrame();
+		faceted->NotifyUnloaded();
+		Delete(faceted);
+		AssetDatabase::UnloadAsset(meshAsset);
+	};
+
+	sun->SetCastShadows(false);
+	ASSERT_NO_FATAL_FAILURE(render(frames.unshadowed));
+	const f32 intensity = sun->GetIntensity();
+	sun->SetIntensity(0.0f);
+	ASSERT_NO_FATAL_FAILURE(render(frames.ambient));
+	sun->SetIntensity(intensity);
+	sun->SetCastShadows(true);
+
+	constexpr f32 OFFSET = 0.02f;
+	shadows[1]->SetNormalOffset(OFFSET);
+	ASSERT_NO_FATAL_FAILURE(render(frames.shadowed));
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		release();
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 5u);
+	const LitSide bare = MeasureLitSide(frames, centers[0]);
+	const LitSide offset = MeasureLitSide(frames, centers[1]);
+	EXPECT_GT(bare.texels, 4000u);
+	EXPECT_GT(offset.texels, 4000u);
+	EXPECT_GT(bare.shadowed, 200u);
+	EXPECT_LT(offset.shadowed * 20, bare.shadowed) << offset.shadowed << " -> " << bare.shadowed;
+	const Vector<u8> firstOffset = frames.shadowed;
+
+	shadows[0]->SetNormalOffset(OFFSET);
+	shadows[1]->SetNormalOffset(0.0f);
+	ASSERT_NO_FATAL_FAILURE(render(frames.shadowed));
+	const LitSide swappedOffset = MeasureLitSide(frames, centers[0]);
+	const LitSide swappedBare = MeasureLitSide(frames, centers[1]);
+	EXPECT_GT(swappedBare.shadowed, 200u);
+	EXPECT_LT(swappedOffset.shadowed * 20, swappedBare.shadowed) << swappedOffset.shadowed << " -> " << swappedBare.shadowed;
+
+	shadows[0]->SetNormalOffset(-1.0f);
+	shadows[1]->SetNormalOffset(OFFSET);
+	ASSERT_NO_FATAL_FAILURE(render(frames.shadowed));
+	EXPECT_EQ(frames.shadowed, firstOffset);
+
+	UseProfile([](GraphicsProfile& profile) { profile.objectShadowResolution = 512; });
+	shadows[0]->SetNormalOffset(0.0f);
+	ASSERT_NO_FATAL_FAILURE(render(frames.shadowed));
+	const LitSide coarseBare = MeasureLitSide(frames, centers[0]);
+	const LitSide coarseOffset = MeasureLitSide(frames, centers[1]);
+	EXPECT_GT(coarseBare.shadowed, 200u);
+	EXPECT_LT(coarseOffset.shadowed * 20, coarseBare.shadowed) << coarseOffset.shadowed << " -> " << coarseBare.shadowed;
+
+	release();
+}
+
 TEST_F(ShadowViewFixture, MomentShadowEdgeMovesWithinTexel) {
 	InitializeWith();
 	if (!RenderSystem::IsRenderingAvailable()) {

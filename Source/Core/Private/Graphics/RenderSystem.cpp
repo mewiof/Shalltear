@@ -1008,6 +1008,7 @@ namespace Shalltear {
 				u32 record = 0;
 				i32 priority = 0;
 				f32 distanceSquared = 0.0f;
+				f32 normalOffset = 0.0f;
 				u64 id = 0;
 				AABB bounds = AABB::Empty();
 				u32 firstMember = 0;
@@ -4329,6 +4330,7 @@ namespace Shalltear {
 				pick.record = i;
 				pick.priority = shadow->GetPriority();
 				pick.distanceSquared = distanceSquared;
+				pick.normalOffset = Math::Max(shadow->GetNormalOffset(), 0.0f);
 				pick.id = shadow->GetInstanceId();
 			}
 			std::sort(picks.begin(), picks.end(), [](const RenderState::ObjectShadowPick& a, const RenderState::ObjectShadowPick& b) {
@@ -4512,7 +4514,7 @@ namespace Shalltear {
 					const GraphicsInternal::CascadeView fitted = GraphicsInternal::BuildObjectShadowView(
 						sun.direction, pick.bounds.Center(), radius, marginTexels, 2.0f * objectReach, static_cast<u32>(tile.size.x));
 					punctualTiles[mapCount] = tile;
-					punctualBias[mapCount] = Vec2(sun.shadowBias, sun.shadowNormalBias);
+					punctualBias[mapCount] = Vec2(sun.shadowBias, sun.shadowNormalBias + pick.normalOffset / fitted.worldTexelSize);
 					casterBias[mapCount] = sun.shadowCasterBias;
 					// absolute texel size (not per unit distance)
 					state.punctualViews.push_back({fitted.viewProjection, fitted.view, fitted.projection, fitted.worldTexelSize});

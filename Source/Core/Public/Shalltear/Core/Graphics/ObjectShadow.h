@@ -12,6 +12,7 @@ namespace Shalltear {
 	public:
 		SLT_REFLECT_COMPONENT(ObjectShadow, Component)
 		SLT_REFLECT_FIELD(_priority)
+		SLT_REFLECT_FIELD(_normalOffset)
 		SLT_END_REFLECT()
 
 		ObjectShadow() = default;
@@ -20,11 +21,16 @@ namespace Shalltear {
 		// higher picked 1st, then nearest to camera
 		i32 GetPriority() const { return _priority; }
 		void SetPriority(i32 priority) { _priority = priority; }
+
+		// meters along receiver normal, added to light's normal bias
+		f32 GetNormalOffset() const { return _normalOffset; }
+		void SetNormalOffset(f32 offset) { _normalOffset = offset; }
 	protected:
 		void OnEnable() override;
 		void OnDisable() override;
 	private:
 		i32 _priority = 0;
+		f32 _normalOffset = 0.0f;
 	};
 
 } // namespace Shalltear

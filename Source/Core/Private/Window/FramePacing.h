@@ -10,6 +10,7 @@ namespace Shalltear::FramePacingInternal {
 
 	struct PacingInputs {
 		i32 targetFrameRate = -1;
+		i32 backgroundFrameRate = 0;
 		u32 windowsPresented = 0;
 		u32 vsyncWindowsPresented = 0;
 		f32 refreshRate = 0.0f;

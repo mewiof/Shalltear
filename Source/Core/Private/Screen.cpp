@@ -236,6 +236,11 @@ namespace Shalltear {
 			return project && project->runInBackground;
 		}
 
+		i32 BackgroundFrameRate() {
+			const PlayerSettings* project = Project();
+			return project ? project->backgroundFrameRate : 0;
+		}
+
 		bool HasGameWindow() {
 			return _runtime && _runtime->window.IsValid();
 		}

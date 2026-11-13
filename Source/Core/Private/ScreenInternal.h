@@ -23,6 +23,7 @@ namespace Shalltear::ScreenInternal {
 	};
 
 	bool RunsInBackground();
+	i32 BackgroundFrameRate();
 	bool HasGameWindow();
 
 	SHALLTEAR_CORE_API str DescribeProjectDefaults(const PlayerSettings& project);

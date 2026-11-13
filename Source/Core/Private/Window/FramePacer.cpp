@@ -21,11 +21,11 @@ namespace Shalltear {
 				pacing.paused = true;
 				return pacing;
 			}
-			if (inputs.vsyncWindowsPresented > 0) {
-				return pacing;
-			}
-			if (inputs.targetFrameRate > 0) {
+			if (inputs.vsyncWindowsPresented == 0 && inputs.targetFrameRate > 0) {
 				pacing.intervalSeconds = 1.0 / static_cast<f64>(inputs.targetFrameRate);
+			}
+			if (!inputs.focused && inputs.backgroundFrameRate > 0) {
+				pacing.intervalSeconds = std::max(pacing.intervalSeconds, 1.0 / static_cast<f64>(inputs.backgroundFrameRate));
 			}
 			if (inputs.windowsPresented == 0) {
 				const f32 hz = inputs.refreshRate > 0.0f ? inputs.refreshRate : FALLBACK_REFRESH_RATE;
@@ -47,6 +47,7 @@ namespace Shalltear {
 		inputs.vsyncWindowsPresented = presents.vsyncWindows;
 		inputs.focused = focused.IsValid();
 		inputs.runInBackground = _unattended || ScreenInternal::RunsInBackground();
+		inputs.backgroundFrameRate = _unattended ? 0 : ScreenInternal::BackgroundFrameRate();
 		if (const Window* window = (inputs.focused ? focused : WindowSystem::GetPrimaryWindow()).Get()) {
 			inputs.refreshRate = window->GetMonitor().refreshRate;
 		}

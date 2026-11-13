@@ -190,6 +190,13 @@ namespace Shalltear {
 			background.keywords = "focus unfocused pause alt tab background minimized";
 			RegisterField("Player", "runInBackground", std::move(background));
 
+			SettingsFieldPresentation backgroundRate;
+			backgroundRate.label = "Background Frame Rate";
+			backgroundRate.tooltip = "Frame rate cap while the game window doesn't have focus (with \"Run In Background\" on). "
+									 "0 = same cap as with focus.";
+			backgroundRate.keywords = "fps limit cap unfocused alt tab background minimized throttle power";
+			RegisterField("Player", "backgroundFrameRate", std::move(backgroundRate));
+
 			SettingsFieldPresentation mode;
 			mode.label = "Fullscreen Mode";
 			mode.tooltip = "Window mode the game starts in. Fullscreen Window covers the monitor without a frame, Maximized Window "

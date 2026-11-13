@@ -74,6 +74,33 @@ TEST(FramePacingTest, UnfocusedPausesUnlessRunInBackground) {
 	EXPECT_FALSE(ResolvePacing(inputs).paused);
 }
 
+TEST(FramePacingTest, BackgroundRateCapsUnfocused) {
+	PacingInputs inputs;
+	inputs.windowsPresented = 1;
+	inputs.backgroundFrameRate = 30;
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 0.0);
+
+	inputs.focused = false;
+	EXPECT_FALSE(ResolvePacing(inputs).paused);
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 1.0 / 30.0);
+
+	inputs.vsyncWindowsPresented = 1;
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 1.0 / 30.0);
+	inputs.vsyncWindowsPresented = 0;
+
+	inputs.targetFrameRate = 20;
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 1.0 / 20.0);
+	inputs.targetFrameRate = 50;
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 1.0 / 30.0);
+
+	inputs.backgroundFrameRate = 0;
+	EXPECT_DOUBLE_EQ(ResolvePacing(inputs).intervalSeconds, 1.0 / 50.0);
+
+	inputs.backgroundFrameRate = 30;
+	inputs.runInBackground = false;
+	EXPECT_TRUE(ResolvePacing(inputs).paused);
+}
+
 namespace {
 
 	std::filesystem::path RepoDir(const char* relative) {
@@ -214,6 +241,36 @@ TEST_F(FramePacerFixture, UnattendedRunNeverPauses) {
 	}
 	EXPECT_FALSE(Player().runInBackground);
 	EXPECT_FALSE(WindowSystem::GetFocusedWindow().IsValid());
+}
+
+TEST_F(FramePacerFixture, BackgroundRateHoldsUntilFocused) {
+	ASSERT_TRUE(_window.IsValid());
+	ASSERT_FALSE(WindowSystem::GetFocusedWindow().IsValid());
+	Player().runInBackground = true;
+	Player().backgroundFrameRate = 20;
+	auto eightFrames = [](FramePacer& pacer) {
+		EXPECT_TRUE(pacer.BeginFrame());
+		const u64 start = Time::GetTicks();
+		for (int frame = 0; frame < 8; ++frame) {
+			EXPECT_TRUE(pacer.BeginFrame());
+		}
+		return Seconds(Time::GetTicks() - start);
+	};
+
+	FramePacer pacer;
+	const f64 background = eightFrames(pacer);
+	EXPECT_GE(background, 8.0 / 20.0 - 0.002);
+	EXPECT_LT(background, 8.0 / 20.0 * 1.5);
+
+	TestPlatform::PostFocus(_window, true);
+	EXPECT_TRUE(pacer.BeginFrame());
+	ASSERT_EQ(WindowSystem::GetFocusedWindow(), _window);
+	EXPECT_LT(eightFrames(pacer), 8.0 / 20.0 * 0.5);
+
+	TestPlatform::PostFocus(_window, false);
+	EXPECT_TRUE(pacer.BeginFrame());
+	FramePacer unattended(true);
+	EXPECT_LT(eightFrames(unattended), 8.0 / 20.0 * 0.5);
 }
 
 TEST_F(FramePacerFixture, CapHoldsTargetRate) {

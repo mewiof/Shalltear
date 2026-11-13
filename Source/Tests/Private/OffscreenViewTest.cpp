@@ -4191,7 +4191,7 @@ TEST_F(ShadowViewFixture, SkinnedRendererFollowsShadowFlags) {
 	AssetDatabase::UnloadAsset(meshAsset);
 }
 
-TEST_F(ShadowViewFixture, FullAtlasDropsLeastImportant) {
+TEST_F(ShadowViewFixture, CrowdedAtlasShadowsEveryLight) {
 	InitializeWith();
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device available";
@@ -4246,19 +4246,95 @@ TEST_F(ShadowViewFixture, FullAtlasDropsLeastImportant) {
 		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
 	}
 	EXPECT_EQ(stats.shadowLights, LIGHT_COUNT);
-	EXPECT_EQ(stats.shadowLightsDropped, 1u);
-	EXPECT_EQ(stats.shadowMapsRendered, LIGHT_COUNT - 1);
+	EXPECT_EQ(stats.shadowLightsDropped, 0u);
+	EXPECT_EQ(stats.shadowMapsRendered, LIGHT_COUNT);
 
 	lights[0]->SetCastShadows(false);
 	RenderFrom(target, eye, lookAt, withoutDimmest, size);
 	EXPECT_EQ(RenderSystem::GetStats().shadowLightsDropped, 0u);
-	EXPECT_EQ(all, withoutDimmest);
+	EXPECT_NE(all, withoutDimmest);
 	lights[0]->SetCastShadows(true);
 
 	lights[LIGHT_COUNT - 1]->SetCastShadows(false);
 	RenderFrom(target, eye, lookAt, withoutBrightest, size);
 	EXPECT_NE(all, withoutBrightest);
 
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
+TEST_F(ShadowViewFixture, FlickerKeepsDroppedLightDropped) {
+	InitializeWith();
+	UseProfile([](GraphicsProfile& profile) { profile.shadowAtlasSize = 1024; });
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Flicker");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.0f, -0.5f, 0.0f));
+	ground->SetLocalScale(Vec3(40.0f, 1.0f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+
+	auto addLight = [&](const Vec3& position, f32 intensity) {
+		Handle<SceneObject> lightObject = SceneSystem::CreateObject("Point", scene);
+		lightObject->SetLocalPosition(position);
+		Handle<Light> light = lightObject->AddComponent<Light>();
+		light->SetLightType(LightType::Point);
+		light->SetRange(40.0f);
+		light->SetIntensity(intensity);
+		light->SetCastShadows(true);
+
+		Handle<SceneObject> blocker = SceneSystem::CreateObject("Blocker", scene);
+		blocker->SetLocalPosition(position - Vec3(0.0f, 1.6f, 0.0f));
+		blocker->SetLocalScale(Vec3(1.2f, 1.2f, 1.2f));
+		blocker->AddComponent<MeshRenderer>()->SetMesh(cube);
+		return light;
+	};
+	addLight(Vec3(0.0f, 3.0f, 6.0f), 1200.0f);
+	Handle<Light> x = addLight(Vec3(-6.0f, 3.0f, 0.0f), 330.0f);
+	Handle<Light> y = addLight(Vec3(6.0f, 3.0f, 0.0f), 300.0f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({160, 160});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	const Vec3 eye(0.0f, 18.0f, -14.0f);
+	const Vec3 lookAt(0.0f, 0.0f, 1.0f);
+	Vec2I size{};
+	auto frame = [&](ViewTargetId into, f32 xIntensity, f32 yIntensity, Vector<u8>& pixels) {
+		x->SetIntensity(xIntensity);
+		y->SetIntensity(yIntensity);
+		RenderFrom(into, eye, lookAt, pixels, size);
+		return RenderSystem::GetStats().shadowLightsDropped;
+	};
+
+	Vector<u8> scratch{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> xKept{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> yKept{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> fresh{GetMemoryResource(MemTag::Graphics)};
+	const u32 firstDropped = frame(target, 330.0f, 300.0f, scratch);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(firstDropped, 1u);
+	EXPECT_EQ(frame(target, 300.0f, 330.0f, xKept), 1u);
+	EXPECT_EQ(frame(target, 300.0f, 600.0f, scratch), 1u);
+	EXPECT_EQ(frame(target, 300.0f, 330.0f, yKept), 1u);
+	EXPECT_NE(xKept, yKept);
+
+	ViewTargetId other = RenderSystem::CreateViewTarget({160, 160});
+	ASSERT_NE(other, INVALID_VIEW_TARGET);
+	EXPECT_EQ(frame(other, 300.0f, 330.0f, fresh), 1u);
+	EXPECT_EQ(fresh, yKept);
+
+	RenderSystem::DestroyViewTarget(other);
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);
 }

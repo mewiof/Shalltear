@@ -898,6 +898,24 @@ namespace Shalltear {
 			ShadowSetup pendingShadow;
 			Vector<ShadowAllocation> shadowAllocations{GetMemoryResource(MemTag::Graphics)};
 
+			struct ShadowKeep {
+				u64 owner = 0;
+				u64 frame = 0;
+				Vector<u64> lights{GetMemoryResource(MemTag::Graphics)};
+			};
+			Vector<ShadowKeep> shadowKeeps{GetMemoryResource(MemTag::Graphics)};
+
+			ShadowKeep& ShadowKeepFor(u64 owner) {
+				for (ShadowKeep& keep : shadowKeeps) {
+					if (keep.owner == owner) {
+						return keep;
+					}
+				}
+				ShadowKeep& added = shadowKeeps.emplace_back();
+				added.owner = owner;
+				return added;
+			}
+
 			u32 ShadowAtlasSize() const { return shadowDistance > 0.0f ? shadowAtlasSize : 1u; }
 			u32 PunctualAtlasSize() const { return ShadowAtlasSize(); }
 
@@ -3710,9 +3728,14 @@ namespace Shalltear {
 				request.importance = GraphicsInternal::ShadowImportance(coverage, candidate.color);
 				request.tileSize = GraphicsInternal::PunctualTileSize(coverage, state.PunctualAtlasSize(), request.MapCount());
 			}
-			GraphicsInternal::SortShadowRequests({requests.data(), requests.size()});
-
+			RenderState::ShadowKeep& keep = state.ShadowKeepFor(owner);
+			GraphicsInternal::FavorKeptShadows({requests.data(), requests.size()}, {keep.lights.data(), keep.lights.size()});
 			const u32 punctualAtlasSize = state.PunctualAtlasSize();
+			GraphicsInternal::FitShadowRequests({requests.data(), requests.size()}, punctualAtlasSize,
+												GraphicsInternal::MAX_SHADOW_MAPS - mapCount);
+			keep.lights.clear();
+			keep.frame = state.renderedFrames;
+
 			state.punctualAllocator.Reset(punctualAtlasSize);
 			state.punctualViews.clear();
 			RectI punctualTiles[GraphicsInternal::MAX_SHADOW_MAPS];
@@ -3722,7 +3745,7 @@ namespace Shalltear {
 			for (GraphicsInternal::ShadowRequest& request : requests) {
 				++state.frameShadowLights;
 				const u32 wanted = request.MapCount();
-				if (mapCount + wanted > GraphicsInternal::MAX_SHADOW_MAPS) {
+				if (request.tileSize == 0) {
 					++state.frameShadowLightsDropped;
 					continue;
 				}
@@ -3763,7 +3786,9 @@ namespace Shalltear {
 				allocation.firstMap = mapCount - wanted;
 				allocation.mapCount = wanted;
 				allocation.strength = request.strength;
+				keep.lights.push_back(request.stableKey);
 			}
+			std::sort(keep.lights.begin(), keep.lights.end());
 
 			if (mapCount == 0) {
 				return 0;
@@ -9424,6 +9449,9 @@ namespace Shalltear {
 		state.frameShadowMapsRendered = 0;
 		state.frameShadowLights = 0;
 		state.frameShadowLightsDropped = 0;
+		std::erase_if(state.shadowKeeps, [&state](const RenderState::ShadowKeep& keep) {
+			return keep.frame + 1 < state.renderedFrames;
+		});
 		state.frameProceduralDrawn = 0;
 		state.frameProceduralCulled = 0;
 		state.frameDrawCallsSaved = 0;

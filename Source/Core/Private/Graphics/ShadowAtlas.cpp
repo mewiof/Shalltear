@@ -126,6 +126,63 @@ namespace Shalltear::GraphicsInternal {
 		});
 	}
 
+	void FavorKeptShadows(std::span<ShadowRequest> requests, std::span<const u64> keptLastFrame) {
+		for (ShadowRequest& request : requests) {
+			if (std::binary_search(keptLastFrame.begin(), keptLastFrame.end(), request.stableKey)) {
+				request.importance *= SHADOW_KEEP_MARGIN;
+			}
+		}
+	}
+
+	u32 FitShadowRequests(std::span<ShadowRequest> requests, u32 atlasSize, u32 freeMaps) {
+		SortShadowRequests(requests);
+		const u32 atlas = FloorPowerOfTwo(atlasSize);
+		const u64 capacity = static_cast<u64>(atlas) * atlas;
+		auto area = [](const ShadowRequest& request, u32 cap) {
+			const u64 side = std::min(request.tileSize, cap);
+			return static_cast<u64>(request.MapCount()) * side * side;
+		};
+
+		u32 maps = 0;
+		u64 floorArea = 0;
+		u32 largest = 0;
+		for (ShadowRequest& request : requests) {
+			const u64 need = area(request, MIN_PUNCTUAL_TILE);
+			if (maps + request.MapCount() > freeMaps || floorArea + need > capacity) {
+				request.tileSize = 0;
+				continue;
+			}
+			maps += request.MapCount();
+			floorArea += need;
+			largest = std::max(largest, request.tileSize);
+		}
+
+		u32 cap = largest;
+		for (;;) {
+			u64 total = 0;
+			for (const ShadowRequest& request : requests) {
+				total += area(request, cap);
+			}
+			if (total <= capacity || cap <= MIN_PUNCTUAL_TILE) {
+				break;
+			}
+			cap >>= 1;
+		}
+
+		u32 keptCount = 0;
+		for (ShadowRequest& request : requests) {
+			request.tileSize = std::min(request.tileSize, cap);
+			keptCount += request.tileSize > 0 ? 1u : 0u;
+		}
+		std::stable_sort(requests.begin(), requests.end(), [](const ShadowRequest& a, const ShadowRequest& b) {
+			if (a.tileSize != b.tileSize) {
+				return a.tileSize > b.tileSize;
+			}
+			return a.tileSize > 0 && a.stableKey < b.stableKey;
+		});
+		return keptCount;
+	}
+
 	PunctualView BuildSpotView(const Vec3& position, const Vec3& direction,
 							   f32 outerAngleDeg, f32 range, u32 tileResolution) {
 		PunctualView out;

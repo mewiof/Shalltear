@@ -4,6 +4,7 @@
 
 #include "Shalltear/Editor/EditorViewportOps.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <set>
@@ -11,6 +12,8 @@
 using namespace Shalltear;
 using Shalltear::GraphicsInternal::BuildPointFaceView;
 using Shalltear::GraphicsInternal::BuildSpotView;
+using Shalltear::GraphicsInternal::FavorKeptShadows;
+using Shalltear::GraphicsInternal::FitShadowRequests;
 using Shalltear::GraphicsInternal::MAX_PUNCTUAL_TILE;
 using Shalltear::GraphicsInternal::MAX_SHADOW_MAPS;
 using Shalltear::GraphicsInternal::MIN_PUNCTUAL_TILE;
@@ -18,6 +21,7 @@ using Shalltear::GraphicsInternal::POINT_SHADOW_FACES;
 using Shalltear::GraphicsInternal::PointFaceOf;
 using Shalltear::GraphicsInternal::PunctualTileSize;
 using Shalltear::GraphicsInternal::PunctualView;
+using Shalltear::GraphicsInternal::SHADOW_KEEP_MARGIN;
 using Shalltear::GraphicsInternal::ShadowAtlasAllocator;
 using Shalltear::GraphicsInternal::ShadowImportance;
 using Shalltear::GraphicsInternal::ShadowRequest;
@@ -253,6 +257,162 @@ TEST(ShadowAtlasTest, RequestsSortByImportance) {
 TEST(ShadowAtlasTest, PointAsks6SpotAsks1) {
 	EXPECT_EQ(MakeRequest(1, 1.0f, LightType::Spot).MapCount(), 1u);
 	EXPECT_EQ(MakeRequest(1, 1.0f, LightType::Point).MapCount(), POINT_SHADOW_FACES);
+}
+
+namespace {
+
+	ShadowRequest Sized(u64 key, f32 importance, LightType type, u32 tile) {
+		ShadowRequest request = MakeRequest(key, importance, type);
+		request.tileSize = tile;
+		return request;
+	}
+
+	bool PacksInOrder(std::span<const ShadowRequest> kept, u32 atlas) {
+		ShadowAtlasAllocator allocator(atlas);
+		Vector<RectI> taken{GetMemoryResource(MemTag::Graphics)};
+		for (const ShadowRequest& request : kept) {
+			for (u32 map = 0; map < request.MapCount(); ++map) {
+				const RectI tile = allocator.Allocate(request.tileSize);
+				if (IsEmpty(tile) || tile.size.x != static_cast<i32>(request.tileSize)) {
+					return false;
+				}
+				for (const RectI& other : taken) {
+					if (tile.Intersects(other)) {
+						return false;
+					}
+				}
+				taken.push_back(tile);
+			}
+		}
+		return true;
+	}
+
+	std::array<u64, 2> KeptPair(f32 x, f32 y, std::span<const u64> keptLastFrame) {
+		std::array<ShadowRequest, 3> requests{
+			Sized(1, 4.0f, LightType::Point, 256), Sized(2, x, LightType::Point, 256), Sized(3, y, LightType::Point, 256)};
+		FavorKeptShadows({requests.data(), requests.size()}, keptLastFrame);
+		const u32 kept = FitShadowRequests({requests.data(), requests.size()}, 1024, MAX_SHADOW_MAPS);
+		EXPECT_EQ(kept, 2u);
+		std::array<u64, 2> keys{requests[0].stableKey, requests[1].stableKey};
+		std::sort(keys.begin(), keys.end());
+		return keys;
+	}
+
+} // namespace
+
+TEST(ShadowAtlasTest, CrowdedAtlasShrinksTilesInsteadOfDropping) {
+	const u32 ceiling = PunctualTileSize(1.0f, 4096, POINT_SHADOW_FACES);
+	ASSERT_EQ(ceiling, 1024u);
+	std::array<ShadowRequest, 3> requests{
+		Sized(1, 1.5f, LightType::Point, ceiling), Sized(2, 1.4f, LightType::Point, ceiling),
+		Sized(3, 1.2f, LightType::Point, ceiling)};
+	EXPECT_EQ(FitShadowRequests({requests.data(), requests.size()}, 4096, MAX_SHADOW_MAPS), 3u);
+	for (const ShadowRequest& request : requests) {
+		EXPECT_GE(request.tileSize, MIN_PUNCTUAL_TILE);
+		EXPECT_LT(request.tileSize, ceiling);
+		EXPECT_EQ(request.tileSize, requests[0].tileSize);
+	}
+	EXPECT_TRUE(PacksInOrder({requests.data(), requests.size()}, 4096));
+}
+
+TEST(ShadowAtlasTest, FittedTilesIgnoreImportance) {
+	auto fit = [](std::array<f32, 5> importance) {
+		std::array<ShadowRequest, 5> requests{
+			Sized(11, importance[0], LightType::Point, 1024), Sized(12, importance[1], LightType::Point, 1024),
+			Sized(13, importance[2], LightType::Point, 1024), Sized(14, importance[3], LightType::Point, 512),
+			Sized(15, importance[4], LightType::Spot, 1024)};
+		EXPECT_EQ(FitShadowRequests({requests.data(), requests.size()}, 4096, MAX_SHADOW_MAPS), 5u);
+		return requests;
+	};
+	const std::array<ShadowRequest, 5> calm = fit({1.0f, 0.9f, 0.8f, 0.7f, 0.6f});
+	const std::array<ShadowRequest, 5> flicker = fit({0.6f, 1.3f, 0.7f, 1.1f, 0.9f});
+	EXPECT_LT(calm[0].tileSize, 1024u);
+	for (size_t i = 0; i < calm.size(); ++i) {
+		EXPECT_EQ(calm[i].stableKey, flicker[i].stableKey);
+		EXPECT_EQ(calm[i].tileSize, flicker[i].tileSize);
+	}
+}
+
+TEST(ShadowAtlasTest, MapLimitDropsLeastImportant) {
+	Vector<ShadowRequest> requests{GetMemoryResource(MemTag::Graphics)};
+	for (u64 key = 1; key <= 11; ++key) {
+		requests.push_back(Sized(key, 1.0f + static_cast<f32>(key), LightType::Point, 256));
+	}
+	requests.push_back(Sized(99, 0.5f, LightType::Spot, 256));
+	const u32 kept = FitShadowRequests({requests.data(), requests.size()}, 4096, MAX_SHADOW_MAPS);
+	ASSERT_EQ(kept, 11u);
+	EXPECT_EQ(requests.back().stableKey, 1u);
+	EXPECT_EQ(requests.back().tileSize, 0u);
+	EXPECT_EQ(requests[kept - 1].stableKey, 99u);
+	EXPECT_TRUE(PacksInOrder({requests.data(), kept}, 4096));
+}
+
+TEST(ShadowAtlasTest, FloorAreaDropsLeastImportant) {
+	std::array<ShadowRequest, 4> requests{
+		Sized(1, 3.0f, LightType::Point, 256), Sized(2, 2.0f, LightType::Point, 256),
+		Sized(3, 1.0f, LightType::Point, 256), Sized(4, 0.5f, LightType::Spot, 256)};
+	ASSERT_EQ(FitShadowRequests({requests.data(), requests.size()}, 1024, MAX_SHADOW_MAPS), 3u);
+	EXPECT_EQ(requests[3].stableKey, 3u);
+	EXPECT_EQ(requests[3].tileSize, 0u);
+	EXPECT_TRUE(PacksInOrder({requests.data(), 3}, 1024));
+}
+
+TEST(ShadowAtlasTest, FittedRequestsAlwaysPack) {
+	u32 seed = 12345u;
+	auto next = [&seed]() {
+		seed = seed * 1664525u + 1013904223u;
+		return seed >> 8;
+	};
+	u32 shrunk = 0;
+	u32 dropped = 0;
+	for (u32 trial = 0; trial < 400; ++trial) {
+		const u32 atlas = 512u << (next() % 4);
+		const u32 freeMaps = MAX_SHADOW_MAPS - next() % 5;
+		Vector<ShadowRequest> requests{GetMemoryResource(MemTag::Graphics)};
+		Vector<u32> wanted{GetMemoryResource(MemTag::Graphics)};
+		const u32 count = 1 + next() % 24;
+		for (u32 i = 0; i < count; ++i) {
+			const LightType type = next() % 3 == 0 ? LightType::Point : LightType::Spot;
+			ShadowRequest request = MakeRequest(i, static_cast<f32>(next() % 1000) / 100.0f, type);
+			request.tileSize = PunctualTileSize(static_cast<f32>(next() % 1001) / 1000.0f, atlas, request.MapCount());
+			wanted.push_back(request.tileSize);
+			requests.push_back(request);
+		}
+		const u32 kept = FitShadowRequests({requests.data(), requests.size()}, atlas, freeMaps);
+		u32 maps = 0;
+		u64 area = 0;
+		for (u32 i = 0; i < kept; ++i) {
+			const ShadowRequest& request = requests[i];
+			ASSERT_GT(request.tileSize, 0u);
+			EXPECT_LE(request.tileSize, wanted[request.stableKey]);
+			shrunk += request.tileSize < wanted[request.stableKey] ? 1u : 0u;
+			maps += request.MapCount();
+			area += static_cast<u64>(request.MapCount()) * request.tileSize * request.tileSize;
+		}
+		for (size_t i = kept; i < requests.size(); ++i) {
+			EXPECT_EQ(requests[i].tileSize, 0u);
+			++dropped;
+		}
+		EXPECT_LE(maps, freeMaps);
+		EXPECT_LE(area, static_cast<u64>(atlas) * atlas);
+		EXPECT_TRUE(PacksInOrder({requests.data(), kept}, atlas)) << trial;
+	}
+	EXPECT_GT(shrunk, 0u);
+	EXPECT_GT(dropped, 0u);
+}
+
+TEST(ShadowAtlasTest, KeptShadowSurvivesSmallImportanceSwap) {
+	std::array<u64, 2> kept = KeptPair(1.1f, 1.0f, {});
+	ASSERT_EQ(kept, (std::array<u64, 2>{1, 2}));
+	for (u32 frame = 0; frame < 6; ++frame) {
+		const bool odd = frame % 2 == 1;
+		kept = KeptPair(odd ? 1.1f : 1.0f, odd ? 1.0f : 1.1f, {kept.data(), kept.size()});
+		EXPECT_EQ(kept, (std::array<u64, 2>{1, 2}));
+	}
+	EXPECT_EQ(KeptPair(1.0f, 1.1f, {}), (std::array<u64, 2>{1, 3}));
+
+	kept = KeptPair(1.0f, 1.1f * SHADOW_KEEP_MARGIN, {kept.data(), kept.size()});
+	EXPECT_EQ(kept, (std::array<u64, 2>{1, 3}));
 }
 
 TEST(ShadowAtlasTest, SpotMapEnclosesCone) {

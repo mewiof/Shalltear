@@ -34,16 +34,21 @@ namespace Shalltear::PanelHeader {
 		EditorIcons::IconButtonParts parts = EditorIcons::IconButton(
 			context, parent, desc.icon, desc.fallback,
 			desc.tooltip.empty() ? desc.fallback : desc.tooltip, desc.onClick, Detail::ChromeTextPx());
-		EditorIcons::SetGlyphOrText(context, parts.face, desc.icon, desc.fallback,
-									desc.checked ? Detail::ChromeChecked() : Detail::ChromeRest(),
-									Detail::ChromeTextPx(), Detail::ChromeTextPx());
+		const bool glyph = EditorIcons::SetGlyphOrText(context, parts.face, desc.icon, desc.fallback,
+													   desc.checked ? Detail::ChromeChecked() : Detail::ChromeRest(),
+													   Detail::ChromeTextPx(), Detail::ChromeTextPx());
 		context.AddClass(parts.button, EditorTheme::Class::ToolButton);
 		if (desc.checked) {
 			context.AddClass(parts.button, EditorTheme::Class::ToolButtonOn);
 		}
 		if (context.IsAlive(parts.face)) {
 			UI::Style faceStyle = context.GetStyle(parts.face);
-			faceStyle.width = UI::Length::Pixel(EditorIcons::LineBoxHeight(Detail::ChromeTextPx()));
+			const UI::Length square = UI::Length::Pixel(EditorIcons::LineBoxHeight(Detail::ChromeTextPx()));
+			if (glyph) {
+				faceStyle.width = square;
+			} else {
+				faceStyle.minWidth = square;
+			}
 			faceStyle.textAlign = UI::Align::Center;
 			context.SetStyle(parts.face, faceStyle);
 		}

@@ -1,6 +1,9 @@
 #include "TestsPCH.h"
 
+#include "Checkout.h"
 #include "UITestUtil.h"
+
+#include "Shalltear/Core/Asset/AssetDatabase.h"
 
 #include "Shalltear/Editor/EditorTheme.h"
 
@@ -308,6 +311,58 @@ TEST(PanelHeaderTest, EscapeClosesAndClears) {
 
 	EXPECT_FALSE(open);
 	EXPECT_EQ(seen, "");
+}
+
+namespace {
+
+	class PanelHeaderFontTest : public ::testing::Test {
+	protected:
+		void SetUp() override {
+			const std::filesystem::path engineAssets = Checkout::Find("EngineAssets");
+			if (engineAssets.empty()) {
+				GTEST_SKIP() << "EngineAssets not found";
+			}
+			FileSystem::Mount("engine", Path(engineAssets.generic_string()));
+			AssetDatabase::Initialize();
+			UISystem::Initialize();
+			ASSERT_GT(EditorIcons::LineBoxHeight(EditorTheme::GetMetric(EditorTheme::MetricToken::FontBody)), 0.0f);
+		}
+
+		void TearDown() override {
+			EditorIcons::Shutdown();
+			UISystem::Terminate();
+			AssetDatabase::Terminate();
+			FileSystem::Unmount("engine");
+		}
+	};
+
+} // anonymous namespace
+
+TEST_F(PanelHeaderFontTest, WordFaceStaysOnOneLine) {
+	for (f32 scale : {1.0f, 1.25f}) {
+		UI::ContextDesc desc = Desc();
+		desc.contentScale = scale;
+		UI::Context context(desc, UISystem::GetFontSystem(), UISystem::GetVectorIconSystem());
+		EditorTheme::ApplyToContext(context);
+		UI::ElementHandle strip = PanelHeader::BuildStrip(context, context.GetRoot());
+
+		for (std::string_view word : {"2D", "Freeze"}) {
+			SCOPED_TRACE(std::format("{} at {}", word, scale));
+			PanelHeader::ToolButtonDesc button;
+			button.fallback = word;
+			button.onClick = []() {};
+			const EditorIcons::IconButtonParts parts = PanelHeader::ToolButton(context, strip, button);
+			context.Update();
+			UI::RenderList list;
+			context.BuildRenderList(list);
+
+			ASSERT_FALSE(context.HasIcon(parts.face));
+			const UI::Context::ShapedTextView text = context.GetShapedText(parts.face);
+			ASSERT_NE(text.run, nullptr);
+			EXPECT_EQ(text.run->LineCount(), 1u);
+			EXPECT_GE(context.GetLayout(parts.face).content.w + 0.01f, text.run->extent.x);
+		}
+	}
 }
 
 TEST(PanelHeaderTest, FieldFocusOnlyWhenAsked) {

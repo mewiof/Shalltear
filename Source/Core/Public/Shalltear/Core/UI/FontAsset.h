@@ -8,6 +8,11 @@
 
 namespace Shalltear {
 
+	enum class SyntheticBoldSpacing : u8 {
+		Widened,
+		Regular,
+	};
+
 	class SHALLTEAR_CORE_API FontAsset : public Asset {
 	public:
 		SLT_REFLECT_CLASS(FontAsset)
@@ -26,6 +31,8 @@ namespace Shalltear {
 
 		// searched in order for a missing glyph, depth first
 		Vector<Guid> fallbacks{GetMemoryResource(MemTag::Asset)};
+
+		SyntheticBoldSpacing syntheticBoldSpacing = SyntheticBoldSpacing::Widened;
 
 		u32 version = 0;
 
@@ -62,7 +69,7 @@ namespace Shalltear {
 		Asset* ImportWithSettings(const Path& sourcePath, const Path& virtualPath, const JSONValue& settings) override;
 		void SerializeSettings(const Path& sourcePath, JSONValue& out) const override;
 		// bump when cooked record changes shape
-		u32 GetImporterVersion() const override { return 3; }
+		u32 GetImporterVersion() const override { return 4; }
 	};
 
 } // namespace Shalltear

@@ -14,7 +14,7 @@
 
 namespace Shalltear::FontInspectorOps {
 
-	bool Apply(const Path& fontPath, std::span<const Guid> faces, std::span<const Guid> fallbacks) {
+	bool Apply(const Path& fontPath, std::span<const Guid> faces, std::span<const Guid> fallbacks, SyntheticBoldSpacing boldSpacing) {
 		const Guid self = AssetDatabase::LookupGuid(fontPath);
 		std::deque<str> pool;
 		auto idList = [&](std::span<const Guid> ids) {
@@ -38,19 +38,23 @@ namespace Shalltear::FontInspectorOps {
 		const JSONValue* previous = importer.IsObject() ? importer.Find("settings") : nullptr;
 		if (previous && previous->IsObject()) {
 			for (size_t i = 0; i < previous->MemberCount(); ++i) {
-				if (previous->KeyAt(i) != "faces" && previous->KeyAt(i) != "fallbacks") {
+				const std::string_view key = previous->KeyAt(i);
+				if (key != "faces" && key != "fallbacks" && key != "syntheticBoldSpacing") {
 					rebuilt.AddMember(previous->KeyAt(i), previous->ChildAt(i));
 				}
 			}
 		}
 		rebuilt.AddMember("faces", idList(faces));
 		rebuilt.AddMember("fallbacks", idList(fallbacks));
+		if (boldSpacing == SyntheticBoldSpacing::Regular) {
+			rebuilt.AddMember("syntheticBoldSpacing", JSONValue::MakeString("regular"));
+		}
 
 		if (!AssetDatabase::WriteImporterSettings(fontPath, rebuilt)) {
 			return false;
 		}
 		if (!EditorAssetOps::Reimport(fontPath)) {
-			SLT_LOG_WARN("Editor", "'{}': faces + fallbacks saved, the font couldn't be re-imported. Close what uses it and re-import",
+			SLT_LOG_WARN("Editor", "'{}': font settings saved, the font couldn't be re-imported. Close what uses it and re-import",
 						 fontPath.ToString());
 			return false;
 		}

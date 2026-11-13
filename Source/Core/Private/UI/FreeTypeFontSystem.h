@@ -75,6 +75,7 @@ namespace Shalltear::UI {
 			f32 ital = 0.0f;
 			f32 slnt = 0.0f;
 			bool embolden = false;
+			bool regularAdvance = false;
 			bool oblique = false;
 		};
 

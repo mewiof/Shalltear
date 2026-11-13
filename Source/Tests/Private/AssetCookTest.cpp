@@ -339,7 +339,7 @@ TEST_F(AssetCookFixture, FontAssetRoundTripsItsBytesVerbatim) {
 
 	ASSERT_EQ(restored.data.size(), original.data.size());
 	EXPECT_EQ(std::memcmp(restored.data.data(), original.data.data(), original.data.size()), 0);
-	EXPECT_EQ(cooked.source.descriptor.size(), 2 * sizeof(u32));
+	EXPECT_EQ(cooked.source.descriptor.size(), 2 * sizeof(u32) + sizeof(u8));
 	EXPECT_TRUE(cooked.source.dependencies.empty());
 	EXPECT_EQ(cooked.source.payload.size(), original.data.size());
 }

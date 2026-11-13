@@ -31,6 +31,8 @@ namespace Shalltear {
 			Vector<Guid> fallbacks{GetMemoryResource(MemTag::Editor)};
 			Vector<Guid> savedFaces{GetMemoryResource(MemTag::Editor)};
 			Vector<Guid> savedFallbacks{GetMemoryResource(MemTag::Editor)};
+			SyntheticBoldSpacing boldSpacing = SyntheticBoldSpacing::Widened;
+			SyntheticBoldSpacing savedBoldSpacing = SyntheticBoldSpacing::Widened;
 		};
 		FontDraft* _draft = nullptr;
 
@@ -48,6 +50,8 @@ namespace Shalltear {
 				_draft->savedFaces.assign(font.faces.begin(), font.faces.end());
 				_draft->fallbacks.assign(font.fallbacks.begin(), font.fallbacks.end());
 				_draft->savedFallbacks.assign(font.fallbacks.begin(), font.fallbacks.end());
+				_draft->boldSpacing = font.syntheticBoldSpacing;
+				_draft->savedBoldSpacing = font.syntheticBoldSpacing;
 			}
 			return *_draft;
 		}
@@ -253,6 +257,29 @@ namespace Shalltear {
 			}
 			BuildList(context, parent, guid, &FontDraft::fallbacks, "Add Fallback", rebuild);
 
+			AddInspectorHeader(context, parent, "Synthetic Bold", EditorTheme::GetColor(ColorToken::TextStrong));
+			AddLine(context, parent, "Thickened glyphs for bold text when no face is bold");
+			ElementHandle spacingRow = AddRow(context, parent);
+			ElementHandle spacingLabel = context.CreateElement();
+			context.AppendChild(spacingRow, spacingLabel);
+			Style labelStyle;
+			labelStyle.margin = {0.0f, 0.0f, 8.0f, 0.0f};
+			context.SetStyle(spacingLabel, labelStyle);
+			context.SetHoverable(spacingLabel, false);
+			context.SetText(spacingLabel, UISystem::GetDefaultFont(), BodyPx(), EditorTheme::GetColor(ColorToken::WidgetText), "Spacing");
+			static constexpr std::string_view Spacings[] = {"Widened", "Regular"};
+			Widgets::DropdownDesc spacing;
+			spacing.items = Spacings;
+			spacing.selected = static_cast<u32>(_draft->boldSpacing);
+			spacing.font = UISystem::GetDefaultFont();
+			spacing.fontSizePx = BodyPx();
+			spacing.onSelect = [](u32 index) {
+				if (_draft) {
+					_draft->boldSpacing = index == 1 ? SyntheticBoldSpacing::Regular : SyntheticBoldSpacing::Widened;
+				}
+			};
+			Widgets::Dropdown(context, spacingRow, spacing);
+
 			ElementHandle row = AddRow(context, parent);
 			Style end = context.GetStyle(row);
 			end.justifyContent = Align::End;
@@ -276,12 +303,13 @@ namespace Shalltear {
 			apply.font = UISystem::GetDefaultFont();
 			apply.fontSizePx = BodyPx();
 			apply.onClick = [path, rebuild]() {
-				if (!_draft || (_draft->faces == _draft->savedFaces && _draft->fallbacks == _draft->savedFallbacks)) {
+				if (!_draft || (_draft->faces == _draft->savedFaces && _draft->fallbacks == _draft->savedFallbacks &&
+								_draft->boldSpacing == _draft->savedBoldSpacing)) {
 					return;
 				}
 				const Vector<Guid> faces = _draft->faces;
 				const Vector<Guid> fallbacks = _draft->fallbacks;
-				FontInspectorOps::Apply(path, {faces.data(), faces.size()}, {fallbacks.data(), fallbacks.size()});
+				FontInspectorOps::Apply(path, {faces.data(), faces.size()}, {fallbacks.data(), fallbacks.size()}, _draft->boldSpacing);
 				_draft->asset = Guid{};
 				rebuild();
 			};

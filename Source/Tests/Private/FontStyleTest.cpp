@@ -103,7 +103,8 @@ namespace {
 		static Guid GuidOf(std::string_view name) { return AssetDatabase::LookupGuid(FontPath(name)); }
 
 		static void SetLists(std::string_view name, std::initializer_list<std::string_view> faces,
-							 std::initializer_list<std::string_view> fallbacks) {
+							 std::initializer_list<std::string_view> fallbacks,
+							 SyntheticBoldSpacing boldSpacing = SyntheticBoldSpacing::Widened) {
 			std::deque<str> ids;
 			auto ToList = [&ids](std::initializer_list<std::string_view> names) {
 				JSONValue list = JSONValue::MakeArray();
@@ -115,6 +116,9 @@ namespace {
 			JSONValue settings = JSONValue::MakeObject();
 			settings.AddMember("faces", ToList(faces));
 			settings.AddMember("fallbacks", ToList(fallbacks));
+			if (boldSpacing == SyntheticBoldSpacing::Regular) {
+				settings.AddMember("syntheticBoldSpacing", JSONValue::MakeString("regular"));
+			}
 			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(FontPath(name), settings));
 		}
 
@@ -310,6 +314,28 @@ TEST_F(FontStyleFixture, MissingBoldSynthesized) {
 	AssetDatabase::UnloadAsset(regular);
 }
 
+TEST_F(FontStyleFixture, SyntheticBoldCanKeepRegularSpacing) {
+	SetLists("Regular", {}, {}, SyntheticBoldSpacing::Regular);
+	SetLists("Medium", {}, {}, SyntheticBoldSpacing::Regular);
+	FontAsset* regular = Load("Regular");
+	FontAsset* inter = Load("Inter");
+	FontAsset* medium = Load("Medium");
+	ASSERT_NE(regular, nullptr);
+	ASSERT_NE(inter, nullptr);
+	ASSERT_NE(medium, nullptr);
+	EXPECT_EQ(regular->syntheticBoldSpacing, SyntheticBoldSpacing::Regular);
+	EXPECT_EQ(Width(regular, 400), 40.0f);
+	EXPECT_EQ(Width(regular, 700), 40.0f);
+	EXPECT_EQ(Width(regular, 700, ITALIC), 40.0f);
+	EXPECT_EQ(Width(medium, 500), Width(medium, 700));
+	EXPECT_EQ(Width(regular, 700, NORMAL, 16.0f, "IIIIIIIIII"), Width(regular, 400, NORMAL, 16.0f, "IIIIIIIIII"));
+	const f32 interRegular = Width(inter, 400, NORMAL, 16.0f, "Hello");
+	EXPECT_EQ(Width(inter, 700, NORMAL, 16.0f, "Hello"), interRegular + 5.0f);
+	AssetDatabase::UnloadAsset(medium);
+	AssetDatabase::UnloadAsset(inter);
+	AssetDatabase::UnloadAsset(regular);
+}
+
 TEST_F(FontStyleFixture, MissingItalicKeepsAdvance) {
 	FontAsset* regular = Load("Regular");
 	ASSERT_NE(regular, nullptr);
@@ -479,6 +505,30 @@ TEST_F(FontInkFixture, SyntheticBoldThickensStem) {
 	AssetDatabase::UnloadAsset(regular);
 }
 
+TEST_F(FontInkFixture, RegularSpacingBoldStillThickensRightward) {
+	SetLists("Regular", {}, {}, SyntheticBoldSpacing::Regular);
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+	const UI::Rect plain = Ink(regular, 400, NORMAL);
+	const UI::Rect bold = Ink(regular, 700, NORMAL);
+	EXPECT_EQ(plain.w, 10.0f);
+	EXPECT_EQ(bold.w, 15.0f);
+	EXPECT_EQ(bold.x, plain.x);
+	EXPECT_EQ(bold.y + bold.h, plain.y + plain.h);
+
+	UI::ShapedRun line;
+	ASSERT_TRUE(UISystem::GetFontSystem()->ShapeText(Query(regular, 700, NORMAL, 100.0f, "III"), line));
+	UI::ShapedRun plainLine;
+	ASSERT_TRUE(UISystem::GetFontSystem()->ShapeText(Query(regular, 400, NORMAL, 100.0f, "III"), plainLine));
+	ASSERT_EQ(line.glyphs.size(), 3u);
+	ASSERT_EQ(plainLine.glyphs.size(), 3u);
+	for (size_t i = 0; i < 3; ++i) {
+		EXPECT_EQ(line.glyphs[i].rect.x, plainLine.glyphs[i].rect.x) << i;
+	}
+	EXPECT_EQ(line.extent.x, plainLine.extent.x);
+	AssetDatabase::UnloadAsset(regular);
+}
+
 TEST_F(FontInkFixture, SyntheticItalicShearsGlyph) {
 	FontAsset* regular = Load("Regular");
 	FontAsset* axis = Load("WeightAxis");
@@ -592,7 +642,7 @@ TEST_F(FontInkFixture, InstalledVariableFontFollowsWeight) {
 }
 
 TEST_F(FontStyleFixture, CookRecordsFaces) {
-	SetFaces("Regular", {"Bold", "Italic"});
+	SetLists("Regular", {"Bold", "Italic"}, {}, SyntheticBoldSpacing::Regular);
 	FontAsset* regular = Load("Regular");
 	ASSERT_NE(regular, nullptr);
 
@@ -612,6 +662,7 @@ TEST_F(FontStyleFixture, CookRecordsFaces) {
 	EXPECT_TRUE(cooked->LoadCooked(descriptorReader, payloadReader));
 	EXPECT_EQ(cooked->faces, regular->faces);
 	EXPECT_TRUE(cooked->fallbacks.empty());
+	EXPECT_EQ(cooked->syntheticBoldSpacing, SyntheticBoldSpacing::Regular);
 	EXPECT_EQ(cooked->data, regular->data);
 	Delete(cooked);
 	AssetDatabase::UnloadAsset(regular);
@@ -793,13 +844,18 @@ TEST_F(FontStyleFixture, ApplyWritesBothLists) {
 	const u32 version = regular->version;
 	const Guid faces[] = {GuidOf("Bold"), GuidOf("Regular"), GuidOf("Bold"), Guid{}, GuidOf("Italic")};
 	const Guid fallbacks[] = {GuidOf("Inter")};
-	ASSERT_TRUE(FontInspectorOps::Apply(FontPath("Regular"), faces, fallbacks));
+	ASSERT_TRUE(FontInspectorOps::Apply(FontPath("Regular"), faces, fallbacks, SyntheticBoldSpacing::Regular));
 	EXPECT_EQ(regular->version, version + 1);
 	ASSERT_EQ(regular->faces.size(), 2u);
 	EXPECT_EQ(regular->faces[0], GuidOf("Bold"));
 	EXPECT_EQ(regular->faces[1], GuidOf("Italic"));
 	ASSERT_EQ(regular->fallbacks.size(), 1u);
 	EXPECT_EQ(regular->fallbacks[0], GuidOf("Inter"));
+	EXPECT_EQ(regular->syntheticBoldSpacing, SyntheticBoldSpacing::Regular);
+
+	ASSERT_TRUE(FontInspectorOps::Apply(FontPath("Regular"), faces, fallbacks, SyntheticBoldSpacing::Widened));
+	EXPECT_EQ(regular->version, version + 2);
+	EXPECT_EQ(regular->syntheticBoldSpacing, SyntheticBoldSpacing::Widened);
 	AssetDatabase::UnloadAsset(regular);
 }
 
@@ -872,6 +928,37 @@ TEST_F(FontFacesInspectorFixture, AddedFaceShowsDeclaredStyle) {
 	EXPECT_EQ(regular->faces[0], GuidOf("BoldItalic"));
 	EXPECT_EQ(regular->faces[1], GuidOf("WeightAxis"));
 	EXPECT_TRUE(regular->fallbacks.empty());
+	AssetDatabase::UnloadAsset(regular);
+}
+
+TEST_F(FontFacesInspectorFixture, BoldSpacingAppliedFromInspector) {
+	FontAsset* regular = Load("Regular");
+	ASSERT_NE(regular, nullptr);
+
+	UI::ContextDesc desc;
+	desc.sizePx = {520, 900};
+	desc.contentScale = 1.0f;
+	UI::Context context(desc, UISystem::GetFontSystem());
+	UI::ElementHandle body = context.CreateElement();
+	UI::Style bodyStyle;
+	bodyStyle.flexDirection = UI::FlexDirection::Column;
+	bodyStyle.width = UI::Length::Percent(1.0f);
+	context.SetStyle(body, bodyStyle);
+	context.AppendChild(context.GetRoot(), body);
+	Build(context, body, "Regular", *regular);
+	ASSERT_TRUE(context.IsAlive(FindByText(context, body, "Synthetic Bold")));
+
+	ClickElement(context, FindByText(context, body, "Widened"));
+	ASSERT_EQ(context.GetOpenPopupCount(), 1u);
+	ClickElement(context, FindByText(context, context.GetOpenPopup(0), "Regular"));
+	EXPECT_EQ(regular->syntheticBoldSpacing, SyntheticBoldSpacing::Widened);
+	ClickElement(context, FindByText(context, body, "Apply"));
+	EXPECT_EQ(regular->syntheticBoldSpacing, SyntheticBoldSpacing::Regular);
+	EXPECT_EQ(Width(regular, 700), 40.0f);
+
+	Build(context, body, "Regular", *regular);
+	EXPECT_TRUE(context.IsAlive(FindByText(context, body, "Regular")));
+	EXPECT_FALSE(context.IsAlive(FindByText(context, body, "Widened")));
 	AssetDatabase::UnloadAsset(regular);
 }
 

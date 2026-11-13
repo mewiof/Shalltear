@@ -130,13 +130,15 @@ namespace Shalltear {
 
 	void FontAsset::AdoptReimport(Asset& fresh) {
 		FontAsset& imported = static_cast<FontAsset&>(fresh);
-		if (imported.data == data && imported.faces == faces && imported.fallbacks == fallbacks) {
+		if (imported.data == data && imported.faces == faces && imported.fallbacks == fallbacks &&
+			imported.syntheticBoldSpacing == syntheticBoldSpacing) {
 			return;
 		}
 		OnUnload();
 		data = std::move(imported.data);
 		faces = std::move(imported.faces);
 		fallbacks = std::move(imported.fallbacks);
+		syntheticBoldSpacing = imported.syntheticBoldSpacing;
 		++version;
 	}
 
@@ -186,13 +188,19 @@ namespace Shalltear {
 		}
 		CookList(descriptor, faces);
 		CookList(descriptor, fallbacks);
+		descriptor.Write(static_cast<u8>(syntheticBoldSpacing));
 		payload.WriteBytes(data.data(), data.size());
 		return true;
 	}
 
 	bool FontAsset::LoadCooked(CookReader& descriptor, CookReader& payload) {
-		return LoadCookedList(descriptor, faces) && LoadCookedList(descriptor, fallbacks) &&
-			   payload.ReadInto(data, payload.Remaining()) && !data.empty();
+		u8 spacing = 0;
+		if (!LoadCookedList(descriptor, faces) || !LoadCookedList(descriptor, fallbacks) || !descriptor.Read(spacing) ||
+			spacing > static_cast<u8>(SyntheticBoldSpacing::Regular)) {
+			return false;
+		}
+		syntheticBoldSpacing = static_cast<SyntheticBoldSpacing>(spacing);
+		return payload.ReadInto(data, payload.Remaining()) && !data.empty();
 	}
 
 	Asset* FontAssetImporter::Import(const Path& sourcePath) {
@@ -211,6 +219,9 @@ namespace Shalltear {
 		}
 		ReadIdList(settings["faces"], "face", virtualPath, asset->faces);
 		ReadIdList(settings["fallbacks"], "fallback", virtualPath, asset->fallbacks);
+		if (settings["syntheticBoldSpacing"].AsString() == "regular") {
+			asset->syntheticBoldSpacing = SyntheticBoldSpacing::Regular;
+		}
 		return asset;
 	}
 

@@ -322,6 +322,8 @@ namespace Shalltear::UI {
 				styled.slnt = std::clamp(lean == Lean::Oblique ? -ITALIC_OBLIQUE_DEGREES : 0.0f, face.slnt.min, face.slnt.max);
 			}
 			styled.embolden = wanted >= BOLD_WEIGHT && styled.weight < BOLD_WEIGHT;
+			const FontAsset* asset = face.system ? nullptr : face.asset.Get();
+			styled.regularAdvance = styled.embolden && asset && asset->syntheticBoldSpacing == SyntheticBoldSpacing::Regular;
 			styled.oblique = lean == Lean::Synthetic;
 			return styled;
 		};
@@ -610,7 +612,11 @@ namespace Shalltear::UI {
 			return false;
 		}
 		if (styled.embolden) {
+			const FT_Pos regular = ftFace->glyph->advance.x;
 			FT_GlyphSlot_Embolden(ftFace->glyph);
+			if (styled.regularAdvance) {
+				ftFace->glyph->advance.x = regular;
+			}
 		}
 		if (styled.oblique) {
 			FT_GlyphSlot_Slant(ftFace->glyph, SYNTHETIC_OBLIQUE_SHEAR, 0);
@@ -634,7 +640,8 @@ namespace Shalltear::UI {
 		out.height = static_cast<i32>(bitmap.rows);
 		out.bearingX = bitmapGlyph->left;
 		out.bearingY = bitmapGlyph->top;
-		out.advance = static_cast<i32>((bitmapGlyph->root.advance.x + (styled.embolden ? 0x8000 : 0)) >> 16);
+		const bool widened = styled.embolden && !styled.regularAdvance;
+		out.advance = static_cast<i32>((bitmapGlyph->root.advance.x + (widened ? 0x8000 : 0)) >> 16);
 
 		if (out.width > 0 && out.height > 0) {
 			i32 atlasX = 0;

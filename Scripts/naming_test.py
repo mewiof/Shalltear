@@ -337,6 +337,48 @@ def check_anon_scope(check):
 	return 3
 
 
+LOCAL_CONSTANTS_SNIPPET = """void Probe() {
+	constexpr unsigned W = 4, H = 4;
+	const unsigned A = 1, B = 2;
+	static constexpr unsigned S = 1, T = 2;
+	unsigned plain = 1, other = 2;
+	auto table = [] { constexpr int L = 1; return L; };
+	(void)table;
+}
+"""
+
+
+def check_local_constants(check):
+	cindex = codemod.cindex
+	libclang = codemod.lint.LIBCLANG
+	if libclang and os.path.exists(libclang):
+		with contextlib.suppress(Exception):
+			cindex.Config.set_library_file(libclang)
+	root = os.path.dirname(os.path.dirname(os.path.abspath(codemod.__file__)))
+	tmp = tempfile.mkdtemp(dir=root)
+	try:
+		src = os.path.join(tmp, "LocalConstantsProbe.cpp")
+		with open(src, "wb") as f:
+			f.write(LOCAL_CONSTANTS_SNIPPET.encode("utf-8"))
+		try:
+			tu = cindex.Index.create().parse(src, args=["-std=c++20"])
+		except Exception:
+			print("SKIPPED: the local constant check needs a loadable libclang")
+			return 0
+		if [d for d in tu.diagnostics if d.severity >= 3]:
+			print("SKIPPED: the local constant probe didn't compile")
+			return 0
+		got = {c.spelling: codemod.lint.row_for(c) for c in tu.cursor.walk_preorder()
+			   if c.kind == codemod.K.VAR_DECL}
+		check("LOCALS constexpr on later declarators in a group", got,
+			  {"W": "constants", "H": "constants", "A": "locals", "B": "locals",
+			   "S": "constants", "T": "constants", "plain": "locals", "other": "locals",
+			   "table": "locals", "L": "constants"})
+	finally:
+		shutil.rmtree(tmp, ignore_errors=True)
+	return 1
+
+
 def check_ledger_freshness(check):
 	here = os.path.dirname(os.path.abspath(__file__))
 	ledger = os.path.join(here, "naming-ledger.txt")
@@ -448,6 +490,7 @@ def main():
 		total += check_merge(check)
 		total += check_traversal(check)
 		total += check_anon_scope(check)
+		total += check_local_constants(check)
 	else:
 		print("SKIPPED: the codemod merge checks need libclang importable")
 	if failures:

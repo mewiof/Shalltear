@@ -44,6 +44,8 @@ KIND_ROW = {
 
 SKIP_SPELLINGS = ("operator", "~")
 
+FUNCTION_KINDS = (K.FUNCTION_DECL, K.CXX_METHOD, K.FUNCTION_TEMPLATE, K.CONSTRUCTOR, K.DESTRUCTOR)
+
 DISPOSITIONS = (
 	"finding",
 	"conforming",
@@ -152,16 +154,46 @@ def _is_constant(cursor):
 	return _has_constexpr(cursor)
 
 
-def _has_constexpr(cursor):
+def _leading_tokens(cursor):
+	out = []
 	try:
 		for n, tok in enumerate(cursor.get_tokens()):
-			if tok.spelling == "constexpr":
-				return True
+			out.append(tok.spelling)
 			if n > 6:
 				break
 	except Exception:
 		pass
-	return False
+	return out
+
+
+def _declaration_statement(cursor):
+	parent = cursor.semantic_parent
+	start = cursor.extent.start
+	if parent is None or parent.kind not in FUNCTION_KINDS or start.file is None:
+		return None
+	stack = [parent]
+	while stack:
+		for child in stack.pop().get_children():
+			at = child.extent
+			if at.start.file is None or at.start.file.name != start.file.name \
+					or not at.start.offset <= start.offset <= at.end.offset:
+				continue
+			if child.kind == K.DECL_STMT and any(c == cursor for c in child.get_children()):
+				return child
+			stack.append(child)
+	return None
+
+
+def _has_constexpr(cursor):
+	head, tokens = cursor, _leading_tokens(cursor)
+	if tokens[:1] == [cursor.spelling]:
+		statement = _declaration_statement(cursor)
+		if statement is not None:
+			head = next(statement.get_children(), cursor)
+			tokens = _leading_tokens(head)
+	if head.spelling in tokens:
+		tokens = tokens[:tokens.index(head.spelling)]
+	return "constexpr" in tokens
 
 
 def _names_a_value(cursor):
@@ -183,9 +215,7 @@ def row_for(cursor):
 	kind = cursor.kind
 	if kind == K.VAR_DECL:
 		parent = cursor.semantic_parent
-		in_function = parent is not None and parent.kind in (
-			K.FUNCTION_DECL, K.CXX_METHOD, K.FUNCTION_TEMPLATE, K.CONSTRUCTOR, K.DESTRUCTOR
-		)
+		in_function = parent is not None and parent.kind in FUNCTION_KINDS
 		constant = _has_constexpr(cursor) if in_function else _is_constant(cursor)
 		if not constant:
 			return "locals" if in_function else "statics"

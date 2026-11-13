@@ -509,6 +509,11 @@ namespace Shalltear::RHI {
 					SLT_LOG_ERROR("Graphics", "TransientSetWriter: the buffer at binding {} wasn't created with Storage usage", staged.binding);
 					continue;
 				}
+				if (staged.a % BINDING_OFFSET_ALIGNMENT != 0) {
+					SLT_LOG_ERROR("Graphics", "TransientSetWriter: buffer offset {} at binding {} isn't a multiple of {} (allocate with default alignment)",
+								  staged.a, staged.binding, BINDING_OFFSET_ALIGNMENT);
+					continue;
+				}
 				out.object = reinterpret_cast<u64>(buffer->buffer);
 				out.offset = staged.a;
 				out.range = staged.b;

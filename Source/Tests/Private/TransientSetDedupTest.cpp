@@ -52,6 +52,9 @@ namespace {
 			if (event.message.find("not ShaderResource") != str::npos) {
 				++_barrierReports;
 			}
+			if (event.message.find("isn't a multiple of") != str::npos) {
+				++_alignmentReports;
+			}
 		}
 		void Flush() override {}
 
@@ -71,10 +74,15 @@ namespace {
 			std::lock_guard lock(_mutex);
 			return _barrierReports;
 		}
+		u32 AlignmentReports() const {
+			std::lock_guard lock(_mutex);
+			return _alignmentReports;
+		}
 	private:
 		mutable std::mutex _mutex;
 		u32 _validationErrors = 0;
 		u32 _barrierReports = 0;
+		u32 _alignmentReports = 0;
 		bool _sentinelSeen = false;
 		str _firstValidation;
 	};
@@ -113,6 +121,7 @@ namespace {
 		u32 ValidationErrors() const { return _sink->ValidationErrors(); }
 		str FirstValidation() const { return _sink->FirstValidation(); }
 		u32 BarrierReports() const { return _sink->BarrierReports(); }
+		u32 AlignmentReports() const { return _sink->AlignmentReports(); }
 	private:
 		std::shared_ptr<GuardSink> _sink;
 		bool _ownsJobSystem = false;
@@ -382,4 +391,33 @@ TEST_F(TransientSetFixture, BarrierGuardFiresEveryCommit) {
 
 	ASSERT_TRUE(watch.Settle());
 	EXPECT_EQ(watch.BarrierReports(), 2u);
+}
+
+TEST_F(TransientSetFixture, MisalignedBufferOffsetIsRefused) {
+	ScopedGuardWatch watch;
+	_device->BeginFrame();
+	RHI::TransientAllocation block = _device->AllocateTransient(512);
+	ASSERT_TRUE(block.IsValid());
+	ASSERT_EQ(block.offset % RHI::BINDING_OFFSET_ALIGNMENT, 0u);
+	auto commit = [&](u64 offset) {
+		return _device->CreateTransientSet(_litPipeline, 1)
+			.WriteUniformBuffer(0, block.buffer, offset, 256)
+			.WriteTexture(1, _textureA)
+			.WriteSampler(2, _samplerA)
+			.Commit();
+	};
+	RHI::TransientSet head = commit(block.offset);
+	RHI::TransientSet shifted = commit(block.offset + 16);
+	RHI::TransientSet shiftedFurther = commit(block.offset + 32);
+	RHI::TransientSet next = commit(block.offset + RHI::BINDING_OFFSET_ALIGNMENT);
+	ASSERT_TRUE(head.IsValid() && shifted.IsValid() && shiftedFurther.IsValid() && next.IsValid());
+	EXPECT_NE(head.opaque, next.opaque);
+	EXPECT_NE(head.opaque, shifted.opaque);
+	EXPECT_EQ(shifted.opaque, shiftedFurther.opaque);
+	_device->EndFrame();
+	_device->WaitIdle();
+
+	ASSERT_TRUE(watch.Settle());
+	EXPECT_EQ(watch.AlignmentReports(), 2u);
+	EXPECT_EQ(watch.ValidationErrors(), 0u) << watch.FirstValidation();
 }

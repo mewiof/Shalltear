@@ -404,6 +404,8 @@ namespace Shalltear::RHI {
 	};
 
 	inline constexpr u64 WHOLE_BUFFER = ~0ull;
+	// buffer offset in a set must be a multiple (max device limit)
+	inline constexpr u64 BINDING_OFFSET_ALIGNMENT = 256;
 
 	inline constexpr u32 MAX_DESCRIPTOR_SETS = 4;
 	inline constexpr u32 MAX_COLOR_ATTACHMENTS = 4;

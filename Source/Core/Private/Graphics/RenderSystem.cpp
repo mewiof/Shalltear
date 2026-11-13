@@ -1912,7 +1912,7 @@ namespace Shalltear {
 				if (block.set != 0 || block.binding != SHADER_GLOBALS_BINDING || block.sizeBytes == 0) {
 					continue;
 				}
-				RHI::TransientAllocation allocation = device.AllocateTransient(block.sizeBytes, 16);
+				RHI::TransientAllocation allocation = device.AllocateTransient(block.sizeBytes);
 				if (!allocation.IsValid()) {
 					break;
 				}

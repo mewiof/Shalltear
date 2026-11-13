@@ -90,7 +90,7 @@ namespace Shalltear::RHI {
 		void EndFrame();
 		bool IsInFrame() const;
 
-		TransientAllocation AllocateTransient(u64 size, u64 alignment = 256);
+		TransientAllocation AllocateTransient(u64 size, u64 alignment = BINDING_OFFSET_ALIGNMENT);
 
 		TransientSetWriter CreateTransientSet(PipelineHandle pipeline, u32 setIndex);
 

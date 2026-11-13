@@ -12,6 +12,7 @@
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
 #include "Shalltear/Core/Graphics/ObjectPass.h"
 #include "Shalltear/Core/Graphics/ShaderGlobals.h"
+#include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Window/WindowSystem.h"
@@ -19,6 +20,7 @@
 #include "Shalltear/Editor/EditorViewportOps.h"
 
 #include "PassProbes.h"
+#include "ShadingHarness.h"
 #include "ZoneProbe.h"
 
 #include <atomic>
@@ -589,6 +591,61 @@ TEST_F(FullScreenPassFixture, ShaderGlobalsReachMeshMaterial) {
 	EXPECT_EQ(count(pixels, size, Color32(0, 0, 255, 255)), 0u);
 	ShaderGlobals::ClearAll();
 	AssetDatabase::UnloadAsset(quadMesh);
+}
+
+TEST_F(FullScreenPassFixture, ShaderGlobalsBindWithoutErrors) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Globals.hlsl", GLOBAL_SHADER);
+	WriteProjectFile("GlobalMesh.hlsl", GLOBAL_MESH_SHADER);
+	MaterialAsset* passMaterial = LoadMaterial("Globals.mat", "Globals.hlsl", "");
+	MaterialAsset* meshMaterial = LoadMaterial("GlobalMesh.mat", "GlobalMesh.hlsl", "");
+	ASSERT_NE(passMaterial, nullptr);
+	ASSERT_NE(meshMaterial, nullptr);
+	Asset* cubeMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
+	ASSERT_NE(cubeMesh, nullptr);
+	_scene = SceneSystem::CreateScene("Globals");
+	Handle<MeshRenderer> renderer = SceneSystem::CreateObject("Cube", _scene)->AddComponent<MeshRenderer>();
+	renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeMesh)));
+	renderer->SetMaterial(0, Handle<MaterialAsset>(meshMaterial));
+	SceneSystem::EndFrame();
+	FullScreenPass row;
+	row.point = PassPoint::AfterOpaque;
+	row.material = Handle<MaterialAsset>(passMaterial);
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	ShaderGlobals::SetColor("meshTint", Color(0.0f, 0.0f, 1.0f, 1.0f));
+	ShaderGlobals::SetColor("globalTint", Color(1.0f, 0.0f, 0.0f, 1.0f));
+	ShaderGlobals::SetFloat("globalScale", 1.0f);
+
+	JobSystem::Initialize();
+	LogManager::Initialize({false, false});
+	LogManager::SetGlobalLevel(LogLevel::Trace);
+	auto sink = std::make_shared<ShadingTest::ShaderDiagnosticSink>();
+	LogManager::AddSink(sink);
+	ASSERT_TRUE(ShadingTest::ArmDiagnosticSink(sink));
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render({}, pixels, size));
+	const u32 texels = static_cast<u32>(size.x * size.y);
+	EXPECT_GT(texels - TexelsOtherThan(pixels, size, Color32(0, 0, 255, 255)), 100u);
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(255, 0, 0, 255)), 0u);
+
+	LogManager::Terminate();
+	const str said = sink->Joined();
+	sink.reset();
+	JobSystem::Terminate();
+	EXPECT_EQ(said.find("TransientSetWriter"), str::npos) << said;
+	EXPECT_EQ(said.find("VUID"), str::npos) << said;
+
+	ShaderGlobals::ClearAll();
+	AssetDatabase::UnloadAsset(cubeMesh);
 }
 
 TEST_F(FullScreenPassFixture, SingleSampleCopyIsBlit) {

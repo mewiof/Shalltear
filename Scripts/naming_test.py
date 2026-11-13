@@ -358,6 +358,7 @@ def check_ledger_freshness(check):
 
 
 CASED_SYSTEM_HEADERS = frozenset(["TargetConditionals.h"])
+CASED_SYSTEM_DIRECTORIES = ("X11/",)
 
 
 def check_system_include_casing(check):
@@ -378,7 +379,7 @@ def check_system_include_casing(check):
 			with open(path, "rb") as f:
 				text = f.read().decode("utf-8", "replace")
 			for header in angled.findall(text):
-				if header in CASED_SYSTEM_HEADERS:
+				if header in CASED_SYSTEM_HEADERS or header.startswith(CASED_SYSTEM_DIRECTORIES):
 					continue
 				if any(c.isupper() for c in header):
 					offenders.append("%s: <%s>" % (os.path.relpath(path, source), header))

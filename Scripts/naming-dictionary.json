@@ -107,6 +107,7 @@
 		"External/**",
 		"**/generated/**",
 		"Source/**/Generated/**",
+		"Source/**/ThirdParty/**",
 		"Source/**/stb_*.h",
 		"Source/**/stb_*.c",
 		"Source/Core/Private/Graphics/DxcMinimal.h"

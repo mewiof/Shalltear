@@ -4,7 +4,7 @@
 // converted from the SVG paths into padded boxes with outlines unchanged
 // 26 original artwork drawn for Shalltear under the repository's LICENSE.txt
 // sources sha256:73a62889f1c46658
-// icon table sha256:4347d6b9baa2b670
+// icon table sha256:0c183675d0fb5e78
 
 #include "EditorIconGlyphs.generated.h"
 

@@ -14,13 +14,18 @@ ShalltearSurface ShalltearDepthSurface(ShalltearVaryings input, bool isFrontFace
 #ifdef SHALLTEAR_ALPHA_CLIP
 	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(ShalltearVaryingsDrawAddress(input)));
 #endif
+	ShalltearClipLODFade(ShalltearLoadDrawFlags(ShalltearVaryingsDrawAddress(input)), input.positionCS.xy);
 	return surface;
 }
 
 #ifdef SHALLTEAR_DEPTH_NO_COLOR
 void PSMain(ShalltearVaryings input, bool isFrontFace : SV_IsFrontFace) {
+#ifdef SHALLTEAR_ALPHA_CLIP
 	ShalltearSurfaceInput surfaceInput;
 	ShalltearDepthSurface(input, isFrontFace, surfaceInput);
+#else
+	ShalltearClipLODFade(ShalltearLoadDrawFlags(ShalltearVaryingsDrawAddress(input)), input.positionCS.xy);
+#endif
 }
 #elif defined(SHALLTEAR_DEPTH_VALUE)
 uint PSMain(ShalltearVaryings input, bool isFrontFace : SV_IsFrontFace) : SV_Target0 {

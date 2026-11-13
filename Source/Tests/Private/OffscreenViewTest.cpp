@@ -8,6 +8,7 @@
 
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Scene.h"
@@ -2237,6 +2238,111 @@ TEST_F(ShadowViewFixture, OccluderOnlyDarkens) {
 	GraphicsStats stats = RenderSystem::GetStats();
 	EXPECT_EQ(stats.shadowLights, 1u);
 	EXPECT_EQ(stats.shadowMapsRendered, 4u) << stats.shadowMapsRendered << " maps rendered";
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
+TEST_F(ShadowViewFixture, LODFadeDithersShadowCasters) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+
+	Handle<Scene> scene = SceneSystem::CreateScene("Shadows");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.3f, -1.0f, 0.7f));
+	ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+	auto caster = [&](const Vec3& at) {
+		Handle<SceneObject> block = SceneSystem::CreateObject("Caster", scene);
+		block->SetLocalPosition(at);
+		block->SetLocalScale(Vec3(3.0f, 3.0f, 3.0f));
+		Handle<MeshRenderer> renderer = block->AddComponent<MeshRenderer>();
+		renderer->SetMesh(cube);
+		renderer->SetCastShadows(ShadowCasting::ShadowsOnly);
+		return block;
+	};
+	Handle<SceneObject> first = caster(Vec3(1.1f, 3.4f, -0.6f));
+	Handle<SceneObject> second = caster(Vec3(-4.9f, 3.4f, -0.6f));
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.2f).objects.push_back(first);
+	group->AddLevel(0.01f).objects.push_back(second);
+	group->SetFadeMode(LODFadeMode::AnimatedCrossFade);
+	group->SetCrossFadeDuration(0.5f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({128, 128});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	f64 clock = 10.0;
+	Vec2I size{};
+	auto render = [&](Vector<u8>& pixels) {
+		const Vec3 eye(-6.0f, 11.0f, -15.0f);
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(eye, Vec3(0.5f, 0.0f, 0.0f));
+		desc.projection = Mat4::PerspectiveReverseZ(55.0f, 1.0f, 0.1f, 500.0f);
+		desc.cameraPosition = eye;
+		desc.clearColor = Color::Black();
+		desc.time = &clock;
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		ASSERT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, size));
+	};
+	Vector<u8> onlyFirst{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> halfway{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> onlySecond{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> unshadowed{GetMemoryResource(MemTag::Graphics)};
+	render(onlyFirst);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	group->EditLevel(0).screenRelativeHeight = 0.9f;
+	render(halfway);
+	EXPECT_EQ(halfway, onlyFirst);
+	clock = 10.25;
+	render(halfway);
+	clock = 10.6;
+	render(onlySecond);
+	sun->SetCastShadows(false);
+	render(unshadowed);
+
+	f64 darkFirst = 0.0;
+	f64 darkSecond = 0.0;
+	f64 halfFirst = 0.0;
+	f64 halfSecond = 0.0;
+	u32 regionFirst = 0;
+	u32 regionSecond = 0;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			const f64 lit = Luma(TexelAt(unshadowed, size, x, y));
+			const f64 byFirst = lit - Luma(TexelAt(onlyFirst, size, x, y));
+			const f64 bySecond = lit - Luma(TexelAt(onlySecond, size, x, y));
+			const f64 mid = lit - Luma(TexelAt(halfway, size, x, y));
+			if (byFirst > 20.0 && bySecond < 3.0) {
+				++regionFirst;
+				darkFirst += byFirst;
+				halfFirst += mid;
+			} else if (bySecond > 20.0 && byFirst < 3.0) {
+				++regionSecond;
+				darkSecond += bySecond;
+				halfSecond += mid;
+			}
+		}
+	}
+	ASSERT_GT(regionFirst, 40u);
+	ASSERT_GT(regionSecond, 40u);
+	EXPECT_NEAR(halfFirst / darkFirst, 0.5, 0.2) << regionFirst;
+	EXPECT_NEAR(halfSecond / darkSecond, 0.5, 0.2) << regionSecond;
 
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);
@@ -4946,4 +5052,261 @@ TEST_F(ShadowViewFixture, AtlasOverlaySurvivesDebugViewUnderIt) {
 
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);
+}
+
+namespace {
+
+	u32 CountLit(const Vector<u8>& pixels, Vec2I size, u32* outRed = nullptr) {
+		u32 lit = 0;
+		u32 red = 0;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				const RGBA texel = TexelAt(pixels, size, x, y);
+				if (texel.r > 24 || texel.g > 24 || texel.b > 24) {
+					++lit;
+					red += texel.r > texel.g + 40 ? 1u : 0u;
+				}
+			}
+		}
+		if (outRed) {
+			*outRed = red;
+		}
+		return lit;
+	}
+
+	ViewDesc ViewFrom(f32 z) {
+		ViewDesc desc = CubeView();
+		desc.view = LookForwardView(Vec3(0.0f, 0.0f, z));
+		desc.cameraPosition = Vec3(0.0f, 0.0f, z);
+		desc.projection = Mat4::PerspectiveReverseZ(60.0f, 1.0f, 0.1f, 1000.0f);
+		return desc;
+	}
+
+} // anonymous namespace
+
+TEST_F(OffscreenViewFixture, LODGroupDrawsLevelForScreenHeight) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> detailed = AddCube(level, 1.6f);
+	Handle<SceneObject> coarse = AddCube(level, -1.6f);
+	if (!detailed.IsValid() || !coarse.IsValid()) {
+		GTEST_SKIP();
+	}
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", level)->AddComponent<LODGroup>();
+	group->AddLevel(0.3f).objects.push_back(detailed);
+	group->AddLevel(0.15f).objects.push_back(coarse);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	auto halves = [&](f32 z, u32& left, u32& right) {
+		Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+		Vec2I size{};
+		ASSERT_TRUE(RenderAndRead(target, ViewFrom(z), pixels, size));
+		CountHalves(pixels, size, left, right);
+	};
+	u32 left = 0;
+	u32 right = 0;
+	halves(-5.0f, left, right);
+	EXPECT_EQ(left, 0u);
+	EXPECT_GT(right, 20u);
+	halves(-15.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+	halves(-30.0f, left, right);
+	EXPECT_EQ(left + right, 0u);
+
+	group->EditLevel(0).objects.push_back(coarse);
+	halves(-5.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_GT(right, 20u);
+	halves(-15.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+	group->EditLevel(0).objects.pop_back();
+
+	Handle<SceneObject> late = SceneSystem::CreateObject("Late", level);
+	late->SetLocalPosition(Vec3(1.6f, 0.0f, 0.0f));
+	group->EditLevel(0).objects.push_back(late);
+	SceneSystem::EndFrame();
+	halves(-15.0f, left, right);
+	Handle<MeshRenderer> lateRenderer = late->AddComponent<MeshRenderer>();
+	lateRenderer->SetMesh(detailed->GetComponent<MeshRenderer>()->GetMesh());
+	lateRenderer->SetMaterial(0, detailed->GetComponent<MeshRenderer>()->GetMaterial(0));
+	SceneSystem::EndFrame();
+	halves(-15.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+
+	group->SetEnabled(false);
+	halves(-30.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_GT(right, 0u);
+
+	group->SetEnabled(true);
+	SceneSystem::Destroy(detailed);
+	SceneSystem::Destroy(late);
+	SceneSystem::EndFrame();
+	halves(-5.0f, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
+}
+
+TEST_F(OffscreenViewFixture, LODCrossFadeSplitsPixelsBetweenLevels) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> plain = AddCube(level, 0.0f);
+	Handle<SceneObject> red = AddCube(level, 0.0f);
+	if (!plain.IsValid() || !red.IsValid()) {
+		GTEST_SKIP();
+	}
+	MaterialAsset* tinted = red->GetComponent<MeshRenderer>()->GetMaterialInstance(0).Get();
+	ASSERT_NE(tinted, nullptr);
+	tinted->SetColor("baseColor", Color(1.0f, 0.0f, 0.0f, 1.0f));
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", level)->AddComponent<LODGroup>();
+	LODLevel& near = group->AddLevel(0.3f);
+	near.objects.push_back(plain);
+	near.fadeTransitionWidth = 1.0f;
+	group->AddLevel(0.01f).objects.push_back(red);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	u32 reds = 0;
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-2.0f), pixels, size));
+	const u32 solid = CountLit(pixels, size, &reds);
+	ASSERT_GT(solid, 200u);
+	EXPECT_EQ(reds, 0u);
+
+	group->SetFadeMode(LODFadeMode::CrossFade);
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-2.0f), pixels, size));
+	const u32 faded = CountLit(pixels, size, &reds);
+	EXPECT_NEAR(static_cast<f32>(faded), static_cast<f32>(solid), static_cast<f32>(solid) * 0.03f);
+	const f32 keep = (0.866f / 2.0f - 0.3f) / 0.7f;
+	EXPECT_NEAR(static_cast<f32>(reds) / static_cast<f32>(faded), 1.0f - keep, 0.08f) << reds << " of " << faded;
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
+}
+
+TEST_F(OffscreenViewFixture, LODAnimatedCrossFadeFollowsViewClock) {
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> plain = AddCube(level, 0.0f);
+	Handle<SceneObject> red = AddCube(level, 0.0f);
+	if (!plain.IsValid() || !red.IsValid()) {
+		GTEST_SKIP();
+	}
+	MaterialAsset* tinted = red->GetComponent<MeshRenderer>()->GetMaterialInstance(0).Get();
+	ASSERT_NE(tinted, nullptr);
+	tinted->SetColor("baseColor", Color(1.0f, 0.0f, 0.0f, 1.0f));
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", level)->AddComponent<LODGroup>();
+	group->AddLevel(0.3f).objects.push_back(plain);
+	group->AddLevel(0.01f).objects.push_back(red);
+	group->SetFadeMode(LODFadeMode::AnimatedCrossFade);
+	group->SetCrossFadeDuration(0.5f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	f64 clock = 10.0;
+	auto redShare = [&](f32 z) {
+		ViewDesc desc = ViewFrom(z);
+		desc.time = &clock;
+		u32 reds = 0;
+		EXPECT_TRUE(RenderAndRead(target, desc, pixels, size));
+		const u32 lit = CountLit(pixels, size, &reds);
+		EXPECT_GT(lit, 100u);
+		return lit > 0 ? static_cast<f32>(reds) / static_cast<f32>(lit) : -1.0f;
+	};
+	EXPECT_EQ(redShare(-2.0f), 0.0f);
+	EXPECT_EQ(redShare(-5.0f), 0.0f);
+	clock = 10.25;
+	EXPECT_NEAR(redShare(-5.0f), 0.5f, 0.08f);
+	clock = 10.6;
+	EXPECT_GT(redShare(-5.0f), 0.97f);
+	clock = 10.725;
+	EXPECT_GT(redShare(-2.0f), 0.97f);
+	clock = 10.975;
+	EXPECT_NEAR(redShare(-2.0f), 0.5f, 0.08f);
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
+}
+
+TEST_F(MSAAViewFixture, LODBiasFromProfileKeepsDetailLonger) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> detailed = AddCube(level, 1.6f);
+	Handle<SceneObject> coarse = AddCube(level, -1.6f);
+	if (!detailed.IsValid() || !coarse.IsValid()) {
+		GTEST_SKIP();
+	}
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", level)->AddComponent<LODGroup>();
+	group->AddLevel(0.3f).objects.push_back(detailed);
+	group->AddLevel(0.01f).objects.push_back(coarse);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	u32 left = 0;
+	u32 right = 0;
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-15.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+
+	auto* profile = static_cast<GraphicsProfile*>(AssetDatabase::LoadAsset(Path("project://Assets/Msaa.slprofile")));
+	ASSERT_NE(profile, nullptr);
+	profile->lodBias = 2.0f;
+	RenderSystem::RenderAll();
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-15.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_EQ(left, 0u);
+	EXPECT_GT(right, 0u);
+
+	group->SetFadeMode(LODFadeMode::CrossFade);
+	group->EditLevel(0).fadeTransitionWidth = 1.0f;
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-15.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_GT(right, 0u);
+	profile->lodCrossFade = false;
+	RenderSystem::RenderAll();
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-15.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_EQ(left, 0u);
+	EXPECT_GT(right, 0u);
+
+	profile->lodBias = 1.0f;
+	profile->maximumLODLevel = 1;
+	RenderSystem::RenderAll();
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-5.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+	profile->maximumLODLevel = 5;
+	RenderSystem::RenderAll();
+	ASSERT_TRUE(RenderAndRead(target, ViewFrom(-5.0f), pixels, size));
+	CountHalves(pixels, size, left, right);
+	EXPECT_GT(left, 0u);
+	EXPECT_EQ(right, 0u);
+	AssetDatabase::UnloadAsset(profile);
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
 }

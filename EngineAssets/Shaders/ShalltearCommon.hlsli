@@ -56,6 +56,12 @@ struct ShalltearPerDraw {
 #define SHALLTEAR_BLEND_ADDITIVE 2u
 #define SHALLTEAR_BLEND_PREMULTIPLIED 3u
 #define SHALLTEAR_BLEND_MULTIPLY 4u
+// bits 16-23 fade amount, bit 24 set for complementary pixels
+#define SHALLTEAR_DRAW_FADE_SHIFT 16u
+#define SHALLTEAR_DRAW_FADE_ABOVE 0x1000000u
+// must match ShaderReflection.h's SHADER_LOD_FADE_CONSTANT_ID
+#define SHALLTEAR_LOD_FADE_CONSTANT 100
+[[vk::constant_id(SHALLTEAR_LOD_FADE_CONSTANT)]] const bool gShalltearLODFade = false;
 
 // passing block by value miscompiles in DXC
 ShalltearPerDraw ShalltearLoadPerDraw(uint64_t drawAddress) {
@@ -74,6 +80,18 @@ float ShalltearLoadAlphaClipThreshold(uint64_t drawAddress) {
 #define SHALLTEAR_DRAW_FLAGS_OFFSET 124
 uint ShalltearLoadDrawFlags(uint64_t drawAddress) {
 	return vk::RawBufferLoad<uint>(drawAddress + SHALLTEAR_DRAW_FLAGS_OFFSET, 4);
+}
+
+void ShalltearClipLODFade(uint flags, float2 pixel) {
+	uint fade = (flags >> SHALLTEAR_DRAW_FADE_SHIFT) & 0xFFu;
+	if (!gShalltearLODFade || fade == 0u) {
+		return;
+	}
+	static const float BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+	uint2 cell = uint2(pixel) & 3u;
+	float threshold = (BAYER[cell.y * 4u + cell.x] + 0.5) / 16.0;
+	float keep = float(255u - fade) / 255.0;
+	clip((flags & SHALLTEAR_DRAW_FADE_ABOVE) != 0u ? threshold - (1.0 - keep) : keep - threshold);
 }
 
 uint ShalltearLoadDrawBlend(uint64_t drawAddress) {

@@ -166,12 +166,14 @@ namespace Shalltear::ProjectOps {
 				i32 cascades;
 				f32 shadowDistance;
 				f32 firstCascadeDistance;
+				f32 lodBias;
+				bool lodCrossFade;
 			};
 			static constexpr Tier TIERS[] = {
-				{"1 Low.slprofile", 1, 3, 1024, 2, 40.0f, 10.0f},
-				{"2 Medium.slprofile", 2, 5, 2048, 3, 60.0f, 6.0f},
-				{"3 High.slprofile", 4, 5, 2048, 4, 60.0f, 4.0f},
-				{"4 Ultra.slprofile", 4, 7, 4096, 4, 120.0f, 8.0f},
+				{"1 Low.slprofile", 1, 3, 1024, 2, 40.0f, 10.0f, 0.4f, false},
+				{"2 Medium.slprofile", 2, 5, 2048, 3, 60.0f, 6.0f, 0.7f, true},
+				{"3 High.slprofile", 4, 5, 2048, 4, 60.0f, 4.0f, 1.0f, true},
+				{"4 Ultra.slprofile", 4, 7, 4096, 4, 120.0f, 8.0f, 2.0f, true},
 			};
 
 			std::error_code ec;
@@ -190,6 +192,8 @@ namespace Shalltear::ProjectOps {
 				profile->shadowCascades = tier.cascades;
 				profile->shadowDistance = tier.shadowDistance;
 				profile->shadowFirstCascadeDistance = tier.firstCascadeDistance;
+				profile->lodBias = tier.lodBias;
+				profile->lodCrossFade = tier.lodCrossFade;
 				profile->tonemap = TonemapCurve::Neutral;
 				const bool saved = profile->Export(Path((settings / tier.fileName).generic_string()));
 				Delete(profile);

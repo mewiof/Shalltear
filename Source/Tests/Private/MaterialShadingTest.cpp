@@ -1848,7 +1848,8 @@ TEST_F(MaterialShadingFixture, TemplatedShadersCarryDepthProgram) {
 		EXPECT_TRUE(base.HasProgram(ShaderProgramKind::Forward)) << name;
 		EXPECT_TRUE(base.HasProgram(ShaderProgramKind::Depth));
 		EXPECT_FALSE(base.depthPixelSpirv.empty()) << name;
-		EXPECT_TRUE(base.depthClipPixelSpirv.empty()) << name;
+		EXPECT_FALSE(base.depthClipPixelSpirv.empty()) << name;
+		EXPECT_FALSE(DeclaresAnOutputAtALocation(base.depthClipPixelSpirv)) << name;
 		EXPECT_NE(base.pixelSpirv, base.depthPixelSpirv) << name;
 	}
 
@@ -2026,7 +2027,7 @@ TEST_F(MaterialShadingFixture, CookCarriesDepthProgramToPlayer) {
 	EXPECT_EQ(after.pixelSpirv, before.pixelSpirv);
 	EXPECT_EQ(after.depthVertexSpirv, before.depthVertexSpirv);
 	EXPECT_EQ(after.depthPixelSpirv, before.depthPixelSpirv);
-	EXPECT_TRUE(after.depthClipPixelSpirv.empty());
+	EXPECT_EQ(after.depthClipPixelSpirv, before.depthClipPixelSpirv);
 	EXPECT_TRUE(after.HasProgram(ShaderProgramKind::Depth));
 	ASSERT_GT(restored.variants.size(), clipped);
 	EXPECT_EQ(restored.variants[clipped].depthClipPixelSpirv, lit->variants[clipped].depthClipPixelSpirv);

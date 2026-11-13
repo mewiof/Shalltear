@@ -325,6 +325,24 @@ float4 PSMain(VSOutput input) : SV_Target { return float4(1, 0, 1, 1); }
 
 } // anonymous namespace
 
+TEST_F(ShaderCompileFixture, OnlyLODFadeSpecializationImports) {
+	ShaderAsset probe;
+	if (!probe.Import(Write("probe.hlsl", MINIMAL_SHADER))) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	auto withConstant = [&](u32 id) {
+		str source = MINIMAL_SHADER;
+		const str flag = "[[vk::constant_id(" + std::to_string(id) + ")]] const bool gFlag = false;\n";
+		source.insert(source.find("struct VSOutput"), flag);
+		const size_t body = source.find("return float4(1, 0, 1, 1);");
+		source.insert(body, "if (gFlag) { clip(-1); } ");
+		ShaderAsset shader;
+		return shader.Import(Write("flag.hlsl", source));
+	};
+	EXPECT_TRUE(withConstant(SHADER_LOD_FADE_CONSTANT_ID));
+	EXPECT_FALSE(withConstant(SHADER_LOD_FADE_CONSTANT_ID + 1));
+}
+
 TEST_F(ShaderCompileFixture, ImportCompilesReflectsAndParsesState) {
 	Path source = Write("minimal.hlsl", MINIMAL_SHADER);
 

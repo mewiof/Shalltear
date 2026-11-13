@@ -684,21 +684,11 @@ namespace Shalltear {
 						 ObtainStage(input, assetPath, ShaderStageKind::Pixel, keywordDefines, mode,
 									 dependencies, variant.depthPixelSpirv);
 			if (built) {
-				const str clipDefine = str(ShaderAlphaClipKeyword) + "=1";
-				bool clips = false;
-				for (const str& define : keywordDefines) {
-					if (define == clipDefine) {
-						clips = true;
-						break;
-					}
-				}
-				if (clips) {
-					Vector<str> clipDefines{GetMemoryResource(MemTag::Asset)};
-					clipDefines.assign(keywordDefines.begin(), keywordDefines.end());
-					clipDefines.push_back(str(DEPTH_NO_COLOR_DEFINE));
-					built = ObtainStage(input, assetPath, ShaderStageKind::Pixel, {clipDefines.data(), clipDefines.size()},
-										mode, dependencies, variant.depthClipPixelSpirv);
-				}
+				Vector<str> clipDefines{GetMemoryResource(MemTag::Asset)};
+				clipDefines.assign(keywordDefines.begin(), keywordDefines.end());
+				clipDefines.push_back(str(DEPTH_NO_COLOR_DEFINE));
+				built = ObtainStage(input, assetPath, ShaderStageKind::Pixel, {clipDefines.data(), clipDefines.size()},
+									mode, dependencies, variant.depthClipPixelSpirv);
 			}
 			if (!built) {
 				SLT_LOG_WARN("Graphics", "shader '{}': the depth-only program doesn't build (no shadows)",

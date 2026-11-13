@@ -16,6 +16,7 @@ float4 PSMain(ShalltearVaryings input, bool isFrontFace : SV_IsFrontFace) : SV_T
 #ifdef SHALLTEAR_ALPHA_CLIP
 	clip(surface.alpha - ShalltearLoadAlphaClipThreshold(drawAddress));
 #endif
+	ShalltearClipLODFade(ShalltearLoadDrawFlags(drawAddress), input.positionCS.xy);
 
 	uint blend = ShalltearLoadDrawBlend(drawAddress);
 	return ShalltearExpose(ShalltearApplyFog(float4(surface.baseColor + surface.emissive, surface.alpha), surfaceInput.positionWS, blend),

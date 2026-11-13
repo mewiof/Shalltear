@@ -49,6 +49,7 @@ namespace Shalltear {
 		};
 
 		enum SpvDecoration : u32 {
+			DecorationSpecId = 1,
 			DecorationBlock = 2,
 			DecorationMatrixStride = 7,
 			DecorationArrayStride = 6,
@@ -121,7 +122,8 @@ namespace Shalltear {
 		std::unordered_map<u64, u32> memberOffsets;
 		std::unordered_map<u64, u32> memberMatrixStrides;
 		std::unordered_map<u32, u32> arrayStrides;
-		bool sawSpecConstant = false;
+		std::unordered_map<u32, u32> specIds;
+		std::vector<u32> specConstants;
 
 		size_t cursor = 5;
 		while (cursor < wordCount) {
@@ -196,6 +198,11 @@ namespace Shalltear {
 					case DecorationArrayStride:
 						arrayStrides[operands[0]] = operands[2];
 						break;
+					case DecorationSpecId:
+						if (operandCount >= 3) {
+							specIds[operands[0]] = operands[2];
+						}
+						break;
 					default:
 						break;
 					}
@@ -250,7 +257,7 @@ namespace Shalltear {
 			case OpSpecConstant:
 			case OpSpecConstantTrue:
 			case OpSpecConstantFalse:
-				sawSpecConstant = true;
+				specConstants.push_back(operandCount >= 2 ? operands[1] : 0u);
 				break;
 			case OpVariable:
 				if (operandCount >= 3) {
@@ -269,9 +276,12 @@ namespace Shalltear {
 			reflection.error = "no entry point found";
 			return reflection;
 		}
-		if (sawSpecConstant) {
-			reflection.error = "specialization constants aren't supported in v1";
-			return reflection;
+		for (u32 id : specConstants) {
+			const auto found = specIds.find(id);
+			if (found == specIds.end() || found->second != SHADER_LOD_FADE_CONSTANT_ID) {
+				reflection.error = "specialization constants aren't supported in v1";
+				return reflection;
+			}
 		}
 
 		auto nameOf = [&](u32 id) -> str {

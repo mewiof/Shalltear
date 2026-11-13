@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">LOD Group</title>
+	<path fill="#4d6f8f" d="M29.9 37.4 L22.4 44.9 L11.6 44.9 L4.1 37.4 L4.1 26.6 L11.6 19.1 L22.4 19.1 L29.9 26.6 Z"/>
+	<path fill="#8ac6f0" d="M11.6 19.1 L22.4 19.1 L17 32 Z M4.1 26.6 L11.6 19.1 L17 32 Z"/>
+	<path fill="#8ac6f0" d="M50 34 L45.5 41.8 L36.5 41.8 L32 34 L36.5 26.2 L45.5 26.2 Z"/>
+	<path fill="#f0a848" d="M57 31 L62 40 L52 40 Z"/>
+</svg>

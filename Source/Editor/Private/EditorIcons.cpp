@@ -9,6 +9,7 @@
 #include "Shalltear/Core/Graphics/Camera.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/Light.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
@@ -470,6 +471,7 @@ namespace Shalltear::EditorIcons {
 				Plant(ReflectionProbe::GetReflectType()->name, Mark::ReflectionProbe, onlyAbsent);
 				Plant(UIPanelRenderer::GetReflectType()->name, Mark::UIPanelRenderer, onlyAbsent);
 				Plant(ProceduralRenderer::GetReflectType()->name, Mark::ProceduralRenderer, onlyAbsent);
+				Plant(LODGroup::GetReflectType()->name, Mark::LODGroup, onlyAbsent);
 			}
 
 		} // anonymous namespace

@@ -400,10 +400,17 @@ namespace Shalltear::RHI {
 	inline constexpr u32 TABLE_TEXTURES_3D_BINDING = 3;
 	inline constexpr u32 TABLE_NONE = ~0u;
 
+	struct SpecializationConstant {
+		u32 id = 0;
+		u32 value = 0;
+	};
+	inline constexpr u32 MAX_SPECIALIZATION_CONSTANTS = 8;
+
 	struct GraphicsPipelineDesc {
 		// spans read only during creation
 		std::span<const u8> vertexSpirv;
 		std::span<const u8> pixelSpirv;
+		std::span<const SpecializationConstant> pixelConstants;
 
 		std::span<const DescriptorBindingDesc> bindings;
 		u32 pushConstantSize = 0;

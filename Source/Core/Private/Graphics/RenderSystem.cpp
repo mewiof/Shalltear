@@ -14,6 +14,7 @@
 #include "Shalltear/Core/Graphics/GraphicsEvents.h"
 #include "Shalltear/Core/Graphics/GraphicsProfile.h"
 #include "Shalltear/Core/Graphics/Light.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
@@ -430,6 +431,10 @@ namespace Shalltear {
 		constexpr u32 DRAW_RECEIVES_SHADOWS = 1u;
 		constexpr u32 DRAW_BLEND_SHIFT = 1u;
 		constexpr u32 DRAW_LAYERS_SHIFT = 8u;
+		// must match ShalltearCommon.hlsli's SHALLTEAR_DRAW_FADE_ values
+		constexpr u32 DRAW_FADE_SHIFT = 16u;
+		constexpr u32 DRAW_FADE_ABOVE = 1u << 24;
+		constexpr RHI::SpecializationConstant LODFadeConstant{SHADER_LOD_FADE_CONSTANT_ID, 1};
 		static_assert(static_cast<u32>(RHI::BlendMode::Count) <= 8u, "the blend's 3 bits of the per-draw flags");
 		static_assert(static_cast<u32>(RHI::BlendMode::Opaque) == 0u && static_cast<u32>(RHI::BlendMode::Alpha) == 1u &&
 						  static_cast<u32>(RHI::BlendMode::Additive) == 2u && static_cast<u32>(RHI::BlendMode::Premultiplied) == 3u &&
@@ -475,6 +480,39 @@ namespace Shalltear {
 			Vector<WarnedSkySource> warnedSkySources{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ReflectionProbe>> reflectionProbes{GetMemoryResource(MemTag::Graphics)};
 			Vector<Handle<ReflectionProbe>> isolatedReflectionProbes{GetMemoryResource(MemTag::Graphics)};
+
+			struct LODRecord {
+				Handle<LODGroup> group;
+				u64 signature = 0;
+				bool dirty = true;
+				Vec3 localCenter{};
+				f32 localSize = 0.0f;
+				Vector<u64> renderers{GetMemoryResource(MemTag::Graphics)};
+			};
+			Vector<LODRecord> lodRecords{GetMemoryResource(MemTag::Graphics)};
+			struct LODFrameGroup {
+				const LODGroup* group = nullptr;
+				u64 id = 0;
+				Vec3 center{};
+				f32 size = 1.0f;
+			};
+			Vector<LODFrameGroup> lodFrame{GetMemoryResource(MemTag::Graphics)};
+			struct LODMember {
+				u32 group = 0;
+				u64 levels = 0;
+			};
+			HashMap<u64, LODMember> lodMembers{GetMemoryResource(MemTag::Graphics)};
+			f32 lodBias = 1.0f;
+			u32 lodFinestLevel = 0;
+			bool lodCrossFade = true;
+			struct LODFadeSlot {
+				LODFadeState fade;
+				LODChoice choice;
+				u64 seen = 0;
+			};
+			HashMap<u64, LODFadeSlot> lodFades{GetMemoryResource(MemTag::Graphics)};
+			u64 lodFrameIndex = 0;
+			u64 lodView = 0;
 
 			struct SkinnedOutput {
 				u64 vertexAddress = 0;
@@ -1234,8 +1272,9 @@ namespace Shalltear {
 		}
 
 		u64 PipelineKey(u64 shaderId, u32 shaderVersion, u32 variant, ShaderProgramKind kind,
-						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples) {
+						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples, bool lodFade) {
 			u64 key = shaderId * 1099511628211ull;
+			key ^= lodFade ? 0x9E3779B97F4A7C15ull : 0ull;
 			key ^= static_cast<u64>(shaderVersion) << 32;
 			key ^= static_cast<u64>(kind) << 62;
 			key ^= static_cast<u64>(variant) << 40;
@@ -1282,7 +1321,8 @@ namespace Shalltear {
 		RHI::PipelineHandle GetOrCreatePipeline(ShaderAsset* shader, RHI::Format colorFormat, RHI::Format depthFormat,
 												const RHI::ShaderRenderState* stateOverride = nullptr, u32 samples = 1,
 												u32 variant = SHADER_BASE_VARIANT,
-												ShaderProgramKind kind = ShaderProgramKind::Forward, bool* outInstanced = nullptr) {
+												ShaderProgramKind kind = ShaderProgramKind::Forward, bool* outInstanced = nullptr,
+												bool lodFade = false) {
 			RenderState& state = *_state;
 			if (outInstanced) {
 				*outInstanced = false;
@@ -1300,7 +1340,9 @@ namespace Shalltear {
 			}
 			u64 shaderId = shader->GetInstanceId();
 			const RHI::ShaderRenderState& pipelineState = stateOverride ? *stateOverride : shader->renderState;
-			u64 key = PipelineKey(shaderId, shader->version, variant, kind, colorFormat, depthFormat, RenderStateKey(pipelineState), samples);
+			lodFade = lodFade && kind != ShaderProgramKind::Compute;
+			u64 key = PipelineKey(shaderId, shader->version, variant, kind, colorFormat, depthFormat, RenderStateKey(pipelineState), samples,
+								  lodFade);
 			auto it = state.pipelineCache.find(key);
 			if (it != state.pipelineCache.end()) {
 				if (outInstanced) {
@@ -1336,12 +1378,18 @@ namespace Shalltear {
 			if (valuePass && code->depthValuePixelSpirv.empty()) {
 				return RHI::PipelineHandle{};
 			}
+			const bool clips = shader->integrator == ShaderTemplate::None
+								   ? !code->depthClipPixelSpirv.empty()
+								   : std::find(code->keywords.begin(), code->keywords.end(), ShaderAlphaClipKeyword) != code->keywords.end();
 			RHI::GraphicsPipelineDesc desc;
 			desc.vertexSpirv = depthOnly ? blob(code->depthVertexSpirv) : blob(code->vertexSpirv);
-			desc.pixelSpirv = depthOnly ? (noColor	   ? blob(code->depthClipPixelSpirv)
+			desc.pixelSpirv = depthOnly ? (noColor	   ? (clips || lodFade ? blob(code->depthClipPixelSpirv) : std::span<const u8>{})
 										   : valuePass ? blob(code->depthValuePixelSpirv)
 													   : blob(code->depthPixelSpirv))
 										: blob(code->pixelSpirv);
+			if (lodFade) {
+				desc.pixelConstants = {&LODFadeConstant, 1};
+			}
 			desc.bindings = {shader->bindings.data(), shader->bindings.size()};
 			desc.pushConstantSize = shader->pushConstantSize;
 			desc.blend = pipelineState.blend;
@@ -1636,6 +1684,8 @@ namespace Shalltear {
 			bool receiveShadows = true;
 			ShadowCasting castShadows = ShadowCasting::On;
 			u64 volumeMask = 0;
+			u8 lodFade = 0;
+			bool lodFadeAbove = false;
 		};
 
 		enum class DrawListUse : u8 {
@@ -1689,8 +1739,9 @@ namespace Shalltear {
 			}
 			const u64 submesh = Math::Min<u64>(static_cast<u64>(entry.submesh - entry.mesh->submeshes.data()), 0xFFFF);
 			order.key[1] = entry.sortGroup;
-			order.key[2] = (static_cast<u64>(depthBand) << 50) | (static_cast<u64>(static_cast<u32>(entry.mesh->GetInstanceId())) << 18) |
-						   (submesh << 2) | (static_cast<u64>(entry.mirrored) << 1) | static_cast<u64>(entry.castShadows == ShadowCasting::TwoSided);
+			order.key[2] = (static_cast<u64>(entry.lodFade != 0) << 60) | (static_cast<u64>(depthBand) << 50) |
+						   (static_cast<u64>(static_cast<u32>(entry.mesh->GetInstanceId())) << 18) | (submesh << 2) |
+						   (static_cast<u64>(entry.mirrored) << 1) | static_cast<u64>(entry.castShadows == ShadowCasting::TwoSided);
 			order.depth = entry.depth;
 			return order;
 		}
@@ -2369,9 +2420,37 @@ namespace Shalltear {
 			const Vector<Handle<MeshRenderer>>* meshRenderers = nullptr;
 			const Vector<Handle<SkinnedMeshRenderer>>* skinnedRenderers = nullptr;
 			const Vector<RenderState::SkinnedOutput>* skinnedOutputs = nullptr;
+			std::span<const LODChoice> lodChoices;
+			const HashMap<u64, RenderState::LODMember>* lodMembers = nullptr;
 			ShaderAsset* errorShader = nullptr;
 			const MaterialAsset* errorMaterial = nullptr;
 		};
+
+		bool LODDraws(const DrawWalk& walk, u64 renderer, u8& outFade, bool& outAbove) {
+			outFade = 0;
+			outAbove = false;
+			const auto found = walk.lodMembers->find(renderer);
+			if (found == walk.lodMembers->end() || found->second.group >= walk.lodChoices.size()) {
+				return true;
+			}
+			const LODChoice& choice = walk.lodChoices[found->second.group];
+			const u64 levels = found->second.levels;
+			const bool atLevel = choice.level < LODChoice::MAX_LEVELS && ((levels >> choice.level) & 1u) != 0;
+			const bool atNext = choice.next < LODChoice::MAX_LEVELS && ((levels >> choice.next) & 1u) != 0;
+			if (atLevel && atNext) {
+				return true;
+			}
+			if (atLevel) {
+				outFade = static_cast<u8>(255u - choice.keep);
+				return choice.keep != 0;
+			}
+			if (atNext) {
+				outFade = choice.keep;
+				outAbove = true;
+				return choice.keep != 255;
+			}
+			return false;
+		}
 
 		// called on a job lane (no state write/RHI call)
 		void WalkRenderers(const DrawWalk& walk, ExtractionLane& lane, u32 laneIndex, u32 first, u32 end) {
@@ -2386,6 +2465,8 @@ namespace Shalltear {
 			const std::span<const GraphicsInternal::CullVolume> volumes = walk.volumes;
 			const u32 laneBits = laneIndex << LANE_ENTRY_BITS;
 
+			u8 lodFade = 0;
+			bool lodFadeAbove = false;
 			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world, u32 renderingLayerMask,
 								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
 				AABB worldBounds = bounds.IsValid() ? bounds.Transformed(world) : AABB{};
@@ -2418,6 +2499,8 @@ namespace Shalltear {
 					entry->castShadows = castShadows;
 					entry->receiveShadows = receiveShadows;
 					entry->object = object;
+					entry->lodFade = lodFade;
+					entry->lodFadeAbove = lodFadeAbove;
 					lane.orders.push_back(OrderOf(*entry, depthBand, laneBits | static_cast<u32>(lane.entries.size())));
 					lane.entries.push_back(entry);
 				}
@@ -2448,6 +2531,9 @@ namespace Shalltear {
 				if ((renderer->GetRenderingLayerMask() & walk.renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), walk.use)) {
 					continue;
 				}
+				if (walk.lodMembers && !LODDraws(walk, renderer->GetInstanceId(), lodFade, lodFadeAbove)) {
+					continue;
+				}
 				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(), renderer->GetRenderingLayerMask(),
 						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
 						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetRenderedMaterial(slot).Get(); });
@@ -2469,6 +2555,9 @@ namespace Shalltear {
 					continue;
 				}
 				if ((renderer->GetRenderingLayerMask() & walk.renderingLayerMask) == 0 || !DrawsFor(renderer->GetCastShadows(), walk.use)) {
+					continue;
+				}
+				if (walk.lodMembers && !LODDraws(walk, renderer->GetInstanceId(), lodFade, lodFadeAbove)) {
 					continue;
 				}
 
@@ -2525,11 +2614,192 @@ namespace Shalltear {
 			}
 			element.flags |= static_cast<u32>(entry.renderState.blend) << DRAW_BLEND_SHIFT;
 			element.flags |= (entry.renderingLayerMask & LIGHT_LAYERS) << DRAW_LAYERS_SHIFT;
+			element.flags |= static_cast<u32>(entry.lodFade) << DRAW_FADE_SHIFT;
+			if (entry.lodFadeAbove) {
+				element.flags |= DRAW_FADE_ABOVE;
+			}
 			out = element;
 		}
 
+		u64 LODSignature(const LODGroup& group) {
+			u64 hash = 0xcbf29ce484222325ull;
+			auto mix = [&hash](u64 value) {
+				hash = (hash ^ value) * 0x100000001b3ull;
+				hash ^= hash >> 31;
+			};
+			const u32 levels = group.GetLevelCount();
+			mix(levels);
+			for (u32 level = 0; level < levels; ++level) {
+				const Vector<Handle<SceneObject>>& objects = group.GetLevel(level).objects;
+				mix(objects.size());
+				for (const Handle<SceneObject>& handle : objects) {
+					const SceneObject* object = handle.Get();
+					mix(handle.GetInstanceId());
+					mix(object ? object->GetComponentCount() : ~0ull);
+				}
+			}
+			return hash;
+		}
+
+		void ForgetLODRecord(RenderState& state, u32 index) {
+			RenderState::LODRecord& record = state.lodRecords[index];
+			for (u64 id : record.renderers) {
+				const auto found = state.lodMembers.find(id);
+				if (found != state.lodMembers.end() && found->second.group == index) {
+					state.lodMembers.erase(found);
+				}
+			}
+			record.renderers.clear();
+		}
+
+		void MeasureLODRecord(RenderState& state, u32 index) {
+			ForgetLODRecord(state, index);
+			RenderState::LODRecord& record = state.lodRecords[index];
+			record.dirty = false;
+			record.localSize = 0.0f;
+			const LODGroup* group = record.group.Get();
+			const SceneObject* owner = group ? group->GetOwner().Get() : nullptr;
+			record.signature = group ? LODSignature(*group) : 0;
+			if (!owner) {
+				return;
+			}
+			const Mat4 toLocal = owner->GetWorldMatrix().Inverse();
+			AABB bounds = AABB::Empty();
+			const u32 levels = Math::Min(group->GetLevelCount(), LODChoice::MAX_LEVELS);
+			for (u32 level = 0; level < levels; ++level) {
+				for (const Handle<SceneObject>& objectHandle : group->GetLevel(level).objects) {
+					const SceneObject* object = objectHandle.Get();
+					if (!object) {
+						continue;
+					}
+					auto join = [&](const Component* renderer, const MeshAsset* mesh) {
+						if (!renderer) {
+							return;
+						}
+						RenderState::LODMember& member = state.lodMembers[renderer->GetInstanceId()];
+						if (member.group != index || member.levels == 0) {
+							member = {index, 0};
+							record.renderers.push_back(renderer->GetInstanceId());
+						}
+						member.levels |= 1ull << level;
+						if (mesh && mesh->bounds.IsValid() && renderer->IsEffectivelyEnabled()) {
+							bounds.Encapsulate(mesh->bounds.Transformed(toLocal * object->GetWorldMatrix()));
+						}
+					};
+					const MeshRenderer* renderer = object->GetComponent<MeshRenderer>().Get();
+					join(renderer, renderer ? renderer->GetMesh().Get() : nullptr);
+					const SkinnedMeshRenderer* skinned = object->GetComponent<SkinnedMeshRenderer>().Get();
+					join(skinned, skinned ? skinned->GetMesh().Get() : nullptr);
+				}
+			}
+			if (bounds.IsValid()) {
+				const Vec3 extent = bounds.max - bounds.min;
+				record.localCenter = bounds.Center();
+				record.localSize = Math::Max(extent.x, Math::Max(extent.y, extent.z));
+			}
+		}
+
+		void MarkLODRecordDirty(RenderState& state, u64 renderer) {
+			const auto member = state.lodMembers.find(renderer);
+			if (member != state.lodMembers.end() && member->second.group < state.lodRecords.size()) {
+				state.lodRecords[member->second.group].dirty = true;
+			}
+		}
+
+		void BuildLODFrame(RenderState& state) {
+			++state.lodFrameIndex;
+			if ((state.lodFrameIndex & 63) == 0) {
+				std::erase_if(state.lodFades, [&](const auto& entry) { return entry.second.seen + 120 < state.lodFrameIndex; });
+			}
+			const u32 count = static_cast<u32>(state.lodRecords.size());
+			state.lodFrame.resize(count);
+			for (u32 i = 0; i < count; ++i) {
+				RenderState::LODRecord& record = state.lodRecords[i];
+				RenderState::LODFrameGroup& frame = state.lodFrame[i];
+				frame = {};
+				const LODGroup* group = record.group.Get();
+				if (!group && record.group.GetInstanceId() != 0) {
+					ForgetLODRecord(state, i);
+					record.group = {};
+				}
+				if (group && (record.dirty || LODSignature(*group) != record.signature)) {
+					MeasureLODRecord(state, i);
+				}
+				const SceneObject* owner = group ? group->GetOwner().Get() : nullptr;
+				if (!owner || group->GetLevelCount() == 0) {
+					continue;
+				}
+				frame.group = group;
+				frame.id = group->GetInstanceId();
+				const Mat4& world = owner->GetWorldMatrix();
+				if (record.localSize > 0.0f) {
+					const f32 scale = Math::Max(Vec3(world(0, 0), world(1, 0), world(2, 0)).Length(),
+												Math::Max(Vec3(world(0, 1), world(1, 1), world(2, 1)).Length(),
+														  Vec3(world(0, 2), world(1, 2), world(2, 2)).Length()));
+					frame.center = world.TransformPoint(record.localCenter);
+					frame.size = record.localSize * scale;
+				} else {
+					frame.center = owner->GetWorldPosition();
+				}
+			}
+		}
+
+		LODChoice FloorLOD(LODChoice choice, u32 levels, u32 finest) {
+			if (finest == 0 || levels == 0) {
+				return choice;
+			}
+			const u8 floor = static_cast<u8>(Math::Min(finest, levels - 1));
+			auto lift = [floor](u8 level) { return level != LODChoice::NONE && level < floor ? floor : level; };
+			choice.level = lift(choice.level);
+			choice.next = lift(choice.next);
+			if (choice.level == choice.next) {
+				choice.next = LODChoice::NONE;
+				choice.keep = 255;
+			}
+			return choice;
+		}
+
+		std::span<const LODChoice> ChooseLODs(RenderState& state, LinearAllocator& arena, const Vec3& origin, const Mat4& projection) {
+			const u32 count = static_cast<u32>(state.lodFrame.size());
+			if (count == 0) {
+				return {};
+			}
+			LODChoice* choices = arena.AllocateAs<LODChoice>(count);
+			const bool perspective = projection(3, 2) != 0.0f;
+			const f32 scale = std::abs(projection(1, 1)) * 0.5f * state.lodBias;
+			const f64 now = state.hasViewTime ? state.viewTime : Time::GetUnscaledTime();
+			for (u32 i = 0; i < count; ++i) {
+				const RenderState::LODFrameGroup& frame = state.lodFrame[i];
+				if (!frame.group) {
+					choices[i] = LODChoice{};
+					continue;
+				}
+				const f32 reach = perspective ? Math::Max(Vec3::Distance(origin, frame.center), 1e-4f) : 1.0f;
+				const f32 height = frame.size * scale / reach;
+				LODChoice choice;
+				if (state.lodView != 0 && state.lodCrossFade && frame.group->GetFadeMode() == LODFadeMode::AnimatedCrossFade) {
+					u64 key = (state.lodView ^ (frame.id * 0x9E3779B97F4A7C15ull)) * 0xBF58476D1CE4E5B9ull;
+					key ^= key >> 31;
+					RenderState::LODFadeSlot& slot = state.lodFades[key];
+					if (slot.seen != state.lodFrameIndex) {
+						slot.seen = state.lodFrameIndex;
+						slot.choice = frame.group->Choose(height, slot.fade, now);
+					}
+					choice = slot.choice;
+				} else {
+					choice = frame.group->Choose(height);
+					if (!state.lodCrossFade) {
+						choice.next = LODChoice::NONE;
+						choice.keep = 255;
+					}
+				}
+				choices[i] = FloorLOD(choice, frame.group->GetLevelCount(), state.lodFinestLevel);
+			}
+			return {choices, count};
+		}
+
 		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
-									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin,
+									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin, const Mat4& lodProjection,
 									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
 			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
 								"a draw's volume mask is 1 bit per shadow map");
@@ -2555,6 +2825,8 @@ namespace Shalltear {
 			walk.errorMaterial = state.errorMaterial;
 
 			arena.Reset();
+			walk.lodChoices = ChooseLODs(state, arena, sortOrigin, lodProjection);
+			walk.lodMembers = walk.lodChoices.empty() || state.lodMembers.empty() ? nullptr : &state.lodMembers;
 			const u32 rendererCount = static_cast<u32>(walk.meshRenderers->size() + walk.skinnedRenderers->size());
 			const u32 lanes = JobSystem::LaneCount(rendererCount, RENDERERS_PER_LANE);
 			Vector<ExtractionLane*>& laneStates = state.extractionLanes;
@@ -3672,22 +3944,28 @@ namespace Shalltear {
 			}
 		}
 
+		constexpr u64 PENDING_VIEW_LOD_KEY = 1ull << 63;
+
 		class ViewRecordScope {
 		public:
 			explicit ViewRecordScope(const RenderState::PendingView& view)
-				: ViewRecordScope(view.hasTime, view.time, _state->passScopes[view.scopeIndex].exposureAddress) {}
+				: ViewRecordScope(view.hasTime, view.time, _state->passScopes[view.scopeIndex].exposureAddress,
+								  PENDING_VIEW_LOD_KEY | view.targetId) {}
 			explicit ViewRecordScope(const RenderState::CameraWork& camera)
-				: ViewRecordScope(false, 0.0, _state->passScopes[camera.scopeIndex].exposureAddress) {}
-			ViewRecordScope(bool hasTime, f64 time, u64 exposureAddress) {
+				: ViewRecordScope(false, 0.0, _state->passScopes[camera.scopeIndex].exposureAddress,
+								  camera.camera ? camera.camera->GetInstanceId() & ~PENDING_VIEW_LOD_KEY : 0) {}
+			ViewRecordScope(bool hasTime, f64 time, u64 exposureAddress, u64 lodView = 0) {
 				RenderState& state = *_state;
 				state.hasViewTime = hasTime;
 				state.viewTime = time;
 				state.viewExposureAddress = exposureAddress;
+				state.lodView = lodView;
 			}
 			~ViewRecordScope() {
 				_state->hasViewTime = false;
 				_state->viewTime = 0.0;
 				_state->viewExposureAddress = 0;
+				_state->lodView = 0;
 			}
 			ViewRecordScope(const ViewRecordScope&) = delete;
 			ViewRecordScope& operator=(const ViewRecordScope&) = delete;
@@ -3739,7 +4017,8 @@ namespace Shalltear {
 
 		bool SharesInstancedDraw(const DrawEntry& first, const DrawEntry& next) {
 			return next.mesh == first.mesh && next.submesh == first.submesh && next.shader == first.shader &&
-				   next.variant == first.variant && next.materialId == first.materialId && next.mirrored == first.mirrored;
+				   next.variant == first.variant && next.materialId == first.materialId && next.mirrored == first.mirrored &&
+				   (next.lodFade != 0) == (first.lodFade != 0);
 		}
 
 		// record = first + instance, a run can't skip entries
@@ -3768,7 +4047,7 @@ namespace Shalltear {
 						   const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
 						   const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value, bool& instanced) {
 			RHI::PipelineHandle pipeline = GetOrCreatePipeline(entry.shader, colorFormat, depthFormat, &drawState, 1, entry.variant,
-															   ShaderProgramKind::Depth, &instanced);
+															   ShaderProgramKind::Depth, &instanced, entry.lodFade != 0);
 			if (!pipeline.IsValid()) {
 				return false;
 			}
@@ -3992,7 +4271,8 @@ namespace Shalltear {
 			}
 
 			const ExtractedDraws extracted =
-				ExtractDrawList(arena, DrawListUse::Casters, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, renderingLayerMask);
+				ExtractDrawList(arena, DrawListUse::Casters, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, projection,
+								renderingLayerMask);
 
 			RHI::TransientAllocation mapAllocation =
 				device.AllocateTransient(static_cast<u64>(mapCount) * sizeof(GPUShadowMap), 16);
@@ -4136,7 +4416,8 @@ namespace Shalltear {
 			RHI::Device& device = *state.device;
 			const Mat4 viewProjection = projection * view;
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
-			const ExtractedDraws extracted = ExtractDrawList(arena, DrawListUse::View, kind, onlyScenes, {&frustum, 1}, cameraPosition, renderingLayerMask);
+			const ExtractedDraws extracted =
+				ExtractDrawList(arena, DrawListUse::View, kind, onlyScenes, {&frustum, 1}, cameraPosition, projection, renderingLayerMask);
 
 			RHI::RenderPassDesc::Attachment normalAttachment;
 			normalAttachment.texture = normals;
@@ -4217,7 +4498,7 @@ namespace Shalltear {
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(viewProjection));
 			const ExtractedDraws extracted =
 				ExtractDrawList(arena, DrawListUse::View, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
-								pending.cameraPosition, pending.cullingMask);
+								pending.cameraPosition, pending.projection, pending.cullingMask);
 
 			RHI::RenderPassDesc::Attachment maskAttachment;
 			maskAttachment.texture = mask;
@@ -4380,7 +4661,7 @@ namespace Shalltear {
 			const GraphicsInternal::CullVolume frustum(Frustum::FromMatrix(pending.projection * pending.view));
 			const ExtractedDraws extracted =
 				ExtractDrawList(arena, DrawListUse::View, pending.kind, {state.viewScenes.data() + pending.firstScene, pending.sceneCount}, {&frustum, 1},
-								pending.cameraPosition, pending.cullingMask);
+								pending.cameraPosition, pending.projection, pending.cullingMask);
 
 			RHI::RenderPassDesc::Attachment valueAttachment;
 			valueAttachment.texture = target;
@@ -4873,7 +5154,7 @@ namespace Shalltear {
 			}
 
 			const ExtractedDraws extracted = ExtractDrawList(arena, DrawListUse::View, kind, onlyScenes, {&frustum, 1}, cameraPosition,
-															 renderingLayerMask, overrideMaterial);
+															 projection, renderingLayerMask, overrideMaterial);
 			DrawEntry** const drawList = extracted.list;
 			const u32 drawCount = extracted.count;
 			const u64 perDrawAddress = extracted.perDrawAddress;
@@ -4902,7 +5183,7 @@ namespace Shalltear {
 			auto bindShaded = [&](const DrawEntry& entry, u64 drawAddress, bool& instanced) {
 				RHI::PipelineHandle pipeline =
 					GetOrCreatePipeline(entry.shader, targets.colorFormat, targets.depthFormat, &entry.renderState, targets.samples,
-										entry.variant, ShaderProgramKind::Forward, &instanced);
+										entry.variant, ShaderProgramKind::Forward, &instanced, entry.lodFade != 0);
 				if (!pipeline.IsValid()) {
 					return false;
 				}
@@ -7936,6 +8217,9 @@ namespace Shalltear {
 			state.anisotropicFiltering = profile.anisotropicFiltering > TextureAnisotropy::ForcedOn ? TextureAnisotropy::PerTexture
 																									: profile.anisotropicFiltering;
 			state.maxAnisotropy = Math::Clamp(profile.maxAnisotropy, 1, 16);
+			state.lodBias = Math::Clamp(profile.lodBias, 0.01f, 100.0f);
+			state.lodFinestLevel = static_cast<u32>(Math::Clamp(profile.maximumLODLevel, 0, static_cast<i32>(LODChoice::MAX_LEVELS) - 1));
+			state.lodCrossFade = profile.lodCrossFade;
 		}
 
 		void CopyProfileFields(const GraphicsProfile& from, GraphicsProfile& to) {
@@ -9413,11 +9697,45 @@ namespace Shalltear {
 		if (!ContainsHandle(list, renderer)) {
 			list.push_back(renderer);
 		}
+		MarkLODRecordDirty(*_state, renderer.GetInstanceId());
 	}
 	void RenderSystem::UnregisterMeshRenderer(Handle<MeshRenderer> renderer) {
 		if (_state) {
 			SwapRemoveHandle(_state->meshRenderers, renderer);
 			SwapRemoveHandle(_state->isolatedMeshRenderers, renderer);
+			MarkLODRecordDirty(*_state, renderer.GetInstanceId());
+		}
+	}
+	void RenderSystem::RegisterLODGroup(Handle<LODGroup> group) {
+		if (!_state || !group.Get()) {
+			return;
+		}
+		RenderState& state = *_state;
+		u32 free = ~0u;
+		for (u32 i = 0; i < state.lodRecords.size(); ++i) {
+			if (state.lodRecords[i].group == group) {
+				return;
+			}
+			free = free == ~0u && state.lodRecords[i].group.GetInstanceId() == 0 ? i : free;
+		}
+		if (free == ~0u) {
+			free = static_cast<u32>(state.lodRecords.size());
+			state.lodRecords.emplace_back();
+		}
+		ForgetLODRecord(state, free);
+		state.lodRecords[free].group = group;
+		state.lodRecords[free].dirty = true;
+	}
+	void RenderSystem::UnregisterLODGroup(Handle<LODGroup> group) {
+		if (!_state) {
+			return;
+		}
+		for (u32 i = 0; i < _state->lodRecords.size(); ++i) {
+			if (_state->lodRecords[i].group == group) {
+				ForgetLODRecord(*_state, i);
+				_state->lodRecords[i].group = {};
+				return;
+			}
 		}
 	}
 	void RenderSystem::RegisterSkinnedMeshRenderer(Handle<SkinnedMeshRenderer> renderer) {
@@ -9431,6 +9749,7 @@ namespace Shalltear {
 		if (!ContainsHandle(list, renderer)) {
 			list.push_back(renderer);
 		}
+		MarkLODRecordDirty(*_state, renderer.GetInstanceId());
 	}
 	void GraphicsInternal::RegisterProceduralRenderer(Handle<ProceduralRenderer> renderer) {
 		ProceduralRenderer* target = renderer.Get();
@@ -9455,6 +9774,7 @@ namespace Shalltear {
 		if (_state) {
 			SwapRemoveHandle(_state->skinnedMeshRenderers, renderer);
 			SwapRemoveHandle(_state->isolatedSkinnedMeshRenderers, renderer);
+			MarkLODRecordDirty(*_state, renderer.GetInstanceId());
 		}
 	}
 
@@ -9500,6 +9820,8 @@ namespace Shalltear {
 		DrainHotReloads();
 
 		ReconcileReflectionProbeArray(state);
+
+		BuildLODFrame(state);
 
 		using WindowWork = RenderState::WindowWork;
 		Vector<WindowWork>& work = state.frameWork;

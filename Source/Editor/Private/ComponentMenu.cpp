@@ -8,6 +8,7 @@
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
 #include "Shalltear/Core/Graphics/Decal.h"
 #include "Shalltear/Core/Graphics/Skeleton.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Memory.h"
 #include "Shalltear/Core/Scene/Component.h"
@@ -53,6 +54,7 @@ namespace Shalltear::ComponentMenu {
 			Plant(Environment::GetReflectType()->name, "Rendering", onlyAbsent);
 			Plant(MeshRenderer::GetReflectType()->name, "Rendering", onlyAbsent);
 			Plant(SkinnedMeshRenderer::GetReflectType()->name, "Rendering", onlyAbsent);
+			Plant(LODGroup::GetReflectType()->name, "Rendering", onlyAbsent);
 			Plant(Skeleton::GetReflectType()->name, "Rendering", onlyAbsent);
 			Plant(ReflectionProbe::GetReflectType()->name, "Rendering", onlyAbsent);
 			Plant(Decal::GetReflectType()->name, "Rendering", onlyAbsent);

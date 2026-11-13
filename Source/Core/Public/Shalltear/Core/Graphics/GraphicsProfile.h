@@ -63,6 +63,10 @@ namespace Shalltear {
 
 		SLT_REFLECT_FIELD(anisotropicFiltering, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_REFLECT_FIELD(maxAnisotropy, SLT_RANGE(1, 16), SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+
+		SLT_REFLECT_FIELD(lodBias, SLT_RANGE(0.1f, 4.0f), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(maximumLODLevel, SLT_RANGE(0, 7), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(lodCrossFade, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_END_REFLECT()
 
 		GraphicsProfile() = default;
@@ -101,6 +105,12 @@ namespace Shalltear {
 		TextureAnisotropy anisotropicFiltering = TextureAnisotropy::PerTexture;
 
 		i32 maxAnisotropy = 16;
+
+		// multiplier on screen relative height, > 1 for farther detail
+		f32 lodBias = 1.0f;
+		// finest group level drawn, last level when group has fewer
+		i32 maximumLODLevel = 0;
+		bool lodCrossFade = true;
 	};
 
 	class SHALLTEAR_CORE_API GraphicsProfileImporter : public IAssetImporter {

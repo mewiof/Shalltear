@@ -606,6 +606,11 @@ namespace Shalltear::RHI {
 			SLT_LOG_ERROR("Graphics", "CreateGraphicsPipeline: push constants {} B exceed the 128 B budget", desc.pushConstantSize);
 			return {};
 		}
+		if (desc.pixelConstants.size() > MAX_SPECIALIZATION_CONSTANTS) {
+			SLT_LOG_ERROR("Graphics", "CreateGraphicsPipeline: {} specialization constants exceed {} allowed", desc.pixelConstants.size(),
+						  MAX_SPECIALIZATION_CONSTANTS);
+			return {};
+		}
 		if (impl->lost) {
 			return {};
 		}
@@ -657,6 +662,23 @@ namespace Shalltear::RHI {
 		stages[1].module = pixelModule;
 		stages[1].pName = "PSMain";
 		const u32 stageCount = depthOnly ? 1u : 2u;
+		VkSpecializationMapEntry pixelEntries[MAX_SPECIALIZATION_CONSTANTS]{};
+		u32 pixelValues[MAX_SPECIALIZATION_CONSTANTS]{};
+		VkSpecializationInfo pixelSpecialization{};
+		if (!desc.pixelConstants.empty()) {
+			const u32 count = static_cast<u32>(desc.pixelConstants.size());
+			for (u32 i = 0; i < count; ++i) {
+				pixelEntries[i].constantID = desc.pixelConstants[i].id;
+				pixelEntries[i].offset = i * static_cast<u32>(sizeof(u32));
+				pixelEntries[i].size = sizeof(u32);
+				pixelValues[i] = desc.pixelConstants[i].value;
+			}
+			pixelSpecialization.mapEntryCount = count;
+			pixelSpecialization.pMapEntries = pixelEntries;
+			pixelSpecialization.dataSize = count * sizeof(u32);
+			pixelSpecialization.pData = pixelValues;
+			stages[1].pSpecializationInfo = &pixelSpecialization;
+		}
 
 		VkPipelineVertexInputStateCreateInfo vertexInput{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 

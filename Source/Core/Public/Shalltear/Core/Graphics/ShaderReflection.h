@@ -114,6 +114,9 @@ namespace Shalltear {
 		Vector<ShaderResourceInfo> resources{GetMemoryResource(MemTag::Asset)};
 	};
 
+	// must match ShalltearCommon.hlsli's SHALLTEAR_LOD_FADE_CONSTANT
+	inline constexpr u32 SHADER_LOD_FADE_CONSTANT_ID = 100;
+
 	SHALLTEAR_CORE_API SpirvReflection ReflectSpirv(std::span<const u8> blob);
 
 	SHALLTEAR_CORE_API bool MergeReflections(const SpirvReflection& vertex, const SpirvReflection& pixel,

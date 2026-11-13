@@ -26,6 +26,8 @@ namespace Shalltear::GraphicsInternal {
 		f32 shadowBias = 0.0f;
 		f32 shadowNormalBias = 0.0f;
 		f32 shadowNearPlane = Light::DEFAULT_SHADOW_NEAR_PLANE;
+		// constant, slope
+		Vec2 shadowCasterBias;
 		// full angle (not half)
 		f32 outerAngleDeg = 0.0f;
 

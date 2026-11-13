@@ -26,6 +26,8 @@ namespace Shalltear::RHI {
 		void SetPipeline(PipelineHandle pipeline);
 		// until the next SetPipeline (which restores Clockwise)
 		void SetFrontFace(FrontFace face);
+		// pipeline must have dynamicDepthBias, reset to 0 on next SetPipeline
+		void SetDepthBias(f32 constant, f32 slope);
 		void SetViewportScissor(RectI rect);
 		void SetScissor(RectI rect);
 		void BindTransientSet(u32 setIndex, TransientSet set);

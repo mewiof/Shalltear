@@ -1491,3 +1491,46 @@ TEST_F(ProceduralRendererFixture, OpaqueItemInPrepassOnly) {
 	TearDownStage(stage);
 	device.DestroyResource(keep->values);
 }
+
+TEST_F(ProceduralRendererFixture, CasterBiasReachesProceduralCasters) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	WriteProjectFile("Tally.hlsl", SHADOW_TALLY_SHADER);
+	Asset* tallyShader = AssetDatabase::LoadAsset(Path("project://Tally.hlsl"));
+	ASSERT_NE(tallyShader, nullptr);
+	MaterialAsset* ground = LoadMaterial("Tally.mat", tallyShader->assetId, "");
+	MaterialAsset* surface = LoadUnlit("Surface.mat", Color(0.0f, 1.0f, 0.0f, 1.0f), false);
+	ASSERT_NE(ground, nullptr);
+	ASSERT_NE(surface, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(ground, stage));
+	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
+	stage.quad->GetComponent<MeshRenderer>()->SetCastShadows(ShadowCasting::Off);
+	stage.sun->SetShadowBias(0.0f);
+	stage.sun->SetShadowNormalBias(0.0f);
+	Handle<SceneObject> object = SceneSystem::CreateObject("Surface", stage.scene);
+	Handle<TestSurface> item = object->AddComponent<TestSurface>();
+	item->material = Handle<MaterialAsset>(surface);
+	item->triangles = Square(Vec3(0.0f, 0.0f, 0.01f), 0.5f, true);
+	item->castShadows = ShadowCasting::ShadowsOnly;
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto shadowed = [&] {
+		EXPECT_TRUE(RenderStage(stage, pixels, size));
+		u32 count = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			count += pixels[i + 2] > 100 && pixels[i + 2] < 180 && pixels[i] < 128 ? 1u : 0u;
+		}
+		return count;
+	};
+
+	const u32 contact = shadowed();
+	EXPECT_GT(contact, 100u);
+	stage.sun->SetShadowCasterSlopeBias(10.0f);
+	EXPECT_LT(shadowed(), contact / 4);
+
+	TearDownStage(stage);
+}

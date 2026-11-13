@@ -69,6 +69,7 @@ namespace Shalltear::RHI {
 	X(vkCmdSetViewport)             \
 	X(vkCmdSetScissor)              \
 	X(vkCmdSetFrontFace)            \
+	X(vkCmdSetDepthBias)            \
 	X(vkCmdBindDescriptorSets)      \
 	X(vkCmdPushConstants)           \
 	X(vkCmdBindIndexBuffer)         \

@@ -39,6 +39,8 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(_shadowBias, SLT_RANGE(0.0f, 4.0f))
 		SLT_REFLECT_FIELD(_shadowNormalBias, SLT_RANGE(0.0f, 4.0f))
 		SLT_REFLECT_FIELD(_shadowNearPlane, SLT_RANGE(MIN_SHADOW_NEAR_PLANE, 10.0f))
+		SLT_REFLECT_FIELD(_shadowCasterBias, SLT_RANGE(0.0f, 100.0f))
+		SLT_REFLECT_FIELD(_shadowCasterSlopeBias, SLT_RANGE(0.0f, 10.0f))
 		SLT_REFLECT_FIELD(_cookie)
 		SLT_REFLECT_FIELD(_cookieSize)
 		SLT_REFLECT_FIELD(_cookieOffset)
@@ -86,6 +88,12 @@ namespace Shalltear {
 		f32 GetShadowNearPlane() const { return _shadowNearPlane; }
 		void SetShadowNearPlane(f32 nearPlane) { _shadowNearPlane = nearPlane; }
 
+		// rasterizer depth bias units, shadow pass only
+		f32 GetShadowCasterBias() const { return _shadowCasterBias; }
+		void SetShadowCasterBias(f32 bias) { _shadowCasterBias = bias; }
+		f32 GetShadowCasterSlopeBias() const { return _shadowCasterSlopeBias; }
+		void SetShadowCasterSlopeBias(f32 bias) { _shadowCasterSlopeBias = bias; }
+
 		// 2D for directional/spot, cube for point
 		Handle<TextureAsset> GetCookie() const { return _cookie; }
 		void SetCookie(Handle<TextureAsset> cookie) { _cookie = cookie; }
@@ -117,6 +125,8 @@ namespace Shalltear {
 		f32 _shadowBias = 1.0f;
 		f32 _shadowNormalBias = 1.0f;
 		f32 _shadowNearPlane = DEFAULT_SHADOW_NEAR_PLANE;
+		f32 _shadowCasterBias = 0.0f;
+		f32 _shadowCasterSlopeBias = 0.0f;
 		Handle<TextureAsset> _cookie;
 		Vec2 _cookieSize{1.0f, 1.0f};
 		Vec2 _cookieOffset{0.0f, 0.0f};

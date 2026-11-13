@@ -132,6 +132,7 @@ namespace Shalltear::RHI {
 		u32 colorFormatCount = 0;
 		Format depthFormat = Format::Unknown;
 		u32 samples = 1;
+		bool dynamicDepthBias = false;
 	};
 
 	struct DeletionQueue {

@@ -209,6 +209,9 @@ namespace Shalltear::RHI {
 		_impl->pipelineRefused = false;
 		if (!compute) {
 			SetFrontFace(FrontFace::Clockwise);
+			if (resource->dynamicDepthBias && !d.lost) {
+				d.fd.vkCmdSetDepthBias(_impl->commandBuffer, 0.0f, 0.0f, 0.0f);
+			}
 		}
 	}
 
@@ -220,6 +223,16 @@ namespace Shalltear::RHI {
 		d.fd.vkCmdSetFrontFace(_impl->commandBuffer, face == FrontFace::CounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
 		_impl->frontFace = face;
 		_impl->frontFaceSet = true;
+	}
+
+	void CommandList::SetDepthBias(f32 constant, f32 slope) {
+		DeviceImpl& d = *_impl->device;
+		const bool dynamic = _impl->boundPipelineIndex != 0 && d.pipelines.slots[_impl->boundPipelineIndex].resource.dynamicDepthBias;
+		SLT_CORE_ASSERT_MSG(dynamic, "SetDepthBias on pipeline without dynamicDepthBias");
+		if (d.lost || !dynamic) {
+			return;
+		}
+		d.fd.vkCmdSetDepthBias(_impl->commandBuffer, constant, 0.0f, slope);
 	}
 
 	void CommandList::SetViewportScissor(RectI rect) {

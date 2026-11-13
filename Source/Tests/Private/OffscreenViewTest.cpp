@@ -3048,6 +3048,68 @@ TEST_F(ShadowFilterFixture, SlantedReceiverReadsUnshadowedAtEveryWidth) {
 	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
 }
 
+namespace {
+
+	u32 DarkTexels(const Vector<f32>& factor) {
+		u32 dark = 0;
+		for (f32 value : factor) {
+			dark += value < 0.97f ? 1u : 0u;
+		}
+		return dark;
+	}
+
+} // anonymous namespace
+
+TEST_F(ShadowFilterFixture, CasterBiasReachesCascades) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(70.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	Box("Hugging", Vec3(0.0f, 0.06f, 0.0f), Vec3(0.4f, 0.02f, 0.4f));
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+
+	Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+	const u32 contact = DarkTexels(factor);
+	EXPECT_GT(contact, 100u);
+
+	_light->SetShadowCasterSlopeBias(10.0f);
+	ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+	EXPECT_LT(DarkTexels(factor), contact / 4);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+}
+
+TEST_F(ShadowFilterFixture, SpotCasterSlopeBiasClearsAcne) {
+	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(70.0f, 25.0f), 8.0f));
+	if (IsSkipped()) {
+		return;
+	}
+	Handle<SceneObject> owner = _light->GetOwner();
+	owner->SetLocalPosition(Vec3(-3.0f, 2.0f, 0.0f));
+	owner->SetLocalRotation(Quat::LookRotation(Vec3(3.0f, -2.0f, 0.0f)));
+	_light->SetLightType(LightType::Spot);
+	_light->SetRange(20.0f);
+	_light->SetSpotAngleDeg(60.0f);
+	_light->SetIntensity(12.0f);
+	_light->SetCastShadows(true);
+	_light->SetShadowBias(0.0f);
+	_light->SetShadowNormalBias(0.0f);
+	SceneSystem::EndFrame();
+	_center = Vec3::Zero();
+	ASSERT_NO_FATAL_FAILURE(RenderReferences());
+
+	Vector<f32> factor{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+	EXPECT_GT(DarkTexels(factor), 100u);
+
+	_light->SetShadowCasterBias(1.0f);
+	_light->SetShadowCasterSlopeBias(2.5f);
+	ASSERT_NO_FATAL_FAILURE(ShadowFactor(factor));
+	EXPECT_EQ(DarkTexels(factor), 0u);
+}
+
 TEST_F(ShadowFilterFixture, SlantedReceiverUnshadowed) {
 	ASSERT_NO_FATAL_FAILURE(BuildRig(Travel(70.0f, 25.0f), 8.0f));
 	if (IsSkipped()) {

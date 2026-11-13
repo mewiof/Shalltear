@@ -680,7 +680,9 @@ namespace Shalltear::RHI {
 			}
 		}
 		rasterization.lineWidth = 1.0f;
-		if (desc.depthBiasConstant != 0.0f || desc.depthBiasSlope != 0.0f) {
+		if (desc.dynamicDepthBias) {
+			rasterization.depthBiasEnable = VK_TRUE;
+		} else if (desc.depthBiasConstant != 0.0f || desc.depthBiasSlope != 0.0f) {
 			rasterization.depthBiasEnable = VK_TRUE;
 			rasterization.depthBiasConstantFactor = desc.depthBiasConstant;
 			rasterization.depthBiasSlopeFactor = desc.depthBiasSlope;
@@ -788,9 +790,10 @@ namespace Shalltear::RHI {
 		blend.attachmentCount = desc.colorFormatCount;
 		blend.pAttachments = blendAttachments;
 
-		VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_FRONT_FACE};
+		VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_FRONT_FACE,
+										  VK_DYNAMIC_STATE_DEPTH_BIAS};
 		VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-		dynamic.dynamicStateCount = static_cast<u32>(std::size(dynamicStates));
+		dynamic.dynamicStateCount = static_cast<u32>(std::size(dynamicStates)) - (desc.dynamicDepthBias ? 0u : 1u);
 		dynamic.pDynamicStates = dynamicStates;
 
 		VkFormat colorFormats[MAX_COLOR_ATTACHMENTS]{};
@@ -845,6 +848,7 @@ namespace Shalltear::RHI {
 		resource.colorFormatCount = desc.colorFormatCount;
 		resource.depthFormat = desc.depthFormat;
 		resource.samples = std::max(1u, desc.samples);
+		resource.dynamicDepthBias = desc.dynamicDepthBias;
 
 		impl->SetDebugName(reinterpret_cast<u64>(pipeline), VK_OBJECT_TYPE_PIPELINE, desc.debugName);
 		return PipelineHandle{index, generation};

@@ -47,6 +47,8 @@ namespace Shalltear::GraphicsInternal {
 		f32 depthBias = 0.0f;
 		f32 normalBias = 0.0f;
 		f32 nearPlane = Light::DEFAULT_SHADOW_NEAR_PLANE;
+		// constant, slope
+		Vec2 casterBias;
 		f32 importance = 0.0f;
 		u32 tileSize = MIN_PUNCTUAL_TILE;
 		u32 layerMask = ~0u;

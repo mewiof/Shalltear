@@ -291,6 +291,8 @@ namespace Shalltear::RHI {
 		f32 depthBiasConstant = 0.0f;
 		f32 depthBiasSlope = 0.0f;
 		DepthCompare depthCompare = DepthCompare::NearerOrEqual;
+		// bias pair applied per draw (not part of pipeline)
+		bool dynamicDepthBias = false;
 	};
 
 	enum class DescriptorType : u8 {
@@ -413,6 +415,8 @@ namespace Shalltear::RHI {
 		FillMode fill = FillMode::Solid;
 		f32 depthBiasConstant = 0.0f;
 		f32 depthBiasSlope = 0.0f;
+		// pair above ignored, set via CommandList::SetDepthBias
+		bool dynamicDepthBias = false;
 
 		Format colorFormats[MAX_COLOR_ATTACHMENTS] = {};
 		u32 colorFormatCount = 0;

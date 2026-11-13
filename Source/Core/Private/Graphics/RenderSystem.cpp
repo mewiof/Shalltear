@@ -180,6 +180,7 @@ namespace Shalltear {
 			RHI::TextureHandle ambientOcclusion;
 			u32* drawCalls = nullptr;
 			u32 value = 0;
+			Vec2 casterBias{};
 		};
 
 		struct ProceduralCulling {
@@ -1157,17 +1158,30 @@ namespace Shalltear {
 			handle = {};
 		}
 
+		void ApplyCasterBias(RHI::ShaderRenderState& state, const Vec2& casterBias) {
+			if (casterBias.x == 0.0f && casterBias.y == 0.0f) {
+				return;
+			}
+			state.dynamicDepthBias = true;
+			// reverse Z (away from light = lower depth)
+			state.depthBiasConstant -= casterBias.x;
+			state.depthBiasSlope -= casterBias.y;
+		}
+
 		u64 RenderStateKey(const RHI::ShaderRenderState& state) {
 			u64 key = static_cast<u64>(state.blend);
 			key = key * 31 + static_cast<u64>(state.depth);
 			key = key * 31 + static_cast<u64>(state.cull);
 			key = key * 31 + static_cast<u64>(state.topology);
 			key = key * 31 + static_cast<u64>(state.fill);
+			key = key * 31 + (state.dynamicDepthBias ? 1u : 0u);
 			u32 bits = 0;
-			std::memcpy(&bits, &state.depthBiasConstant, sizeof(bits));
-			key = key * 31 + bits;
-			std::memcpy(&bits, &state.depthBiasSlope, sizeof(bits));
-			key = key * 31 + bits;
+			if (!state.dynamicDepthBias) {
+				std::memcpy(&bits, &state.depthBiasConstant, sizeof(bits));
+				key = key * 31 + bits;
+				std::memcpy(&bits, &state.depthBiasSlope, sizeof(bits));
+				key = key * 31 + bits;
+			}
 			key = key * 31 + static_cast<u64>(state.depthCompare);
 			return key;
 		}
@@ -1312,6 +1326,7 @@ namespace Shalltear {
 			desc.fill = pipelineState.fill;
 			desc.depthBiasConstant = pipelineState.depthBiasConstant;
 			desc.depthBiasSlope = pipelineState.depthBiasSlope;
+			desc.dynamicDepthBias = pipelineState.dynamicDepthBias;
 			desc.depthCompare = pipelineState.depthCompare;
 			desc.colorFormats[0] = colorFormat;
 			desc.colorFormatCount = noColor ? 0u : 1u;
@@ -2524,6 +2539,7 @@ namespace Shalltear {
 			RHI::Format colorFormat = RHI::Format::Unknown;
 			RHI::Format depthFormat = RHI::Format::Unknown;
 			RHI::TransientAllocation viewBlock{};
+			Vec2 casterBias{};
 		};
 
 		u32 RecordProceduralDepth(RHI::CommandList& cmd, RHI::Device& device, std::span<const u32> renderers,
@@ -2588,6 +2604,7 @@ namespace Shalltear {
 					init.viewBlock = depthView.viewBlock;
 					init.drawCalls = &drawCalls;
 					init.value = value;
+					init.casterBias = depthView.casterBias;
 					ProceduralContext context(init);
 					renderer->Record(context);
 				}
@@ -3316,6 +3333,8 @@ namespace Shalltear {
 				candidate.shadowBias = Math::Max(light->GetShadowBias(), 0.0f);
 				candidate.shadowNormalBias = Math::Max(light->GetShadowNormalBias(), 0.0f);
 				candidate.shadowNearPlane = light->GetShadowNearPlane();
+				candidate.shadowCasterBias = Vec2(Math::Max(light->GetShadowCasterBias(), 0.0f),
+												  Math::Max(light->GetShadowCasterSlopeBias(), 0.0f));
 				candidate.stableKey = light->GetInstanceId();
 				candidate.renderingLayerMask = light->GetRenderingLayerMask();
 				candidate.shadowLayerMask = light->GetShadowLayerMask();
@@ -3581,6 +3600,8 @@ namespace Shalltear {
 			RHI::PipelineHandle pipeline{};
 			u64 material = ~0ull;
 			RHI::TransientSet materialSet{};
+			bool biasSet = false;
+			Vec2 bias{};
 		};
 
 		bool BindDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, const DrawEntry& entry,
@@ -3595,6 +3616,7 @@ namespace Shalltear {
 				cmd.SetPipeline(pipeline);
 				bound.pipeline = pipeline;
 				bound.material = ~0ull;
+				bound.biasSet = false;
 				cmd.BindTransientSet(0, CreateViewSet(device, pipeline, *entry.shader, viewAllocation,
 													  RHI::TextureHandle{}, RHI::TextureHandle{}));
 				if (SceneRequests::DeclaresSceneSet(*entry.shader)) {
@@ -3606,6 +3628,12 @@ namespace Shalltear {
 					bound.materialSet = set;
 				}
 				bound.material = entry.materialId;
+			}
+			const Vec2 bias(drawState.depthBiasConstant, drawState.depthBiasSlope);
+			if (drawState.dynamicDepthBias && (!bound.biasSet || bound.bias != bias)) {
+				cmd.SetDepthBias(bias.x, bias.y);
+				bound.bias = bias;
+				bound.biasSet = true;
 			}
 			GPUDrawHeader header;
 			header.drawAddress = drawAddress;
@@ -3724,6 +3752,7 @@ namespace Shalltear {
 				request.depthBias = candidate.shadowBias;
 				request.normalBias = candidate.shadowNormalBias;
 				request.nearPlane = candidate.shadowNearPlane;
+				request.casterBias = candidate.shadowCasterBias;
 				request.layerMask = candidate.shadowLayerMask;
 				const f32 coverage = GraphicsInternal::ShadowScreenCoverage(projection, cameraPosition,
 																			candidate.position, candidate.range);
@@ -3742,6 +3771,10 @@ namespace Shalltear {
 			state.punctualViews.clear();
 			RectI punctualTiles[GraphicsInternal::MAX_SHADOW_MAPS];
 			Vec2 punctualBias[GraphicsInternal::MAX_SHADOW_MAPS];
+			Vec2 casterBias[GraphicsInternal::MAX_SHADOW_MAPS];
+			for (u32 i = 0; i < mapCount; ++i) {
+				casterBias[i] = candidates[casterIndex].shadowCasterBias;
+			}
 			const u32 firstPunctualMap = mapCount;
 			const Vec3 forward(view(2, 0), view(2, 1), view(2, 2));
 			for (GraphicsInternal::ShadowRequest& request : requests) {
@@ -3777,6 +3810,7 @@ namespace Shalltear {
 															  request.range, static_cast<u32>(granted[face].size.x), request.nearPlane);
 					punctualTiles[mapCount] = granted[face];
 					punctualBias[mapCount] = Vec2(request.depthBias, request.normalBias);
+					casterBias[mapCount] = request.casterBias;
 					state.punctualViews.push_back(built);
 					volumes.push_back(GraphicsInternal::BuildCasterVolume(
 						built.viewProjection, view, projection, Vec2(lightDepth - depthReach, lightDepth + depthReach),
@@ -3884,6 +3918,7 @@ namespace Shalltear {
 						casterState.depth = RHI::DepthMode::TestWrite;
 						casterState.depthCompare = RHI::DepthCompare::NearerOrEqual;
 						casterState.fill = RHI::FillMode::Solid;
+						ApplyCasterBias(casterState, casterBias[map]);
 						if (twoSided) {
 							casterState.cull = RHI::CullMode::Off;
 						}
@@ -3911,6 +3946,7 @@ namespace Shalltear {
 						itemView.extent = tile.size;
 						itemView.depthFormat = SHADOW_ATLAS_FORMAT;
 						itemView.viewBlock = viewAllocation;
+						itemView.casterBias = casterBias[map];
 						drawCalls += RecordProceduralDepth(cmd, device, casters, itemView, &volumes[map]);
 					}
 					++state.frameShadowMapsRendered;
@@ -8093,7 +8129,7 @@ namespace Shalltear {
 		  _shadowAtlas(init.shadowAtlas),
 		  _punctualAtlas(init.punctualAtlas), _environmentCube(init.environmentCube), _environmentCube2(init.environmentCube2), _ambientOcclusion(init.ambientOcclusion),
 		  _drawCalls(init.drawCalls), _view(init.view), _projection(init.projection), _cameraPosition(init.cameraPosition),
-		  _extent(init.extent) {}
+		  _extent(init.extent), _casterBias(init.casterBias) {}
 
 	bool ProceduralContext::BindItem(std::span<const u8> pushConstants, bool surface) const {
 		RenderState* state = _state;
@@ -8126,6 +8162,9 @@ namespace Shalltear {
 			if (_pass == ProceduralPass::Shadow && item.castShadows == ShadowCasting::TwoSided) {
 				renderState.cull = RHI::CullMode::Off;
 			}
+			if (_pass == ProceduralPass::Shadow) {
+				ApplyCasterBias(renderState, _casterBias);
+			}
 		}
 		const u32 variant = shader->FindVariant(material->keywordHash);
 		RHI::PipelineHandle pipeline = GetOrCreatePipeline(shader, _colorFormat, _depthFormat, &renderState, _samples, variant, program);
@@ -8136,6 +8175,9 @@ namespace Shalltear {
 		PackMaterialBlock(entry, *state->extractionArena, shader, material);
 		ResolveMaterialTextures(entry, *state->extractionArena, shader, material);
 		_cmd->SetPipeline(pipeline);
+		if (renderState.dynamicDepthBias) {
+			_cmd->SetDepthBias(renderState.depthBiasConstant, renderState.depthBiasSlope);
+		}
 		if (SceneRequests::DeclaresViewSet(*shader) && _viewBlock.IsValid()) {
 			_cmd->BindTransientSet(0, CreateViewSet(*_device, pipeline, *shader, _viewBlock, _shadowAtlas, _punctualAtlas,
 													_environmentCube, _ambientOcclusion, _environmentCube2));

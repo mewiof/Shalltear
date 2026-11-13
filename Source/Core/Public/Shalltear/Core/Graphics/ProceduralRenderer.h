@@ -111,6 +111,7 @@ namespace Shalltear {
 		Mat4 _projection = Mat4::Identity();
 		Vec3 _cameraPosition{};
 		Vec2I _extent{1, 1};
+		Vec2 _casterBias{};
 	};
 
 	class SHALLTEAR_CORE_API ProceduralRenderer : public Component {

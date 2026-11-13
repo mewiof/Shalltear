@@ -51,6 +51,8 @@ namespace {
 		{"Shaders/Outline.hlsl", EngineBuiltins::OutlineShader},
 		{"Shaders/SkyPrefilter.hlsl", EngineBuiltins::SkyPrefilterShader},
 		{"Shaders/Skinning.hlsl", EngineBuiltins::SkinningShader},
+		{"Shaders/DepthRange.hlsl", EngineBuiltins::DepthRangeShader},
+		{"Shaders/DepthRangeMS.hlsl", EngineBuiltins::DepthRangeMultisampledShader},
 	};
 
 	class EngineBuiltinsFixture : public ::testing::Test {

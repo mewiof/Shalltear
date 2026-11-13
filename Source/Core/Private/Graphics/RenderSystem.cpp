@@ -671,6 +671,22 @@ namespace Shalltear {
 			RHI::BufferHandle pickRing;
 			u64 renderedFrames = 0;
 
+			ShadowCascadeFit shadowCascadeFit = ShadowCascadeFit::Fixed;
+			static constexpr u32 DEPTH_RANGE_SLOTS = 32;
+			struct DepthRangeSlot {
+				bool inUse = false;
+				u64 frame = 0;
+				u64 view = 0;
+			};
+			DepthRangeSlot depthRangeSlots[DEPTH_RANGE_SLOTS];
+			RHI::BufferHandle depthRangeRing;
+			RHI::BufferHandle depthRangeScratch;
+			RHI::BufferHandle depthRangeSeed;
+			HashMap<u64, GraphicsInternal::CascadeDepthFit> depthFits{GetMemoryResource(MemTag::Graphics)};
+			Handle<ShaderAsset> depthRangeShader;
+			Handle<ShaderAsset> depthRangeShaderMultisampled;
+			bool depthRangeShadersTried = false;
+
 			struct RowPlan {
 				u32 firstStep = 0;
 				u32 firstTarget = 0;
@@ -1203,6 +1219,19 @@ namespace Shalltear {
 				state.skyPrefilterShader = LoadEngineShader(EngineBuiltins::SkyPrefilterShader, "SkyPrefilter");
 			}
 			return state.skyPrefilterShader.Get();
+		}
+
+		bool FitsDepth() {
+			RenderState& state = *_state;
+			if (state.shadowCascadeFit != ShadowCascadeFit::VisibleDepth) {
+				return false;
+			}
+			if (!state.depthRangeShadersTried) {
+				state.depthRangeShadersTried = true;
+				state.depthRangeShader = LoadEngineShader(EngineBuiltins::DepthRangeShader, "DepthRange");
+				state.depthRangeShaderMultisampled = LoadEngineShader(EngineBuiltins::DepthRangeMultisampledShader, "DepthRangeMS");
+			}
+			return state.depthRangeShader.Get() && state.depthRangeShaderMultisampled.Get();
 		}
 
 		ShaderAsset* EnsureSkinningShader() {
@@ -4141,8 +4170,16 @@ namespace Shalltear {
 			if (casterIndex < candidateCount) {
 				const Mat4& fitView = fitCamera ? fitCamera->view : view;
 				const Mat4& fitProjection = fitCamera ? fitCamera->projection : projection;
-				splits = GraphicsInternal::SolveCascadeSplits(CameraNearDepth(fitProjection), state.shadowDistance,
-															  state.shadowCascades, state.shadowFirstCascadeDistance);
+				f32 distance = state.shadowDistance;
+				f32 firstDistance = state.shadowFirstCascadeDistance;
+				if (!fitCamera && state.lodView != 0 && state.shadowCascadeFit == ShadowCascadeFit::VisibleDepth) {
+					const auto fit = state.depthFits.find(state.lodView);
+					if (fit != state.depthFits.end() && fit->second.applied > 0.0f && fit->second.applied < distance) {
+						firstDistance *= fit->second.applied / distance;
+						distance = fit->second.applied;
+					}
+				}
+				splits = GraphicsInternal::SolveCascadeSplits(CameraNearDepth(fitProjection), distance, state.shadowCascades, firstDistance);
 				const u32 tileResolution = atlasSize / GraphicsInternal::CascadeTilesPerAxis(splits.count);
 				state.cascadeViews.assign(splits.count, GraphicsInternal::CascadeView{});
 				cascadeCount = GraphicsInternal::BuildCascadeViews(
@@ -4601,6 +4638,71 @@ namespace Shalltear {
 			}
 			SLT_LOG_WARN("Graphics", "a view's pick wasn't asked (all {} pick slots are in flight)", RenderState::PICK_SLOTS);
 			return RenderState::PICK_SLOTS;
+		}
+
+		u32 ClaimDepthRangeSlot(RenderState& state, RHI::Device& device, u64 view) {
+			if (!state.depthRangeRing.IsValid()) {
+				RHI::BufferDesc desc;
+				desc.size = RenderState::DEPTH_RANGE_SLOTS * 2 * sizeof(f32);
+				desc.usage = RHI::BufferUsage::TransferDst;
+				desc.access = RHI::MemoryAccess::Readback;
+				desc.debugName = "DepthRangeRing";
+				state.depthRangeRing = device.CreateBufferResource(desc);
+				desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::TransferDst | RHI::BufferUsage::TransferSrc;
+				desc.access = RHI::MemoryAccess::GPUOnly;
+				desc.debugName = "DepthRangeScratch";
+				state.depthRangeScratch = device.CreateBufferResource(desc);
+				desc.size = 2 * sizeof(u32);
+				desc.usage = RHI::BufferUsage::TransferSrc;
+				desc.access = RHI::MemoryAccess::CPUToGPU;
+				desc.debugName = "DepthRangeSeed";
+				state.depthRangeSeed = device.CreateBufferResource(desc);
+				if (auto* seed = static_cast<u32*>(state.depthRangeSeed.IsValid() ? device.GetMappedPointer(state.depthRangeSeed) : nullptr)) {
+					seed[0] = 0x7F7FFFFFu;
+					seed[1] = 0u;
+				}
+			}
+			if (!state.depthRangeRing.IsValid() || !state.depthRangeScratch.IsValid() || !state.depthRangeSeed.IsValid()) {
+				return RenderState::DEPTH_RANGE_SLOTS;
+			}
+			for (u32 slot = 0; slot < RenderState::DEPTH_RANGE_SLOTS; ++slot) {
+				RenderState::DepthRangeSlot& claimed = state.depthRangeSlots[slot];
+				if (!claimed.inUse) {
+					claimed = {true, state.renderedFrames, view};
+					return slot;
+				}
+			}
+			return RenderState::DEPTH_RANGE_SLOTS;
+		}
+
+		void HarvestDepthRanges(RenderState& state, RHI::Device& device) {
+			if (!state.depthRangeRing.IsValid()) {
+				return;
+			}
+			const auto* mapped = static_cast<const f32*>(device.GetMappedPointer(state.depthRangeRing));
+			for (;;) {
+				u32 oldest = RenderState::DEPTH_RANGE_SLOTS;
+				for (u32 slot = 0; slot < RenderState::DEPTH_RANGE_SLOTS; ++slot) {
+					const RenderState::DepthRangeSlot& flight = state.depthRangeSlots[slot];
+					if (flight.inUse && flight.frame + RHI::FRAMES_IN_FLIGHT <= state.renderedFrames &&
+						(oldest == RenderState::DEPTH_RANGE_SLOTS || flight.frame < state.depthRangeSlots[oldest].frame)) {
+						oldest = slot;
+					}
+				}
+				if (oldest == RenderState::DEPTH_RANGE_SLOTS) {
+					break;
+				}
+				RenderState::DepthRangeSlot& flight = state.depthRangeSlots[oldest];
+				if (mapped) {
+					GraphicsInternal::CascadeDepthFit& fit = state.depthFits[flight.view];
+					GraphicsInternal::UpdateCascadeDepthFit(fit, mapped[oldest * 2 + 1]);
+					fit.seen = state.renderedFrames;
+				}
+				flight.inUse = false;
+			}
+			if ((state.renderedFrames & 63) == 0) {
+				std::erase_if(state.depthFits, [&](const auto& entry) { return entry.second.seen + 120 < state.renderedFrames; });
+			}
 		}
 
 		void AnswerFinishedPicks(RenderState& state, RHI::Device& device) {
@@ -6349,6 +6451,64 @@ namespace Shalltear {
 											   camera->GetCullingMask());
 		}
 
+		struct GPUDepthRangePush {
+			u32 resultOffset = 0;
+			f32 a = 0.0f;
+			f32 b = 0.0f;
+			u32 width = 0;
+			u32 height = 0;
+			u32 orthographic = 0;
+		};
+		constexpr u32 DEPTH_RANGE_TILE = 64;
+
+		void RecordDepthRange(GraphExecution& exec, RHI::TextureHandle depth, const Mat4& projection, u32 slot) {
+			RenderState& state = *_state;
+			ShaderAsset* kernel = state.msaaSamples > 1 ? state.depthRangeShaderMultisampled.Get() : state.depthRangeShader.Get();
+			if (!kernel || !depth.IsValid() || slot >= RenderState::DEPTH_RANGE_SLOTS || !state.depthRangeScratch.IsValid()) {
+				return;
+			}
+			const RHI::PipelineHandle pipeline =
+				GetOrCreatePipeline(kernel, RHI::Format::Unknown, RHI::Format::Unknown, nullptr, 1, SHADER_BASE_VARIANT, ShaderProgramKind::Compute);
+			if (!pipeline.IsValid()) {
+				return;
+			}
+			const Vec2I size = exec.device->GetTextureSize(depth);
+			const u64 offset = static_cast<u64>(slot) * 2 * sizeof(f32);
+			GPUDepthRangePush push;
+			push.resultOffset = static_cast<u32>(offset);
+			push.a = projection(2, 2);
+			push.b = projection(2, 3);
+			push.width = static_cast<u32>(Math::Max(size.x, 0));
+			push.height = static_cast<u32>(Math::Max(size.y, 0));
+			push.orthographic = projection(3, 2) == 0.0f ? 1u : 0u;
+			RHI::CommandList& cmd = *exec.cmd;
+			cmd.TransitionBuffer(state.depthRangeScratch, RHI::ResourceState::TransferDst);
+			cmd.CopyBufferRegion(state.depthRangeSeed, state.depthRangeScratch, 0, offset, 2 * sizeof(f32));
+			cmd.TransitionBuffer(state.depthRangeScratch, RHI::ResourceState::UnorderedAccess);
+			cmd.SetPipeline(pipeline);
+			RHI::TransientSetWriter writer = exec.device->CreateTransientSet(pipeline, 0);
+			writer.WriteTexture(0, depth);
+			writer.WriteStorageBuffer(1, state.depthRangeScratch, 0, RHI::WHOLE_BUFFER);
+			cmd.BindTransientSet(0, writer.Commit());
+			cmd.PushConstants({reinterpret_cast<const u8*>(&push), sizeof(push)});
+			cmd.Dispatch((push.width + DEPTH_RANGE_TILE - 1) / DEPTH_RANGE_TILE, (push.height + DEPTH_RANGE_TILE - 1) / DEPTH_RANGE_TILE);
+			cmd.TransitionBuffer(state.depthRangeScratch, RHI::ResourceState::TransferSrc);
+			cmd.TransitionBuffer(state.depthRangeRing, RHI::ResourceState::TransferDst);
+			cmd.CopyBufferRegion(state.depthRangeScratch, state.depthRangeRing, offset, offset, 2 * sizeof(f32));
+		}
+
+		void PassRecordViewDepthRange(GraphExecution& exec, const GraphPass& pass) {
+			const RenderState::PendingView& pending = _state->pendingViews[pass.work.index];
+			RecordDepthRange(exec, pass.textures[0], pending.projection, pass.work.element);
+		}
+
+		void PassRecordWindowDepthRange(GraphExecution& exec, const GraphPass& pass) {
+			const RenderState::CameraWork& cameraWork = _state->frameWork[pass.work.index].cameras[pass.work.subIndex];
+			if (cameraWork.camera) {
+				RecordDepthRange(exec, pass.textures[0], cameraWork.camera->BuildProjection(CameraAspect(cameraWork)), pass.work.element);
+			}
+		}
+
 		void PassRecordWindowScene(GraphExecution& exec, const GraphPass& pass) {
 			enum : u32 { COLOR = 0,
 						 DEPTH = 1 };
@@ -6575,6 +6735,9 @@ namespace Shalltear {
 			outDepth.size = size;
 			outDepth.format = SCENE_DEPTH_FORMAT;
 			outDepth.usage = RHI::TextureUsage::DepthStencil;
+			if (FitsDepth()) {
+				outDepth.usage = outDepth.usage | RHI::TextureUsage::Sampled;
+			}
 			outDepth.samples = samples;
 			outDepth.debugName = "ViewTargetDepth";
 		}
@@ -7544,6 +7707,17 @@ namespace Shalltear {
 				graph.Read(windowShadowAtlas, RHI::ResourceState::ShaderResource);
 				graph.Read(windowPunctualAtlas, RHI::ResourceState::ShaderResource);
 				DeclareScenePassReads(graph, productions.ambientOcclusion, sceneReads, prepassDepth, prepassNormals, opaqueColor);
+				if (windowCasts && FitsDepth() && cameraRows.camera) {
+					const u32 slot = ClaimDepthRangeSlot(state, device, cameraRows.camera->GetInstanceId() & ~PENDING_VIEW_LOD_KEY);
+					if (slot < RenderState::DEPTH_RANGE_SLOTS) {
+						SLT_GRAPH_SITE(windowDepthRangeSite, "Render.Window.DepthRange");
+						PassWork rangeWork = work;
+						rangeWork.element = slot;
+						graph.AddPass("Render.Window.DepthRange", windowDepthRangeSite, &PassRecordWindowDepthRange, rangeWork);
+						graph.Read(cameraDepth, RHI::ResourceState::ShaderResource);
+						graph.Write(graph.CreateVirtual(true), RHI::ResourceState::Undefined);
+					}
+				}
 				work.produced = false;
 				DeclareProceduralReads(state, graph, procedural);
 
@@ -7829,6 +8003,17 @@ namespace Shalltear {
 				DeclareScenePassReads(graph, productions.ambientOcclusion, sceneReads, prepassDepth, prepassNormals, opaqueColor);
 				viewWork.produced = false;
 				DeclareProceduralReads(state, graph, procedural);
+				if (viewCasts && FitsDepth()) {
+					const u32 slot = ClaimDepthRangeSlot(state, device, PENDING_VIEW_LOD_KEY | pending.targetId);
+					if (slot < RenderState::DEPTH_RANGE_SLOTS) {
+						SLT_GRAPH_SITE(viewDepthRangeSite, "Render.View.DepthRange");
+						PassWork rangeWork = viewWork;
+						rangeWork.element = slot;
+						graph.AddPass("Render.View.DepthRange", viewDepthRangeSite, &PassRecordViewDepthRange, rangeWork);
+						graph.Read(depth, RHI::ResourceState::ShaderResource);
+						graph.Write(graph.CreateVirtual(true), RHI::ResourceState::Undefined);
+					}
+				}
 
 				if (pending.debugView != DebugView::None && wantsPrepass) {
 					flushRowsBefore(RowSortKey(PassPoint::Overlay, FrameStagePosition::Early));
@@ -8207,6 +8392,7 @@ namespace Shalltear {
 			state.shadowCascades = static_cast<u32>(
 				Math::Clamp(profile.shadowCascades, 1, static_cast<i32>(MAX_SHADOW_CASCADES)));
 			state.shadowFirstCascadeDistance = profile.shadowFirstCascadeDistance;
+			state.shadowCascadeFit = profile.shadowCascadeFit;
 			state.shadowPcfTaps = static_cast<u32>(Math::Clamp(profile.shadowPcfTaps, 1, 7)) | 1u;
 			state.shadowAtlasSize = ClampAtlasSize(profile.shadowAtlasSize);
 			state.transparentReceiveShadows = profile.transparentReceiveShadows;
@@ -9058,8 +9244,16 @@ namespace Shalltear {
 			ReleaseEngineShader(state.debugOverlayShader);
 			ReleaseEngineShader(state.outlineShader);
 			ReleaseEngineShader(state.skinningShader);
+			ReleaseEngineShader(state.depthRangeShader);
+			ReleaseEngineShader(state.depthRangeShaderMultisampled);
 			state.skinDeformer.Destroy(*state.device);
 			state.isolatedSkinDeformer.Destroy(*state.device);
+			for (RHI::BufferHandle* buffer : {&state.depthRangeRing, &state.depthRangeScratch, &state.depthRangeSeed}) {
+				if (buffer->IsValid()) {
+					state.device->DestroyResource(*buffer);
+					*buffer = {};
+				}
+			}
 			if (state.pickRing.IsValid()) {
 				state.device->DestroyResource(state.pickRing);
 				state.pickRing = {};
@@ -9706,6 +9900,14 @@ namespace Shalltear {
 			MarkLODRecordDirty(*_state, renderer.GetInstanceId());
 		}
 	}
+	f32 GraphicsInternal::GetCameraDepthFit(u64 cameraInstanceId) {
+		if (!_state || cameraInstanceId == 0) {
+			return 0.0f;
+		}
+		const auto fit = _state->depthFits.find(cameraInstanceId & ~PENDING_VIEW_LOD_KEY);
+		return fit != _state->depthFits.end() ? fit->second.applied : 0.0f;
+	}
+
 	void RenderSystem::RegisterLODGroup(Handle<LODGroup> group) {
 		if (!_state || !group.Get()) {
 			return;
@@ -9978,6 +10180,7 @@ namespace Shalltear {
 		}
 		++state.renderedFrames;
 		AnswerFinishedPicks(state, device);
+		HarvestDepthRanges(state, device);
 		AnswerSkyReadbacks(state, device);
 		AnswerFrameCaptures(state, device);
 

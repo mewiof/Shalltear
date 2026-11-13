@@ -43,4 +43,13 @@ namespace Shalltear::GraphicsInternal {
 
 	SHALLTEAR_CORE_API Vec2 CascadeReceiverDepths(const CascadeSplits& splits, u32 index);
 
+	struct CascadeDepthFit {
+		f32 applied = 0.0f;
+		u32 shrinkFrames = 0;
+		u64 seen = 0;
+	};
+
+	SHALLTEAR_CORE_API void UpdateCascadeDepthFit(CascadeDepthFit& fit, f32 farthest);
+	SHALLTEAR_CORE_API f32 GetCameraDepthFit(u64 cameraInstanceId);
+
 } // namespace Shalltear::GraphicsInternal

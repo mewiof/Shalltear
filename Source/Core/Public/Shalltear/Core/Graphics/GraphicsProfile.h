@@ -21,6 +21,11 @@ namespace Shalltear {
 		ForcedOn = 2
 	};
 
+	enum class ShadowCascadeFit : u8 {
+		Fixed = 0,
+		VisibleDepth = 1,
+	};
+
 } // namespace Shalltear
 
 SLT_REFLECT_ENUM(::Shalltear::TonemapCurve)
@@ -34,6 +39,11 @@ SLT_REFLECT_ENUM(::Shalltear::TextureAnisotropy)
 SLT_ENUM_VALUE(Disabled)
 SLT_ENUM_VALUE(PerTexture)
 SLT_ENUM_VALUE(ForcedOn)
+SLT_END_ENUM()
+
+SLT_REFLECT_ENUM(::Shalltear::ShadowCascadeFit)
+SLT_ENUM_VALUE(Fixed)
+SLT_ENUM_VALUE(VisibleDepth)
 SLT_END_ENUM()
 
 namespace Shalltear {
@@ -56,6 +66,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(shadowDistance, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowCascades, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowFirstCascadeDistance, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(shadowCascadeFit, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowPcfTaps, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowAtlasSize, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_REFLECT_FIELD(transparentReceiveShadows, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
@@ -93,6 +104,9 @@ namespace Shalltear {
 		i32 shadowCascades = 4;
 
 		f32 shadowFirstCascadeDistance = 4.0f;
+
+		// VisibleDepth: cascades fitted to depth read back from earlier frames
+		ShadowCascadeFit shadowCascadeFit = ShadowCascadeFit::Fixed;
 
 		i32 shadowPcfTaps = 5;
 

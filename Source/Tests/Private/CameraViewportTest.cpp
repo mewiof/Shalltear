@@ -1,6 +1,7 @@
 #include "TestsPCH.h"
 
 #include "Graphics/CameraViewport.h"
+#include "Graphics/ShadowCascades.h"
 #include "Graphics/GraphicsSettings.h"
 
 #include "Shalltear/Core/Asset.h"
@@ -224,6 +225,69 @@ namespace {
 	};
 
 } // anonymous namespace
+
+TEST_F(CameraViewportFixture, WindowCameraFitsCascadesToVisibleDepth) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	auto* profile = static_cast<GraphicsProfile*>(AssetDatabase::LoadAsset(Path("project://Assets/Viewports.slprofile")));
+	ASSERT_NE(profile, nullptr);
+	profile->shadowDistance = 120.0f;
+	profile->shadowCascadeFit = ShadowCascadeFit::VisibleDepth;
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<SceneObject> wall = SceneSystem::CreateObject("Wall", _scene);
+	wall->SetLocalPosition(Vec3(0.0f, 10.0f, 15.0f));
+	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
+	wall->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
+	SceneSystem::CreateObject("Sun", _scene)->AddComponent<Light>()->SetIntensity(2.0f);
+	Handle<Camera> camera = AddCamera("Camera", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	camera->GetOwner()->SetLocalPosition(Vec3(0.0f, 2.0f, 0.0f));
+	camera->GetOwner()->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, 0.0f, 1.0f)));
+	Handle<Window> window = HiddenWindow({64, 64});
+	ASSERT_TRUE(window.IsValid());
+	RenderFrames();
+	RenderFrames();
+	EXPECT_FLOAT_EQ(GraphicsInternal::GetCameraDepthFit(camera.GetInstanceId()), 16.0f);
+	AssetDatabase::UnloadAsset(profile);
+}
+
+TEST_F(CameraViewportFixture, StoppedCameraDepthFitIsDropped) {
+	InitializeAt(1);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	auto* profile = static_cast<GraphicsProfile*>(AssetDatabase::LoadAsset(Path("project://Assets/Viewports.slprofile")));
+	ASSERT_NE(profile, nullptr);
+	profile->shadowDistance = 120.0f;
+	profile->shadowCascadeFit = ShadowCascadeFit::VisibleDepth;
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<SceneObject> wall = SceneSystem::CreateObject("Wall", _scene);
+	wall->SetLocalPosition(Vec3(0.0f, 10.0f, 15.0f));
+	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
+	wall->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
+	SceneSystem::CreateObject("Sun", _scene)->AddComponent<Light>()->SetIntensity(2.0f);
+	Handle<Camera> stopped = AddCamera("Stopped", BLUE, RectF(0.0f, 0.0f, 0.5f, 1.0f));
+	Handle<Camera> running = AddCamera("Running", RED, RectF(0.5f, 0.0f, 0.5f, 1.0f));
+	for (const Handle<Camera>& camera : {stopped, running}) {
+		camera->GetOwner()->SetLocalPosition(Vec3(0.0f, 2.0f, 0.0f));
+		camera->GetOwner()->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, 0.0f, 1.0f)));
+	}
+	Handle<Window> window = HiddenWindow({64, 64});
+	ASSERT_TRUE(window.IsValid());
+	RenderFrames();
+	RenderFrames();
+	ASSERT_GT(GraphicsInternal::GetCameraDepthFit(stopped.GetInstanceId()), 0.0f);
+	stopped->SetEnabled(false);
+	for (int round = 0; round < 70; ++round) {
+		RenderFrames();
+	}
+	EXPECT_EQ(GraphicsInternal::GetCameraDepthFit(stopped.GetInstanceId()), 0.0f);
+	EXPECT_GT(GraphicsInternal::GetCameraDepthFit(running.GetInstanceId()), 0.0f);
+	AssetDatabase::UnloadAsset(profile);
+}
 
 TEST_F(CameraViewportFixture, SplitScreenFillsEachHalf) {
 	InitializeAt(1);

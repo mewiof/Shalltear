@@ -4678,6 +4678,76 @@ TEST_F(ShadowViewFixture, CascadeFitKeptWhileAsked) {
 	SceneSystem::UnloadScene(scene);
 }
 
+TEST_F(ShadowViewFixture, VisibleDepthFitsCascadesToWall) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile([](GraphicsProfile& profile) {
+		profile.shadowDistance = 120.0f;
+		profile.shadowCascades = 4;
+		profile.shadowFirstCascadeDistance = 8.0f;
+	});
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("DepthFit");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.0f, -1.0f, 400.0f));
+	ground->SetLocalScale(Vec3(2000.0f, 1.0f, 1000.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+	Handle<SceneObject> wall = SceneSystem::CreateObject("Wall", scene);
+	wall->SetLocalPosition(Vec3(0.0f, 10.0f, 15.0f));
+	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
+	wall->AddComponent<MeshRenderer>()->SetMesh(cube);
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	sunObject->AddComponent<Light>()->SetIntensity(2.0f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({96, 96});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	auto fitAfter = [&](u32 frames, CascadeFit* out) {
+		u32 count = 0;
+		for (u32 frame = 0; frame < frames; ++frame) {
+			const Vec3 eye(0.0f, 2.0f, 0.0f);
+			ViewDesc desc;
+			desc.view = Mat4::LookAt(eye, Vec3(0.0f, 2.0f, 10.0f));
+			desc.projection = Mat4::PerspectiveReverseZ(60.0f, 1.0f, 0.1f, 1000.0f);
+			desc.cameraPosition = eye;
+			desc.retainCascadeFit = true;
+			RenderSystem::SubmitView(target, desc);
+			RenderSystem::RenderAll();
+			count = RenderSystem::GetCascadeFit(target, {out, MAX_SHADOW_CASCADES});
+		}
+		return count;
+	};
+	CascadeFit fixed[MAX_SHADOW_CASCADES];
+	ASSERT_EQ(fitAfter(1, fixed), 4u);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_FLOAT_EQ(fixed[3].farDepth, 120.0f);
+
+	UseProfile([](GraphicsProfile& profile) { profile.shadowCascadeFit = ShadowCascadeFit::VisibleDepth; });
+	CascadeFit fitted[MAX_SHADOW_CASCADES];
+	ASSERT_EQ(fitAfter(RHI::FRAMES_IN_FLIGHT + 3, fitted), 4u);
+	EXPECT_FLOAT_EQ(fitted[3].farDepth, 16.0f);
+	EXPECT_LT(fitted[0].worldTexelSize, fixed[0].worldTexelSize / 3.0f);
+
+	wall->SetActive(false);
+	SceneSystem::EndFrame();
+	ASSERT_EQ(fitAfter(RHI::FRAMES_IN_FLIGHT + 3, fitted), 4u);
+	EXPECT_FLOAT_EQ(fitted[3].farDepth, 120.0f);
+	EXPECT_FLOAT_EQ(fitted[0].worldTexelSize, fixed[0].worldTexelSize);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+}
+
 TEST_F(ShadowViewFixture, ViewsKeepSeparateCascadeFits) {
 	InitializeWith();
 	if (!RenderSystem::IsRenderingAvailable()) {
@@ -5240,6 +5310,53 @@ TEST_F(OffscreenViewFixture, LODAnimatedCrossFadeFollowsViewClock) {
 	EXPECT_GT(redShare(-2.0f), 0.97f);
 	clock = 10.975;
 	EXPECT_NEAR(redShare(-2.0f), 0.5f, 0.08f);
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(level);
+}
+
+TEST_F(MSAAViewFixture, VisibleDepthFitReadsMultisampledDepth) {
+	InitializeAt(4);
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	auto* profile = static_cast<GraphicsProfile*>(AssetDatabase::LoadAsset(Path("project://Assets/Msaa.slprofile")));
+	ASSERT_NE(profile, nullptr);
+	profile->shadowDistance = 120.0f;
+	profile->shadowCascades = 4;
+	profile->shadowFirstCascadeDistance = 8.0f;
+	profile->shadowCascadeFit = ShadowCascadeFit::VisibleDepth;
+	Handle<Scene> level = SceneSystem::CreateScene("Level");
+	Handle<SceneObject> wall = AddCube(level, 0.0f);
+	if (!wall.IsValid()) {
+		AssetDatabase::UnloadAsset(profile);
+		GTEST_SKIP();
+	}
+	wall->SetLocalPosition(Vec3(0.0f, 10.0f, 15.0f));
+	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
+	Handle<SceneObject> sun = SceneSystem::CreateObject("Sun", level);
+	sun->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+	sun->AddComponent<Light>()->SetIntensity(2.0f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	CascadeFit fits[MAX_SHADOW_CASCADES];
+	u32 count = 0;
+	for (u32 frame = 0; frame < RHI::FRAMES_IN_FLIGHT + 3; ++frame) {
+		ViewDesc desc = ViewFrom(0.0f);
+		desc.view = Mat4::LookAt(Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 2.0f, 10.0f));
+		desc.cameraPosition = Vec3(0.0f, 2.0f, 0.0f);
+		desc.retainCascadeFit = true;
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		count = RenderSystem::GetCascadeFit(target, {fits, MAX_SHADOW_CASCADES});
+	}
+	if (count > 0) {
+		EXPECT_FLOAT_EQ(fits[count - 1].farDepth, 16.0f);
+	} else {
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	AssetDatabase::UnloadAsset(profile);
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(level);
 }

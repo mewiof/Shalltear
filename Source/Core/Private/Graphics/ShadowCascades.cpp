@@ -13,6 +13,11 @@ namespace Shalltear::GraphicsInternal {
 		// must match SHALLTEAR_CASCADE_BLEND_FRACTION in Shadows.hlsli
 		inline constexpr f32 CASCADE_BLEND_FRACTION = 0.1f;
 
+		inline constexpr f32 FIT_MARGIN = 1.1f;
+		inline constexpr f32 FIT_STEPS_PER_OCTAVE = 4.0f;
+		inline constexpr f32 FIT_FLOOR = 1.0f;
+		inline constexpr u32 FIT_SHRINK_FRAMES = 30;
+
 		Mat4 LightBasis(const Vec3& direction) {
 			return Mat4::LookAt(Vec3::Zero(), direction, LightUp);
 		}
@@ -142,6 +147,23 @@ namespace Shalltear::GraphicsInternal {
 			}
 		}
 		return splits.count;
+	}
+
+	void UpdateCascadeDepthFit(CascadeDepthFit& fit, f32 farthest) {
+		if (!(farthest > 0.0f) || !std::isfinite(farthest)) {
+			return;
+		}
+		const f32 octaves = std::ceil(std::log2(std::max(farthest * FIT_MARGIN, FIT_FLOOR)) * FIT_STEPS_PER_OCTAVE) / FIT_STEPS_PER_OCTAVE;
+		const f32 wanted = std::exp2(octaves);
+		if (wanted >= fit.applied) {
+			fit.applied = wanted;
+			fit.shrinkFrames = 0;
+			return;
+		}
+		if (++fit.shrinkFrames >= FIT_SHRINK_FRAMES) {
+			fit.applied = wanted;
+			fit.shrinkFrames = 0;
+		}
 	}
 
 	Vec2 CascadeReceiverDepths(const CascadeSplits& splits, u32 index) {

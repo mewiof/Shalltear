@@ -60,6 +60,38 @@ namespace {
 
 } // namespace
 
+TEST(ShadowCascadeTest, DepthFitGrowsAtOnceShrinksLate) {
+	GraphicsInternal::CascadeDepthFit fit;
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 0.0f);
+	GraphicsInternal::UpdateCascadeDepthFit(fit, std::numeric_limits<f32>::infinity());
+	EXPECT_EQ(fit.applied, 0.0f);
+
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 15.0f);
+	const f32 near = fit.applied;
+	EXPECT_NEAR(near, std::exp2(4.25f), 1e-3f);
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 16.0f);
+	EXPECT_EQ(fit.applied, near);
+
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 100.0f);
+	EXPECT_EQ(fit.applied, 128.0f);
+	for (u32 frame = 0; frame < 29; ++frame) {
+		GraphicsInternal::UpdateCascadeDepthFit(fit, 15.0f);
+	}
+	EXPECT_EQ(fit.applied, 128.0f);
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 100.0f);
+	for (u32 frame = 0; frame < 29; ++frame) {
+		GraphicsInternal::UpdateCascadeDepthFit(fit, 15.0f);
+	}
+	EXPECT_EQ(fit.applied, 128.0f);
+	GraphicsInternal::UpdateCascadeDepthFit(fit, 15.0f);
+	EXPECT_EQ(fit.applied, near);
+
+	for (u32 frame = 0; frame < 30; ++frame) {
+		GraphicsInternal::UpdateCascadeDepthFit(fit, 0.05f);
+	}
+	EXPECT_EQ(fit.applied, 1.0f);
+}
+
 TEST(ShadowCascadeTest, SplitsSpanRangeAndAscend) {
 	for (u32 count = 1; count <= MAX_SHADOW_CASCADES; ++count) {
 		const CascadeSplits splits = DefaultSplits(0.05f, DefaultShadowDistance(), count);

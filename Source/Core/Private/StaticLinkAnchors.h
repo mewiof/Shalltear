@@ -37,7 +37,8 @@
 	X(ReflectionProbe)               \
 	X(Skeleton)                      \
 	X(SkinnedMeshRenderer)           \
-	X(LODGroup)
+	X(LODGroup)                      \
+	X(ObjectShadow)
 
 #define SLT_UI_SYSTEM_ANCHORS(X) \
 	X(UIPanelRenderer)

@@ -19,6 +19,8 @@ namespace Shalltear::GraphicsInternal {
 	inline constexpr u32 MIN_PUNCTUAL_TILE = 256;
 	inline constexpr u32 MAX_PUNCTUAL_TILE = 1024;
 
+	inline constexpr u32 MAX_OBJECT_SHADOWS = 16;
+
 	class SHALLTEAR_CORE_API ShadowAtlasAllocator {
 	public:
 		explicit ShadowAtlasAllocator(u32 atlasSize = 0) { Reset(atlasSize); }
@@ -71,7 +73,11 @@ namespace Shalltear::GraphicsInternal {
 	SHALLTEAR_CORE_API void FavorKeptShadows(std::span<ShadowRequest> requests, std::span<const u64> keptLastFrame);
 
 	// allocate in output order (largest tile first or packing can fail)
-	SHALLTEAR_CORE_API u32 FitShadowRequests(std::span<ShadowRequest> requests, u32 atlasSize, u32 freeMaps);
+	SHALLTEAR_CORE_API u32 FitShadowRequests(std::span<ShadowRequest> requests, u32 atlasSize, u32 freeMaps,
+											 u64 reservedArea = 0);
+
+	// budget's maps capped at 1/2 of atlas
+	SHALLTEAR_CORE_API u32 ObjectShadowTileSize(u32 atlasSize, u32 budget, u32 resolution);
 
 	struct PunctualView {
 		Mat4 viewProjection;

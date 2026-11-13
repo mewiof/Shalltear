@@ -84,7 +84,7 @@ TEST_F(GraphicsProfileFixture, EveryProfileFieldIsClassified) {
 	}
 	EXPECT_GT(classified, 0u);
 
-	EXPECT_EQ(type->fieldCount, 19u);
+	EXPECT_EQ(type->fieldCount, 21u);
 }
 
 TEST_F(GraphicsProfileFixture, BuiltInDefaultMatchesNoProfile) {
@@ -103,6 +103,8 @@ TEST_F(GraphicsProfileFixture, BuiltInDefaultMatchesNoProfile) {
 	EXPECT_TRUE(profile->lodCrossFade);
 	EXPECT_EQ(profile->shadowCascadeFit, ShadowCascadeFit::Fixed);
 	EXPECT_EQ(profile->shadowAtlasSize, 2048);
+	EXPECT_EQ(profile->objectShadows, 4);
+	EXPECT_EQ(profile->objectShadowResolution, 1024);
 	EXPECT_TRUE(profile->transparentReceiveShadows);
 	EXPECT_EQ(profile->anisotropicFiltering, TextureAnisotropy::PerTexture);
 	EXPECT_EQ(profile->maxAnisotropy, 16);

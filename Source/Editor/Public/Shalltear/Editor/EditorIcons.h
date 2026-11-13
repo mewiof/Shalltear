@@ -228,6 +228,7 @@ namespace Shalltear::EditorIcons {
 		inline constexpr std::string_view UIPanelRenderer = "engine://Icons/Components/UIPanelRenderer.svg";
 		inline constexpr std::string_view ProceduralRenderer = "engine://Icons/Components/ProceduralRenderer.svg";
 		inline constexpr std::string_view LODGroup = "engine://Icons/Components/LODGroup.svg";
+		inline constexpr std::string_view ObjectShadow = "engine://Icons/Components/ObjectShadow.svg";
 		inline constexpr std::string_view Behavior = "engine://Icons/Components/Behavior.svg";
 		inline constexpr std::string_view Component = "engine://Icons/Components/Component.svg";
 		inline constexpr std::string_view MissingComponent = "engine://Icons/Components/Missing.svg";

@@ -9,6 +9,7 @@
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/LODGroup.h"
+#include "Shalltear/Core/Graphics/ObjectShadow.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Scene.h"
@@ -3583,6 +3584,7 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 			mirrored->SetLocalPosition(Vec3(-2.4f, 1.2f, 1.9f));
 			mirrored->SetLocalScale(Vec3(-1.5f, 1.5f, 1.5f));
 			mirrored->AddComponent<MeshRenderer>()->SetMesh(cube);
+			mirrored->AddComponent<ObjectShadow>();
 			Handle<SceneObject> spotObject = SceneSystem::CreateObject("Spot", scene);
 			spotObject->SetLocalPosition(Vec3(-4.3f, 6.1f, 2.7f));
 			spotObject->SetLocalRotation(Quat::LookRotation(Vec3(0.31f, -0.88f, -0.36f).Normalized()));
@@ -3627,7 +3629,7 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 	}
 	ASSERT_TRUE(armed);
 	EXPECT_EQ(shadowLights, 3u);
-	EXPECT_EQ(shadowMaps, 11u);
+	EXPECT_EQ(shadowMaps, 12u);
 	EXPECT_EQ(punctualOnlyMaps, 7u);
 	EXPECT_TRUE(captured.empty()) << captured;
 }
@@ -4999,6 +5001,238 @@ namespace {
 	}
 
 } // anonymous namespace
+
+namespace {
+
+	struct ShadowEdge {
+		u32 shadowed = 0;
+		u32 core = 0;
+		u32 penumbra = 0;
+	};
+
+	ShadowEdge MeasureShadowEdge(const Vector<u8>& shadowed, const Vector<u8>& lit, Vec2I size) {
+		ShadowEdge edge;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				const u32 bright = Luma(TexelAt(lit, size, x, y));
+				const u32 dark = Luma(TexelAt(shadowed, size, x, y));
+				if (bright < 60 || dark + 6 >= bright) {
+					continue;
+				}
+				++edge.shadowed;
+				const f32 ratio = static_cast<f32>(dark) / static_cast<f32>(bright);
+				edge.core += ratio < 0.7f ? 1u : 0u;
+				edge.penumbra += ratio > 0.3f && ratio < 0.85f ? 1u : 0u;
+			}
+		}
+		return edge;
+	}
+
+	Handle<SceneObject> BuildHero(Handle<Scene> scene, Handle<MeshAsset> cube, const Vec3& position) {
+		Handle<SceneObject> hero = SceneSystem::CreateObject("Hero", scene);
+		hero->SetLocalPosition(position);
+		Handle<SceneObject> body = SceneSystem::CreateObject("Body", scene, hero);
+		body->SetLocalPosition(Vec3(0.0f, 0.9f, 0.0f));
+		body->SetLocalScale(Vec3(0.5f, 1.8f, 0.5f));
+		body->AddComponent<SkinnedMeshRenderer>()->SetMesh(cube);
+		Handle<SceneObject> prop = SceneSystem::CreateObject("Prop", scene, hero);
+		prop->SetLocalPosition(Vec3(0.45f, 1.0f, 0.0f));
+		prop->SetLocalScale(Vec3(0.15f, 0.6f, 0.15f));
+		prop->AddComponent<MeshRenderer>()->SetMesh(cube);
+		hero->AddComponent<ObjectShadow>();
+		return hero;
+	}
+
+	Handle<SceneObject> BuildHeroGround(Handle<Scene> scene, Handle<MeshAsset> cube) {
+		Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+		ground->SetLocalPosition(Vec3(0.0f, -0.2f, 0.0f));
+		ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+		ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+		Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+		sunObject->SetLocalRotation(Quat::FromEuler(Vec3(52.0f, 37.0f, 11.0f)));
+		sunObject->AddComponent<Light>()->SetIntensity(2.0f);
+		return sunObject;
+	}
+
+	void RenderThirdPerson(ViewTargetId target, Vector<u8>& pixels, Vec2I& size) {
+		const Vec3 eye(0.0f, 4.0f, 0.01f);
+		ViewDesc desc;
+		desc.view = Mat4::LookAt(eye, Vec3::Zero());
+		desc.projection = Mat4::PerspectiveReverseZ(75.0f, 16.0f / 9.0f, 0.1f, 500.0f);
+		desc.cameraPosition = eye;
+		desc.clearColor = Color::Black();
+		RenderSystem::SubmitView(target, desc);
+		RenderSystem::RenderAll();
+		ASSERT_TRUE(RenderSystem::ReadbackViewTarget(target, pixels, size));
+	}
+
+	void UseTicketCascades(GraphicsProfile& profile) {
+		profile.shadowDistance = 135.0f;
+		profile.shadowCascades = 3;
+		profile.shadowFirstCascadeDistance = 17.0f;
+		profile.shadowAtlasSize = 2048;
+	}
+
+} // anonymous namespace
+
+TEST_F(ShadowViewFixture, ObjectShadowSharpensGroupOutOfCascades) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile(UseTicketCascades);
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("ObjectShadow");
+	const Handle<Light> sun = BuildHeroGround(scene, cube)->GetComponent<Light>();
+	const Handle<SceneObject> hero = BuildHero(scene, cube, Vec3::Zero());
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({320, 180});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> sharp{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> again{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> cascaded{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> lit{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderThirdPerson(target, sharp, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	RenderThirdPerson(target, again, size);
+	EXPECT_EQ(sharp, again);
+	hero->GetComponent<ObjectShadow>()->SetEnabled(false);
+	RenderThirdPerson(target, cascaded, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 3u);
+	sun->SetCastShadows(false);
+	RenderThirdPerson(target, lit, size);
+
+	const ShadowEdge object = MeasureShadowEdge(sharp, lit, size);
+	const ShadowEdge cascade = MeasureShadowEdge(cascaded, lit, size);
+	EXPECT_GT(cascade.shadowed, 300u);
+	EXPECT_GT(cascade.penumbra, 3 * object.penumbra) << cascade.penumbra << " -> " << object.penumbra;
+	EXPECT_NEAR(static_cast<f32>(object.core), static_cast<f32>(cascade.core), 0.2f * static_cast<f32>(cascade.core))
+		<< object.shadowed << " " << object.core << " " << object.penumbra << " -> " << cascade.shadowed << " " << cascade.core << " "
+		<< cascade.penumbra;
+	EXPECT_EQ(CompareFrames(sharp, lit, size).brighter, 0u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, ObjectShadowBudgetPicksPriorityThenNearest) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile([](GraphicsProfile& profile) {
+		UseTicketCascades(profile);
+		profile.objectShadows = 1;
+	});
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("ObjectShadowBudget");
+	BuildHeroGround(scene, cube);
+	const Handle<ObjectShadow> nearShadow = BuildHero(scene, cube, Vec3(-1.5f, 0.0f, 0.0f))->GetComponent<ObjectShadow>();
+	const Handle<ObjectShadow> farShadow = BuildHero(scene, cube, Vec3(2.0f, 0.0f, 1.0f))->GetComponent<ObjectShadow>();
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({320, 180});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> onlyNear{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> onlyFar{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> neither{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	farShadow->SetEnabled(false);
+	RenderThirdPerson(target, onlyNear, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	nearShadow->SetEnabled(false);
+	RenderThirdPerson(target, neither, size);
+	farShadow->SetEnabled(true);
+	RenderThirdPerson(target, onlyFar, size);
+	nearShadow->SetEnabled(true);
+	EXPECT_GT(Differing(onlyNear, onlyFar, size), 50u);
+
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	EXPECT_EQ(pixels, onlyNear);
+	farShadow->SetPriority(1);
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(pixels, onlyFar);
+
+	UseProfile([](GraphicsProfile& profile) { profile.objectShadows = 2; });
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 5u);
+	UseProfile([](GraphicsProfile& profile) { profile.objectShadows = 0; });
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 3u);
+	EXPECT_EQ(pixels, neither);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, NestedObjectShadowTakesSubtree) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile(UseTicketCascades);
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("NestedObjectShadow");
+	BuildHeroGround(scene, cube);
+	const Handle<SceneObject> rider = BuildHero(scene, cube, Vec3::Zero());
+	Handle<SceneObject> mount = SceneSystem::CreateObject("Mount", scene, rider);
+	mount->SetLocalPosition(Vec3(-0.8f, 0.4f, 0.0f));
+	mount->SetLocalScale(Vec3(0.6f, 0.8f, 1.4f));
+	mount->AddComponent<MeshRenderer>()->SetMesh(cube);
+	const Handle<ObjectShadow> mountShadow = mount->AddComponent<ObjectShadow>();
+	SceneSystem::CreateObject("Empty", scene)->AddComponent<ObjectShadow>();
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({160, 90});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	RenderThirdPerson(target, pixels, size);
+	if (RenderSystem::GetStats().shadowLights == 0) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 5u);
+	mountShadow->SetEnabled(false);
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	mountShadow->SetEnabled(true);
+	rider->GetComponent<ObjectShadow>()->SetEnabled(false);
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 4u);
+	mount->GetComponent<MeshRenderer>()->SetCastShadows(ShadowCasting::Off);
+	RenderThirdPerson(target, pixels, size);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 3u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
 
 TEST_F(ShadowViewFixture, AtlasOverlayStaysInCorner) {
 	InitializeWith();

@@ -166,6 +166,28 @@ namespace Shalltear::GraphicsInternal {
 		}
 	}
 
+	f32 ObjectShadowRadius(f32 needed, f32 previous) {
+		const f32 octaves = std::ceil(std::log2(std::max(needed, 1e-3f)) * FIT_STEPS_PER_OCTAVE) / FIT_STEPS_PER_OCTAVE;
+		const f32 step = std::exp2(octaves);
+		return previous >= step && previous < step * 1.3f ? previous : step;
+	}
+
+	CascadeView BuildObjectShadowView(const Vec3& lightDirection, const Vec3& center, f32 radius,
+									  f32 marginTexels, f32 reach, u32 tileResolution) {
+		CascadeView out;
+		const f32 resolution = static_cast<f32>(std::max(tileResolution, 1u));
+		const f32 margin = std::clamp(2.0f * marginTexels / resolution, 0.0f, 0.5f);
+		const f32 half = std::max(radius, 1e-3f) / (1.0f - margin);
+		const Vec3 direction = lightDirection.Normalized();
+		const f32 backOff = 2.0f * half;
+		const Vec3 eye = center - direction * backOff;
+		out.view = Mat4::LookAt(eye, center, LightUp);
+		out.projection = Mat4::OrthographicReverseZ(-half, half, -half, half, 0.0f, backOff + half + std::max(reach, 0.0f));
+		out.viewProjection = out.projection * out.view;
+		out.worldTexelSize = 2.0f * half / resolution;
+		return out;
+	}
+
 	Vec2 CascadeReceiverDepths(const CascadeSplits& splits, u32 index) {
 		const f32 farDepth = splits.depths[index + 1];
 		if (index == 0) {

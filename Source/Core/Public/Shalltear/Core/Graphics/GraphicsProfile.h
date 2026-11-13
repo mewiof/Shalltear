@@ -69,6 +69,8 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(shadowCascadeFit, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowPcfTaps, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowAtlasSize, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+		SLT_REFLECT_FIELD(objectShadows, SLT_RANGE(0, 16), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(objectShadowResolution, SLT_RANGE(64, 4096), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(transparentReceiveShadows, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(reflectionProbeResolution, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 
@@ -111,6 +113,11 @@ namespace Shalltear {
 		i32 shadowPcfTaps = 5;
 
 		i32 shadowAtlasSize = 2048;
+
+		// most ObjectShadow maps per view, picked by priority then distance
+		i32 objectShadows = 4;
+		// texels per side, budget's maps capped at 1/2 of punctual atlas
+		i32 objectShadowResolution = 1024;
 
 		bool transparentReceiveShadows = true;
 

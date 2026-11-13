@@ -92,6 +92,51 @@ TEST(ShadowCascadeTest, DepthFitGrowsAtOnceShrinksLate) {
 	EXPECT_EQ(fit.applied, 1.0f);
 }
 
+TEST(ShadowCascadeTest, ObjectRadiusGrowsAtOnceShrinksLate) {
+	const f32 step = std::exp2(0.25f);
+	EXPECT_FLOAT_EQ(GraphicsInternal::ObjectShadowRadius(1.0f, 0.0f), 1.0f);
+	const f32 grown = GraphicsInternal::ObjectShadowRadius(1.05f, 1.0f);
+	EXPECT_NEAR(grown, step, 1e-5f);
+	EXPECT_EQ(GraphicsInternal::ObjectShadowRadius(0.99f, grown), grown);
+	EXPECT_NEAR(GraphicsInternal::ObjectShadowRadius(0.8f, grown), 1.0f / step, 1e-5f);
+	EXPECT_GT(GraphicsInternal::ObjectShadowRadius(0.0f, 0.0f), 0.0f);
+}
+
+TEST(ShadowCascadeTest, ObjectViewHoldsAndFollowsSphere) {
+	const Vec3 direction = Vec3(0.3f, -0.8f, 0.5f).Normalized();
+	const Vec3 center(3.0f, 1.0f, -2.0f);
+	constexpr u32 RESOLUTION = 512;
+	constexpr f32 MARGIN = 4.0f;
+	const f32 inner = 1.0f - 2.0f * MARGIN / static_cast<f32>(RESOLUTION);
+	const CascadeView view = GraphicsInternal::BuildObjectShadowView(direction, center, 1.0f, MARGIN, 50.0f, RESOLUTION);
+	EXPECT_NEAR(view.worldTexelSize, 2.0f / inner / static_cast<f32>(RESOLUTION), 1e-6f);
+
+	auto project = [](const CascadeView& fitted, const Vec3& world) {
+		const Vec4 clip = fitted.viewProjection * Vec4(world.x, world.y, world.z, 1.0f);
+		return Vec3(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+	};
+	const Vec3 side = Vec3::Cross(direction, Vec3(0.0f, 1.0f, 0.0f)).Normalized();
+	const Vec3 up = Vec3::Cross(side, direction).Normalized();
+	const Vec3 axes[] = {side, side * -1.0f, up, up * -1.0f, direction, direction * -1.0f};
+	for (const Vec3& axis : axes) {
+		const Vec3 ndc = project(view, center + axis);
+		EXPECT_LE(std::abs(ndc.x), inner + 1e-4f);
+		EXPECT_LE(std::abs(ndc.y), inner + 1e-4f);
+		EXPECT_GT(ndc.z, 0.0f);
+		EXPECT_LT(ndc.z, 1.0f);
+	}
+	EXPECT_GT(project(view, center + direction * 45.0f).z, 0.0f);
+	EXPECT_LT(project(view, center + direction * 60.0f).z, 0.0f);
+
+	const Vec3 moved = center + Vec3(0.013f, -0.007f, 0.021f);
+	const CascadeView follow = GraphicsInternal::BuildObjectShadowView(direction, moved, 1.0f, MARGIN, 50.0f, RESOLUTION);
+	const Vec3 offset(0.4f, 0.2f, -0.3f);
+	const Vec3 before = project(view, center + offset);
+	const Vec3 after = project(follow, moved + offset);
+	EXPECT_NEAR(before.x, after.x, 1e-4f);
+	EXPECT_NEAR(before.y, after.y, 1e-4f);
+}
+
 TEST(ShadowCascadeTest, SplitsSpanRangeAndAscend) {
 	for (u32 count = 1; count <= MAX_SHADOW_CASCADES; ++count) {
 		const CascadeSplits splits = DefaultSplits(0.05f, DefaultShadowDistance(), count);

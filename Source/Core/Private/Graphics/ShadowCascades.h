@@ -50,6 +50,13 @@ namespace Shalltear::GraphicsInternal {
 	};
 
 	SHALLTEAR_CORE_API void UpdateCascadeDepthFit(CascadeDepthFit& fit, f32 farthest);
+
+	// 2^(1/4) steps, shrunk only when 2 steps under previous
+	SHALLTEAR_CORE_API f32 ObjectShadowRadius(f32 needed, f32 previous);
+
+	// unsnapped (shadow should move with object), reach past sphere for receivers
+	SHALLTEAR_CORE_API CascadeView BuildObjectShadowView(const Vec3& lightDirection, const Vec3& center, f32 radius,
+														 f32 marginTexels, f32 reach, u32 tileResolution);
 	SHALLTEAR_CORE_API f32 GetCameraDepthFit(u64 cameraInstanceId);
 
 } // namespace Shalltear::GraphicsInternal

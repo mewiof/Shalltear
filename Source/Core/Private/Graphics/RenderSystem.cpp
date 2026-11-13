@@ -18,6 +18,7 @@
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
+#include "Shalltear/Core/Graphics/ObjectShadow.h"
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/RHICommandList.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
@@ -965,6 +966,8 @@ namespace Shalltear {
 				u64 lightKey = 0;
 				u32 firstMap = 0;
 				u32 mapCount = 0;
+				u32 objectFirst = 0;
+				u32 objectCount = 0;
 				f32 strength = 1.0f;
 			};
 			struct ShadowSetup {
@@ -977,6 +980,29 @@ namespace Shalltear {
 			};
 			ShadowSetup pendingShadow;
 			Vector<ShadowAllocation> shadowAllocations{GetMemoryResource(MemTag::Graphics)};
+
+			struct ObjectShadowRecord {
+				Handle<ObjectShadow> shadow;
+				f32 radius = 0.0f;
+			};
+			Vector<ObjectShadowRecord> objectShadows{GetMemoryResource(MemTag::Graphics)};
+			struct ObjectShadowPick {
+				u32 record = 0;
+				i32 priority = 0;
+				f32 distanceSquared = 0.0f;
+				u64 id = 0;
+				AABB bounds = AABB::Empty();
+				u32 firstMember = 0;
+				u32 memberCount = 0;
+			};
+			Vector<ObjectShadowPick> objectShadowPicks{GetMemoryResource(MemTag::Graphics)};
+			Vector<u64> objectShadowMemberIds{GetMemoryResource(MemTag::Graphics)};
+			HashMap<u64, u32> objectShadowMembers{GetMemoryResource(MemTag::Graphics)};
+			Vector<SceneObject*> objectShadowStack{GetMemoryResource(MemTag::Graphics)};
+			Vector<Handle<MeshRenderer>> objectShadowMeshes{GetMemoryResource(MemTag::Graphics)};
+			Vector<Handle<SkinnedMeshRenderer>> objectShadowSkinned{GetMemoryResource(MemTag::Graphics)};
+			u32 objectShadowBudget = 4;
+			u32 objectShadowResolution = 1024;
 
 			struct ShadowKeep {
 				u64 owner = 0;
@@ -2439,6 +2465,13 @@ namespace Shalltear {
 			Vector<LaneDeferral> deferred{GetMemoryResource(MemTag::Graphics)};
 		};
 
+		struct CasterSplit {
+			const HashMap<u64, u32>* members = nullptr;
+			u64 cascadeBits = 0;
+			u64 objectBits = 0;
+			u32 firstObject = 0;
+		};
+
 		struct DrawWalk {
 			DrawListUse use = DrawListUse::View;
 			std::span<const u64> onlyScenes;
@@ -2451,6 +2484,7 @@ namespace Shalltear {
 			const Vector<RenderState::SkinnedOutput>* skinnedOutputs = nullptr;
 			std::span<const LODChoice> lodChoices;
 			const HashMap<u64, RenderState::LODMember>* lodMembers = nullptr;
+			const CasterSplit* split = nullptr;
 			ShaderAsset* errorShader = nullptr;
 			const MaterialAsset* errorMaterial = nullptr;
 		};
@@ -2497,13 +2531,20 @@ namespace Shalltear {
 			u8 lodFade = 0;
 			bool lodFadeAbove = false;
 			auto emitDraws = [&](MeshAsset* mesh, u64 vertexAddress, const AABB& bounds, const Mat4& world, u32 renderingLayerMask,
-								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, auto&& materialForSlot) {
+								 ShadowCasting castShadows, bool receiveShadows, Handle<SceneObject> object, u64 renderer,
+								 auto&& materialForSlot) {
 				AABB worldBounds = bounds.IsValid() ? bounds.Transformed(world) : AABB{};
 				u64 volumeMask = 0;
 				for (u32 volume = 0; volume < static_cast<u32>(volumes.size()); ++volume) {
 					if ((renderingLayerMask & volumes[volume].layerMask) != 0 && (!bounds.IsValid() || volumes[volume].Intersects(worldBounds))) {
 						volumeMask |= 1ull << volume;
 					}
+				}
+				if (walk.split && (volumeMask & walk.split->objectBits) != 0) {
+					const CasterSplit& split = *walk.split;
+					const auto member = split.members->find(renderer);
+					const u64 own = member != split.members->end() ? 1ull << (split.firstObject + member->second) : 0ull;
+					volumeMask &= (volumeMask & own) != 0 ? ~(split.cascadeBits | split.objectBits) | own : ~split.objectBits;
 				}
 				if (volumeMask == 0) {
 					return;
@@ -2564,7 +2605,7 @@ namespace Shalltear {
 					continue;
 				}
 				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(), renderer->GetRenderingLayerMask(),
-						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
+						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(), renderer->GetInstanceId(),
 						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetRenderedMaterial(slot).Get(); });
 			}
 
@@ -2597,6 +2638,7 @@ namespace Shalltear {
 				const RenderState::SkinnedOutput* skinned = i < skinnedOutputs.size() && skinnedOutputs[i].vertexAddress ? &skinnedOutputs[i] : nullptr;
 				emitDraws(mesh, skinned ? skinned->vertexAddress : mesh->vertexBufferAddress, skinned ? skinned->bounds : mesh->bounds, world,
 						  renderer->GetRenderingLayerMask(), renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
+						  renderer->GetInstanceId(),
 						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetRenderedMaterial(slot).Get(); });
 			}
 			std::sort(lane.orders.begin(), lane.orders.end(), DrawOrderLess{});
@@ -2829,7 +2871,8 @@ namespace Shalltear {
 
 		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
 									   std::span<const GraphicsInternal::CullVolume> volumes, const Vec3& sortOrigin, const Mat4& lodProjection,
-									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr) {
+									   u32 renderingLayerMask = ~0u, MaterialAsset* overrideMaterial = nullptr,
+									   const CasterSplit* split = nullptr) {
 			SLT_CORE_ASSERT_MSG(!volumes.empty() && volumes.size() <= GraphicsInternal::MAX_SHADOW_MAPS,
 								"a draw's volume mask is 1 bit per shadow map");
 			RenderState& state = *_state;
@@ -2847,6 +2890,7 @@ namespace Shalltear {
 			walk.sortOrigin = sortOrigin;
 			walk.renderingLayerMask = renderingLayerMask;
 			walk.overrideMaterial = overrideMaterial;
+			walk.split = split;
 			walk.meshRenderers = isolated ? &state.isolatedMeshRenderers : &state.meshRenderers;
 			walk.skinnedRenderers = isolated ? &state.isolatedSkinnedMeshRenderers : &state.skinnedMeshRenderers;
 			walk.skinnedOutputs = isolated ? &state.isolatedSkinnedOutputs : &state.skinnedOutputs;
@@ -4125,6 +4169,117 @@ namespace Shalltear {
 			return instances;
 		}
 
+		void GatherObjectShadowMembers(RenderState& state, SceneObject& root, u32 layerMask, AABB& bounds) {
+			Vector<SceneObject*>& stack = state.objectShadowStack;
+			stack.clear();
+			stack.push_back(&root);
+			while (!stack.empty()) {
+				SceneObject* object = stack.back();
+				stack.pop_back();
+				if (!object->IsActiveInHierarchy()) {
+					continue;
+				}
+				if (object != &root) {
+					if (const Handle<ObjectShadow> nested = object->GetComponent<ObjectShadow>(); nested && nested->IsEnabledSelf()) {
+						continue;
+					}
+				}
+				state.objectShadowMeshes.clear();
+				object->GetComponents<MeshRenderer>(state.objectShadowMeshes);
+				for (const Handle<MeshRenderer>& handle : state.objectShadowMeshes) {
+					const MeshRenderer* renderer = handle.Get();
+					const MeshAsset* mesh = renderer ? renderer->GetMesh().Get() : nullptr;
+					if (!mesh || !mesh->bounds.IsValid() || !renderer->IsEnabledSelf() || renderer->GetCastShadows() == ShadowCasting::Off ||
+						(renderer->GetRenderingLayerMask() & layerMask) == 0) {
+						continue;
+					}
+					bounds.Encapsulate(mesh->bounds.Transformed(object->GetWorldMatrix()));
+					state.objectShadowMemberIds.push_back(renderer->GetInstanceId());
+				}
+				state.objectShadowSkinned.clear();
+				object->GetComponents<SkinnedMeshRenderer>(state.objectShadowSkinned);
+				for (const Handle<SkinnedMeshRenderer>& handle : state.objectShadowSkinned) {
+					const SkinnedMeshRenderer* renderer = handle.Get();
+					const MeshAsset* mesh = renderer ? renderer->GetMesh().Get() : nullptr;
+					if (!mesh || !renderer->IsEnabledSelf() || renderer->GetCastShadows() == ShadowCasting::Off ||
+						(renderer->GetRenderingLayerMask() & layerMask) == 0) {
+						continue;
+					}
+					const size_t index = static_cast<size_t>(
+						std::find(state.skinnedMeshRenderers.begin(), state.skinnedMeshRenderers.end(), handle) - state.skinnedMeshRenderers.begin());
+					const bool skinned = index < state.skinnedOutputs.size() && state.skinnedOutputs[index].vertexAddress != 0;
+					const AABB& local = skinned ? state.skinnedOutputs[index].bounds : mesh->bounds;
+					if (!local.IsValid()) {
+						continue;
+					}
+					const Skeleton* skeleton = renderer->GetSkeleton().Get();
+					const SceneObject* skeletonOwner = skeleton ? skeleton->GetOwner().Get() : nullptr;
+					bounds.Encapsulate(local.Transformed(skeletonOwner ? skeletonOwner->GetWorldMatrix() : object->GetWorldMatrix()));
+					state.objectShadowMemberIds.push_back(renderer->GetInstanceId());
+				}
+				for (u32 child = 0; child < object->GetChildCount(); ++child) {
+					if (SceneObject* next = object->GetChild(child).Get()) {
+						stack.push_back(next);
+					}
+				}
+			}
+		}
+
+		u32 PickObjectShadows(RenderState& state, const Vec3& cameraPosition, std::span<const u64> onlyScenes, f32 reach, u32 layerMask) {
+			Vector<RenderState::ObjectShadowPick>& picks = state.objectShadowPicks;
+			picks.clear();
+			state.objectShadowMemberIds.clear();
+			state.objectShadowMembers.clear();
+			if (state.objectShadowBudget == 0 || !(reach > 0.0f) || layerMask == 0) {
+				return 0;
+			}
+			for (u32 i = 0; i < static_cast<u32>(state.objectShadows.size()); ++i) {
+				const ObjectShadow* shadow = state.objectShadows[i].shadow.Get();
+				const SceneObject* owner = shadow ? shadow->GetOwner().Get() : nullptr;
+				if (!owner || !owner->IsActiveInHierarchy() || !shadow->IsEnabledSelf()) {
+					continue;
+				}
+				if (!onlyScenes.empty() &&
+					std::find(onlyScenes.begin(), onlyScenes.end(), owner->GetScene().GetInstanceId()) == onlyScenes.end()) {
+					continue;
+				}
+				const f32 distanceSquared = Vec3::DistanceSquared(cameraPosition, owner->GetWorldPosition());
+				if (distanceSquared > reach * reach) {
+					continue;
+				}
+				RenderState::ObjectShadowPick& pick = picks.emplace_back();
+				pick.record = i;
+				pick.priority = shadow->GetPriority();
+				pick.distanceSquared = distanceSquared;
+				pick.id = shadow->GetInstanceId();
+			}
+			std::sort(picks.begin(), picks.end(), [](const RenderState::ObjectShadowPick& a, const RenderState::ObjectShadowPick& b) {
+				if (a.priority != b.priority) {
+					return a.priority > b.priority;
+				}
+				if (a.distanceSquared != b.distanceSquared) {
+					return a.distanceSquared < b.distanceSquared;
+				}
+				return a.id < b.id;
+			});
+			u32 kept = 0;
+			for (u32 p = 0; p < static_cast<u32>(picks.size()) && kept < state.objectShadowBudget; ++p) {
+				RenderState::ObjectShadowPick pick = picks[p];
+				SceneObject* owner = state.objectShadows[pick.record].shadow->GetOwner().Get();
+				pick.firstMember = static_cast<u32>(state.objectShadowMemberIds.size());
+				pick.bounds = AABB::Empty();
+				GatherObjectShadowMembers(state, *owner, layerMask, pick.bounds);
+				pick.memberCount = static_cast<u32>(state.objectShadowMemberIds.size()) - pick.firstMember;
+				if (pick.memberCount == 0 || !pick.bounds.IsValid()) {
+					state.objectShadowMemberIds.resize(pick.firstMember);
+					continue;
+				}
+				picks[kept++] = pick;
+			}
+			picks.resize(kept);
+			return kept;
+		}
+
 		u32 RecordShadowPass(RHI::CommandList& cmd, LinearAllocator& arena,
 							 const Mat4& view, const Mat4& projection, const Vec3& cameraPosition,
 							 RHI::TextureHandle atlas, RHI::TextureHandle punctualAtlas, u64 owner, u32& outTriangles,
@@ -4210,6 +4365,10 @@ namespace Shalltear {
 				}
 			}
 
+			const f32 objectReach = cascadeCount > 0 && kind == SceneKind::World ? splits.depths[splits.count] : 0.0f;
+			const u32 objectPicks = PickObjectShadows(state, cameraPosition, onlyScenes, objectReach,
+													  cascadeCount > 0 ? candidates[casterIndex].shadowLayerMask & renderingLayerMask : 0u);
+
 			Vector<GraphicsInternal::ShadowRequest>& requests = state.shadowRequests;
 			requests.clear();
 			for (u32 i = orderedDirectional; i < candidateCount; ++i) {
@@ -4238,8 +4397,12 @@ namespace Shalltear {
 			RenderState::ShadowKeep& keep = state.ShadowKeepFor(owner);
 			GraphicsInternal::FavorKeptShadows({requests.data(), requests.size()}, {keep.lights.data(), keep.lights.size()});
 			const u32 punctualAtlasSize = state.PunctualAtlasSize();
+			const u32 objectTile = objectPicks > 0 ? GraphicsInternal::ObjectShadowTileSize(punctualAtlasSize, state.objectShadowBudget,
+																							state.objectShadowResolution)
+												   : 0u;
 			GraphicsInternal::FitShadowRequests({requests.data(), requests.size()}, punctualAtlasSize,
-												GraphicsInternal::MAX_SHADOW_MAPS - mapCount);
+												GraphicsInternal::MAX_SHADOW_MAPS - mapCount - objectPicks,
+												static_cast<u64>(objectPicks) * objectTile * objectTile);
 			keep.lights.clear();
 			keep.frame = state.renderedFrames;
 
@@ -4252,8 +4415,43 @@ namespace Shalltear {
 				casterBias[i] = candidates[casterIndex].shadowCasterBias;
 			}
 			const u32 firstPunctualMap = mapCount;
+			u32 objectFirst = 0;
+			u32 objectCount = 0;
+			bool objectsPlaced = objectPicks == 0;
+			auto placeObjectMaps = [&] {
+				objectsPlaced = true;
+				objectFirst = mapCount;
+				const GraphicsInternal::LightCandidate& sun = candidates[casterIndex];
+				const f32 marginTexels = GraphicsInternal::ShadowReceiverMarginTexels(state.shadowPcfTaps, sun.shadowNormalBias);
+				for (u32 p = 0; p < objectPicks; ++p) {
+					const RectI tile = state.punctualAllocator.Allocate(objectTile);
+					if (tile.size.x <= 0) {
+						break;
+					}
+					const RenderState::ObjectShadowPick& pick = state.objectShadowPicks[p];
+					f32& radius = state.objectShadows[pick.record].radius;
+					radius = GraphicsInternal::ObjectShadowRadius(pick.bounds.Extents().Length(), radius);
+					const GraphicsInternal::CascadeView fitted = GraphicsInternal::BuildObjectShadowView(
+						sun.direction, pick.bounds.Center(), radius, marginTexels, 2.0f * objectReach, static_cast<u32>(tile.size.x));
+					punctualTiles[mapCount] = tile;
+					punctualBias[mapCount] = Vec2(sun.shadowBias, sun.shadowNormalBias);
+					casterBias[mapCount] = sun.shadowCasterBias;
+					// absolute texel size (not per unit distance)
+					state.punctualViews.push_back({fitted.viewProjection, fitted.view, fitted.projection, fitted.worldTexelSize});
+					volumes.push_back(GraphicsInternal::CullVolume(Frustum::FromMatrix(fitted.viewProjection)));
+					volumes.back().layerMask = sun.shadowLayerMask;
+					for (u32 m = 0; m < pick.memberCount; ++m) {
+						state.objectShadowMembers[state.objectShadowMemberIds[pick.firstMember + m]] = objectCount;
+					}
+					++objectCount;
+					++mapCount;
+				}
+			};
 			const Vec3 forward(view(2, 0), view(2, 1), view(2, 2));
 			for (GraphicsInternal::ShadowRequest& request : requests) {
+				if (!objectsPlaced && request.tileSize < objectTile) {
+					placeObjectMaps();
+				}
 				++state.frameShadowLights;
 				const u32 wanted = request.MapCount();
 				if (request.tileSize == 0) {
@@ -4301,15 +4499,29 @@ namespace Shalltear {
 				allocation.strength = request.strength;
 				keep.lights.push_back(request.stableKey);
 			}
+			if (!objectsPlaced) {
+				placeObjectMaps();
+			}
+			if (objectCount > 0) {
+				state.shadowAllocations.front().objectFirst = objectFirst;
+				state.shadowAllocations.front().objectCount = objectCount;
+			}
 			std::sort(keep.lights.begin(), keep.lights.end());
 
 			if (mapCount == 0) {
 				return 0;
 			}
 
+			CasterSplit split;
+			if (objectCount > 0) {
+				split.members = &state.objectShadowMembers;
+				split.cascadeBits = (1ull << cascadeCount) - 1;
+				split.objectBits = ((1ull << objectCount) - 1) << objectFirst;
+				split.firstObject = objectFirst;
+			}
 			const ExtractedDraws extracted =
 				ExtractDrawList(arena, DrawListUse::Casters, kind, onlyScenes, {volumes.data(), mapCount}, cameraPosition, projection,
-								renderingLayerMask);
+								renderingLayerMask, nullptr, split.members ? &split : nullptr);
 
 			RHI::TransientAllocation mapAllocation =
 				device.AllocateTransient(static_cast<u64>(mapCount) * sizeof(GPUShadowMap), 16);
@@ -4415,7 +4627,7 @@ namespace Shalltear {
 						outTriangles += entry.submesh->indexCount / 3 * drawn;
 						i += drawn;
 					}
-					if (!casters.empty()) {
+					if (!casters.empty() && (map < objectFirst || map >= objectFirst + objectCount)) {
 						ProceduralDepthView itemView;
 						itemView.pass = ProceduralPass::Shadow;
 						itemView.view = cascade ? state.cascadeViews[map].view : state.punctualViews[map - firstPunctualMap].view;
@@ -5100,7 +5312,8 @@ namespace Shalltear {
 						for (const RenderState::ShadowAllocation& allocation : allocations) {
 							if (allocation.lightKey == candidate.stableKey) {
 								record.shadowIndex = allocation.firstMap;
-								record.shadowCount = allocation.mapCount;
+								// directional: bits 0-7 cascades, 8-15 object maps, 16-31 1st object map
+								record.shadowCount = allocation.mapCount | allocation.objectCount << 8 | allocation.objectFirst << 16;
 								record.shadowStrength = allocation.strength;
 								break;
 							}
@@ -8406,6 +8619,8 @@ namespace Shalltear {
 			state.lodBias = Math::Clamp(profile.lodBias, 0.01f, 100.0f);
 			state.lodFinestLevel = static_cast<u32>(Math::Clamp(profile.maximumLODLevel, 0, static_cast<i32>(LODChoice::MAX_LEVELS) - 1));
 			state.lodCrossFade = profile.lodCrossFade;
+			state.objectShadowBudget = static_cast<u32>(Math::Clamp(profile.objectShadows, 0, static_cast<i32>(GraphicsInternal::MAX_OBJECT_SHADOWS)));
+			state.objectShadowResolution = static_cast<u32>(Math::Clamp(profile.objectShadowResolution, 64, 4096));
 		}
 
 		void CopyProfileFields(const GraphicsProfile& from, GraphicsProfile& to) {
@@ -9936,6 +10151,31 @@ namespace Shalltear {
 			if (_state->lodRecords[i].group == group) {
 				ForgetLODRecord(*_state, i);
 				_state->lodRecords[i].group = {};
+				return;
+			}
+		}
+	}
+	void RenderSystem::RegisterObjectShadow(Handle<ObjectShadow> shadow) {
+		ObjectShadow* target = shadow.Get();
+		if (!_state || !target || KindOfOwningScene(*target) != SceneKind::World) {
+			return;
+		}
+		for (const RenderState::ObjectShadowRecord& record : _state->objectShadows) {
+			if (record.shadow == shadow) {
+				return;
+			}
+		}
+		_state->objectShadows.push_back({shadow, 0.0f});
+	}
+	void RenderSystem::UnregisterObjectShadow(Handle<ObjectShadow> shadow) {
+		if (!_state) {
+			return;
+		}
+		Vector<RenderState::ObjectShadowRecord>& records = _state->objectShadows;
+		for (size_t i = 0; i < records.size(); ++i) {
+			if (records[i].shadow == shadow) {
+				records[i] = records.back();
+				records.pop_back();
 				return;
 			}
 		}

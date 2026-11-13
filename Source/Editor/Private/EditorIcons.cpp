@@ -11,6 +11,7 @@
 #include "Shalltear/Core/Graphics/Light.h"
 #include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
+#include "Shalltear/Core/Graphics/ObjectShadow.h"
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
 #include "Shalltear/Core/Graphics/Decal.h"
@@ -472,6 +473,7 @@ namespace Shalltear::EditorIcons {
 				Plant(UIPanelRenderer::GetReflectType()->name, Mark::UIPanelRenderer, onlyAbsent);
 				Plant(ProceduralRenderer::GetReflectType()->name, Mark::ProceduralRenderer, onlyAbsent);
 				Plant(LODGroup::GetReflectType()->name, Mark::LODGroup, onlyAbsent);
+				Plant(ObjectShadow::GetReflectType()->name, Mark::ObjectShadow, onlyAbsent);
 			}
 
 		} // anonymous namespace

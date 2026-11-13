@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Object Shadow</title>
+	<rect fill="#4d6f8f" x="24" y="38" width="36" height="22" rx="4"/>
+	<ellipse fill="#1f2a3c" cx="42" cy="50" rx="13" ry="5"/>
+	<rect fill="#e8c193" x="16" y="18" width="12" height="32" rx="6"/>
+	<circle fill="#e8c193" cx="22" cy="10" r="6"/>
+	<circle fill="#f5d76e" cx="54" cy="12" r="6"/>
+</svg>

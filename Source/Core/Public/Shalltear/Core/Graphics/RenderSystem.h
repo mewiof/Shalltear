@@ -26,6 +26,7 @@ namespace Shalltear {
 	class ShaderAsset;
 	class SkinnedMeshRenderer;
 	class LODGroup;
+	class ObjectShadow;
 	class Window;
 	namespace RHI {
 		class CommandList;
@@ -217,6 +218,8 @@ namespace Shalltear {
 		static void UnregisterSkinnedMeshRenderer(Handle<SkinnedMeshRenderer> renderer);
 		static void RegisterLODGroup(Handle<LODGroup> group);
 		static void UnregisterLODGroup(Handle<LODGroup> group);
+		static void RegisterObjectShadow(Handle<ObjectShadow> shadow);
+		static void UnregisterObjectShadow(Handle<ObjectShadow> shadow);
 
 		static bool ReadbackWindowSceneColor(Handle<Window> window, Vector<u8>& outRGBA16F, Vec2I& outSize);
 

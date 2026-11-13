@@ -132,10 +132,11 @@ namespace Shalltear::GraphicsInternal {
 		}
 	}
 
-	u32 FitShadowRequests(std::span<ShadowRequest> requests, u32 atlasSize, u32 freeMaps) {
+	u32 FitShadowRequests(std::span<ShadowRequest> requests, u32 atlasSize, u32 freeMaps, u64 reservedArea) {
 		SortShadowRequests(requests);
 		const u32 atlas = FloorPowerOfTwo(atlasSize);
-		const u64 capacity = static_cast<u64>(atlas) * atlas;
+		const u64 whole = static_cast<u64>(atlas) * atlas;
+		const u64 capacity = whole - std::min(reservedArea, whole);
 		auto area = [](const ShadowRequest& request, u32 cap) {
 			const u64 side = std::min(request.tileSize, cap);
 			return static_cast<u64>(request.MapCount()) * side * side;
@@ -179,6 +180,19 @@ namespace Shalltear::GraphicsInternal {
 			return a.tileSize > 0 && a.stableKey < b.stableKey;
 		});
 		return keptCount;
+	}
+
+	u32 ObjectShadowTileSize(u32 atlasSize, u32 budget, u32 resolution) {
+		const u32 atlas = FloorPowerOfTwo(atlasSize);
+		if (atlas == 0 || budget == 0) {
+			return 0;
+		}
+		const u64 half = static_cast<u64>(atlas) * atlas / 2;
+		u32 tile = std::min(std::max(FloorPowerOfTwo(resolution), 1u), atlas);
+		while (tile > 1 && static_cast<u64>(budget) * tile * tile > half) {
+			tile >>= 1;
+		}
+		return tile;
 	}
 
 	PunctualView BuildSpotView(const Vec3& position, const Vec3& direction,

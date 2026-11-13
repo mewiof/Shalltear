@@ -112,11 +112,14 @@ float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, fl
 }
 
 float ShalltearSampleShadowMap(Texture2D<float> atlas, uint index, float texelSize, float3 positionWS,
-							   float3 positionDdx, float3 positionDdy, float3 normalWS, float3 lightDirection) {
+							   float3 positionDdx, float3 positionDdy, float3 normalWS, float3 lightDirection, bool tileOnly = false) {
 	ShalltearShadowMap map = ShalltearLoadShadowMap(index);
 	float3 biased = ShalltearShadowBiasedPosition(map, texelSize, positionWS, normalWS, lightDirection);
 	float3 projected = ShalltearShadowProject(map, biased);
 	if (projected.z <= 0.0 || projected.z >= 1.0) {
+		return 1.0;
+	}
+	if (tileOnly && (any(projected.xy < map.uvBounds.xy) || any(projected.xy > map.uvBounds.zw))) {
 		return 1.0;
 	}
 	float2 slope = ShalltearShadowReceiverSlope(map, texelSize, biased, projected, positionDdx, positionDdy);
@@ -133,8 +136,17 @@ float ShalltearSampleCascade(uint index, float3 positionWS, float3 positionDdx, 
 
 #define SHALLTEAR_CASCADE_BLEND_FRACTION 0.1
 
-float ShalltearDirectionalShadow(uint firstMap, uint count, float3 positionWS, float3 positionDdx, float3 positionDdy,
+float ShalltearObjectShadow(uint index, float3 positionWS, float3 positionDdx, float3 positionDdy,
+							float3 normalWS, float3 lightDirection) {
+	float texel = ShalltearLoadShadowMap(index).worldTexelSize;
+	return ShalltearSampleShadowMap(sltPunctualShadowAtlas, index, texel, positionWS, positionDdx, positionDdy, normalWS,
+									lightDirection, true);
+}
+
+// must match shadowCount packing in RenderSystem.cpp
+float ShalltearDirectionalShadow(uint firstMap, uint packed, float3 positionWS, float3 positionDdx, float3 positionDdy,
 								 float3 normalWS, float3 lightDirection, float viewDepth) {
+	uint count = packed & 0xFFu;
 	if (sltShadowMapAddress == 0 || count == 0) {
 		return 1.0;
 	}
@@ -151,6 +163,12 @@ float ShalltearDirectionalShadow(uint firstMap, uint count, float3 positionWS, f
 	if (cascade + 1 < count && band > 0.0 && viewDepth > cascadeFar - band) {
 		float blend = saturate((viewDepth - (cascadeFar - band)) / band);
 		shadow = lerp(shadow, ShalltearSampleCascade(firstMap + cascade + 1, positionWS, positionDdx, positionDdy, normalWS, lightDirection), blend);
+	}
+
+	uint objectFirst = packed >> 16;
+	uint objectCount = (packed >> 8) & 0xFFu;
+	[loop] for (uint i = 0; i < objectCount; ++i) {
+		shadow *= ShalltearObjectShadow(objectFirst + i, positionWS, positionDdx, positionDdy, normalWS, lightDirection);
 	}
 
 	float fadeRange = max(sltShadowFadeEnd - sltShadowFadeStart, 1e-4);

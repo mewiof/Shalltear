@@ -51,6 +51,15 @@ namespace Shalltear {
 				_materials.resize(slot + 1);
 			}
 			_materials[slot] = material;
+			_instances.Release(slot);
+		}
+
+		// renderer's copy, made on 1st call (freed with renderer/on SetMaterial)
+		Handle<MaterialAsset> GetMaterialInstance(u32 slot) { return _instances.Acquire(slot, GetMaterial(slot)); }
+
+		Handle<MaterialAsset> GetRenderedMaterial(u32 slot) const {
+			const Handle<MaterialAsset> instance = _instances.Find(slot);
+			return instance.IsValid() ? instance : GetMaterial(slot);
 		}
 
 		u32 GetBlendShapeWeightCount() const { return static_cast<u32>(_blendShapeWeights.size()); }
@@ -85,6 +94,7 @@ namespace Shalltear {
 		Handle<MeshAsset> _mesh;
 
 		Vector<Handle<MaterialAsset>> _materials{GetMemoryResource(MemTag::Scene)};
+		MaterialInstanceSlots _instances;
 
 		Handle<SkinAsset> _skin;
 		Handle<Skeleton> _skeleton;

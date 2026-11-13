@@ -105,9 +105,32 @@ namespace Shalltear {
 
 		bool Cook(CookWriter& descriptor, CookWriter& payload) const override;
 		bool LoadCooked(CookReader& descriptor, CookReader& payload) override;
+
+		// loaded copy (params copied, shader/textures shared), free via DestroyInstance
+		static Handle<MaterialAsset> CreateInstance(Handle<MaterialAsset> source);
+		// no-op for materials not made by CreateInstance
+		static void DestroyInstance(Handle<MaterialAsset> instance);
 	protected:
 		void OnLoad() override;
 		void OnUnload() override;
+	private:
+		bool _instance = false;
+	};
+
+	class SHALLTEAR_CORE_API MaterialInstanceSlots {
+	public:
+		MaterialInstanceSlots() = default;
+		~MaterialInstanceSlots();
+		MaterialInstanceSlots(const MaterialInstanceSlots&) = delete;
+		MaterialInstanceSlots& operator=(const MaterialInstanceSlots&) = delete;
+
+		Handle<MaterialAsset> Acquire(u32 slot, Handle<MaterialAsset> shared);
+		Handle<MaterialAsset> Find(u32 slot) const;
+		void Release(u32 slot);
+	private:
+		Vector<Handle<MaterialAsset>> _instances{GetMemoryResource(MemTag::Scene)};
+
+		void ReleaseAll();
 	};
 
 	class SHALLTEAR_CORE_API MaterialAssetImporter : public IAssetImporter {

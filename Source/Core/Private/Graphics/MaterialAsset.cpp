@@ -610,6 +610,75 @@ namespace Shalltear {
 		}
 	}
 
+	Handle<MaterialAsset> MaterialAsset::CreateInstance(Handle<MaterialAsset> source) {
+		const MaterialAsset* from = source.Get();
+		if (!from) {
+			return {};
+		}
+		MaterialAsset* instance = New<MaterialAsset>(MemTag::Asset);
+		instance->_instance = true;
+		instance->virtualPath = from->virtualPath + " (Instance)";
+		instance->shaderGuid = from->shaderGuid;
+		instance->params.assign(from->params.begin(), from->params.end());
+		for (const TextureParam& texture : from->textures) {
+			instance->textures.push_back({texture.name, texture.hash, texture.texture, {}});
+		}
+		instance->keywords.assign(from->keywords.begin(), from->keywords.end());
+		instance->keywordHash = from->keywordHash;
+		instance->blend = from->blend;
+		instance->cull = from->cull;
+		instance->alphaClipThreshold = from->alphaClipThreshold;
+		instance->sortingPriority = from->sortingPriority;
+		instance->NotifyLoaded();
+		return Handle<MaterialAsset>(instance);
+	}
+
+	void MaterialAsset::DestroyInstance(Handle<MaterialAsset> instance) {
+		MaterialAsset* material = instance.Get();
+		if (!material || !material->_instance) {
+			return;
+		}
+		material->NotifyUnloaded();
+		Delete(material);
+	}
+
+	MaterialInstanceSlots::~MaterialInstanceSlots() {
+		ReleaseAll();
+	}
+
+	Handle<MaterialAsset> MaterialInstanceSlots::Acquire(u32 slot, Handle<MaterialAsset> shared) {
+		if (Handle<MaterialAsset> existing = Find(slot); existing.IsValid()) {
+			return existing;
+		}
+		Handle<MaterialAsset> instance = MaterialAsset::CreateInstance(shared);
+		if (!instance.IsValid()) {
+			return {};
+		}
+		if (slot >= _instances.size()) {
+			_instances.resize(slot + 1);
+		}
+		_instances[slot] = instance;
+		return instance;
+	}
+
+	Handle<MaterialAsset> MaterialInstanceSlots::Find(u32 slot) const {
+		return slot < _instances.size() && _instances[slot].IsValid() ? _instances[slot] : Handle<MaterialAsset>{};
+	}
+
+	void MaterialInstanceSlots::Release(u32 slot) {
+		if (slot < _instances.size()) {
+			MaterialAsset::DestroyInstance(_instances[slot]);
+			_instances[slot] = {};
+		}
+	}
+
+	void MaterialInstanceSlots::ReleaseAll() {
+		for (Handle<MaterialAsset>& instance : _instances) {
+			MaterialAsset::DestroyInstance(instance);
+		}
+		_instances.clear();
+	}
+
 	void MaterialAsset::OnUnload() {
 		if (Asset* loadedShader = shader.Get()) {
 			AssetDatabase::UnloadAsset(loadedShader);

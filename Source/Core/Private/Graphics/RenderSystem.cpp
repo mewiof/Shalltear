@@ -2357,7 +2357,7 @@ namespace Shalltear {
 				}
 				emitDraws(mesh, mesh->vertexBufferAddress, mesh->bounds, owner->GetWorldMatrix(), renderer->GetRenderingLayerMask(),
 						  renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
-						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetMaterial(slot).Get(); });
+						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetRenderedMaterial(slot).Get(); });
 			}
 
 			const Vector<RenderState::SkinnedOutput>& skinnedOutputs = *walk.skinnedOutputs;
@@ -2386,7 +2386,7 @@ namespace Shalltear {
 				const RenderState::SkinnedOutput* skinned = i < skinnedOutputs.size() && skinnedOutputs[i].vertexAddress ? &skinnedOutputs[i] : nullptr;
 				emitDraws(mesh, skinned ? skinned->vertexAddress : mesh->vertexBufferAddress, skinned ? skinned->bounds : mesh->bounds, world,
 						  renderer->GetRenderingLayerMask(), renderer->GetCastShadows(), renderer->GetReceiveShadows(), renderer->GetOwner(),
-						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetMaterial(slot).Get(); });
+						  [&](u32 slot) { return walk.overrideMaterial ? walk.overrideMaterial : renderer->GetRenderedMaterial(slot).Get(); });
 			}
 			std::sort(lane.orders.begin(), lane.orders.end(), DrawOrderLess{});
 		}
@@ -6392,7 +6392,7 @@ namespace Shalltear {
 					}
 					PassRequests reads = PassRequests::None;
 					for (u32 slot = 0; slot < renderer->GetMaterialCount(); ++slot) {
-						reads |= TransparentSceneReads(renderer->GetMaterial(slot).Get());
+						reads |= TransparentSceneReads(renderer->GetRenderedMaterial(slot).Get());
 					}
 					const SceneObject* owner = reads != PassRequests::None ? renderer->GetOwner().Get() : nullptr;
 					const MeshAsset* mesh = owner ? renderer->GetMesh().Get() : nullptr;

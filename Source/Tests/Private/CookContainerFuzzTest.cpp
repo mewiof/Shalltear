@@ -328,10 +328,10 @@ TEST(CookContainerFuzzTest, SaturatedTocIsRefusedNotTrusted) {
 
 	Rng rng(0xC00C1EE4ull);
 
-	const u32 SECTIONS[] = {PAK_SECT, PAK_TYPE, PAK_IDX0, PAK_DESC, PAK_PLDM,
+	const u32 sections[] = {PAK_SECT, PAK_TYPE, PAK_IDX0, PAK_DESC, PAK_PLDM,
 							PAK_PAGE, PAK_DEPS, PAK_NAMS, PAK_STRS};
 
-	for (u32 which = 0; which < static_cast<u32>(std::size(SECTIONS)); ++which) {
+	for (u32 which = 0; which < static_cast<u32>(std::size(sections)); ++which) {
 		PakSuperblock sb{};
 		std::memcpy(&sb, valid.data(), sizeof(PakSuperblock));
 		size_t offset = 0;
@@ -339,7 +339,7 @@ TEST(CookContainerFuzzTest, SaturatedTocIsRefusedNotTrusted) {
 		for (u16 i = 0; i < sb.sectionCount; ++i) {
 			PakSection section{};
 			std::memcpy(&section, valid.data() + sb.tocOffset + i * sizeof(PakSection), sizeof(PakSection));
-			if (section.fourcc == SECTIONS[which]) {
+			if (section.fourcc == sections[which]) {
 				offset = static_cast<size_t>(sb.tocOffset + section.offset);
 				length = static_cast<size_t>(section.size);
 				break;

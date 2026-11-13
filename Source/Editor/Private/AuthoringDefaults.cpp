@@ -39,7 +39,7 @@ namespace Shalltear::AuthoringDefaults {
 			return *_state;
 		}
 
-		constexpr std::string_view DEFAULT_SKYBOX =
+		constexpr std::string_view DefaultSkybox =
 			R"({"_handle": true, "pointeeType": "MaterialAsset", "assetId": "6a68ff70f33bd8c6-4820ba95ba856f68"})";
 
 		void Plant(StringHash type, StringHash field, std::string_view value, bool onlyAbsent) {
@@ -59,7 +59,7 @@ namespace Shalltear::AuthoringDefaults {
 			table.seeded = true;
 			const StringHash environment = Environment::GetReflectType()->name;
 			Plant(environment, StringHash("_skyMode"), R"("Material")", onlyAbsent);
-			Plant(environment, StringHash("_skyMaterial"), DEFAULT_SKYBOX, onlyAbsent);
+			Plant(environment, StringHash("_skyMaterial"), DefaultSkybox, onlyAbsent);
 		}
 
 		bool LoadingToHandle(void* user, const Guid& guid, StringHash pointeeType, u64* outId) {

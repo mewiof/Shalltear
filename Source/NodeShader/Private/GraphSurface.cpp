@@ -82,7 +82,7 @@ namespace Shalltear {
 			return false;
 		}
 
-		constexpr std::string_view SUPPORT_EFFECTS = "supportEffects";
+		constexpr std::string_view SupportEffects = "supportEffects";
 
 		bool ReadSettings(const GraphDocument& document, Settings& out, Vector<GraphDiagnostic>& diagnostics) {
 			bool valid = true;
@@ -130,7 +130,7 @@ namespace Shalltear {
 			bool sky;
 		};
 
-		constexpr Block FRAGMENT_BLOCKS[] = {
+		constexpr Block FragmentBlockTable[] = {
 			{"Block/BaseColor", "baseColor", true, true, true},
 			{"Block/Alpha", "alpha", true, true, false},
 			{"Block/Metallic", "metallic", true, false, false},
@@ -168,7 +168,7 @@ namespace Shalltear {
 		constexpr const char* NO_MOTION_VECTORS = "nothing renders motion vectors";
 		constexpr const char* SKY_ONLY = "only a Sky graph is handed the sky's ray and its sun";
 
-		const GraphBinding SURFACE_BINDINGS[] = {
+		const GraphBinding surfaceBindings[] = {
 			{"UV0", "input.uv", GraphValueType::Float2, GraphStageAll},
 			{"VertexColor", "input.color", GraphValueType::Float4, GraphStageAll},
 
@@ -247,19 +247,19 @@ namespace Shalltear {
 
 		constexpr GraphStageMask SCENE_STAGES = static_cast<GraphStageMask>(GraphStageFragment | GraphStageLighting);
 
-		const GraphBinding TRANSPARENT_SCENE_BINDINGS[] = {
+		const GraphBinding transparentSceneBindings[] = {
 			{"SceneColor", "sltSceneColor", GraphValueType::Texture2D, SCENE_STAGES, {}, "sltSceneSampler"},
 			{"SceneDepth", "sltSceneDepth", GraphValueType::Texture2D, SCENE_STAGES, {}, "sltSceneSampler"},
 			{"SceneNormals", "", GraphValueType::Texture2D, GraphStageAll, SURFACE_NO_NORMALS},
 		};
 
-		const GraphBinding EFFECT_SCENE_BINDINGS[] = {
+		const GraphBinding effectSceneBindings[] = {
 			{"SceneColor", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
 			{"SceneDepth", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
 			{"SceneNormals", "", GraphValueType::Texture2D, GraphStageAll, EFFECT_NO_SCENE},
 		};
 
-		const GraphBinding LIGHTING_BINDINGS[] = {
+		const GraphBinding lightingBindings[] = {
 			{"LightDirection", "light.direction", GraphValueType::Float3, GraphStageLighting},
 			{"LightColor", "light.color", GraphValueType::Float3, GraphStageLighting},
 			{"LightAttenuation", "light.attenuation", GraphValueType::Float, GraphStageLighting},
@@ -276,7 +276,7 @@ namespace Shalltear {
 			 GraphStageLighting},
 		};
 
-		constexpr std::string_view FRAME = R"(template <typename Input>
+		constexpr std::string_view Frame = R"(template <typename Input>
 float3 ShalltearGraphTangent(Input input)
 {
 	float3 tangent = input.tangentWS.xyz - input.normalWS * dot(input.normalWS, input.tangentWS.xyz);
@@ -379,10 +379,10 @@ float3 ShalltearGraphPredisplacementOS(ShalltearVertexInput input)
 )";
 
 		constexpr const char* FULLSCREEN_NO_SURFACE = "a full-screen draw shades the scene (it has a normal, no tangent frame)";
-		constexpr std::string_view FULLSCREEN_IDENTITY = "float4x4(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)";
+		constexpr std::string_view FullscreenIdentity = "float4x4(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)";
 		constexpr GraphStageMask FULLSCREEN = GraphStageFragment;
 
-		const GraphBinding FULLSCREEN_BINDINGS[] = {
+		const GraphBinding fullscreenBindings[] = {
 			{"UV0", "input.uv", GraphValueType::Float2, FULLSCREEN},
 			{"VertexColor", "float4(1.0, 1.0, 1.0, 1.0)", GraphValueType::Float4, FULLSCREEN, "a full-screen draw has no vertices to color"},
 
@@ -423,8 +423,8 @@ float3 ShalltearGraphPredisplacementOS(ShalltearVertexInput input)
 			{"PixelPosition", "input.positionCS.xy", GraphValueType::Float2, FULLSCREEN},
 			{"ClipPosition", "input.positionCS.xy", GraphValueType::Float2, FULLSCREEN},
 
-			{"ObjectToWorld", str(FULLSCREEN_IDENTITY), GraphValueType::Float4x4, FULLSCREEN},
-			{"WorldToObject", str(FULLSCREEN_IDENTITY), GraphValueType::Float4x4, FULLSCREEN},
+			{"ObjectToWorld", str(FullscreenIdentity), GraphValueType::Float4x4, FULLSCREEN},
+			{"WorldToObject", str(FullscreenIdentity), GraphValueType::Float4x4, FULLSCREEN},
 			{"View", "ShalltearPassViewMatrix()", GraphValueType::Float4x4, FULLSCREEN},
 			{"InverseView", "ShalltearPassInverseViewMatrix()", GraphValueType::Float4x4, FULLSCREEN},
 			{"Projection", "ShalltearPassProjectionMatrix()", GraphValueType::Float4x4, FULLSCREEN},
@@ -464,7 +464,7 @@ float3 ShalltearGraphPredisplacementOS(ShalltearVertexInput input)
 			std::string_view text;
 		};
 
-		constexpr FullscreenResource FULLSCREEN_RESOURCES[] = {
+		constexpr FullscreenResource FullscreenResources[] = {
 			{"sltPassView", {}, "#include \"ViewData.hlsli\"\n"
 								"[[vk::binding(0, 2)]] cbuffer sltViewRecord\n{\n\tShalltearViewData sltPassView;\n};\n\n"},
 			{"ShalltearPass", {"sltPassView"}, "float4x4 ShalltearPassViewMatrix() { return ShalltearViewDataMatrix(sltPassView.view[0], sltPassView.view[1], sltPassView.view[2], sltPassView.view[3]); }\n"
@@ -495,7 +495,7 @@ float3 ShalltearGraphPredisplacementOS(ShalltearVertexInput input)
 																	  "\treturn normalize(sltPassView.inverseView[3].xyz - far.xyz / far.w);\n}\n"},
 		};
 
-		constexpr std::string_view FULLSCREEN_TRIANGLE = R"(struct ShalltearFullscreenVaryings
+		constexpr std::string_view FullscreenTriangle = R"(struct ShalltearFullscreenVaryings
 {
 	float4 positionCS : SV_Position;
 	float2 uv : TEXCOORD0;
@@ -515,7 +515,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 		constexpr const char* SKY_NO_SURFACE = "a sky has no surface/mesh, the Sky node's Direction is the ray";
 		constexpr GraphStageMask SKY = GraphStageFragment;
 
-		const GraphBinding SKY_BINDINGS[] = {
+		const GraphBinding skyBindings[] = {
 			{"UV0", "0.0", GraphValueType::Float2, SKY, SKY_NO_SURFACE},
 			{"VertexColor", "0.0", GraphValueType::Float4, SKY, SKY_NO_SURFACE},
 
@@ -555,8 +555,8 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			{"PixelPosition", "(input.screenUV * ShalltearScreenParameters().xy)", GraphValueType::Float2, SKY},
 			{"ClipPosition", "(input.screenUV * ShalltearScreenParameters().xy)", GraphValueType::Float2, SKY},
 
-			{"ObjectToWorld", str(FULLSCREEN_IDENTITY), GraphValueType::Float4x4, SKY},
-			{"WorldToObject", str(FULLSCREEN_IDENTITY), GraphValueType::Float4x4, SKY},
+			{"ObjectToWorld", str(FullscreenIdentity), GraphValueType::Float4x4, SKY},
+			{"WorldToObject", str(FullscreenIdentity), GraphValueType::Float4x4, SKY},
 			{"View", "ShalltearViewMatrix()", GraphValueType::Float4x4, SKY},
 			{"InverseView", "ShalltearInverseViewMatrix()", GraphValueType::Float4x4, SKY},
 			{"Projection", "ShalltearProjectionMatrix()", GraphValueType::Float4x4, SKY},
@@ -616,7 +616,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			}
 		}
 
-		constexpr std::string_view RADIANCE_BLOCK = GraphSurface::RADIANCE_BLOCK_ID;
+		constexpr std::string_view RadianceBlock = GraphSurface::RadianceBlockId;
 
 		str NodeSettingText(const GraphNode& node, std::string_view key) {
 			for (const GraphSetting& setting : node.settings) {
@@ -634,7 +634,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			std::string_view field;
 		};
 
-		constexpr VertexBlock VERTEX_BLOCKS[] = {
+		constexpr VertexBlock VertexBlockTable[] = {
 			{"Block/Position", "positionOS"},
 			{"Block/Normal", "normalOS"},
 			{"Block/Tangent", "tangentOS"},
@@ -642,8 +642,8 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 
 		constexpr u32 MAX_INTERPOLATOR_SLOTS = 16;
 
-		constexpr std::string_view INTERPOLATOR_COUNTS[] = {"SHALLTEAR_INTERPOLATORS_LINEAR", "SHALLTEAR_INTERPOLATORS_NO_PERSPECTIVE",
-															"SHALLTEAR_INTERPOLATORS_FLAT"};
+		constexpr std::string_view InterpolatorCounts[] = {"SHALLTEAR_INTERPOLATORS_LINEAR", "SHALLTEAR_INTERPOLATORS_NO_PERSPECTIVE",
+														   "SHALLTEAR_INTERPOLATORS_FLAT"};
 
 		struct Interpolant {
 			u32 block = 0;
@@ -784,17 +784,17 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			return std::any_of(block.inputs.begin(), block.inputs.end(), [](const GraphInput& input) { return input.fromNode != 0; });
 		}
 
-		void NeededResources(const GraphProgram& program, std::array<bool, std::size(FULLSCREEN_RESOURCES)>& out) {
+		void NeededResources(const GraphProgram& program, std::array<bool, std::size(FullscreenResources)>& out) {
 			out.fill(false);
-			for (size_t i = 0; i < std::size(FULLSCREEN_RESOURCES); ++i) {
+			for (size_t i = 0; i < std::size(FullscreenResources); ++i) {
 				for (const GraphExternal& external : program.externals) {
-					out[i] = out[i] || external.expression.find(FULLSCREEN_RESOURCES[i].name) != str::npos;
+					out[i] = out[i] || external.expression.find(FullscreenResources[i].name) != str::npos;
 				}
 			}
-			for (size_t i = std::size(FULLSCREEN_RESOURCES); i-- > 0;) {
-				for (std::string_view need : FULLSCREEN_RESOURCES[i].needs) {
+			for (size_t i = std::size(FullscreenResources); i-- > 0;) {
+				for (std::string_view need : FullscreenResources[i].needs) {
 					for (size_t j = 0; j < i && out[i] && !need.empty(); ++j) {
-						out[j] = out[j] || FULLSCREEN_RESOURCES[j].name == need;
+						out[j] = out[j] || FullscreenResources[j].name == need;
 					}
 				}
 			}
@@ -805,7 +805,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 							GraphDefinitions& resolver, str& out, Vector<GraphDiagnostic>& diagnostics, Vector<u32>* lines) {
 			GraphCompileRequest request;
 			request.roots = roots;
-			request.bindings = FULLSCREEN_BINDINGS;
+			request.bindings = fullscreenBindings;
 			request.definitions = &resolver;
 			GraphProgram program;
 			if (!GraphCompiler::Compile(document, request, program, diagnostics)) {
@@ -821,7 +821,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			text += "#pragma shalltear_cull off\n";
 			text += PropertyPragmas(properties);
 			text += GraphProperties::Declarations(properties);
-			text += FULLSCREEN_TRIANGLE;
+			text += FullscreenTriangle;
 			text += GraphSurface::PassDeclarations(program);
 			Vector<LineSegment> segments{GetMemoryResource(MemTag::Editor)};
 			text += "\n";
@@ -847,7 +847,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 					 Vector<GraphDiagnostic>& diagnostics, Vector<u32>* lines) {
 			GraphCompileRequest request;
 			request.roots = roots;
-			request.bindings = SKY_BINDINGS;
+			request.bindings = skyBindings;
 			request.definitions = &resolver;
 			GraphProgram program;
 			if (!GraphCompiler::Compile(document, request, program, diagnostics)) {
@@ -928,7 +928,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			if (stack.fragment != nullptr) {
 				for (const GraphNode& node : stack.fragment->blocks) {
 					const Block* block = nullptr;
-					for (const Block& candidate : FRAGMENT_BLOCKS) {
+					for (const Block& candidate : FragmentBlockTable) {
 						block = candidate.id == node.def ? &candidate : block;
 					}
 					if (block == nullptr) {
@@ -968,10 +968,10 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 
 			Vector<const VertexBlock*> vertexRooted{GetMemoryResource(MemTag::Editor)};
 			Vector<Interpolant> interpolants{GetMemoryResource(MemTag::Editor)};
-			Vector<GraphBinding> bindings{SURFACE_BINDINGS, SURFACE_BINDINGS + std::size(SURFACE_BINDINGS), GetMemoryResource(MemTag::Editor)};
+			Vector<GraphBinding> bindings{surfaceBindings, surfaceBindings + std::size(surfaceBindings), GetMemoryResource(MemTag::Editor)};
 			const bool readsScene = shadesMesh && settings.blend != RHI::BlendMode::Opaque;
 			if (readsScene || !shadesMesh) {
-				for (const GraphBinding& scene : readsScene ? std::span<const GraphBinding>(TRANSPARENT_SCENE_BINDINGS) : std::span<const GraphBinding>(EFFECT_SCENE_BINDINGS)) {
+				for (const GraphBinding& scene : readsScene ? std::span<const GraphBinding>(transparentSceneBindings) : std::span<const GraphBinding>(effectSceneBindings)) {
 					for (GraphBinding& binding : bindings) {
 						binding = binding.name == scene.name ? scene : binding;
 					}
@@ -980,20 +980,20 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			if (vertex != nullptr) {
 				Vector<str> names{GetMemoryResource(MemTag::Editor)};
 				for (const GraphNode& node : vertex->blocks) {
-					if (node.def == GraphSurface::INTERPOLATOR_BLOCK) {
+					if (node.def == GraphSurface::InterpolatorBlock) {
 						Interpolant interpolant;
 						interpolant.block = node.id;
 						interpolant.node = node.id;
 						interpolant.name = NodeSettingText(node, "Name");
 						const str type = NodeSettingText(node, "Type");
 						const str mode = NodeSettingText(node, "Interpolation");
-						u32 typeIndex = type.empty() ? 3u : static_cast<u32>(std::size(GRAPH_INTERPOLATOR_TYPES));
-						u32 modeIndex = mode.empty() ? 0u : static_cast<u32>(std::size(GRAPH_INTERPOLATOR_MODES));
-						for (u32 i = 0; i < std::size(GRAPH_INTERPOLATOR_TYPES); ++i) {
-							typeIndex = GRAPH_INTERPOLATOR_TYPES[i] == type ? i : typeIndex;
+						u32 typeIndex = type.empty() ? 3u : static_cast<u32>(std::size(GraphInterpolatorTypes));
+						u32 modeIndex = mode.empty() ? 0u : static_cast<u32>(std::size(GraphInterpolatorModes));
+						for (u32 i = 0; i < std::size(GraphInterpolatorTypes); ++i) {
+							typeIndex = GraphInterpolatorTypes[i] == type ? i : typeIndex;
 						}
-						for (u32 i = 0; i < std::size(GRAPH_INTERPOLATOR_MODES); ++i) {
-							modeIndex = GRAPH_INTERPOLATOR_MODES[i] == mode ? i : modeIndex;
+						for (u32 i = 0; i < std::size(GraphInterpolatorModes); ++i) {
+							modeIndex = GraphInterpolatorModes[i] == mode ? i : modeIndex;
 						}
 						if (interpolant.name.empty()) {
 							diagnostics.push_back({node.id, "is a custom interpolator with no name (a node finds its interpolator by name)"});
@@ -1003,7 +1003,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 							diagnostics.push_back({node.id, "is a 2nd custom interpolator named '" + interpolant.name + "'"});
 							continue;
 						}
-						if (typeIndex == std::size(GRAPH_INTERPOLATOR_TYPES) || modeIndex == std::size(GRAPH_INTERPOLATOR_MODES)) {
+						if (typeIndex == std::size(GraphInterpolatorTypes) || modeIndex == std::size(GraphInterpolatorModes)) {
 							diagnostics.push_back({node.id, "has a Type or Interpolation that isn't one of its options"});
 							continue;
 						}
@@ -1019,7 +1019,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 						continue;
 					}
 					const VertexBlock* block = nullptr;
-					for (const VertexBlock& candidate : VERTEX_BLOCKS) {
+					for (const VertexBlock& candidate : VertexBlockTable) {
 						block = candidate.id == node.def ? &candidate : block;
 					}
 					if (block == nullptr) {
@@ -1082,7 +1082,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			size_t radianceRoot = SIZE_MAX;
 			if (lighting != nullptr) {
 				for (const GraphNode& node : lighting->blocks) {
-					if (node.def != RADIANCE_BLOCK) {
+					if (node.def != RadianceBlock) {
 						diagnostics.push_back({node.id, GraphNodeLibrary::Find(node.def) != nullptr
 															? str("is not a Lighting block")
 															: "has no definition '" + node.def + "' (unchanged, compiles nothing)"});
@@ -1101,7 +1101,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 					return false;
 				}
 			}
-			bindings.insert(bindings.end(), std::begin(LIGHTING_BINDINGS), std::end(LIGHTING_BINDINGS));
+			bindings.insert(bindings.end(), std::begin(lightingBindings), std::end(lightingBindings));
 
 			GraphCompileRequest request;
 			request.roots = roots;
@@ -1128,7 +1128,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			out.blend = settings.blend;
 			out.cull = settings.cull;
 			out.depth = settings.depth;
-			out.supportsEffects = SettingToggle(document, SUPPORT_EFFECTS);
+			out.supportsEffects = SettingToggle(document, SupportEffects);
 			out.properties = stack.properties;
 			out.propertyStages.assign(out.properties.size(), GraphStageNone);
 			out.fragmentReadsObject = false;
@@ -1158,7 +1158,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			Vector<LineSegment> segments{GetMemoryResource(MemTag::Editor)};
 			segments.push_back({LineOf(text), &both.functionLineNodes});
 			text += both.functions;
-			text += FRAME;
+			text += Frame;
 			if (predisplacement != nullptr) {
 				const str read = "input.interpolators[" + std::to_string(predisplacement->slot) + "]." +
 								 str(ComponentsAt(predisplacement->offset, predisplacement->width));
@@ -1219,7 +1219,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 					  GraphDefinitions* definitions, Vector<u32>* lines) {
 			out.clear();
 			const size_t firstDiagnostic = diagnostics.size();
-			if (document.type != DOCUMENT_TYPE) {
+			if (document.type != DocumentType) {
 				diagnostics.push_back({0, "the document is a '" + document.type + "', not a node shader"});
 				return false;
 			}
@@ -1260,7 +1260,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 				text += "#define SHALLTEAR_VERTEX_FUNCTION\n";
 				for (u32 mode = 0; mode < 3; ++mode) {
 					if (functions.interpolators[mode] != 0) {
-						text += "#define " + str(INTERPOLATOR_COUNTS[mode]) + " " + std::to_string(functions.interpolators[mode]) + "\n";
+						text += "#define " + str(InterpolatorCounts[mode]) + " " + std::to_string(functions.interpolators[mode]) + "\n";
 					}
 				}
 			}
@@ -1283,7 +1283,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 		bool GenerateFunctions(const GraphDocument& document, GraphSurfaceFunctions& out, Vector<GraphDiagnostic>& diagnostics,
 							   GraphDefinitions* definitions) {
 			const size_t firstDiagnostic = diagnostics.size();
-			if (document.type != DOCUMENT_TYPE) {
+			if (document.type != DocumentType) {
 				diagnostics.push_back({0, "the document is a '" + document.type + "', not a node shader"});
 				return false;
 			}
@@ -1305,7 +1305,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 
 		bool SupportsEffects(const GraphDocument& document) {
 			const str target = SettingText(document, "target");
-			return document.type == DOCUMENT_TYPE && target != "fullscreen" && target != "sky" && SettingToggle(document, SUPPORT_EFFECTS);
+			return document.type == DocumentType && target != "fullscreen" && target != "sky" && SettingToggle(document, SupportEffects);
 		}
 
 		bool CanShadeEffects(const GraphDocument& document, std::string_view graph, str& why) {
@@ -1326,7 +1326,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 									 GraphDefinitions* definitions, const Guid& asset, Vector<u32>* lines) {
 			out.clear();
 			const size_t firstDiagnostic = diagnostics.size();
-			if (document.type != GRAPH_SUBGRAPH_DOCUMENT_TYPE) {
+			if (document.type != GraphSubgraphDocumentType) {
 				diagnostics.push_back({0, "the document is a '" + document.type + "', not a subgraph"});
 				return false;
 			}
@@ -1338,7 +1338,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 
 			const GraphContext* output = nullptr;
 			for (const GraphContext& context : document.contexts) {
-				output = context.node.def == GRAPH_SUBGRAPH_OUTPUT_CONTEXT ? &context : output;
+				output = context.node.def == GraphSubgraphOutputContext ? &context : output;
 			}
 			if (output == nullptr || output->blocks.empty()) {
 				diagnostics.push_back({0, "the subgraph has no outputs (needs at least 1)"});
@@ -1353,7 +1353,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			root.input = true;
 			GraphCompileRequest request;
 			request.roots = {&root, 1};
-			request.bindings = SURFACE_BINDINGS;
+			request.bindings = surfaceBindings;
 			request.definitions = &resolver;
 			request.asset = asset;
 			GraphProgram program;
@@ -1397,7 +1397,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			Vector<LineSegment> segments{GetMemoryResource(MemTag::Editor)};
 			segments.push_back({LineOf(text), &fragment.functionLineNodes});
 			text += fragment.functions;
-			text += FRAME;
+			text += Frame;
 			text += "void ShalltearSurfaceFunction(ShalltearSurfaceInput input, inout ShalltearSurface surface) {\n";
 			segments.push_back({LineOf(text), &fragment.lineNodes});
 			text += fragment.body;
@@ -1409,13 +1409,13 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			return true;
 		}
 
-		std::span<const GraphBinding> Bindings() { return SURFACE_BINDINGS; }
+		std::span<const GraphBinding> Bindings() { return surfaceBindings; }
 
-		std::span<const GraphBinding> LightingBindings() { return LIGHTING_BINDINGS; }
+		std::span<const GraphBinding> LightingBindings() { return lightingBindings; }
 
-		std::span<const GraphBinding> FullscreenBindings() { return FULLSCREEN_BINDINGS; }
+		std::span<const GraphBinding> FullscreenBindings() { return fullscreenBindings; }
 
-		std::span<const GraphBinding> SkyBindings() { return SKY_BINDINGS; }
+		std::span<const GraphBinding> SkyBindings() { return skyBindings; }
 
 		bool IsFullscreen(const GraphDocument& document) { return SettingText(document, "target") == "fullscreen"; }
 
@@ -1424,11 +1424,11 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 		bool HasVertexStage(const GraphDocument& document) { return !IsFullscreen(document) && !IsSky(document); }
 
 		str PassDeclarations(const GraphProgram& program) {
-			std::array<bool, std::size(FULLSCREEN_RESOURCES)> needed{};
+			std::array<bool, std::size(FullscreenResources)> needed{};
 			NeededResources(program, needed);
 			str text;
-			for (size_t i = 0; i < std::size(FULLSCREEN_RESOURCES); ++i) {
-				text += needed[i] ? str(FULLSCREEN_RESOURCES[i].text) : str();
+			for (size_t i = 0; i < std::size(FullscreenResources); ++i) {
+				text += needed[i] ? str(FullscreenResources[i].text) : str();
 			}
 			return text;
 		}
@@ -1448,24 +1448,24 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 			Settings settings;
 			Vector<GraphDiagnostic> ignored{GetMemoryResource(MemTag::Editor)};
 			ReadSettings(document, settings, ignored);
-			for (const Block& block : FRAGMENT_BLOCKS) {
+			for (const Block& block : FragmentBlockTable) {
 				if (block.id == def) {
 					return Active(block, settings);
 				}
 			}
-			if (def == RADIANCE_BLOCK) {
+			if (def == RadianceBlock) {
 				return settings.target == Target::CustomLighting;
 			}
 			return settings.target != Target::Fullscreen && settings.target != Target::Sky &&
-				   (def == INTERPOLATOR_BLOCK ||
-					std::any_of(std::begin(VERTEX_BLOCKS), std::end(VERTEX_BLOCKS), [&](const VertexBlock& block) { return block.id == def; }));
+				   (def == InterpolatorBlock ||
+					std::any_of(std::begin(VertexBlockTable), std::end(VertexBlockTable), [&](const VertexBlock& block) { return block.id == def; }));
 		}
 
 		std::span<const std::string_view> VertexBlocks() {
 			static const auto ids = [] {
-				std::array<std::string_view, std::size(VERTEX_BLOCKS)> out{};
+				std::array<std::string_view, std::size(VertexBlockTable)> out{};
 				for (size_t i = 0; i < out.size(); ++i) {
-					out[i] = VERTEX_BLOCKS[i].id;
+					out[i] = VertexBlockTable[i].id;
 				}
 				return out;
 			}();
@@ -1474,9 +1474,9 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 
 		std::span<const std::string_view> FragmentBlocks() {
 			static const auto ids = [] {
-				std::array<std::string_view, std::size(FRAGMENT_BLOCKS)> out{};
+				std::array<std::string_view, std::size(FragmentBlockTable)> out{};
 				for (size_t i = 0; i < out.size(); ++i) {
-					out[i] = FRAGMENT_BLOCKS[i].id;
+					out[i] = FragmentBlockTable[i].id;
 				}
 				return out;
 			}();
@@ -1486,7 +1486,7 @@ ShalltearFullscreenVaryings VSMain(uint vertexId : SV_VertexID)
 		bool IsMaterialShaderSource(std::string_view source) {
 			GraphDocument document;
 			str error;
-			if (!GraphDocumentOps::Read(source, document, error) || document.type != DOCUMENT_TYPE) {
+			if (!GraphDocumentOps::Read(source, document, error) || document.type != DocumentType) {
 				return false;
 			}
 			str target = SettingText(document, "target");

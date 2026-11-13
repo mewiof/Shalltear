@@ -1,4 +1,4 @@
-#include "ParticleCpuSystem.h"
+#include "ParticleCPUSystem.h"
 
 #include "Shalltear/Core/Jobs/JobSystem.h"
 
@@ -59,8 +59,8 @@ namespace Shalltear::VisualEffectsImpl {
 
 	} // anonymous namespace
 
-	bool ParticleCpuSystem::Build(const EffectDescription& description, u32 system) {
-		*this = ParticleCpuSystem{};
+	bool ParticleCPUSystem::Build(const EffectDescription& description, u32 system) {
+		*this = ParticleCPUSystem{};
 		if (system >= description.systems.size() || !description.systems[system].cpu) {
 			return false;
 		}
@@ -86,7 +86,7 @@ namespace Shalltear::VisualEffectsImpl {
 		return true;
 	}
 
-	void ParticleCpuSystem::ReadsOf(const EffectDescription& description, const EffectProgram& program, Reads& out) const {
+	void ParticleCPUSystem::ReadsOf(const EffectDescription& description, const EffectProgram& program, Reads& out) const {
 		const EffectSystem& system = description.systems[_system];
 		const u32 stored = EFFECT_PARTICLE_SLOT_STORED;
 		const u32 source = stored + static_cast<u32>(system.stored.size());
@@ -107,17 +107,17 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	f32 ParticleCpuSystem::Read(u32 slot, u32 index) const {
+	f32 ParticleCPUSystem::Read(u32 slot, u32 index) const {
 		const size_t at = static_cast<size_t>(slot) * _capacity + index;
 		return at < _words.size() ? std::bit_cast<f32>(_words[at]) : 0.0f;
 	}
 
-	void ParticleCpuSystem::FillKeys(Lane& lane, u32 id) const {
+	void ParticleCPUSystem::FillKeys(Lane& lane, u32 id) const {
 		lane.slots[_base + EFFECT_PARTICLE_SLOT_RANDOM] = Key(EffectHash(id ^ _frameHash));
 		lane.slots[_base + EFFECT_PARTICLE_SLOT_RANDOM + 1] = Key(EffectHash(id ^ _seedHash));
 	}
 
-	void ParticleCpuSystem::FillStored(const EffectSystem& system, const Reads& reads, Lane& lane, u32 index) const {
+	void ParticleCPUSystem::FillStored(const EffectSystem& system, const Reads& reads, Lane& lane, u32 index) const {
 		for (const u32 i : reads.stored) {
 			const EffectStored& stored = system.stored[i];
 			EffectValue value;
@@ -128,7 +128,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	void ParticleCpuSystem::Store(const EffectSystem& system, const EffectProgram& program, const EffectMachine& machine, u32 index, u32 id) {
+	void ParticleCPUSystem::Store(const EffectSystem& system, const EffectProgram& program, const EffectMachine& machine, u32 index, u32 id) {
 		for (u32 i = 0; i < system.stored.size(); ++i) {
 			const EffectStored& stored = system.stored[i];
 			if (stored.slot == _idSlot) {
@@ -142,7 +142,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	void ParticleCpuSystem::Send(Lane& lane, const EffectProgram& program, std::span<const EffectOutputEvent> events,
+	void ParticleCPUSystem::Send(Lane& lane, const EffectProgram& program, std::span<const EffectOutputEvent> events,
 								 std::span<const EffectCarried> carried, bool update) {
 		for (u32 e = 0; e < events.size(); ++e) {
 			const f32 sent = lane.machine.Root(program, events[e].root).v[0];
@@ -157,7 +157,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	void ParticleCpuSystem::Measure(Lane& lane, const EffectProgram& program, u32 root) {
+	void ParticleCPUSystem::Measure(Lane& lane, const EffectProgram& program, u32 root) {
 		if (root == EFFECT_NO_BINDING) {
 			return;
 		}
@@ -171,7 +171,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	void ParticleCpuSystem::Run(const Chunk& chunk) {
+	void ParticleCPUSystem::Run(const Chunk& chunk) {
 		const EffectDescription& description = *chunk.description;
 		const EffectSystem& system = description.systems[_system];
 		const std::span<const u8> frame = chunk.frame;
@@ -236,7 +236,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 	}
 
-	void ParticleCpuSystem::Advance(const EffectDescription& description, std::span<const u8> frame, std::span<const EffectValue> slots,
+	void ParticleCPUSystem::Advance(const EffectDescription& description, std::span<const u8> frame, std::span<const EffectValue> slots,
 									u32 spawnCount, std::span<const EffectMeshView> meshes) {
 		_events.clear();
 		_eventValues.clear();
@@ -311,7 +311,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 		for (u32 lane = 0; lane < lanes; ++lane) {
 			const u32 base = static_cast<u32>(_eventValues.size());
-			for (ParticleCpuEvent event : _lanes[lane].events) {
+			for (ParticleCPUEvent event : _lanes[lane].events) {
 				event.values += base;
 				_events.push_back(event);
 			}

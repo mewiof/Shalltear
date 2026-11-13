@@ -16,8 +16,8 @@ namespace Shalltear {
 
 		constexpr std::string_view UV0 = "UV0";
 
-		constexpr GraphPortDefinition PROPERTY_OUTPUTS[] = {{"Out", P::Any}};
-		constexpr GraphSettingDefinition PROPERTY_SETTINGS[] = {{GRAPH_PROPERTY_SETTING, S::Property}};
+		constexpr GraphPortDefinition PropertyOutputs[] = {{"Out", P::Any}};
+		constexpr GraphSettingDefinition PropertySettings[] = {{GraphPropertySetting, S::Property}};
 
 		void PropertyBody(GraphBodyContext& c) {
 			const GraphSettingValue& property = c.settings[0];
@@ -33,10 +33,10 @@ namespace Shalltear {
 																: c.builder.External(property.type, property.text, property.expression);
 		}
 
-		constexpr GraphPortDefinition FLOAT_OUT[] = {{"Out", P::Float}};
+		constexpr GraphPortDefinition FloatOut[] = {{"Out", P::Float}};
 
-		constexpr GraphSettingDefinition BOOLEAN_SETTINGS[] = {{"Value", S::Toggle}};
-		constexpr GraphPortDefinition BOOLEAN_OUT[] = {{"Out", P::Boolean}};
+		constexpr GraphSettingDefinition BooleanSettings[] = {{"Value", S::Toggle}};
+		constexpr GraphPortDefinition BooleanOut[] = {{"Out", P::Boolean}};
 
 		void BooleanBody(GraphBodyContext& c) {
 			const f32 value = c.Setting(0) != 0 ? 1.0f : 0.0f;
@@ -44,49 +44,49 @@ namespace Shalltear {
 		}
 
 		// documents store colors linear
-		constexpr std::string_view COLOR_MODES[] = {"Default", "HDR"};
-		constexpr GraphSettingDefinition COLOR_SETTINGS[] = {{"Color", S::Color}, {"Mode", S::Choice, COLOR_MODES}};
-		constexpr GraphPortDefinition COLOR_OUT[] = {{"Out", P::Float4}};
+		constexpr std::string_view ColorModes[] = {"Default", "HDR"};
+		constexpr GraphSettingDefinition ColorSettings[] = {{"Color", S::Color}, {"Mode", S::Choice, ColorModes}};
+		constexpr GraphPortDefinition ColorOut[] = {{"Out", P::Float4}};
 
 		void ColorBody(GraphBodyContext& c) {
 			c.outputs[0] = c.builder.Constant(GraphValueType::Float4, c.settings[0].numbers);
 		}
 
-		constexpr std::string_view CONSTANTS[] = {"PI", "TAU", "PHI", "E", "SQRT2"};
+		constexpr std::string_view Constants[] = {"PI", "TAU", "PHI", "E", "SQRT2"};
 		constexpr f32 CONSTANT_VALUES[] = {3.1415926f, 6.28318530f, 1.618034f, 2.718282f, 1.414214f};
-		constexpr GraphSettingDefinition CONSTANT_SETTINGS[] = {{"Constant", S::Choice, CONSTANTS}};
+		constexpr GraphSettingDefinition ConstantSettings[] = {{"Constant", S::Choice, Constants}};
 
 		void ConstantBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Scalar(CONSTANT_VALUES[c.Setting(0)]); }
 
-		constexpr GraphSettingDefinition INTEGER_SETTINGS[] = {{"Value", S::Number}};
+		constexpr GraphSettingDefinition IntegerSettings[] = {{"Value", S::Number}};
 
 		void IntegerBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Scalar(static_cast<f32>(static_cast<i32>(c.Number(0)))); }
 
-		constexpr GraphSettingDefinition SLIDER_SETTINGS[] = {
+		constexpr GraphSettingDefinition SliderSettings[] = {
 			{"Value", S::Number}, {"Min", S::Number}, {"Max", S::Number, {}, 0, {}, {1.0f, 0.0f, 0.0f, 0.0f}}};
 
 		void SliderBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Scalar(c.Number(0)); }
 
-		constexpr GraphPortDefinition FLOAT_INPUTS[] = {{"X", P::Float}};
+		constexpr GraphPortDefinition FloatInputs[] = {{"X", P::Float}};
 
 		void FloatBody(GraphBodyContext& c) { c.outputs[0] = c.In(0); }
 
-		constexpr GraphPortDefinition VECTOR_INPUTS[] = {{"X", P::Float}, {"Y", P::Float}, {"Z", P::Float}, {"W", P::Float}};
-		constexpr GraphPortDefinition VECTOR2_OUT[] = {{"Out", P::Float2}};
-		constexpr GraphPortDefinition VECTOR3_OUT[] = {{"Out", P::Float3}};
-		constexpr GraphPortDefinition VECTOR4_OUT[] = {{"Out", P::Float4}};
+		constexpr GraphPortDefinition VectorInputs[] = {{"X", P::Float}, {"Y", P::Float}, {"Z", P::Float}, {"W", P::Float}};
+		constexpr GraphPortDefinition Vector2Out[] = {{"Out", P::Float2}};
+		constexpr GraphPortDefinition Vector3Out[] = {{"Out", P::Float3}};
+		constexpr GraphPortDefinition Vector4Out[] = {{"Out", P::Float4}};
 
 		template <u32 Width>
 		void VectorBody(GraphBodyContext& c) {
 			c.outputs[0] = c.builder.Construct(GraphTypes::Vector(Width), c.inputs.first(Width));
 		}
 
-		constexpr std::string_view UV_CHANNELS[] = {"UV0", "UV1", "UV2", "UV3", "UV4", "UV5", "UV6", "UV7"};
-		constexpr GraphSettingDefinition UV_SETTINGS[] = {{"Channel", S::Choice, UV_CHANNELS}};
+		constexpr std::string_view UVChannels[] = {"UV0", "UV1", "UV2", "UV3", "UV4", "UV5", "UV6", "UV7"};
+		constexpr GraphSettingDefinition UVSettings[] = {{"Channel", S::Choice, UVChannels}};
 
 		void UVBody(GraphBodyContext& c) {
 			if (c.Setting(0) != 0) {
-				c.error = "reads channel " + str(UV_CHANNELS[c.Setting(0)]) + " (a mesh here has 1 UV set, UV0)";
+				c.error = "reads channel " + str(UVChannels[c.Setting(0)]) + " (a mesh here has 1 UV set, UV0)";
 				return;
 			}
 			B& b = c.builder;
@@ -96,7 +96,7 @@ namespace Shalltear {
 
 		void VertexColorBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("VertexColor"); }
 
-		constexpr GraphPortDefinition TIME_OUTPUTS[] = {
+		constexpr GraphPortDefinition TimeOutputs[] = {
 			{"Time", P::Float}, {"Sine Time", P::Float}, {"Cosine Time", P::Float}, {"Delta Time", P::Float}, {"Smooth Delta", P::Float}};
 
 		void TimeBody(GraphBodyContext& c) {
@@ -109,21 +109,21 @@ namespace Shalltear {
 			c.outputs[4] = c.Binding("SmoothDeltaTime");
 		}
 
-		constexpr std::string_view DIRECTION_SPACES[] = {"Object", "View", "World", "Tangent"};
-		constexpr std::string_view POSITION_SPACES[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld"};
-		constexpr GraphSettingDefinition DIRECTION_SPACE_SETTINGS[] = {{"Space", S::Choice, DIRECTION_SPACES, 2}};
-		constexpr GraphPortDefinition VECTOR3_OUTPUT[] = {{"Out", P::Float3}};
+		constexpr std::string_view DirectionSpaces[] = {"Object", "View", "World", "Tangent"};
+		constexpr std::string_view PositionSpaces[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld"};
+		constexpr GraphSettingDefinition DirectionSpaceSettings[] = {{"Space", S::Choice, DirectionSpaces, 2}};
+		constexpr GraphPortDefinition Vector3Output[] = {{"Out", P::Float3}};
 
 		template <const char* Quantity>
 		void GeometryBody(GraphBodyContext& c) {
-			c.outputs[0] = c.Binding(str(POSITION_SPACES[c.Setting(0)]) + "Space" + Quantity);
+			c.outputs[0] = c.Binding(str(PositionSpaces[c.Setting(0)]) + "Space" + Quantity);
 		}
 
-		constexpr std::string_view POSITION_SOURCES[] = {"Default", "Predisplacement"};
-		constexpr GraphSettingDefinition POSITION_SETTINGS[] = {{"Space", S::Choice, POSITION_SPACES, 2}, {"Source", S::Choice, POSITION_SOURCES}};
+		constexpr std::string_view PositionSources[] = {"Default", "Predisplacement"};
+		constexpr GraphSettingDefinition PositionSettings[] = {{"Space", S::Choice, PositionSpaces, 2}, {"Source", S::Choice, PositionSources}};
 
 		void PositionBody(GraphBodyContext& c) {
-			str name = str(POSITION_SPACES[c.Setting(0)]) + "SpacePosition";
+			str name = str(PositionSpaces[c.Setting(0)]) + "SpacePosition";
 			c.outputs[0] = c.Binding(c.Setting(1) == 1 ? name + "Predisplacement" : name);
 		}
 
@@ -165,8 +165,8 @@ namespace Shalltear {
 		}
 
 		// normalized screen modes are y down
-		constexpr std::string_view SCREEN_MODES[] = {"Default", "Raw", "Center", "Tiled", "Pixel", "Clip"};
-		constexpr GraphSettingDefinition SCREEN_POSITION_SETTINGS[] = {{"Mode", S::Choice, SCREEN_MODES}};
+		constexpr std::string_view ScreenModes[] = {"Default", "Raw", "Center", "Tiled", "Pixel", "Clip"};
+		constexpr GraphSettingDefinition ScreenPositionSettings[] = {{"Mode", S::Choice, ScreenModes}};
 
 		void ScreenPositionBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -203,11 +203,11 @@ namespace Shalltear {
 			}
 		}
 
-		void VertexIDBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("VertexID"); }
+		void VertexIdBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("VertexID"); }
 
-		constexpr GraphPortDefinition LIGHT_OUTPUTS[] = {
+		constexpr GraphPortDefinition LightOutputs[] = {
 			{"Direction", P::Float3}, {"Color", P::Float3}, {"Attenuation", P::Float}, {"Shadow", P::Float}};
-		constexpr GraphPortDefinition SURFACE_OUTPUTS[] = {{"Base Color", P::Float3}, {"Alpha", P::Float}, {"Metallic", P::Float}, {"Roughness", P::Float}, {"Reflectance", P::Float}, {"Occlusion", P::Float}, {"Emission", P::Float3}, {"Normal", P::Float3}};
+		constexpr GraphPortDefinition SurfaceOutputs[] = {{"Base Color", P::Float3}, {"Alpha", P::Float}, {"Metallic", P::Float}, {"Roughness", P::Float}, {"Reflectance", P::Float}, {"Occlusion", P::Float}, {"Emission", P::Float3}, {"Normal", P::Float3}};
 
 		void LightBody(GraphBodyContext& c) {
 			c.outputs[0] = c.Binding("LightDirection");
@@ -217,38 +217,38 @@ namespace Shalltear {
 		}
 
 		void SurfaceBody(GraphBodyContext& c) {
-			constexpr std::string_view NAMES[] = {"SurfaceBaseColor", "SurfaceAlpha", "SurfaceMetallic", "SurfaceRoughness",
+			constexpr std::string_view Names[] = {"SurfaceBaseColor", "SurfaceAlpha", "SurfaceMetallic", "SurfaceRoughness",
 												  "SurfaceReflectance", "SurfaceOcclusion", "SurfaceEmission", "SurfaceNormal"};
-			for (u32 i = 0; i < std::size(NAMES); ++i) {
-				c.outputs[i] = c.Binding(NAMES[i]);
+			for (u32 i = 0; i < std::size(Names); ++i) {
+				c.outputs[i] = c.Binding(Names[i]);
 			}
 		}
 
 		void StandardLightingBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("StandardRadiance"); }
 
-		constexpr GraphPortDefinition SKY_OUTPUTS[] = {{"Direction", P::Float3}, {"Sun Direction", P::Float3}, {"Sun Color", P::Float3}, {"Sun Angular Diameter", P::Float}, {"Sun Enabled", P::Boolean}, {"Capturing", P::Boolean}};
+		constexpr GraphPortDefinition SkyOutputs[] = {{"Direction", P::Float3}, {"Sun Direction", P::Float3}, {"Sun Color", P::Float3}, {"Sun Angular Diameter", P::Float}, {"Sun Enabled", P::Boolean}, {"Capturing", P::Boolean}};
 
 		void SkyBody(GraphBodyContext& c) {
-			constexpr std::string_view NAMES[] = {"SkyDirection", "SkySunDirection", "SkySunColor",
+			constexpr std::string_view Names[] = {"SkyDirection", "SkySunDirection", "SkySunColor",
 												  "SkySunAngularDiameter", "SkySunEnabled", "SkyCapturing"};
-			for (u32 i = 0; i < std::size(NAMES); ++i) {
-				c.outputs[i] = c.Binding(NAMES[i]);
+			for (u32 i = 0; i < std::size(Names); ++i) {
+				c.outputs[i] = c.Binding(Names[i]);
 			}
 		}
 
 		void SunDiscBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("SkySunDisc"); }
 
-		constexpr std::string_view INTERPOLATOR_BLOCKS[] = {"Block/CustomInterpolator"};
-		constexpr GraphSettingDefinition INTERPOLATOR_NODE_SETTINGS[] = {{"Interpolator", S::Block, INTERPOLATOR_BLOCKS, 0, ""},
-																		 {"Type", S::Choice, GRAPH_INTERPOLATOR_TYPES, 3}};
-		constexpr GraphPortDefinition INTERPOLATOR_OUT[] = {{"Out", P::DynamicVector}};
+		constexpr std::string_view InterpolatorBlocks[] = {"Block/CustomInterpolator"};
+		constexpr GraphSettingDefinition InterpolatorNodeSettings[] = {{"Interpolator", S::Block, InterpolatorBlocks, 0, ""},
+																	   {"Type", S::Choice, GraphInterpolatorTypes, 3}};
+		constexpr GraphPortDefinition InterpolatorOut[] = {{"Out", P::DynamicVector}};
 
 		void CustomInterpolatorBody(GraphBodyContext& c) {
 			c.outputs[0] = c.builder.Convert(c.settings[0].value, GraphTypes::Vector(c.Setting(1) + 1));
 		}
-		void InstanceIDBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("InstanceID"); }
+		void InstanceIdBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("InstanceID"); }
 
-		constexpr GraphPortDefinition BLACKBODY_INPUTS[] = {{"Temperature", P::Float, {512.0f, 512.0f, 512.0f, 512.0f}}};
+		constexpr GraphPortDefinition BlackbodyInputs[] = {{"Temperature", P::Float, {512.0f, 512.0f, 512.0f, 512.0f}}};
 
 		void BlackbodyBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -266,8 +266,8 @@ namespace Shalltear {
 			c.outputs[0] = b.Select(b.Binary(GraphOp::Less, temperature, b.Scalar(1000.0f)), dim, color);
 		}
 
-		constexpr GraphSettingDefinition GRADIENT_SETTINGS[] = {{"Gradient", S::Gradient}};
-		constexpr GraphPortDefinition GRADIENT_OUTPUT[] = {{"Out", P::Gradient}};
+		constexpr GraphSettingDefinition GradientSettings[] = {{"Gradient", S::Gradient}};
+		constexpr GraphPortDefinition GradientOutput[] = {{"Out", P::Gradient}};
 
 		void GradientBody(GraphBodyContext& c) {
 			std::span<const f32> stored = c.settings[0].data;
@@ -285,8 +285,8 @@ namespace Shalltear {
 			c.outputs[0] = c.builder.Constant(GraphValueType::Gradient, gradient);
 		}
 
-		constexpr GraphPortDefinition SAMPLE_GRADIENT_INPUTS[] = {{"Gradient", P::Gradient}, {"Time", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_GRADIENT_OUTPUT[] = {{"Out", P::Float4}};
+		constexpr GraphPortDefinition SampleGradientInputs[] = {{"Gradient", P::Gradient}, {"Time", P::Float}};
+		constexpr GraphPortDefinition SampleGradientOutput[] = {{"Out", P::Float4}};
 
 		void SampleGradientBody(GraphBodyContext& c) {
 			std::span<const f32> gradient = c.builder.ConstantOf(c.In(0));
@@ -297,10 +297,10 @@ namespace Shalltear {
 			c.outputs[0] = GraphGradients::Sample(c.builder, gradient, c.In(1));
 		}
 
-		constexpr GraphSettingDefinition MATRIX_ROWS[] = {{"Row 0", S::Vector}, {"Row 1", S::Vector}, {"Row 2", S::Vector}, {"Row 3", S::Vector}};
-		constexpr GraphPortDefinition MATRIX2_OUTPUT[] = {{"Out", P::Float2x2}};
-		constexpr GraphPortDefinition MATRIX3_OUTPUT[] = {{"Out", P::Float3x3}};
-		constexpr GraphPortDefinition MATRIX4_OUTPUT[] = {{"Out", P::Float4x4}};
+		constexpr GraphSettingDefinition MatrixRows[] = {{"Row 0", S::Vector}, {"Row 1", S::Vector}, {"Row 2", S::Vector}, {"Row 3", S::Vector}};
+		constexpr GraphPortDefinition Matrix2Output[] = {{"Out", P::Float2x2}};
+		constexpr GraphPortDefinition Matrix3Output[] = {{"Out", P::Float3x3}};
+		constexpr GraphPortDefinition Matrix4Output[] = {{"Out", P::Float4x4}};
 
 		template <u32 Dimension>
 		void MatrixBody(GraphBodyContext& c) {
@@ -313,15 +313,15 @@ namespace Shalltear {
 			c.outputs[0] = c.builder.Constant(GraphTypes::Matrix(Dimension), {components.data(), Dimension * Dimension});
 		}
 
-		constexpr std::string_view TRANSFORMATION_MATRICES[] = {"Model", "InverseModel", "View", "InverseView",
-																"Projection", "InverseProjection", "ViewProjection", "InverseViewProjection"};
-		constexpr std::string_view TRANSFORMATION_BINDINGS[] = {"ObjectToWorld", "WorldToObject", "View", "InverseView",
-																"Projection", "InverseProjection", "ViewProjection", "InverseViewProjection"};
-		constexpr GraphSettingDefinition TRANSFORMATION_SETTINGS[] = {{"Matrix", S::Choice, TRANSFORMATION_MATRICES}};
+		constexpr std::string_view TransformationMatrices[] = {"Model", "InverseModel", "View", "InverseView",
+															   "Projection", "InverseProjection", "ViewProjection", "InverseViewProjection"};
+		constexpr std::string_view TransformationBindings[] = {"ObjectToWorld", "WorldToObject", "View", "InverseView",
+															   "Projection", "InverseProjection", "ViewProjection", "InverseViewProjection"};
+		constexpr GraphSettingDefinition TransformationSettings[] = {{"Matrix", S::Choice, TransformationMatrices}};
 
-		void TransformationMatrixBody(GraphBodyContext& c) { c.outputs[0] = c.Binding(TRANSFORMATION_BINDINGS[c.Setting(0)]); }
+		void TransformationMatrixBody(GraphBodyContext& c) { c.outputs[0] = c.Binding(TransformationBindings[c.Setting(0)]); }
 
-		constexpr GraphPortDefinition CAMERA_OUTPUTS[] = {{"Position", P::Float3}, {"Direction", P::Float3}, {"Orthographic", P::Float}, {"Near Plane", P::Float}, {"Far Plane", P::Float}, {"Z Buffer Sign", P::Float}, {"Width", P::Float}, {"Height", P::Float}};
+		constexpr GraphPortDefinition CameraOutputs[] = {{"Position", P::Float3}, {"Direction", P::Float3}, {"Orthographic", P::Float}, {"Near Plane", P::Float}, {"Far Plane", P::Float}, {"Z Buffer Sign", P::Float}, {"Width", P::Float}, {"Height", P::Float}};
 
 		void CameraBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -337,7 +337,7 @@ namespace Shalltear {
 			c.outputs[7] = b.Swizzle(screen, "w");
 		}
 
-		constexpr GraphPortDefinition OBJECT_OUTPUTS[] = {
+		constexpr GraphPortDefinition ObjectOutputs[] = {
 			{"Position", P::Float3}, {"Scale", P::Float3}, {"World Bounds Min", P::Float3}, {"World Bounds Max", P::Float3}, {"Bounds Size", P::Float3}};
 
 		void ObjectBody(GraphBodyContext& c) {
@@ -358,7 +358,7 @@ namespace Shalltear {
 			c.outputs[4] = b.Subtract(maximum, minimum);
 		}
 
-		constexpr GraphPortDefinition SCREEN_OUTPUTS[] = {{"Width", P::Float}, {"Height", P::Float}};
+		constexpr GraphPortDefinition ScreenOutputs[] = {{"Width", P::Float}, {"Height", P::Float}};
 
 		void ScreenBody(GraphBodyContext& c) {
 			GraphValueId screen = c.Binding("ScreenParams");
@@ -366,8 +366,8 @@ namespace Shalltear {
 			c.outputs[1] = c.builder.Swizzle(screen, "y");
 		}
 
-		constexpr GraphPortDefinition FOG_INPUTS[] = {{"Position", P::Float3, {}, "ObjectSpacePosition"}};
-		constexpr GraphPortDefinition FOG_OUTPUTS[] = {{"Color", P::Float4}, {"Density", P::Float}};
+		constexpr GraphPortDefinition FogInputs[] = {{"Position", P::Float3, {}, "ObjectSpacePosition"}};
+		constexpr GraphPortDefinition FogOutputs[] = {{"Color", P::Float4}, {"Density", P::Float}};
 
 		void FogBody(GraphBodyContext& c) {
 			const f32 none[] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -377,7 +377,7 @@ namespace Shalltear {
 
 		void EyeIndexBody(GraphBodyContext& c) { c.outputs[0] = c.Binding("EyeIndex"); }
 
-		constexpr GraphPortDefinition SCENE_UV_INPUT[] = {{"UV", P::Float4, {}, "NDCPosition"}};
+		constexpr GraphPortDefinition SceneUVInput[] = {{"UV", P::Float4, {}, "NDCPosition"}};
 
 		GraphValueId SampleScene(GraphBodyContext& c, std::string_view image) {
 			B& b = c.builder;
@@ -390,8 +390,8 @@ namespace Shalltear {
 		void SceneColorBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Swizzle(SampleSceneColor(c), "xyz"); }
 
 		// raw = reversed z, 1 at the near plane
-		constexpr std::string_view SCENE_DEPTH_MODES[] = {"Linear01", "Raw", "Eye"};
-		constexpr GraphSettingDefinition SCENE_DEPTH_SETTINGS[] = {{"Sampling Mode", S::Choice, SCENE_DEPTH_MODES}};
+		constexpr std::string_view SceneDepthModes[] = {"Linear01", "Raw", "Eye"};
+		constexpr GraphSettingDefinition SceneDepthSettings[] = {{"Sampling Mode", S::Choice, SceneDepthModes}};
 
 		void SceneDepthBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -406,9 +406,9 @@ namespace Shalltear {
 			c.outputs[0] = c.Setting(0) == 2 ? eye : b.Divide(eye, b.Swizzle(c.Binding("ProjectionParams"), "y"));
 		}
 
-		constexpr std::string_view SAMPLE_BUFFERS[] = {"NormalWorldSpace", "MotionVectors", "BlitSource"};
-		constexpr GraphSettingDefinition SAMPLE_BUFFER_SETTINGS[] = {{"Source Buffer", S::Choice, SAMPLE_BUFFERS}};
-		constexpr GraphPortDefinition SAMPLE_BUFFER_OUTPUT[] = {{"Output", P::DynamicVector}};
+		constexpr std::string_view SampleBuffers[] = {"NormalWorldSpace", "MotionVectors", "BlitSource"};
+		constexpr GraphSettingDefinition SampleBufferSettings[] = {{"Source Buffer", S::Choice, SampleBuffers}};
+		constexpr GraphPortDefinition SampleBufferOutput[] = {{"Output", P::DynamicVector}};
 
 		void SampleBufferBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -427,10 +427,10 @@ namespace Shalltear {
 			}
 		}
 
-		constexpr std::string_view DIELECTRICS[] = {"Common", "RustedMetal", "Water", "Ice", "Glass", "Custom"};
-		constexpr GraphSettingDefinition DIELECTRIC_SETTINGS[] = {{"Material", S::Choice, DIELECTRICS},
-																  {"Range", S::Number, {}, 0, {}, {0.5f, 0.0f, 0.0f, 0.0f}},
-																  {"IOR", S::Number, {}, 0, {}, {1.0f, 0.0f, 0.0f, 0.0f}}};
+		constexpr std::string_view Dielectrics[] = {"Common", "RustedMetal", "Water", "Ice", "Glass", "Custom"};
+		constexpr GraphSettingDefinition DielectricSettings[] = {{"Material", S::Choice, Dielectrics},
+																 {"Range", S::Number, {}, 0, {}, {0.5f, 0.0f, 0.0f, 0.0f}},
+																 {"IOR", S::Number, {}, 0, {}, {1.0f, 0.0f, 0.0f, 0.0f}}};
 		constexpr f32 DIELECTRIC_VALUES[] = {0.0f, 0.030f, 0.020f, 0.018f, 0.040f};
 
 		void DielectricSpecularBody(GraphBodyContext& c) {
@@ -453,21 +453,21 @@ namespace Shalltear {
 			}
 		}
 
-		constexpr std::string_view METALS[] = {"Iron", "Silver", "Aluminium", "Gold", "Copper", "Chromium", "Nickel", "Titanium", "Cobalt", "Platinum"};
+		constexpr std::string_view Metals[] = {"Iron", "Silver", "Aluminium", "Gold", "Copper", "Chromium", "Nickel", "Titanium", "Cobalt", "Platinum"};
 		constexpr f32 METAL_VALUES[][3] = {{0.560f, 0.570f, 0.580f}, {0.972f, 0.960f, 0.915f}, {0.913f, 0.921f, 0.925f}, {1.000f, 0.766f, 0.336f}, {0.955f, 0.637f, 0.538f}, {0.550f, 0.556f, 0.554f}, {0.660f, 0.609f, 0.526f}, {0.542f, 0.497f, 0.449f}, {0.662f, 0.655f, 0.634f}, {0.672f, 0.637f, 0.585f}};
-		constexpr GraphSettingDefinition METAL_SETTINGS[] = {{"Material", S::Choice, METALS}};
+		constexpr GraphSettingDefinition MetalSettings[] = {{"Material", S::Choice, Metals}};
 
 		void MetalReflectanceBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Constant(GraphValueType::Float3, METAL_VALUES[c.Setting(0)]); }
 
-		constexpr std::string_view TEXTURE_TYPES[] = {"Default", "Normal"};
-		constexpr std::string_view NORMAL_SPACES[] = {"Tangent", "Object"};
-		constexpr GraphSettingDefinition SAMPLE_SETTINGS[] = {{"Type", S::Choice, TEXTURE_TYPES}, {"Space", S::Choice, NORMAL_SPACES}};
-		constexpr GraphPortDefinition SAMPLE_INPUTS[] = {{"Texture", P::Texture2D}, {"UV", P::Float2, {}, UV0}};
-		constexpr std::string_view MIP_SAMPLING_MODES[] = {"Standard", "LOD", "Gradient", "Bias"};
+		constexpr std::string_view TextureTypes[] = {"Default", "Normal"};
+		constexpr std::string_view NormalSpaces[] = {"Tangent", "Object"};
+		constexpr GraphSettingDefinition SampleSettings[] = {{"Type", S::Choice, TextureTypes}, {"Space", S::Choice, NormalSpaces}};
+		constexpr GraphPortDefinition SampleInputs[] = {{"Texture", P::Texture2D}, {"UV", P::Float2, {}, UV0}};
+		constexpr std::string_view MipSamplingModes[] = {"Standard", "LOD", "Gradient", "Bias"};
 		constexpr u8 MIP_SETTING = 2;
-		constexpr GraphSettingDefinition SAMPLE_2D_SETTINGS[] = {
-			{"Type", S::Choice, TEXTURE_TYPES}, {"Space", S::Choice, NORMAL_SPACES}, {"Mip Sampling Mode", S::Choice, MIP_SAMPLING_MODES}};
-		constexpr GraphPortDefinition SAMPLE_2D_INPUTS[] = {
+		constexpr GraphSettingDefinition Sample2DSettings[] = {
+			{"Type", S::Choice, TextureTypes}, {"Space", S::Choice, NormalSpaces}, {"Mip Sampling Mode", S::Choice, MipSamplingModes}};
+		constexpr GraphPortDefinition Sample2DInputs[] = {
 			{"Texture", P::Texture2D},
 			{"UV", P::Float2, {}, UV0},
 			{"LOD", P::Float, {}, {}, MIP_SETTING, 1u << 1},
@@ -475,11 +475,11 @@ namespace Shalltear {
 			{"DDY", P::Float2, {}, {}, MIP_SETTING, 1u << 2},
 			{"Bias", P::Float, {}, {}, MIP_SETTING, 1u << 3},
 		};
-		constexpr GraphPortDefinition SAMPLE_LOD_INPUTS[] = {{"Texture", P::Texture2D}, {"UV", P::Float2, {}, UV0}, {"LOD", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_OUTPUTS[] = {{"RGBA", P::Float4}, {"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
+		constexpr GraphPortDefinition SampleLODInputs[] = {{"Texture", P::Texture2D}, {"UV", P::Float2, {}, UV0}, {"LOD", P::Float}};
+		constexpr GraphPortDefinition SampleOutputs[] = {{"RGBA", P::Float4}, {"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
 
 		// must match ShalltearUnpackNormalMap
-		void SampleOutputs(GraphBodyContext& c, GraphValueId sample) {
+		void EmitSampleOutputs(GraphBodyContext& c, GraphValueId sample) {
 			B& b = c.builder;
 			GraphValueId rgba = sample;
 			if (c.Setting(0) == 1) {
@@ -507,22 +507,22 @@ namespace Shalltear {
 			switch (c.Setting(MIP_SETTING)) {
 			case 1: {
 				const GraphValueId operands[] = {c.In(0), c.In(1), c.In(2)};
-				SampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureLevel, operands));
+				EmitSampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureLevel, operands));
 				return;
 			}
 			case 2: {
 				const GraphValueId operands[] = {c.In(0), c.In(1), c.In(3), c.In(4)};
-				SampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureGrad, operands));
+				EmitSampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureGrad, operands));
 				return;
 			}
 			case 3: {
 				const GraphValueId operands[] = {c.In(0), c.In(1), c.In(5)};
-				SampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureBias, operands));
+				EmitSampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureBias, operands));
 				return;
 			}
 			default: {
 				const GraphValueId operands[] = {c.In(0), c.In(1)};
-				SampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTexture, operands));
+				EmitSampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTexture, operands));
 				return;
 			}
 			}
@@ -530,7 +530,7 @@ namespace Shalltear {
 
 		void SampleTexture2DLODBody(GraphBodyContext& c) {
 			const GraphValueId operands[] = {c.In(0), c.In(1), c.In(2)};
-			SampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureLevel, operands));
+			EmitSampleOutputs(c, c.builder.TextureOp(GraphOp::SampleTextureLevel, operands));
 		}
 
 		void ChannelOutputs(GraphBodyContext& c, GraphValueId sample) {
@@ -543,8 +543,8 @@ namespace Shalltear {
 		}
 
 		constexpr u8 ARRAY_MIP_SETTING = 0;
-		constexpr GraphSettingDefinition SAMPLE_ARRAY_SETTINGS[] = {{"Mip Sampling Mode", S::Choice, MIP_SAMPLING_MODES}};
-		constexpr GraphPortDefinition SAMPLE_ARRAY_INPUTS[] = {
+		constexpr GraphSettingDefinition SampleArraySettings[] = {{"Mip Sampling Mode", S::Choice, MipSamplingModes}};
+		constexpr GraphPortDefinition SampleArrayInputs[] = {
 			{"Texture Array", P::Texture2DArray},
 			{"Index", P::Float},
 			{"UV", P::Float2, {}, UV0},
@@ -582,9 +582,9 @@ namespace Shalltear {
 			}
 		}
 
-		constexpr std::string_view MIP_3D_MODES[] = {"Standard", "LOD"};
-		constexpr GraphSettingDefinition SAMPLE_3D_SETTINGS[] = {{"Mip Sampling Mode", S::Choice, MIP_3D_MODES}};
-		constexpr GraphPortDefinition SAMPLE_3D_INPUTS[] = {
+		constexpr std::string_view Mip3DModes[] = {"Standard", "LOD"};
+		constexpr GraphSettingDefinition Sample3DSettings[] = {{"Mip Sampling Mode", S::Choice, Mip3DModes}};
+		constexpr GraphPortDefinition Sample3DInputs[] = {
 			{"Texture", P::Texture3D},
 			{"UV", P::Float3},
 			{"LOD", P::Float, {}, {}, 0, 1u << 1},
@@ -600,18 +600,18 @@ namespace Shalltear {
 			ChannelOutputs(c, c.builder.TextureOp(GraphOp::SampleTexture, operands));
 		}
 
-		constexpr GraphPortDefinition SAMPLE_CUBE_INPUTS[] = {{"Cube", P::Cubemap}, {"Dir", P::Float3, {}, "WorldSpaceNormal"}, {"LOD", P::Float}};
-		constexpr GraphPortDefinition CUBE_OUTPUT[] = {{"Out", P::Float4}};
+		constexpr GraphPortDefinition SampleCubeInputs[] = {{"Cube", P::Cubemap}, {"Dir", P::Float3, {}, "WorldSpaceNormal"}, {"LOD", P::Float}};
+		constexpr GraphPortDefinition CubeOutput[] = {{"Out", P::Float4}};
 
 		void SampleCubemapBody(GraphBodyContext& c) {
 			const GraphValueId operands[] = {c.In(0), c.In(1), c.In(2)};
 			c.outputs[0] = c.builder.TextureOp(GraphOp::SampleTextureLevel, operands);
 		}
 
-		constexpr GraphPortDefinition SAMPLE_REFLECTED_INPUTS[] = {{"Cube", P::Cubemap},
-																   {"ViewDir", P::Float3, {}, "ObjectSpaceViewDirection"},
-																   {"Normal", P::Float3, {}, "ObjectSpaceNormal"},
-																   {"LOD", P::Float}};
+		constexpr GraphPortDefinition SampleReflectedInputs[] = {{"Cube", P::Cubemap},
+																 {"ViewDir", P::Float3, {}, "ObjectSpaceViewDirection"},
+																 {"Normal", P::Float3, {}, "ObjectSpaceNormal"},
+																 {"LOD", P::Float}};
 
 		void SampleReflectedCubemapBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -620,8 +620,8 @@ namespace Shalltear {
 			c.outputs[0] = b.TextureOp(GraphOp::SampleTextureLevel, operands);
 		}
 
-		constexpr GraphPortDefinition TEXTURE_INPUT[] = {{"Texture", P::Texture2D}};
-		constexpr GraphPortDefinition TEXTURE_SIZE_OUTPUTS[] = {
+		constexpr GraphPortDefinition TextureInput[] = {{"Texture", P::Texture2D}};
+		constexpr GraphPortDefinition TextureSizeOutputs[] = {
 			{"Width", P::Float}, {"Height", P::Float}, {"Texel Width", P::Float}, {"Texel Height", P::Float}};
 
 		void TextureSizeBody(GraphBodyContext& c) {
@@ -634,89 +634,89 @@ namespace Shalltear {
 			c.outputs[3] = b.Swizzle(size, "w");
 		}
 
-		constexpr GraphSettingDefinition LOD_SETTINGS[] = {{"Clamp", S::Toggle, {}, 1}};
-		constexpr GraphPortDefinition LOD_OUTPUTS[] = {{"LOD", P::Float}};
+		constexpr GraphSettingDefinition LODSettings[] = {{"Clamp", S::Toggle, {}, 1}};
+		constexpr GraphPortDefinition LODOutputs[] = {{"LOD", P::Float}};
 
 		void CalculateLevelOfDetailBody(GraphBodyContext& c) {
 			const GraphValueId operands[] = {c.In(0), c.In(1)};
 			c.outputs[0] = c.builder.TextureOp(GraphOp::TextureLevelOfDetail, operands, c.Setting(0));
 		}
 
-		constexpr GraphNodeDefinition INPUT_DEFINITIONS[] = {
-			{GRAPH_PROPERTY_NODE, "Property", "Input", "", {}, PROPERTY_OUTPUTS, PROPERTY_SETTINGS, PropertyBody, GraphPreviewMode::None},
+		constexpr GraphNodeDefinition InputDefinitions[] = {
+			{GraphPropertyNode, "Property", "Input", "", {}, PropertyOutputs, PropertySettings, PropertyBody, GraphPreviewMode::None},
 
-			{"Input/Boolean", "Boolean", "Input/Basic", "toggle switch", {}, BOOLEAN_OUT, BOOLEAN_SETTINGS, BooleanBody, GraphPreviewMode::None},
-			{"Input/Color", "Color", "Input/Basic", "rgba", {}, COLOR_OUT, COLOR_SETTINGS, ColorBody, GraphPreviewMode::None},
-			{"Input/Constant", "Constant", "Input/Basic", "pi tau phi", {}, FLOAT_OUT, CONSTANT_SETTINGS, ConstantBody, GraphPreviewMode::None},
-			{"Input/Integer", "Integer", "Input/Basic", "int whole number", {}, FLOAT_OUT, INTEGER_SETTINGS, IntegerBody, GraphPreviewMode::None},
-			{"Input/Float", "Float", "Input/Basic", "Vector 1 scalar value", FLOAT_INPUTS, FLOAT_OUT, {}, FloatBody, GraphPreviewMode::None},
-			{"Input/Slider", "Slider", "Input/Basic", "range", {}, FLOAT_OUT, SLIDER_SETTINGS, SliderBody, GraphPreviewMode::None},
-			{"Input/Vector2", "Vector 2", "Input/Basic", "float2", std::span(VECTOR_INPUTS).first(2), VECTOR2_OUT, {}, VectorBody<2>, GraphPreviewMode::None},
-			{"Input/Vector3", "Vector 3", "Input/Basic", "float3", std::span(VECTOR_INPUTS).first(3), VECTOR3_OUT, {}, VectorBody<3>, GraphPreviewMode::None},
-			{"Input/Vector4", "Vector 4", "Input/Basic", "float4", VECTOR_INPUTS, VECTOR4_OUT, {}, VectorBody<4>, GraphPreviewMode::None},
+			{"Input/Boolean", "Boolean", "Input/Basic", "toggle switch", {}, BooleanOut, BooleanSettings, BooleanBody, GraphPreviewMode::None},
+			{"Input/Color", "Color", "Input/Basic", "rgba", {}, ColorOut, ColorSettings, ColorBody, GraphPreviewMode::None},
+			{"Input/Constant", "Constant", "Input/Basic", "pi tau phi", {}, FloatOut, ConstantSettings, ConstantBody, GraphPreviewMode::None},
+			{"Input/Integer", "Integer", "Input/Basic", "int whole number", {}, FloatOut, IntegerSettings, IntegerBody, GraphPreviewMode::None},
+			{"Input/Float", "Float", "Input/Basic", "Vector 1 scalar value", FloatInputs, FloatOut, {}, FloatBody, GraphPreviewMode::None},
+			{"Input/Slider", "Slider", "Input/Basic", "range", {}, FloatOut, SliderSettings, SliderBody, GraphPreviewMode::None},
+			{"Input/Vector2", "Vector 2", "Input/Basic", "float2", std::span(VectorInputs).first(2), Vector2Out, {}, VectorBody<2>, GraphPreviewMode::None},
+			{"Input/Vector3", "Vector 3", "Input/Basic", "float3", std::span(VectorInputs).first(3), Vector3Out, {}, VectorBody<3>, GraphPreviewMode::None},
+			{"Input/Vector4", "Vector 4", "Input/Basic", "float4", VectorInputs, Vector4Out, {}, VectorBody<4>, GraphPreviewMode::None},
 
-			{"Input/Time", "Time", "Input/Basic", "", {}, TIME_OUTPUTS, {}, TimeBody, GraphPreviewMode::None},
+			{"Input/Time", "Time", "Input/Basic", "", {}, TimeOutputs, {}, TimeBody, GraphPreviewMode::None},
 
-			{"Input/UV", "UV", "Input/Geometry", "texcoords", {}, COLOR_OUT, UV_SETTINGS, UVBody},
-			{"Input/VertexColor", "Vertex Color", "Input/Geometry", "", {}, COLOR_OUT, {}, VertexColorBody, GraphPreviewMode::Preview3D},
-			{"Input/Position", "Position", "Input/Geometry", "location", {}, VECTOR3_OUTPUT, POSITION_SETTINGS, PositionBody, GraphPreviewMode::Preview3D},
-			{"Input/NormalVector", "Normal Vector", "Input/Geometry", "surface direction", {}, VECTOR3_OUTPUT, DIRECTION_SPACE_SETTINGS, GeometryBody<NORMAL>, GraphPreviewMode::Preview3D},
-			{"Input/TangentVector", "Tangent Vector", "Input/Geometry", "", {}, VECTOR3_OUTPUT, DIRECTION_SPACE_SETTINGS, GeometryBody<TANGENT>, GraphPreviewMode::Preview3D},
-			{"Input/BitangentVector", "Bitangent Vector", "Input/Geometry", "binormal", {}, VECTOR3_OUTPUT, DIRECTION_SPACE_SETTINGS, GeometryBody<BITANGENT>, GraphPreviewMode::Preview3D},
-			{"Input/ViewDirection", "View Direction", "Input/Geometry", "eye direction", {}, VECTOR3_OUTPUT, DIRECTION_SPACE_SETTINGS, GeometryBody<VIEW_DIRECTION>, GraphPreviewMode::Preview3D},
-			{"Input/ViewVector", "View Vector", "Input/Geometry", "eye vector", {}, VECTOR3_OUTPUT, DIRECTION_SPACE_SETTINGS, ViewVectorBody, GraphPreviewMode::Preview3D},
-			{"Input/ScreenPosition", "Screen Position", "Input/Geometry", "", {}, COLOR_OUT, SCREEN_POSITION_SETTINGS, ScreenPositionBody},
-			{"Input/VertexID", "Vertex ID", "Input/Geometry", "", {}, FLOAT_OUT, {}, VertexIDBody, GraphPreviewMode::None},
-			{"Input/InstanceID", "Instance ID", "Input/Geometry", "", {}, FLOAT_OUT, {}, InstanceIDBody, GraphPreviewMode::None},
+			{"Input/UV", "UV", "Input/Geometry", "texcoords", {}, ColorOut, UVSettings, UVBody},
+			{"Input/VertexColor", "Vertex Color", "Input/Geometry", "", {}, ColorOut, {}, VertexColorBody, GraphPreviewMode::Preview3D},
+			{"Input/Position", "Position", "Input/Geometry", "location", {}, Vector3Output, PositionSettings, PositionBody, GraphPreviewMode::Preview3D},
+			{"Input/NormalVector", "Normal Vector", "Input/Geometry", "surface direction", {}, Vector3Output, DirectionSpaceSettings, GeometryBody<NORMAL>, GraphPreviewMode::Preview3D},
+			{"Input/TangentVector", "Tangent Vector", "Input/Geometry", "", {}, Vector3Output, DirectionSpaceSettings, GeometryBody<TANGENT>, GraphPreviewMode::Preview3D},
+			{"Input/BitangentVector", "Bitangent Vector", "Input/Geometry", "binormal", {}, Vector3Output, DirectionSpaceSettings, GeometryBody<BITANGENT>, GraphPreviewMode::Preview3D},
+			{"Input/ViewDirection", "View Direction", "Input/Geometry", "eye direction", {}, Vector3Output, DirectionSpaceSettings, GeometryBody<VIEW_DIRECTION>, GraphPreviewMode::Preview3D},
+			{"Input/ViewVector", "View Vector", "Input/Geometry", "eye vector", {}, Vector3Output, DirectionSpaceSettings, ViewVectorBody, GraphPreviewMode::Preview3D},
+			{"Input/ScreenPosition", "Screen Position", "Input/Geometry", "", {}, ColorOut, ScreenPositionSettings, ScreenPositionBody},
+			{"Input/VertexID", "Vertex ID", "Input/Geometry", "", {}, FloatOut, {}, VertexIdBody, GraphPreviewMode::None},
+			{"Input/InstanceID", "Instance ID", "Input/Geometry", "", {}, FloatOut, {}, InstanceIdBody, GraphPreviewMode::None},
 
-			{"Input/Light", "Light", "Input/Lighting", "main light direction color attenuation shadow", {}, LIGHT_OUTPUTS, {}, LightBody, GraphPreviewMode::None},
-			{"Input/Surface", "Surface", "Input/Lighting", "base color albedo normal", {}, SURFACE_OUTPUTS, {}, SurfaceBody, GraphPreviewMode::None},
-			{"Input/StandardLighting", "Standard Lighting", "Input/Lighting", "brdf pbr lit radiance", {}, VECTOR3_OUTPUT, {}, StandardLightingBody, GraphPreviewMode::Preview3D},
+			{"Input/Light", "Light", "Input/Lighting", "main light direction color attenuation shadow", {}, LightOutputs, {}, LightBody, GraphPreviewMode::None},
+			{"Input/Surface", "Surface", "Input/Lighting", "base color albedo normal", {}, SurfaceOutputs, {}, SurfaceBody, GraphPreviewMode::None},
+			{"Input/StandardLighting", "Standard Lighting", "Input/Lighting", "brdf pbr lit radiance", {}, Vector3Output, {}, StandardLightingBody, GraphPreviewMode::Preview3D},
 
-			{"Input/Sky", "Sky", "Input/Sky", "main light direction sun eye ray view direction capturing", {}, SKY_OUTPUTS, {}, SkyBody, GraphPreviewMode::Preview3D},
-			{"Input/SunDisc", "Sun Disc", "Input/Sky", "sun disk", {}, VECTOR3_OUTPUT, {}, SunDiscBody, GraphPreviewMode::Preview3D},
+			{"Input/Sky", "Sky", "Input/Sky", "main light direction sun eye ray view direction capturing", {}, SkyOutputs, {}, SkyBody, GraphPreviewMode::Preview3D},
+			{"Input/SunDisc", "Sun Disc", "Input/Sky", "sun disk", {}, Vector3Output, {}, SunDiscBody, GraphPreviewMode::Preview3D},
 
-			{"CustomInterpolators/Instance", "Custom Interpolator", "Custom Interpolators", "", {}, INTERPOLATOR_OUT, INTERPOLATOR_NODE_SETTINGS, CustomInterpolatorBody},
+			{"CustomInterpolators/Instance", "Custom Interpolator", "Custom Interpolators", "", {}, InterpolatorOut, InterpolatorNodeSettings, CustomInterpolatorBody},
 
-			{"Input/Blackbody", "Blackbody", "Input/Gradient", "", BLACKBODY_INPUTS, VECTOR3_OUTPUT, {}, BlackbodyBody},
-			{"Input/Gradient", "Gradient", "Input/Gradient", "ramp", {}, GRADIENT_OUTPUT, GRADIENT_SETTINGS, GradientBody, GraphPreviewMode::None},
-			{"Input/SampleGradient", "Sample Gradient", "Input/Gradient", "", SAMPLE_GRADIENT_INPUTS, SAMPLE_GRADIENT_OUTPUT, {}, SampleGradientBody},
+			{"Input/Blackbody", "Blackbody", "Input/Gradient", "", BlackbodyInputs, Vector3Output, {}, BlackbodyBody},
+			{"Input/Gradient", "Gradient", "Input/Gradient", "ramp", {}, GradientOutput, GradientSettings, GradientBody, GraphPreviewMode::None},
+			{"Input/SampleGradient", "Sample Gradient", "Input/Gradient", "", SampleGradientInputs, SampleGradientOutput, {}, SampleGradientBody},
 
-			{"Input/Matrix2x2", "Matrix 2x2", "Input/Matrix", "", {}, MATRIX2_OUTPUT, std::span(MATRIX_ROWS).first(2), MatrixBody<2>, GraphPreviewMode::None},
-			{"Input/Matrix3x3", "Matrix 3x3", "Input/Matrix", "", {}, MATRIX3_OUTPUT, std::span(MATRIX_ROWS).first(3), MatrixBody<3>, GraphPreviewMode::None},
-			{"Input/Matrix4x4", "Matrix 4x4", "Input/Matrix", "", {}, MATRIX4_OUTPUT, MATRIX_ROWS, MatrixBody<4>, GraphPreviewMode::None},
-			{"Input/TransformationMatrix", "Transformation Matrix", "Input/Matrix", "", {}, MATRIX4_OUTPUT, TRANSFORMATION_SETTINGS, TransformationMatrixBody, GraphPreviewMode::None},
+			{"Input/Matrix2x2", "Matrix 2x2", "Input/Matrix", "", {}, Matrix2Output, std::span(MatrixRows).first(2), MatrixBody<2>, GraphPreviewMode::None},
+			{"Input/Matrix3x3", "Matrix 3x3", "Input/Matrix", "", {}, Matrix3Output, std::span(MatrixRows).first(3), MatrixBody<3>, GraphPreviewMode::None},
+			{"Input/Matrix4x4", "Matrix 4x4", "Input/Matrix", "", {}, Matrix4Output, MatrixRows, MatrixBody<4>, GraphPreviewMode::None},
+			{"Input/TransformationMatrix", "Transformation Matrix", "Input/Matrix", "", {}, Matrix4Output, TransformationSettings, TransformationMatrixBody, GraphPreviewMode::None},
 
-			{"Input/Camera", "Camera", "Input/Scene", "position direction orthographic near plane far plane width height", {}, CAMERA_OUTPUTS, {}, CameraBody, GraphPreviewMode::None},
-			{"Input/Fog", "Fog", "Input/Scene", "", FOG_INPUTS, FOG_OUTPUTS, {}, FogBody, GraphPreviewMode::None},
-			{"Input/Object", "Object", "Input/Scene", "position scale bounds size", {}, OBJECT_OUTPUTS, {}, ObjectBody, GraphPreviewMode::None},
-			{"Input/Screen", "Screen", "Input/Scene", "", {}, SCREEN_OUTPUTS, {}, ScreenBody, GraphPreviewMode::None},
-			{"Input/EyeIndex", "Eye Index", "Input/Scene", "stereo 3d", {}, FLOAT_OUT, {}, EyeIndexBody, GraphPreviewMode::None},
-			{"Input/SceneColor", "Scene Color", "Input/Scene", "screen buffer", SCENE_UV_INPUT, VECTOR3_OUTPUT, {}, SceneColorBody, GraphPreviewMode::None},
-			{"Input/SceneDepth", "Scene Depth", "Input/Scene", "zbuffer zdepth", SCENE_UV_INPUT, FLOAT_OUT, SCENE_DEPTH_SETTINGS, SceneDepthBody,
+			{"Input/Camera", "Camera", "Input/Scene", "position direction orthographic near plane far plane width height", {}, CameraOutputs, {}, CameraBody, GraphPreviewMode::None},
+			{"Input/Fog", "Fog", "Input/Scene", "", FogInputs, FogOutputs, {}, FogBody, GraphPreviewMode::None},
+			{"Input/Object", "Object", "Input/Scene", "position scale bounds size", {}, ObjectOutputs, {}, ObjectBody, GraphPreviewMode::None},
+			{"Input/Screen", "Screen", "Input/Scene", "", {}, ScreenOutputs, {}, ScreenBody, GraphPreviewMode::None},
+			{"Input/EyeIndex", "Eye Index", "Input/Scene", "stereo 3d", {}, FloatOut, {}, EyeIndexBody, GraphPreviewMode::None},
+			{"Input/SceneColor", "Scene Color", "Input/Scene", "screen buffer", SceneUVInput, Vector3Output, {}, SceneColorBody, GraphPreviewMode::None},
+			{"Input/SceneDepth", "Scene Depth", "Input/Scene", "zbuffer zdepth", SceneUVInput, FloatOut, SceneDepthSettings, SceneDepthBody,
 			 GraphPreviewMode::None},
-			{"Input/SampleBuffer", "Sample Buffer", "Input/Scene", "sample buffer normal motion vector blit", SCENE_UV_INPUT, SAMPLE_BUFFER_OUTPUT,
-			 SAMPLE_BUFFER_SETTINGS, SampleBufferBody, GraphPreviewMode::Preview2D},
+			{"Input/SampleBuffer", "Sample Buffer", "Input/Scene", "sample buffer normal motion vector blit", SceneUVInput, SampleBufferOutput,
+			 SampleBufferSettings, SampleBufferBody, GraphPreviewMode::Preview2D},
 
-			{"Input/DielectricSpecular", "Dielectric Specular", "Input/PBR", "", {}, FLOAT_OUT, DIELECTRIC_SETTINGS, DielectricSpecularBody},
-			{"Input/MetalReflectance", "Metal Reflectance", "Input/PBR", "", {}, VECTOR3_OUT, METAL_SETTINGS, MetalReflectanceBody},
+			{"Input/DielectricSpecular", "Dielectric Specular", "Input/PBR", "", {}, FloatOut, DielectricSettings, DielectricSpecularBody},
+			{"Input/MetalReflectance", "Metal Reflectance", "Input/PBR", "", {}, Vector3Out, MetalSettings, MetalReflectanceBody},
 
-			{"Input/SampleTexture2D", "Sample Texture 2D", "Input/Texture", "tex2d", SAMPLE_2D_INPUTS, SAMPLE_OUTPUTS, SAMPLE_2D_SETTINGS, SampleTexture2DBody},
-			{"Input/SampleTexture2DLOD", "Sample Texture 2D LOD", "Input/Texture", "tex2dlod", SAMPLE_LOD_INPUTS, SAMPLE_OUTPUTS, SAMPLE_SETTINGS,
+			{"Input/SampleTexture2D", "Sample Texture 2D", "Input/Texture", "tex2d", Sample2DInputs, SampleOutputs, Sample2DSettings, SampleTexture2DBody},
+			{"Input/SampleTexture2DLOD", "Sample Texture 2D LOD", "Input/Texture", "tex2dlod", SampleLODInputs, SampleOutputs, SampleSettings,
 			 SampleTexture2DLODBody},
-			{"Input/TextureSize", "Texture Size", "Input/Texture", "texel size", TEXTURE_INPUT, TEXTURE_SIZE_OUTPUTS, {}, TextureSizeBody, GraphPreviewMode::None},
-			{"Input/CalculateLevelOfDetailTexture2D", "Calculate Level Of Detail Texture 2D", "Input/Texture", "mip lod", SAMPLE_INPUTS,
-			 LOD_OUTPUTS, LOD_SETTINGS, CalculateLevelOfDetailBody},
-			{"Input/SampleTexture2DArray", "Sample Texture 2D Array", "Input/Texture", "tex2darray texture array", SAMPLE_ARRAY_INPUTS, SAMPLE_OUTPUTS,
-			 SAMPLE_ARRAY_SETTINGS, SampleTexture2DArrayBody},
-			{"Input/SampleTexture3D", "Sample Texture 3D", "Input/Texture", "tex3d volume", SAMPLE_3D_INPUTS, SAMPLE_OUTPUTS, SAMPLE_3D_SETTINGS,
+			{"Input/TextureSize", "Texture Size", "Input/Texture", "texel size", TextureInput, TextureSizeOutputs, {}, TextureSizeBody, GraphPreviewMode::None},
+			{"Input/CalculateLevelOfDetailTexture2D", "Calculate Level Of Detail Texture 2D", "Input/Texture", "mip lod", SampleInputs,
+			 LODOutputs, LODSettings, CalculateLevelOfDetailBody},
+			{"Input/SampleTexture2DArray", "Sample Texture 2D Array", "Input/Texture", "tex2darray texture array", SampleArrayInputs, SampleOutputs,
+			 SampleArraySettings, SampleTexture2DArrayBody},
+			{"Input/SampleTexture3D", "Sample Texture 3D", "Input/Texture", "tex3d volume", Sample3DInputs, SampleOutputs, Sample3DSettings,
 			 SampleTexture3DBody},
-			{"Input/SampleCubemap", "Sample Cubemap", "Input/Texture", "cube texcube", SAMPLE_CUBE_INPUTS, CUBE_OUTPUT, {}, SampleCubemapBody},
-			{"Input/SampleReflectedCubemap", "Sample Reflected Cubemap", "Input/Texture", "cube reflection environment", SAMPLE_REFLECTED_INPUTS, CUBE_OUTPUT, {}, SampleReflectedCubemapBody},
+			{"Input/SampleCubemap", "Sample Cubemap", "Input/Texture", "cube texcube", SampleCubeInputs, CubeOutput, {}, SampleCubemapBody},
+			{"Input/SampleReflectedCubemap", "Sample Reflected Cubemap", "Input/Texture", "cube reflection environment", SampleReflectedInputs, CubeOutput, {}, SampleReflectedCubemapBody},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphInputDefinitions() { return INPUT_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphInputDefinitions() { return InputDefinitions; }
 
 } // namespace Shalltear

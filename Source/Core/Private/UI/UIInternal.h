@@ -28,8 +28,8 @@ namespace Shalltear::UI {
 	inline constexpr Rect UnknownInk = {0.0f, 0.0f, -1.0f, -1.0f};
 
 	inline constexpr f32 INITIAL_FONT_SIZE = 16.0f;
-	inline constexpr Color INITIAL_TEXT_COLOR = Color::White();
-	inline constexpr Color INITIAL_OUTLINE_COLOR = Color::Black();
+	inline constexpr Color InitialTextColor = Color::White();
+	inline constexpr Color InitialOutlineColor = Color::Black();
 	inline constexpr u16 INITIAL_FONT_WEIGHT = 400;
 
 	// hex (#rgb to #rrggbbaa) or a CSS basic color name

@@ -34,11 +34,11 @@ namespace Shalltear {
 		}
 
 		constexpr f32 BC6H_QUALITY = 0.05f;
-		void* g_bc6hOptions = nullptr;
+		void* _bc6hOptions = nullptr;
 
-		struct SRGBTable {
+		struct sRGBTable {
 			f32 toLinear[256];
-			SRGBTable() {
+			sRGBTable() {
 				for (u32 value = 0; value < 256; ++value) {
 					const f32 encoded = static_cast<f32>(value) / 255.0f;
 					toLinear[value] = encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f);
@@ -46,8 +46,8 @@ namespace Shalltear {
 			}
 		};
 
-		const SRGBTable& Table() {
-			static const SRGBTable table;
+		const sRGBTable& Table() {
+			static const sRGBTable table;
 			return table;
 		}
 
@@ -64,7 +64,7 @@ namespace Shalltear {
 			if (channel == 3 || meaning == TexelMeaning::Linear) {
 				return static_cast<f32>(value) / 255.0f;
 			}
-			if (meaning == TexelMeaning::SRGBColor) {
+			if (meaning == TexelMeaning::sRGBColor) {
 				return Table().toLinear[value];
 			}
 			return static_cast<f32>(value) / 255.0f * 2.0f - 1.0f;
@@ -104,7 +104,7 @@ namespace Shalltear {
 				for (size_t channel = 0; channel < 3; ++channel) {
 					const f32 value = level[i + channel];
 					switch (meaning) {
-					case TexelMeaning::SRGBColor:
+					case TexelMeaning::sRGBColor:
 						out[i + channel] = ToByte(LinearToSRGB(value));
 						break;
 					case TexelMeaning::Linear:
@@ -202,7 +202,7 @@ namespace Shalltear {
 					u8* block = job.blocks + (static_cast<size_t>(blockY) * blocksX + blockX) * 16;
 					if (job.format == RHI::Format::BC6HUFloat) {
 						GatherHalves(job, blockX, blockY, halves);
-						CompressBlockBC6(halves, 4 * 3, block, g_bc6hOptions);
+						CompressBlockBC6(halves, 4 * 3, block, _bc6hOptions);
 						continue;
 					}
 					Gather(job, blockX, blockY, texels);
@@ -251,7 +251,7 @@ namespace Shalltear {
 			if ((hdr && input.meaning != TexelMeaning::Linear) || (input.suppliedLevels != 1 && input.suppliedLevels != input.mipLevels)) {
 				return false;
 			}
-			if (format == RHI::Format::BC6HUFloat && !g_bc6hOptions) {
+			if (format == RHI::Format::BC6HUFloat && !_bc6hOptions) {
 				return false;
 			}
 			const size_t texelScale = hdr ? sizeof(u16) : 1;
@@ -386,9 +386,9 @@ namespace Shalltear {
 		// before any worker encodes
 		bc7e_scalar::bc7e_compress_block_init();
 		rgbcx::init();
-		if (!g_bc6hOptions) {
-			CreateOptionsBC6(&g_bc6hOptions);
-			SetQualityBC6(g_bc6hOptions, BC6H_QUALITY);
+		if (!_bc6hOptions) {
+			CreateOptionsBC6(&_bc6hOptions);
+			SetQualityBC6(_bc6hOptions, BC6H_QUALITY);
 		}
 
 		const TextureCodec codec{&Encode, &Decode};
@@ -400,9 +400,9 @@ namespace Shalltear {
 	}
 
 	void ShutdownTextureCodecs() {
-		if (g_bc6hOptions) {
-			DestroyOptionsBC6(g_bc6hOptions);
-			g_bc6hOptions = nullptr;
+		if (_bc6hOptions) {
+			DestroyOptionsBC6(_bc6hOptions);
+			_bc6hOptions = nullptr;
 		}
 	}
 

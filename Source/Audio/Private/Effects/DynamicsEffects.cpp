@@ -9,14 +9,14 @@ namespace Shalltear {
 
 			namespace {
 
-				constexpr AudioParameterDefinition COMPRESSOR[] = {
+				constexpr AudioParameterDefinition CompressorParameters[] = {
 					{"Threshold", "dB", -60.0f, 0.0f, 0.0f},
 					{"Attack", "ms", 10.0f, 200.0f, 50.0f},
 					{"Release", "ms", 20.0f, 1000.0f, 50.0f},
 					{"Make up gain", "dB", 0.0f, 30.0f, 0.0f},
 				};
 
-				constexpr AudioParameterDefinition DUCK_VOLUME[] = {
+				constexpr AudioParameterDefinition DuckVolumeParameters[] = {
 					{"Threshold", "dB", -80.0f, 0.0f, -10.0f},
 					{"Ratio", "%", 100.0f, 10000.0f, 200.0f},
 					{"Attack Time", "ms", 0.0f, 5000.0f, 100.0f},
@@ -26,13 +26,13 @@ namespace Shalltear {
 					{"Sidechain Mix", "%", 0.0f, 100.0f, 100.0f},
 				};
 
-				constexpr AudioParameterDefinition NORMALIZE[] = {
+				constexpr AudioParameterDefinition NormalizeParameters[] = {
 					{"Fade in time", "ms", 0.0f, 20000.0f, 5000.0f},
 					{"Lowest volume", "", 0.0f, 1.0f, 0.1f},
 					{"Maximum amp", "x", 0.0f, 100000.0f, 20.0f},
 				};
 
-				constexpr AudioParameterDefinition DISTORTION[] = {
+				constexpr AudioParameterDefinition DistortionParameters[] = {
 					{"Distortion", "", 0.0f, 1.0f, 0.5f},
 				};
 
@@ -59,12 +59,12 @@ namespace Shalltear {
 							parameter.Advance(block.frames);
 						}
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
-						const f32 attack = OnePole(_parameters[ATTACK].end * 0.001f, _rate);
-						const f32 release = OnePole(_parameters[RELEASE].end * 0.001f, _rate);
-						const f32 thresholdStart = DecibelsToGain(_parameters[THRESHOLD].start);
-						const f32 thresholdEnd = DecibelsToGain(_parameters[THRESHOLD].end);
-						const f32 makeUpStart = DecibelsToGain(_parameters[MAKE_UP].start);
-						const f32 makeUpEnd = DecibelsToGain(_parameters[MAKE_UP].end);
+						const f32 attack = OnePole(_parameters[Attack].end * 0.001f, _rate);
+						const f32 release = OnePole(_parameters[Release].end * 0.001f, _rate);
+						const f32 thresholdStart = DecibelsToGain(_parameters[Threshold].start);
+						const f32 thresholdEnd = DecibelsToGain(_parameters[Threshold].end);
+						const f32 makeUpStart = DecibelsToGain(_parameters[MakeUp].start);
+						const f32 makeUpEnd = DecibelsToGain(_parameters[MakeUp].end);
 						const f32 per = block.frames > 0 ? 1.0f / static_cast<f32>(block.frames) : 0.0f;
 						for (u32 frame = 0; frame < block.frames; ++frame) {
 							const f32 at = static_cast<f32>(frame + 1) * per;
@@ -85,12 +85,12 @@ namespace Shalltear {
 						}
 					}
 
-					bool IsQuiet() const [[clang::nonblocking]] override { return _envelope <= DecibelsToGain(_parameters[THRESHOLD].end); }
+					bool IsQuiet() const [[clang::nonblocking]] override { return _envelope <= DecibelsToGain(_parameters[Threshold].end); }
 				private:
-					enum : u32 { THRESHOLD = 0,
-								 ATTACK,
-								 RELEASE,
-								 MAKE_UP };
+					enum : u32 { Threshold = 0,
+								 Attack,
+								 Release,
+								 MakeUp };
 					AudioRamp _parameters[4];
 					f32 _envelope = 0.0f;
 				};
@@ -98,7 +98,7 @@ namespace Shalltear {
 				class DuckVolume final : public BuiltinEffect {
 				public:
 					static constexpr u32 CHUNK_FRAMES = 8;
-					static constexpr bool READS_SIDECHAIN = true;
+					static constexpr bool ReadsSidechain = true;
 
 					explicit DuckVolume(const AudioEffectContext& context) : BuiltinEffect(context) {
 						for (u32 index = 0; index < 7; ++index) {
@@ -111,13 +111,13 @@ namespace Shalltear {
 							parameter.Advance(block.frames);
 						}
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
-						const f32 threshold = _parameters[THRESHOLD].end;
-						const f32 slope = 1.0f - 100.0f / (_parameters[RATIO].end > 100.0f ? _parameters[RATIO].end : 100.0f);
-						const f32 knee = _parameters[KNEE].end;
+						const f32 threshold = _parameters[Threshold].end;
+						const f32 slope = 1.0f - 100.0f / (_parameters[Ratio].end > 100.0f ? _parameters[Ratio].end : 100.0f);
+						const f32 knee = _parameters[Knee].end;
 						const f32 chunkSeconds = static_cast<f32>(CHUNK_FRAMES) / _rate;
-						const f32 attack = OnePole(_parameters[ATTACK].end * 0.001f / chunkSeconds, 1.0f);
-						const f32 release = OnePole(_parameters[RELEASE].end * 0.001f / chunkSeconds, 1.0f);
-						const f32 makeUp = DecibelsToGain(_parameters[MAKE_UP].end);
+						const f32 attack = OnePole(_parameters[Attack].end * 0.001f / chunkSeconds, 1.0f);
+						const f32 release = OnePole(_parameters[Release].end * 0.001f / chunkSeconds, 1.0f);
+						const f32 makeUp = DecibelsToGain(_parameters[MakeUp].end);
 						const u32 keyed = sidechain ? (sidechain->channels < channels ? sidechain->channels : channels) : 0;
 
 						for (u32 from = 0; from < block.frames; from += CHUNK_FRAMES) {
@@ -137,7 +137,7 @@ namespace Shalltear {
 							}
 							_reduction += (reduction - _reduction) * (reduction > _reduction ? attack : release);
 
-							const f32 mix = _parameters[MIX].At(to - 1) * 0.01f;
+							const f32 mix = _parameters[Mix].At(to - 1) * 0.01f;
 							const f32 target = (1.0f - mix) + mix * DecibelsToGain(-_reduction) * makeUp;
 							const f32 step = (target - _gain) / static_cast<f32>(to - from);
 							for (u32 frame = from; frame < to; ++frame) {
@@ -158,13 +158,13 @@ namespace Shalltear {
 
 					bool IsQuiet() const [[clang::nonblocking]] override { return _reduction < 1e-3f; }
 				private:
-					enum : u32 { THRESHOLD = 0,
-								 RATIO,
-								 ATTACK,
-								 RELEASE,
-								 MAKE_UP,
-								 KNEE,
-								 MIX };
+					enum : u32 { Threshold = 0,
+								 Ratio,
+								 Attack,
+								 Release,
+								 MakeUp,
+								 Knee,
+								 Mix };
 					AudioRamp _parameters[7];
 					f32 _reduction = 0.0f;
 					f32 _gain = 1.0f;
@@ -184,11 +184,11 @@ namespace Shalltear {
 							parameter.Advance(block.frames);
 						}
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
-						const f32 fade = _parameters[FADE].end * 0.001f;
+						const f32 fade = _parameters[Fade].end * 0.001f;
 						const f32 rise = OnePole(fade * 0.2f, _rate);
 						const f32 forget = 1.0f - OnePole(fade, _rate);
-						const f32 lowest = _parameters[LOWEST].end;
-						const f32 ceiling = _parameters[MAXIMUM].end;
+						const f32 lowest = _parameters[Lowest].end;
+						const f32 ceiling = _parameters[Maximum].end;
 						for (u32 frame = 0; frame < block.frames; ++frame) {
 							const f32 peak = LoudestOfFrame(block, channels, frame);
 							_peak = peak > _peak * forget ? peak : _peak * forget;
@@ -209,15 +209,15 @@ namespace Shalltear {
 					}
 
 					bool IsQuiet() const [[clang::nonblocking]] override {
-						const f32 lowest = _parameters[LOWEST].end;
-						const f32 ceiling = _parameters[MAXIMUM].end;
+						const f32 lowest = _parameters[Lowest].end;
+						const f32 ceiling = _parameters[Maximum].end;
 						const f32 rest = lowest > 0.0f ? (1.0f / lowest < ceiling ? 1.0f / lowest : ceiling) : ceiling;
 						return _peak <= (lowest > QUIET_LEVEL ? lowest : QUIET_LEVEL) && Abs(_gain - rest) <= rest * 1e-3f;
 					}
 				private:
-					enum : u32 { FADE = 0,
-								 LOWEST,
-								 MAXIMUM };
+					enum : u32 { Fade = 0,
+								 Lowest,
+								 Maximum };
 					AudioRamp _parameters[3];
 					f32 _peak = 0.0f;
 					f32 _gain = 1.0f;
@@ -252,10 +252,10 @@ namespace Shalltear {
 					AudioRamp _amount;
 				};
 
-				BuiltinDefinition<Compressor> _compressor(COMPRESSOR);
-				BuiltinDefinition<DuckVolume> _duckVolume(DUCK_VOLUME);
-				BuiltinDefinition<Normalize> _normalize(NORMALIZE);
-				BuiltinDefinition<Distortion> _distortion(DISTORTION);
+				BuiltinDefinition<Compressor> _compressor(CompressorParameters);
+				BuiltinDefinition<DuckVolume> _duckVolume(DuckVolumeParameters);
+				BuiltinDefinition<Normalize> _normalize(NormalizeParameters);
+				BuiltinDefinition<Distortion> _distortion(DistortionParameters);
 
 			} // anonymous namespace
 

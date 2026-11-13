@@ -829,7 +829,7 @@ TEST(FBXMaterialTest, LossyMappingReportedOnce) {
 	auto sink = std::make_shared<FBXCapturingSink>();
 	LogManager::AddSink(sink);
 
-	constexpr std::string_view REPORT = "the metallic-roughness mapping drops";
+	constexpr std::string_view Report = "the metallic-roughness mapping drops";
 
 	DrainLog(*sink, "before-shared");
 	sink->Clear();
@@ -837,7 +837,7 @@ TEST(FBXMaterialTest, LossyMappingReportedOnce) {
 	ASSERT_TRUE(shared.success) << shared.error;
 	EXPECT_EQ(shared.materials.size(), 2u);
 	DrainLog(*sink, "after-shared");
-	EXPECT_EQ(sink->CountMatching(REPORT), 1u);
+	EXPECT_EQ(sink->CountMatching(Report), 1u);
 	EXPECT_EQ(sink->CountMatching("maya_shared_textures_7500_binary.fbx"), 1u);
 	EXPECT_EQ(sink->CountMatching("1 of 2 material(s)"), 1u);
 
@@ -847,14 +847,14 @@ TEST(FBXMaterialTest, LossyMappingReportedOnce) {
 	ASSERT_TRUE(blob.success) << blob.error;
 	EXPECT_EQ(blob.materials.size(), 7u);
 	DrainLog(*sink, "after-blob");
-	EXPECT_EQ(sink->CountMatching(REPORT), 0u);
+	EXPECT_EQ(sink->CountMatching(Report), 0u);
 
 	DrainLog(*sink, "before-quiet");
 	sink->Clear();
 	ModelParseResult quiet = ParseFBX(CorpusFile("blender_279_default_7400_binary.fbx"));
 	ASSERT_TRUE(quiet.success) << quiet.error;
 	DrainLog(*sink, "after-quiet");
-	EXPECT_EQ(sink->CountMatching(REPORT), 0u);
+	EXPECT_EQ(sink->CountMatching(Report), 0u);
 
 	LogManager::Terminate();
 	LogManager::RemoveAllSinks();
@@ -902,7 +902,7 @@ TEST(FBXGeometryPreconditionTest, TrianglelessMeshWarns) {
 	auto sink = std::make_shared<FBXCapturingSink>();
 	LogManager::AddSink(sink);
 
-	constexpr std::string_view REPORT = "no triangles reach this import";
+	constexpr std::string_view Report = "no triangles reach this import";
 
 	DrainLog(*sink, "before-edges");
 	sink->Clear();
@@ -910,7 +910,7 @@ TEST(FBXGeometryPreconditionTest, TrianglelessMeshWarns) {
 	ASSERT_TRUE(edges.success) << edges.error;
 	ASSERT_FALSE(edges.meshes.empty());
 	DrainLog(*sink, "after-edges");
-	EXPECT_EQ(sink->CountMatching(REPORT), 1u);
+	EXPECT_EQ(sink->CountMatching(Report), 1u);
 	EXPECT_EQ(sink->CountMatching("blender_279_edge_vertex_7400_binary.fbx"), 1u);
 
 	DrainLog(*sink, "before-bones");
@@ -919,7 +919,7 @@ TEST(FBXGeometryPreconditionTest, TrianglelessMeshWarns) {
 	ASSERT_TRUE(bones.success) << bones.error;
 	ASSERT_TRUE(bones.meshes.empty());
 	DrainLog(*sink, "after-bones");
-	EXPECT_EQ(sink->CountMatching(REPORT), 0u);
+	EXPECT_EQ(sink->CountMatching(Report), 0u);
 
 	LogManager::Terminate();
 	LogManager::RemoveAllSinks();

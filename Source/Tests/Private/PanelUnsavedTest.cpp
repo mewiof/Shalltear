@@ -98,14 +98,14 @@ namespace {
 
 		static UnsavedProbePanel* Probe(Handle<EditorPanel> panel) { return static_cast<UnsavedProbePanel*>(panel.Get()); }
 
-		UI::Context& Ui() { return *UISystem::GetContext(_main); }
+		UI::Context& UI() { return *UISystem::GetContext(_main); }
 
 		bool Answer(std::string_view label) {
-			UI::ElementHandle button = FindByText(Ui(), Ui().GetRoot(), label);
-			if (!Ui().IsAlive(button)) {
+			UI::ElementHandle button = FindByText(UI(), UI().GetRoot(), label);
+			if (!UI().IsAlive(button)) {
 				return false;
 			}
-			ClickElement(Ui(), button);
+			ClickElement(UI(), button);
 			Frame();
 			return true;
 		}
@@ -119,7 +119,7 @@ TEST_F(PanelUnsavedFixture, ACleanPanelClosesWithoutAsking) {
 	PanelManager::CloseByDockId(panel->GetDockId());
 	Frame();
 	EXPECT_EQ(PanelManager::GetOpenPanelCount(), 0u);
-	EXPECT_FALSE(Ui().IsAlive(FindByText(Ui(), Ui().GetRoot(), "Discard")));
+	EXPECT_FALSE(UI().IsAlive(FindByText(UI(), UI().GetRoot(), "Discard")));
 }
 
 TEST_F(PanelUnsavedFixture, UnsavedPanelAsks) {
@@ -162,28 +162,28 @@ TEST_F(PanelUnsavedFixture, SaveThatFailsKeepsPanelOpen) {
 
 TEST_F(PanelUnsavedFixture, TheTabCarriesTheUnsavedMark) {
 	Handle<EditorPanel> panel = Open();
-	ASSERT_TRUE(Ui().IsAlive(FindByText(Ui(), Ui().GetRoot(), "Unsaved Probe")));
+	ASSERT_TRUE(UI().IsAlive(FindByText(UI(), UI().GetRoot(), "Unsaved Probe")));
 
 	Probe(panel)->unsaved = true;
 	Frame();
-	EXPECT_TRUE(Ui().IsAlive(FindByText(Ui(), Ui().GetRoot(), "Unsaved Probe*")));
+	EXPECT_TRUE(UI().IsAlive(FindByText(UI(), UI().GetRoot(), "Unsaved Probe*")));
 
 	Probe(panel)->unsaved = false;
 	Frame();
-	EXPECT_TRUE(Ui().IsAlive(FindByText(Ui(), Ui().GetRoot(), "Unsaved Probe")));
-	EXPECT_FALSE(Ui().IsAlive(FindByText(Ui(), Ui().GetRoot(), "Unsaved Probe*")));
+	EXPECT_TRUE(UI().IsAlive(FindByText(UI(), UI().GetRoot(), "Unsaved Probe")));
+	EXPECT_FALSE(UI().IsAlive(FindByText(UI(), UI().GetRoot(), "Unsaved Probe*")));
 }
 
 TEST_F(PanelUnsavedFixture, QuitAsksPerUnsavedPanel) {
 	u32 proceeded = 0;
-	PanelManager::ConfirmUnsavedPanelsThen(Ui(), [&proceeded]() { ++proceeded; });
+	PanelManager::ConfirmUnsavedPanelsThen(UI(), [&proceeded]() { ++proceeded; });
 	EXPECT_EQ(proceeded, 1u);
 
 	Handle<EditorPanel> first = Open();
 	Handle<EditorPanel> second = Open();
 	Probe(first)->unsaved = true;
 	Probe(second)->unsaved = true;
-	PanelManager::ConfirmUnsavedPanelsThen(Ui(), [&proceeded]() { ++proceeded; });
+	PanelManager::ConfirmUnsavedPanelsThen(UI(), [&proceeded]() { ++proceeded; });
 	Frame();
 	EXPECT_EQ(proceeded, 1u);
 	ASSERT_TRUE(Answer("Save All & Continue"));
@@ -193,7 +193,7 @@ TEST_F(PanelUnsavedFixture, QuitAsksPerUnsavedPanel) {
 
 	Probe(first)->unsaved = true;
 	Probe(first)->saveFails = true;
-	PanelManager::ConfirmUnsavedPanelsThen(Ui(), [&proceeded]() { ++proceeded; });
+	PanelManager::ConfirmUnsavedPanelsThen(UI(), [&proceeded]() { ++proceeded; });
 	Frame();
 	ASSERT_TRUE(Answer("Save All & Continue"));
 	EXPECT_EQ(proceeded, 2u);

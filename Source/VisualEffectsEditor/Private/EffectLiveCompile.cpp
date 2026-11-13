@@ -23,7 +23,7 @@ namespace Shalltear::VisualEffectsEditor::EffectLiveCompiles {
 
 	namespace {
 
-		constexpr std::string_view LIVE_LEAF = "Live";
+		constexpr std::string_view LiveLeaf = "Live";
 
 		struct Entry {
 			Guid asset;
@@ -92,7 +92,7 @@ namespace Shalltear::VisualEffectsEditor::EffectLiveCompiles {
 		bool Start(Entry& entry, const GraphDocument& document, Vector<GraphDiagnostic>& diagnostics, const GraphEffectCompileOptions& options) {
 			const Path path = AssetDatabase::LookupPath(entry.asset);
 			entry.graph = path.ToString();
-			const str directory = GeneratedDirectory(FileSystem::Resolve(path), path, LIVE_LEAF);
+			const str directory = GeneratedDirectory(FileSystem::Resolve(path), path, LiveLeaf);
 			if (directory.empty()) {
 				return false;
 			}

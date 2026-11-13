@@ -40,16 +40,16 @@ namespace Shalltear::VisualEffectsEditor::EffectAssetSettings {
 				PropertyRows::MakeDisabled(context, box.box);
 			}
 		};
-		toggle("Fixed Delta Time", GRAPH_EFFECT_FIXED_DELTA_TIME, timing.fixedDeltaTime, true);
-		toggle("Exact Fixed Time", GRAPH_EFFECT_EXACT_FIXED_TIME, timing.exactFixedTime, timing.fixedDeltaTime);
-		toggle("Ignore Time Scale", GRAPH_EFFECT_IGNORE_TIME_SCALE, timing.ignoreTimeScale, true);
+		toggle("Fixed Delta Time", GraphEffectFixedDeltaTime, timing.fixedDeltaTime, true);
+		toggle("Exact Fixed Time", GraphEffectExactFixedTime, timing.exactFixedTime, timing.fixedDeltaTime);
+		toggle("Ignore Time Scale", GraphEffectIgnoreTimeScale, timing.ignoreTimeScale, true);
 
-		static constexpr std::string_view CULLING_OPTIONS[] = {"Simulate and update bounds only while visible",
-															   "Always update bounds, simulate only while visible",
-															   "Always simulate and update bounds"};
+		static constexpr std::string_view CullingOptions[] = {"Simulate and update bounds only while visible",
+															  "Always update bounds, simulate only while visible",
+															  "Always simulate and update bounds"};
 		static constexpr u32 CULLING_FLAGS[] = {GRAPH_EFFECT_CULL_DEFAULT, GRAPH_EFFECT_CULL_SIMULATION, 0};
 		UI::Widgets::DropdownDesc culling;
-		culling.items = CULLING_OPTIONS;
+		culling.items = CullingOptions;
 		culling.selected = static_cast<u32>(std::size(CULLING_FLAGS));
 		for (u32 i = 0; i < std::size(CULLING_FLAGS); ++i) {
 			culling.selected = CULLING_FLAGS[i] == timing.cullingFlags ? i : culling.selected;
@@ -96,12 +96,12 @@ namespace Shalltear::VisualEffectsEditor::EffectAssetSettings {
 				AddText(context, parent, ColorToken::WidgetTextDim, MetricToken::FontSmall, "- it uses GPU events");
 			}
 		}
-		static constexpr std::string_view INSTANCING_OPTIONS[] = {"Disabled", "Automatic batch capacity", "Custom batch capacity"};
+		static constexpr std::string_view InstancingOptions[] = {"Disabled", "Automatic batch capacity", "Custom batch capacity"};
 		static constexpr i32 INSTANCING_MODES[] = {GRAPH_EFFECT_INSTANCING_DISABLED, GRAPH_EFFECT_INSTANCING_AUTOMATIC, GRAPH_EFFECT_INSTANCING_CUSTOM};
 		const bool refused = instancing.refused != 0;
 		const i32 shown = refused ? GRAPH_EFFECT_INSTANCING_DISABLED : instancing.mode;
 		UI::Widgets::DropdownDesc mode;
-		mode.items = INSTANCING_OPTIONS;
+		mode.items = InstancingOptions;
 		mode.selected = 0;
 		for (u32 i = 0; i < std::size(INSTANCING_MODES); ++i) {
 			mode.selected = INSTANCING_MODES[i] == shown ? i : mode.selected;

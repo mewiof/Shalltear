@@ -17,7 +17,7 @@ namespace Shalltear {
 	struct GraphDocument;
 	class GraphDefinitions;
 
-	inline constexpr std::string_view GRAPH_SHADER_DOCUMENT_TYPE = "NodeShader";
+	inline constexpr std::string_view GraphShaderDocumentType = "NodeShader";
 
 	struct GraphSurfaceFunctions {
 		enum class Target : u8 {

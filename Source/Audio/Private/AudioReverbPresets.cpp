@@ -28,7 +28,7 @@ namespace Shalltear {
 				return values;
 			}
 
-			constexpr AudioReverbValues PRESETS[] = {
+			constexpr AudioReverbValues Presets[] = {
 				I3DL2(-10000, -100, 0.0f, 1.49f, 0.83f, -2602, 0.007f, 200, 0.011f, 100.0f, 100.0f, 5000.0f),
 				I3DL2(-1000, -100, 0.0f, 1.49f, 0.83f, -2602, 0.007f, 200, 0.011f, 100.0f, 100.0f, 5000.0f),
 				I3DL2(-1000, -6000, 0.0f, 0.17f, 0.10f, -1204, 0.001f, 207, 0.002f, 100.0f, 100.0f, 5000.0f),
@@ -57,7 +57,7 @@ namespace Shalltear {
 				I3DL2(-1000, -400, 0.0f, 17.23f, 0.56f, -1713, 0.020f, -613, 0.030f, 60.0f, 36.45f, 5000.0f),
 				I3DL2(-1000, -151, 0.0f, 7.56f, 0.91f, -626, 0.020f, 774, 0.030f, 50.0f, 6.25f, 5000.0f),
 			};
-			static_assert(sizeof(PRESETS) / sizeof(PRESETS[0]) == static_cast<size_t>(AudioReverbPreset::User),
+			static_assert(sizeof(Presets) / sizeof(Presets[0]) == static_cast<size_t>(AudioReverbPreset::User),
 						  "a room per preset but User, in the enum's order");
 
 			f32 Amplitude(f32 millibels) {
@@ -76,7 +76,7 @@ namespace Shalltear {
 
 		const AudioReverbValues& GetReverbPreset(AudioReverbPreset preset) {
 			const size_t index = static_cast<size_t>(preset);
-			return index < sizeof(PRESETS) / sizeof(PRESETS[0]) ? PRESETS[index] : PRESETS[0];
+			return index < sizeof(Presets) / sizeof(Presets[0]) ? Presets[index] : Presets[0];
 		}
 
 		void WriteSfxReverb(const AudioReverbValues& values, f32 dryLevel, f32* out) {

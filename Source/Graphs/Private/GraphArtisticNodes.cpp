@@ -39,11 +39,11 @@ namespace Shalltear {
 		}
 
 		GraphValueId Component(B& b, GraphValueId v, u32 i) {
-			constexpr std::string_view NAMES[] = {"x", "y", "z", "w"};
-			return GraphTypes::VectorWidth(b.TypeOf(v)) == 1 ? v : b.Swizzle(v, NAMES[i]);
+			constexpr std::string_view Names[] = {"x", "y", "z", "w"};
+			return GraphTypes::VectorWidth(b.TypeOf(v)) == 1 ? v : b.Swizzle(v, Names[i]);
 		}
 
-		GraphValueId RgbToHsv(B& b, GraphValueId in, f32 e, bool epsilonV) {
+		GraphValueId RGBToHSV(B& b, GraphValueId in, f32 e, bool epsilonV) {
 			GraphValueId p = b.Lerp(b.Construct(T::Float4, std::array{b.Swizzle(in, "zy"), Const2(b, -1.0f, 2.0f / 3.0f)}),
 									b.Construct(T::Float4, std::array{b.Swizzle(in, "yz"), Const2(b, 0.0f, -1.0f / 3.0f)}),
 									b.Binary(GraphOp::Step, b.Swizzle(in, "z"), b.Swizzle(in, "y")));
@@ -63,7 +63,7 @@ namespace Shalltear {
 			return b.Construct(T::Float3, std::array{h, s, v});
 		}
 
-		GraphValueId HsvToRgb(B& b, GraphValueId hsv) {
+		GraphValueId HSVToRGB(B& b, GraphValueId hsv) {
 			GraphValueId k = Const4(b, 1.0f, 2.0f / 3.0f, 1.0f / 3.0f, 3.0f);
 			GraphValueId p = b.Unary(GraphOp::Absolute, b.Subtract(b.Multiply(b.Unary(GraphOp::Fraction, b.Add(b.Swizzle(hsv, "xxx"), b.Swizzle(k, "xyz"))), b.Scalar(6.0f)),
 																   b.Swizzle(k, "www")));
@@ -71,7 +71,7 @@ namespace Shalltear {
 			return b.Multiply(b.Swizzle(hsv, "z"), b.Lerp(kxxx, b.Unary(GraphOp::Saturate, b.Subtract(p, kxxx)), b.Swizzle(hsv, "y")));
 		}
 
-		GraphValueId SrgbToLinear(B& b, GraphValueId in) {
+		GraphValueId sRGBToLinear(B& b, GraphValueId in) {
 			GraphValueId lo = b.Divide(in, b.Scalar(12.92f));
 			GraphValueId hi = b.Binary(GraphOp::Power, b.Maximum(b.Unary(GraphOp::Absolute, b.Divide(b.Add(in, b.Scalar(0.055f)), b.Scalar(1.055f))), b.Scalar(1.192092896e-07f)),
 									   Const3(b, 2.4f, 2.4f, 2.4f));
@@ -80,7 +80,7 @@ namespace Shalltear {
 			});
 		}
 
-		GraphValueId LinearToSrgb(B& b, GraphValueId in) {
+		GraphValueId LinearToSRGB(B& b, GraphValueId in) {
 			GraphValueId lo = b.Multiply(in, b.Scalar(12.92f));
 			GraphValueId hi = b.Subtract(b.Multiply(b.Binary(GraphOp::Power, b.Maximum(b.Unary(GraphOp::Absolute, in), b.Scalar(1.192092896e-07f)),
 															 Const3(b, 1.0f / 2.4f, 1.0f / 2.4f, 1.0f / 2.4f)),
@@ -91,13 +91,13 @@ namespace Shalltear {
 			});
 		}
 
-		constexpr GraphPortDefinition IN3[] = {{"In", P::Float3}};
-		constexpr GraphPortDefinition OUT3[] = {{"Out", P::Float3}};
-		constexpr GraphPortDefinition IN_VECTOR[] = {{"In", P::DynamicVector}};
-		constexpr GraphPortDefinition OUT_VECTOR[] = {{"Out", P::DynamicVector}};
-		constexpr GraphPortDefinition OUT1[] = {{"Out", P::Float}};
+		constexpr GraphPortDefinition In3[] = {{"In", P::Float3}};
+		constexpr GraphPortDefinition Out3[] = {{"Out", P::Float3}};
+		constexpr GraphPortDefinition InVector[] = {{"In", P::DynamicVector}};
+		constexpr GraphPortDefinition OutVector[] = {{"Out", P::DynamicVector}};
+		constexpr GraphPortDefinition Out1[] = {{"Out", P::Float}};
 
-		constexpr GraphPortDefinition CONTRAST_INPUTS[] = {{"In", P::Float3}, {"Contrast", P::Float, {1, 1, 1, 1}}};
+		constexpr GraphPortDefinition ContrastInputs[] = {{"In", P::Float3}, {"Contrast", P::Float, {1, 1, 1, 1}}};
 
 		void ContrastBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -105,21 +105,21 @@ namespace Shalltear {
 			c.outputs[0] = b.Add(b.Multiply(b.Subtract(c.In(0), midpoint), c.In(1)), midpoint);
 		}
 
-		constexpr std::string_view HUE_RANGES[] = {"Degrees", "Normalized"};
-		constexpr GraphSettingDefinition HUE_SETTINGS[] = {{"Range", S::Choice, HUE_RANGES}};
-		constexpr GraphPortDefinition HUE_INPUTS[] = {{"In", P::Float3}, {"Offset", P::Float}};
+		constexpr std::string_view HueRanges[] = {"Degrees", "Normalized"};
+		constexpr GraphSettingDefinition HueSettings[] = {{"Range", S::Choice, HueRanges}};
+		constexpr GraphPortDefinition HueInputs[] = {{"In", P::Float3}, {"Offset", P::Float}};
 
 		void HueBody(GraphBodyContext& c) {
 			B& b = c.builder;
-			GraphValueId hsv = RgbToHsv(b, c.In(0), 1e-4f, true);
+			GraphValueId hsv = RGBToHSV(b, c.In(0), 1e-4f, true);
 			GraphValueId offset = c.Setting(0) == 1 ? c.In(1) : b.Divide(c.In(1), b.Scalar(360.0f));
 			GraphValueId hue = b.Add(b.Swizzle(hsv, "x"), offset);
 			GraphValueId wrapped = b.Select(b.Binary(GraphOp::Less, hue, b.Scalar(0.0f)), b.Add(hue, b.Scalar(1.0f)),
 											b.Select(b.Binary(GraphOp::Less, b.Scalar(1.0f), hue), b.Subtract(hue, b.Scalar(1.0f)), hue));
-			c.outputs[0] = HsvToRgb(b, b.Construct(T::Float3, std::array{wrapped, b.Swizzle(hsv, "yz")}));
+			c.outputs[0] = HSVToRGB(b, b.Construct(T::Float3, std::array{wrapped, b.Swizzle(hsv, "yz")}));
 		}
 
-		constexpr GraphSettingDefinition CHANNEL_TOGGLES[] = {
+		constexpr GraphSettingDefinition ChannelToggles[] = {
 			{"Red", S::Toggle}, {"Green", S::Toggle}, {"Blue", S::Toggle}, {"Alpha", S::Toggle}};
 
 		void InvertColorsBody(GraphBodyContext& c) {
@@ -133,7 +133,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Unary(GraphOp::Absolute, b.Subtract(invert, c.In(0)));
 		}
 
-		constexpr GraphPortDefinition REPLACE_INPUTS[] = {
+		constexpr GraphPortDefinition ReplaceInputs[] = {
 			{"In", P::Float3}, {"From", P::Float3}, {"To", P::Float3}, {"Range", P::Float}, {"Fuzziness", P::Float}};
 
 		void ReplaceColorBody(GraphBodyContext& c) {
@@ -143,7 +143,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Lerp(c.In(2), c.In(0), t);
 		}
 
-		constexpr GraphPortDefinition SATURATION_INPUTS[] = {{"In", P::Float3}, {"Saturation", P::Float, {1, 1, 1, 1}}};
+		constexpr GraphPortDefinition SaturationInputs[] = {{"In", P::Float3}, {"Saturation", P::Float, {1, 1, 1, 1}}};
 
 		void SaturationBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -152,7 +152,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Add(lumas, b.Multiply(Splat3(b, c.In(1)), b.Subtract(c.In(0), lumas)));
 		}
 
-		constexpr GraphPortDefinition WHITE_BALANCE_INPUTS[] = {{"In", P::Float3}, {"Temperature", P::Float}, {"Tint", P::Float}};
+		constexpr GraphPortDefinition WhiteBalanceInputs[] = {{"In", P::Float3}, {"Temperature", P::Float}, {"Tint", P::Float}};
 
 		void WhiteBalanceBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -169,13 +169,13 @@ namespace Shalltear {
 			GraphValueId s = b.Add(b.Add(b.Multiply(b.Scalar(0.0030f), bigX), b.Multiply(b.Scalar(0.0136f), one)), b.Multiply(b.Scalar(0.9834f), bigZ));
 			GraphValueId w2 = b.Construct(T::Float3, std::array{l, m, s});
 			GraphValueId balance = b.Divide(Const3(b, 0.949237f, 1.03542f, 1.08728f), w2);
-			constexpr f32 LIN_2_LMS[] = {3.90405e-1f, 5.49941e-1f, 8.92632e-3f, 7.08416e-2f, 9.63172e-1f, 1.35775e-3f, 2.31082e-2f, 1.28021e-1f, 9.36245e-1f};
-			constexpr f32 LMS_2_LIN[] = {2.85847e+0f, -1.62879e+0f, -2.48910e-2f, -2.10182e-1f, 1.15820e+0f, 3.24281e-4f, -4.18120e-2f, -1.18169e-1f, 1.06867e+0f};
-			GraphValueId lms = b.Multiply(b.Binary(GraphOp::MatrixMultiply, b.Constant(T::Float3x3, LIN_2_LMS), c.In(0)), balance);
-			c.outputs[0] = b.Binary(GraphOp::MatrixMultiply, b.Constant(T::Float3x3, LMS_2_LIN), lms);
+			constexpr f32 LIN_TO_LMS[] = {3.90405e-1f, 5.49941e-1f, 8.92632e-3f, 7.08416e-2f, 9.63172e-1f, 1.35775e-3f, 2.31082e-2f, 1.28021e-1f, 9.36245e-1f};
+			constexpr f32 LMS_TO_LIN[] = {2.85847e+0f, -1.62879e+0f, -2.48910e-2f, -2.10182e-1f, 1.15820e+0f, 3.24281e-4f, -4.18120e-2f, -1.18169e-1f, 1.06867e+0f};
+			GraphValueId lms = b.Multiply(b.Binary(GraphOp::MatrixMultiply, b.Constant(T::Float3x3, LIN_TO_LMS), c.In(0)), balance);
+			c.outputs[0] = b.Binary(GraphOp::MatrixMultiply, b.Constant(T::Float3x3, LMS_TO_LIN), lms);
 		}
 
-		constexpr GraphSettingDefinition CHANNEL_MIXER_SETTINGS[] = {
+		constexpr GraphSettingDefinition ChannelMixerSettings[] = {
 			{"Red", S::Vector, {}, 0, {}, {1, 0, 0, 0}}, {"Green", S::Vector, {}, 0, {}, {0, 1, 0, 0}}, {"Blue", S::Vector, {}, 0, {}, {0, 0, 1, 0}}};
 
 		void ChannelMixerBody(GraphBodyContext& c) {
@@ -188,12 +188,12 @@ namespace Shalltear {
 			c.outputs[0] = b.Construct(T::Float3, rows);
 		}
 
-		constexpr std::string_view BLEND_MODES[] = {"Burn", "Darken", "Difference", "Dodge", "Divide", "Exclusion",
-													"HardLight", "HardMix", "Lighten", "LinearBurn", "LinearDodge", "LinearLight",
-													"LinearLightAddSub", "Multiply", "Negation", "Overlay", "PinLight", "Screen",
-													"SoftLight", "Subtract", "VividLight", "Overwrite"};
-		constexpr GraphSettingDefinition BLEND_SETTINGS[] = {{"Mode", S::Choice, BLEND_MODES, 15}};
-		constexpr GraphPortDefinition BLEND_INPUTS[] = {{"Base", P::DynamicVector}, {"Blend", P::DynamicVector}, {"Opacity", P::Float, {1, 1, 1, 1}}};
+		constexpr std::string_view BlendModes[] = {"Burn", "Darken", "Difference", "Dodge", "Divide", "Exclusion",
+												   "HardLight", "HardMix", "Lighten", "LinearBurn", "LinearDodge", "LinearLight",
+												   "LinearLightAddSub", "Multiply", "Negation", "Overlay", "PinLight", "Screen",
+												   "SoftLight", "Subtract", "VividLight", "Overwrite"};
+		constexpr GraphSettingDefinition BlendSettings[] = {{"Mode", S::Choice, BlendModes, 15}};
+		constexpr GraphPortDefinition BlendInputs[] = {{"Base", P::DynamicVector}, {"Blend", P::DynamicVector}, {"Opacity", P::Float, {1, 1, 1, 1}}};
 
 		void BlendBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -300,7 +300,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Lerp(base, out, c.In(2));
 		}
 
-		constexpr GraphPortDefinition DITHER_INPUTS[] = {{"In", P::DynamicVector}, {"Screen Position", P::Float2, {}, "NDCPosition"}};
+		constexpr GraphPortDefinition DitherInputs[] = {{"In", P::DynamicVector}, {"Screen Position", P::Float2, {}, "NDCPosition"}};
 
 		void DitherBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -322,9 +322,9 @@ namespace Shalltear {
 			c.outputs[0] = b.Subtract(c.In(0), threshold);
 		}
 
-		constexpr GraphPortDefinition FADE_INPUTS[] = {
+		constexpr GraphPortDefinition FadeInputs[] = {
 			{"NoiseValue", P::Float, {0.5f, 0, 0, 0}}, {"FadeValue", P::Float, {0.5f, 0, 0, 0}}, {"FadeContrast", P::Float, {1, 0, 0, 0}}};
-		constexpr GraphPortDefinition FADE_OUTPUTS[] = {{"Fade", P::Float}};
+		constexpr GraphPortDefinition FadeOutputs[] = {{"Fade", P::Float}};
 
 		void FadeTransitionBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -333,7 +333,7 @@ namespace Shalltear {
 															b.Multiply(b.Subtract(c.In(0), b.Scalar(1.0f)), contrast)));
 		}
 
-		constexpr GraphSettingDefinition CHANNEL_MASK_SETTINGS[] = {
+		constexpr GraphSettingDefinition ChannelMaskSettings[] = {
 			{"Red", S::Toggle, {}, 1}, {"Green", S::Toggle, {}, 1}, {"Blue", S::Toggle, {}, 1}, {"Alpha", S::Toggle, {}, 1}};
 
 		void ChannelMaskBody(GraphBodyContext& c) {
@@ -359,7 +359,7 @@ namespace Shalltear {
 			c.outputs[0] = PerComponent(b, width, [&](u32 i) { return (mask & (1u << i)) != 0 ? Component(b, c.In(0), i) : b.Scalar(0.0f); });
 		}
 
-		constexpr GraphPortDefinition COLOR_MASK_INPUTS[] = {{"In", P::Float3}, {"Mask Color", P::Float3}, {"Range", P::Float}, {"Fuzziness", P::Float}};
+		constexpr GraphPortDefinition ColorMaskInputs[] = {{"In", P::Float3}, {"Mask Color", P::Float3}, {"Range", P::Float}, {"Fuzziness", P::Float}};
 
 		void ColorMaskBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -367,9 +367,9 @@ namespace Shalltear {
 			c.outputs[0] = b.Unary(GraphOp::Saturate, b.Subtract(b.Scalar(1.0f), b.Divide(b.Subtract(distance, c.In(2)), b.Maximum(c.In(3), b.Scalar(1e-5f)))));
 		}
 
-		constexpr std::string_view NORMAL_BLEND_MODES[] = {"Default", "Reoriented"};
-		constexpr GraphSettingDefinition NORMAL_BLEND_SETTINGS[] = {{"Mode", S::Choice, NORMAL_BLEND_MODES}};
-		constexpr GraphPortDefinition NORMAL_BLEND_INPUTS[] = {{"A", P::Float3, {0, 0, 1, 0}}, {"B", P::Float3, {0, 0, 1, 0}}};
+		constexpr std::string_view NormalBlendModes[] = {"Default", "Reoriented"};
+		constexpr GraphSettingDefinition NormalBlendSettings[] = {{"Mode", S::Choice, NormalBlendModes}};
+		constexpr GraphPortDefinition NormalBlendInputs[] = {{"A", P::Float3, {0, 0, 1, 0}}, {"B", P::Float3, {0, 0, 1, 0}}};
 
 		void NormalBlendBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -384,9 +384,9 @@ namespace Shalltear {
 			c.outputs[0] = GraphSpaces::SafeNormalize(b, b.Construct(T::Float3, std::array{xy, z}));
 		}
 
-		constexpr std::string_view OUTPUT_SPACES[] = {"Tangent", "World"};
-		constexpr GraphSettingDefinition NORMAL_FROM_HEIGHT_SETTINGS[] = {{"Output Space", S::Choice, OUTPUT_SPACES}};
-		constexpr GraphPortDefinition NORMAL_FROM_HEIGHT_INPUTS[] = {{"In", P::Float}, {"Strength", P::Float, {0.01f, 0, 0, 0}}};
+		constexpr std::string_view OutputSpaces[] = {"Tangent", "World"};
+		constexpr GraphSettingDefinition NormalFromHeightSettings[] = {{"Output Space", S::Choice, OutputSpaces}};
+		constexpr GraphPortDefinition NormalFromHeightInputs[] = {{"In", P::Float}, {"Strength", P::Float, {0.01f, 0, 0, 0}}};
 
 		// fragment only (takes derivatives)
 		void NormalFromHeightBody(GraphBodyContext& c) {
@@ -410,7 +410,7 @@ namespace Shalltear {
 			c.outputs[0] = c.Setting(0) == 0 ? GraphSpaces::Transform(c, out, GraphSpace::World, GraphSpace::Tangent, GraphConversion::Normal, true) : out;
 		}
 
-		constexpr GraphPortDefinition NORMAL_FROM_TEXTURE_INPUTS[] = {
+		constexpr GraphPortDefinition NormalFromTextureInputs[] = {
 			{"Texture", P::Texture2D}, {"UV", P::Float2, {}, "UV0"}, {"Offset", P::Float, {0.5f, 0, 0, 0}}, {"Strength", P::Float, {8, 0, 0, 0}}};
 
 		void NormalFromTextureBody(GraphBodyContext& c) {
@@ -432,7 +432,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Unary(GraphOp::Normalize, b.Binary(GraphOp::Cross, va, vb));
 		}
 
-		constexpr GraphPortDefinition NORMAL_RECONSTRUCT_INPUTS[] = {{"In", P::Float2}};
+		constexpr GraphPortDefinition NormalReconstructInputs[] = {{"In", P::Float2}};
 
 		void NormalReconstructZBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -440,7 +440,7 @@ namespace Shalltear {
 			c.outputs[0] = b.Unary(GraphOp::Normalize, b.Construct(T::Float3, std::array{c.In(0), z}));
 		}
 
-		constexpr GraphPortDefinition NORMAL_STRENGTH_INPUTS[] = {{"In", P::Float3, {0, 0, 1, 0}}, {"Strength", P::Float, {1, 0, 0, 0}}};
+		constexpr GraphPortDefinition NormalStrengthInputs[] = {{"In", P::Float3, {0, 0, 1, 0}}, {"Strength", P::Float, {1, 0, 0, 0}}};
 
 		void NormalStrengthBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -449,9 +449,9 @@ namespace Shalltear {
 			c.outputs[0] = b.Construct(T::Float3, std::array{xy, z});
 		}
 
-		constexpr std::string_view NORMAL_MAP_SPACES[] = {"Tangent", "Object"};
-		constexpr GraphSettingDefinition NORMAL_UNPACK_SETTINGS[] = {{"Space", S::Choice, NORMAL_MAP_SPACES}};
-		constexpr GraphPortDefinition NORMAL_UNPACK_INPUTS[] = {{"In", P::Float4}};
+		constexpr std::string_view NormalMapSpaces[] = {"Tangent", "Object"};
+		constexpr GraphSettingDefinition NormalUnpackSettings[] = {{"Space", S::Choice, NormalMapSpaces}};
+		constexpr GraphPortDefinition NormalUnpackInputs[] = {{"In", P::Float4}};
 
 		void NormalUnpackBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -464,8 +464,8 @@ namespace Shalltear {
 			c.outputs[0] = b.Construct(T::Float3, std::array{xy, z});
 		}
 
-		constexpr std::string_view COLORSPACES[] = {"RGB", "Linear", "HSV"};
-		constexpr GraphSettingDefinition COLORSPACE_SETTINGS[] = {{"From", S::Choice, COLORSPACES}, {"To", S::Choice, COLORSPACES}};
+		constexpr std::string_view ColorSpaces[] = {"RGB", "Linear", "HSV"};
+		constexpr GraphSettingDefinition ColorspaceSettings[] = {{"From", S::Choice, ColorSpaces}, {"To", S::Choice, ColorSpaces}};
 
 		void ColorspaceConversionBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -474,50 +474,50 @@ namespace Shalltear {
 			const u32 to = c.Setting(1);
 			GraphValueId out = in;
 			if (from == 0 && to == 1) {
-				out = SrgbToLinear(b, in);
+				out = sRGBToLinear(b, in);
 			} else if (from == 0 && to == 2) {
-				out = RgbToHsv(b, in, 1e-10f, true);
+				out = RGBToHSV(b, in, 1e-10f, true);
 			} else if (from == 1 && to == 0) {
-				out = LinearToSrgb(b, in);
+				out = LinearToSRGB(b, in);
 			} else if (from == 1 && to == 2) {
-				out = RgbToHsv(b, LinearToSrgb(b, in), 1e-10f, false);
+				out = RGBToHSV(b, LinearToSRGB(b, in), 1e-10f, false);
 			} else if (from == 2 && to == 0) {
-				out = HsvToRgb(b, in);
+				out = HSVToRGB(b, in);
 			} else if (from == 2 && to == 1) {
-				out = SrgbToLinear(b, HsvToRgb(b, in));
+				out = sRGBToLinear(b, HSVToRGB(b, in));
 			}
 			c.outputs[0] = out;
 		}
 
-		constexpr GraphNodeDefinition ARTISTIC_DEFINITIONS[] = {
-			{"Artistic/ChannelMixer", "Channel Mixer", "Artistic/Adjustment", "", IN3, OUT3, CHANNEL_MIXER_SETTINGS, ChannelMixerBody},
-			{"Artistic/Contrast", "Contrast", "Artistic/Adjustment", "", CONTRAST_INPUTS, OUT3, {}, ContrastBody},
-			{"Artistic/Hue", "Hue", "Artistic/Adjustment", "", HUE_INPUTS, OUT3, HUE_SETTINGS, HueBody},
-			{"Artistic/InvertColors", "Invert Colors", "Artistic/Adjustment", "", IN_VECTOR, OUT_VECTOR, CHANNEL_TOGGLES, InvertColorsBody},
-			{"Artistic/ReplaceColor", "Replace Color", "Artistic/Adjustment", "", REPLACE_INPUTS, OUT3, {}, ReplaceColorBody},
-			{"Artistic/Saturation", "Saturation", "Artistic/Adjustment", "", SATURATION_INPUTS, OUT3, {}, SaturationBody},
-			{"Artistic/WhiteBalance", "White Balance", "Artistic/Adjustment", "", WHITE_BALANCE_INPUTS, OUT3, {}, WhiteBalanceBody},
+		constexpr GraphNodeDefinition ArtisticDefinitions[] = {
+			{"Artistic/ChannelMixer", "Channel Mixer", "Artistic/Adjustment", "", In3, Out3, ChannelMixerSettings, ChannelMixerBody},
+			{"Artistic/Contrast", "Contrast", "Artistic/Adjustment", "", ContrastInputs, Out3, {}, ContrastBody},
+			{"Artistic/Hue", "Hue", "Artistic/Adjustment", "", HueInputs, Out3, HueSettings, HueBody},
+			{"Artistic/InvertColors", "Invert Colors", "Artistic/Adjustment", "", InVector, OutVector, ChannelToggles, InvertColorsBody},
+			{"Artistic/ReplaceColor", "Replace Color", "Artistic/Adjustment", "", ReplaceInputs, Out3, {}, ReplaceColorBody},
+			{"Artistic/Saturation", "Saturation", "Artistic/Adjustment", "", SaturationInputs, Out3, {}, SaturationBody},
+			{"Artistic/WhiteBalance", "White Balance", "Artistic/Adjustment", "", WhiteBalanceInputs, Out3, {}, WhiteBalanceBody},
 			{"Artistic/Blend", "Blend", "Artistic/Blend",
 			 "burn darken difference dodge divide exclusion hard light hard mix linear burn linear dodge linear light multiply negate overlay pin "
 			 "light screen soft light subtract vivid light overwrite",
-			 BLEND_INPUTS, OUT_VECTOR, BLEND_SETTINGS, BlendBody},
-			{"Artistic/Dither", "Dither", "Artistic/Filter", "blue noise half tone", DITHER_INPUTS, OUT_VECTOR, {}, DitherBody},
-			{"Artistic/FadeTransition", "Fade Transition", "Artistic/Filter", "fade", FADE_INPUTS, FADE_OUTPUTS, {}, FadeTransitionBody},
-			{"Artistic/ChannelMask", "Channel Mask", "Artistic/Mask", "component mask", IN_VECTOR, OUT_VECTOR, CHANNEL_MASK_SETTINGS, ChannelMaskBody},
-			{"Artistic/ColorMask", "Color Mask", "Artistic/Mask", "", COLOR_MASK_INPUTS, OUT1, {}, ColorMaskBody},
-			{"Artistic/NormalBlend", "Normal Blend", "Artistic/Normal", "", NORMAL_BLEND_INPUTS, OUT3, NORMAL_BLEND_SETTINGS, NormalBlendBody},
-			{"Artistic/NormalFromHeight", "Normal From Height", "Artistic/Normal", "convert to normal bump map", NORMAL_FROM_HEIGHT_INPUTS, OUT3,
-			 NORMAL_FROM_HEIGHT_SETTINGS, NormalFromHeightBody},
-			{"Artistic/NormalFromTexture", "Normal From Texture", "Artistic/Normal", "convert to normal bump map", NORMAL_FROM_TEXTURE_INPUTS, OUT3, {}, NormalFromTextureBody},
-			{"Artistic/NormalReconstructZ", "Normal Reconstruct Z", "Artistic/Normal", "derive z", NORMAL_RECONSTRUCT_INPUTS, OUT3, {}, NormalReconstructZBody},
-			{"Artistic/NormalStrength", "Normal Strength", "Artistic/Normal", "intensity", NORMAL_STRENGTH_INPUTS, OUT3, {}, NormalStrengthBody},
-			{"Artistic/NormalUnpack", "Normal Unpack", "Artistic/Normal", "", NORMAL_UNPACK_INPUTS, OUT3, NORMAL_UNPACK_SETTINGS, NormalUnpackBody},
-			{"Artistic/ColorspaceConversion", "Colorspace Conversion", "Artistic/Utility", "", IN3, OUT3, COLORSPACE_SETTINGS,
+			 BlendInputs, OutVector, BlendSettings, BlendBody},
+			{"Artistic/Dither", "Dither", "Artistic/Filter", "blue noise half tone", DitherInputs, OutVector, {}, DitherBody},
+			{"Artistic/FadeTransition", "Fade Transition", "Artistic/Filter", "fade", FadeInputs, FadeOutputs, {}, FadeTransitionBody},
+			{"Artistic/ChannelMask", "Channel Mask", "Artistic/Mask", "component mask", InVector, OutVector, ChannelMaskSettings, ChannelMaskBody},
+			{"Artistic/ColorMask", "Color Mask", "Artistic/Mask", "", ColorMaskInputs, Out1, {}, ColorMaskBody},
+			{"Artistic/NormalBlend", "Normal Blend", "Artistic/Normal", "", NormalBlendInputs, Out3, NormalBlendSettings, NormalBlendBody},
+			{"Artistic/NormalFromHeight", "Normal From Height", "Artistic/Normal", "convert to normal bump map", NormalFromHeightInputs, Out3,
+			 NormalFromHeightSettings, NormalFromHeightBody},
+			{"Artistic/NormalFromTexture", "Normal From Texture", "Artistic/Normal", "convert to normal bump map", NormalFromTextureInputs, Out3, {}, NormalFromTextureBody},
+			{"Artistic/NormalReconstructZ", "Normal Reconstruct Z", "Artistic/Normal", "derive z", NormalReconstructInputs, Out3, {}, NormalReconstructZBody},
+			{"Artistic/NormalStrength", "Normal Strength", "Artistic/Normal", "intensity", NormalStrengthInputs, Out3, {}, NormalStrengthBody},
+			{"Artistic/NormalUnpack", "Normal Unpack", "Artistic/Normal", "", NormalUnpackInputs, Out3, NormalUnpackSettings, NormalUnpackBody},
+			{"Artistic/ColorspaceConversion", "Colorspace Conversion", "Artistic/Utility", "", In3, Out3, ColorspaceSettings,
 			 ColorspaceConversionBody},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphArtisticDefinitions() { return ARTISTIC_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphArtisticDefinitions() { return ArtisticDefinitions; }
 
 } // namespace Shalltear

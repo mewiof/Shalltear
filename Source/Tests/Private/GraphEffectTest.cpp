@@ -111,14 +111,14 @@ TEST(GraphEffectTest, TheContextsCarryTheirFlowSlots) {
 		std::span<const std::string_view> slots;
 		bool output;
 	};
-	constexpr std::string_view SPAWN[] = {"Start", "Stop"};
-	constexpr std::string_view IN[] = {"In"};
+	constexpr std::string_view Spawn[] = {"Start", "Stop"};
+	constexpr std::string_view In[] = {"In"};
 	const Expected contexts[] = {
-		{GRAPH_EFFECT_EVENT, {}, true},
-		{GRAPH_EFFECT_SPAWN, SPAWN, true},
-		{GRAPH_EFFECT_INITIALIZE, IN, true},
-		{GRAPH_EFFECT_UPDATE, IN, true},
-		{GRAPH_EFFECT_OUTPUT, IN, false},
+		{GraphEffectEvent, {}, true},
+		{GraphEffectSpawn, Spawn, true},
+		{GraphEffectInitialize, In, true},
+		{GraphEffectUpdate, In, true},
+		{GraphEffectOutputDefinition, In, false},
 	};
 	for (const Expected& expected : contexts) {
 		const GraphNodeDefinition* definition = GraphNodeLibrary::Find(expected.id);
@@ -207,7 +207,7 @@ TEST(GraphEffectTest, CurveAttributePerSampleMode) {
 	EXPECT_EQ(color->name, "Multiply Color Random Constant/Particle");
 	EXPECT_EQ(names(color->inputs), "Color,Seed,Blend");
 	EXPECT_EQ(color->inputs[0].type, GraphPortType::Gradient);
-	EXPECT_FALSE(color->inputs[0].defaultJson.empty());
+	EXPECT_FALSE(color->inputs[0].defaultJSON.empty());
 	EXPECT_EQ(names(color->outputs), "color,alpha");
 
 	const GraphNodeDefinition* alpha = definitions.Find(document, context.blocks[4]);
@@ -219,7 +219,7 @@ TEST(GraphEffectTest, CurveAttributePerSampleMode) {
 	EXPECT_EQ(definitions.Find(document, context.blocks[5], &error), nullptr);
 	EXPECT_NE(error.find("Boolean"), str::npos) << error;
 
-	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE);
+	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GraphEffectAttributeFromCurve);
 	ASSERT_NE(table, nullptr);
 	const auto shown = [&](u32 block, std::string_view key) {
 		for (u32 index = 0; index < table->settings.size(); ++index) {
@@ -284,7 +284,7 @@ TEST(GraphEffectTest, BoundsCenterIsInSpacePortReads) {
 	GraphDefinitions definitions;
 	const GraphDocument fountain = Read(Fountain);
 	GraphNode initialize;
-	initialize.def = str(GRAPH_EFFECT_INITIALIZE);
+	initialize.def = str(GraphEffectInitialize);
 	const GraphNodeDefinition* definition = definitions.Find(fountain, initialize);
 	ASSERT_NE(definition, nullptr);
 	const auto space = [&](std::string_view name) {
@@ -335,9 +335,9 @@ TEST(GraphEffectTest, BoundsModeShowsPorts) {
 	const GraphDocument fountain = Read(Fountain);
 	const auto shows = [&](std::string_view mode, std::string_view port) {
 		GraphNode initialize;
-		initialize.def = str(GRAPH_EFFECT_INITIALIZE);
+		initialize.def = str(GraphEffectInitialize);
 		if (!mode.empty()) {
-			initialize.settings.push_back({str(GRAPH_EFFECT_BOUNDS_SETTING_MODE), "\"" + str(mode) + "\""});
+			initialize.settings.push_back({str(GraphEffectBoundsSettingMode), "\"" + str(mode) + "\""});
 		}
 		const GraphNodeDefinition* definition = definitions.Find(fountain, initialize);
 		for (u32 index = 0; definition && index < definition->inputs.size(); ++index) {
@@ -349,18 +349,18 @@ TEST(GraphEffectTest, BoundsModeShowsPorts) {
 		return false;
 	};
 	for (const std::string_view mode : {std::string_view(), std::string_view("Recorded")}) {
-		EXPECT_TRUE(shows(mode, GRAPH_EFFECT_BOUNDS_CENTER) && shows(mode, GRAPH_EFFECT_BOUNDS_SIZE) && shows(mode, GRAPH_EFFECT_BOUNDS_PADDING));
+		EXPECT_TRUE(shows(mode, GraphEffectBoundsCenter) && shows(mode, GraphEffectBoundsSize) && shows(mode, GraphEffectBoundsPadding));
 	}
-	EXPECT_TRUE(shows("Manual", GRAPH_EFFECT_BOUNDS_CENTER) && shows("Manual", GRAPH_EFFECT_BOUNDS_SIZE));
-	EXPECT_FALSE(shows("Manual", GRAPH_EFFECT_BOUNDS_PADDING));
-	EXPECT_FALSE(shows("Automatic", GRAPH_EFFECT_BOUNDS_CENTER) || shows("Automatic", GRAPH_EFFECT_BOUNDS_SIZE));
-	EXPECT_TRUE(shows("Automatic", GRAPH_EFFECT_BOUNDS_PADDING));
+	EXPECT_TRUE(shows("Manual", GraphEffectBoundsCenter) && shows("Manual", GraphEffectBoundsSize));
+	EXPECT_FALSE(shows("Manual", GraphEffectBoundsPadding));
+	EXPECT_FALSE(shows("Automatic", GraphEffectBoundsCenter) || shows("Automatic", GraphEffectBoundsSize));
+	EXPECT_TRUE(shows("Automatic", GraphEffectBoundsPadding));
 
-	constexpr std::string_view STORED = R"("in":{"Bounds Center":{"value":[3,3,3]},"Bounds Size":{"value":[4,4,4]},"Bounds Padding":{"value":[5,5,5]}},)";
+	constexpr std::string_view Stored = R"("in":{"Bounds Center":{"value":[3,3,3]},"Bounds Size":{"value":[4,4,4]},"Bounds Padding":{"value":[5,5,5]}},)";
 	const auto program = [&](std::string_view mode, GraphProgram& out) {
 		GraphEffect effect;
 		Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-		ASSERT_TRUE(Compile(FountainWith(std::format(R"(,"Bounds Setting Mode":"{}")", mode), STORED), effect, diagnostics))
+		ASSERT_TRUE(Compile(FountainWith(std::format(R"(,"Bounds Setting Mode":"{}")", mode), Stored), effect, diagnostics))
 			<< (diagnostics.empty() ? str() : diagnostics[0].message);
 		EXPECT_EQ(effect.systems[0].boundsMode, mode == "Recorded" ? GRAPH_EFFECT_BOUNDS_RECORDED : mode == "Manual" ? GRAPH_EFFECT_BOUNDS_MANUAL
 																													 : GRAPH_EFFECT_BOUNDS_AUTOMATIC);
@@ -485,11 +485,11 @@ TEST(GraphEffectTest, EventsStartAndStopSpawn) {
 }
 
 TEST(GraphEffectTest, EverySystemIsNamedByUsualRule) {
-	constexpr std::string_view typed[] = {"Sparks", "", "Sparks (3)", "Sparks", "", "Smoke (x)"};
-	constexpr std::string_view named[] = {"Sparks", "System", "Sparks (1)", "Sparks (2)", "System (1)", "Smoke (x)"};
+	constexpr std::string_view Typed[] = {"Sparks", "", "Sparks (3)", "Sparks", "", "Smoke (x)"};
+	constexpr std::string_view Named[] = {"Sparks", "System", "Sparks (1)", "Sparks (2)", "System (1)", "Smoke (x)"};
 	str contexts;
-	for (u32 i = 0; i < std::size(typed); ++i) {
-		const str setting = typed[i].empty() && i == 1 ? str() : std::format(R"(,"System Name":"{}")", typed[i]);
+	for (u32 i = 0; i < std::size(Typed); ++i) {
+		const str setting = Typed[i].empty() && i == 1 ? str() : std::format(R"(,"System Name":"{}")", Typed[i]);
 		contexts += std::format(R"({}{{"id":{},"def":"Context/Initialize","settings":{{"Capacity":8{}}},"blocks":[]}},
 {{"id":{},"def":"Context/OutputParticlePrimitive","flow":[[{},"In"]],"blocks":[]}})",
 								i == 0 ? "" : ",", 10 + 2 * i, setting, 11 + 2 * i, 10 + 2 * i);
@@ -498,9 +498,9 @@ TEST(GraphEffectTest, EverySystemIsNamedByUsualRule) {
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	ASSERT_TRUE(Compile(graph, effect, diagnostics)) << (diagnostics.empty() ? str() : diagnostics[0].message);
-	ASSERT_EQ(effect.systems.size(), std::size(named));
-	for (u32 i = 0; i < std::size(named); ++i) {
-		EXPECT_EQ(effect.systems[i].name, named[i]) << "system " << i << ", typed '" << typed[i] << "'";
+	ASSERT_EQ(effect.systems.size(), std::size(Named));
+	for (u32 i = 0; i < std::size(Named); ++i) {
+		EXPECT_EQ(effect.systems[i].name, Named[i]) << "system " << i << ", typed '" << Typed[i] << "'";
 	}
 }
 
@@ -722,8 +722,8 @@ TEST(GraphEffectTest, SpawnRangesAreCpuPrograms) {
 }
 
 TEST(GraphEffectTest, TheEffectsOwnNodesAreItsAlone) {
-	for (std::string_view id : {GRAPH_EFFECT_GET_ATTRIBUTE, GRAPH_EFFECT_AGE_OVER_LIFETIME, GRAPH_EFFECT_RANDOM_NUMBER, GRAPH_EFFECT_TOTAL_TIME,
-								GRAPH_EFFECT_DELTA_TIME, GRAPH_EFFECT_SET_SPAWN_EVENT, GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_SAMPLE_CURVE}) {
+	for (std::string_view id : {GraphEffectGetAttribute, GraphEffectAgeOverLifetime, GraphEffectRandomNumber, GraphEffectTotalTime,
+								GraphEffectDeltaTime, GraphEffectSetSpawnEvent, GraphEffectSpawn, GraphEffectSampleCurve}) {
 		EXPECT_TRUE(GraphEffectRules::IsEffectOnly(id)) << id;
 	}
 	EXPECT_FALSE(GraphEffectRules::IsEffectOnly("Math/Add"));
@@ -732,7 +732,7 @@ TEST(GraphEffectTest, TheEffectsOwnNodesAreItsAlone) {
 
 namespace {
 
-	str CurveJson(std::string_view pre, std::string_view post) {
+	str CurveJSON(std::string_view pre, std::string_view post) {
 		return std::format(R"({{"keys":[{{"time":0,"value":0,"outTangent":2}},{{"time":0.5,"value":1,"inTangent":-1,"outTangent":3,"broken":true}},)"
 						   R"({{"time":1,"value":0.5,"outTangentMode":"Constant"}},{{"time":2,"value":2,"inTangent":-1,"outTangent":1}}],)"
 						   R"("preWrapMode":"{}","postWrapMode":"{}"}})",
@@ -749,13 +749,13 @@ namespace {
 						   curve, time);
 	}
 
-	constexpr std::string_view WRAPS[][2] = {{"Clamp", "Clamp"}, {"Loop", "Loop"}, {"PingPong", "PingPong"}, {"Loop", "PingPong"}, {"Clamp", "Loop"}};
+	constexpr std::string_view Wraps[][2] = {{"Clamp", "Clamp"}, {"Loop", "Loop"}, {"PingPong", "PingPong"}, {"Loop", "PingPong"}, {"Clamp", "Loop"}};
 
 } // anonymous namespace
 
 TEST(GraphEffectTest, ConstantTimeCurveFolds) {
-	for (const auto& wrap : WRAPS) {
-		const str json = CurveJson(wrap[0], wrap[1]);
+	for (const auto& wrap : Wraps) {
+		const str json = CurveJSON(wrap[0], wrap[1]);
 		AnimationCurve curve;
 		str error;
 		ASSERT_TRUE(GraphCurves::Parse(json, curve, error)) << error;
@@ -776,7 +776,7 @@ TEST(GraphEffectTest, ConstantTimeCurveFolds) {
 TEST(GraphEffectTest, CurveKeyLimitEnforced) {
 	AnimationCurve curve;
 	str error;
-	ASSERT_TRUE(GraphCurves::Parse(CurveJson("Loop", "PingPong"), curve, error)) << error;
+	ASSERT_TRUE(GraphCurves::Parse(CurveJSON("Loop", "PingPong"), curve, error)) << error;
 	AnimationCurve again;
 	ASSERT_TRUE(GraphCurves::Parse(GraphCurves::Write(curve), again, error)) << error;
 	EXPECT_EQ(again, curve);
@@ -1040,8 +1040,8 @@ TEST_F(GraphEffectBlockFixture, KernelsDrawIsMachinesBitForBit) {
 }
 
 TEST(GraphEffectTest, SampledCurveInCpuProgramIsCurve) {
-	for (const auto& wrap : WRAPS) {
-		const str json = CurveJson(wrap[0], wrap[1]);
+	for (const auto& wrap : Wraps) {
+		const str json = CurveJSON(wrap[0], wrap[1]);
 		AnimationCurve curve;
 		str error;
 		ASSERT_TRUE(GraphCurves::Parse(json, curve, error)) << error;
@@ -1066,8 +1066,8 @@ TEST(GraphEffectTest, SampledCurveInCpuProgramIsCurve) {
 TEST(GraphEffectTest, SampledGradientInCpuProgramIsGradient) {
 	f32 colors[8][4] = {};
 	f32 alphas[8][2] = {};
-	str colorJson;
-	str alphaJson;
+	str colorJSON;
+	str alphaJSON;
 	for (u32 key = 0; key < 8; ++key) {
 		const f32 time = static_cast<f32>(key) / 7.0f;
 		const f32 k = static_cast<f32>(key);
@@ -1077,10 +1077,10 @@ TEST(GraphEffectTest, SampledGradientInCpuProgramIsGradient) {
 		colors[key][3] = time;
 		alphas[key][0] = 1.0f - 0.12f * k;
 		alphas[key][1] = time;
-		colorJson += std::format("{}[{},{},{},{}]", key == 0 ? "" : ",", colors[key][0], colors[key][1], colors[key][2], time);
-		alphaJson += std::format("{}[{},{}]", key == 0 ? "" : ",", alphas[key][0], time);
+		colorJSON += std::format("{}[{},{},{},{}]", key == 0 ? "" : ",", colors[key][0], colors[key][1], colors[key][2], time);
+		alphaJSON += std::format("{}[{},{}]", key == 0 ? "" : ",", alphas[key][0], time);
 	}
-	const str gradient = std::format(R"({{"alphas":[{}],"colors":[{}],"mode":"Blend"}})", alphaJson, colorJson);
+	const str gradient = std::format(R"({{"alphas":[{}],"colors":[{}],"mode":"Blend"}})", alphaJSON, colorJSON);
 	const auto expected = [&](u32 channel, f32 time) {
 		const bool alpha = channel == 3;
 		const auto value = [&](u32 key) { return alpha ? alphas[key][0] : colors[key][channel]; };
@@ -1092,7 +1092,7 @@ TEST(GraphEffectTest, SampledGradientInCpuProgramIsGradient) {
 		}
 		return out;
 	};
-	constexpr std::string_view CHANNELS[] = {"R", "G", "B", "A"};
+	constexpr std::string_view Channels[] = {"R", "G", "B", "A"};
 	for (u32 channel = 0; channel < 4; ++channel) {
 		const str graph = std::format(R"({{"_type":"EffectGraph","version":3,"nextId":100,"nodes":[
 			{{"id":20,"def":"Input/SampleGradient","in":{{"Gradient":{{"value":{}}},"Time":{{"from":[21,"totalTime"]}}}}}},
@@ -1101,7 +1101,7 @@ TEST(GraphEffectTest, SampledGradientInCpuProgramIsGradient) {
 			{{"id":1,"def":"Context/Spawn","blocks":[{{"id":2,"def":"Block/ConstantSpawnRate","in":{{"Rate":{{"from":[22,"{}"]}}}}}}]}},
 			{{"id":3,"def":"Context/Initialize","flow":[[1,"In"]],"blocks":[]}},
 			{{"id":4,"def":"Context/OutputParticlePrimitive","flow":[[3,"In"]],"blocks":[]}}]}})",
-									  gradient, CHANNELS[channel]);
+									  gradient, Channels[channel]);
 		GraphEffect effect;
 		Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 		ASSERT_TRUE(Compile(graph, effect, diagnostics)) << (diagnostics.empty() ? str() : diagnostics[0].message);
@@ -1113,16 +1113,16 @@ TEST(GraphEffectTest, SampledGradientInCpuProgramIsGradient) {
 			const f32 time = static_cast<f32>(step) / 32.0f;
 			const VisualEffectsImpl::EffectValue slots[] = {{{time, std::sin(time), std::cos(time), 0.1f}}};
 			ASSERT_TRUE(machine.Run(program, slots));
-			EXPECT_NEAR(machine.Root(program, 0).v[0], expected(channel, time), 1e-5f) << CHANNELS[channel] << " at " << time;
+			EXPECT_NEAR(machine.Root(program, 0).v[0], expected(channel, time), 1e-5f) << Channels[channel] << " at " << time;
 		}
 	}
 }
 
 namespace {
 
-	constexpr std::string_view EASE = R"({"keys":[{"time":0,"value":1},{"time":1,"value":3}]})";
+	constexpr std::string_view Ease = R"({"keys":[{"time":0,"value":1},{"time":1,"value":3}]})";
 
-	constexpr std::string_view RAMP = R"({"alphas":[[0.2,0],[1,0.5],[0.4,1]],"colors":[[0.5,0.2,0.1,0],[0,1,1,1]],"mode":"Blend"})";
+	constexpr std::string_view Ramp = R"({"alphas":[[0.2,0],[1,0.5],[0.4,1]],"colors":[[0.5,0.2,0.1,0],[0,1,1,1]],"mode":"Blend"})";
 
 	str FromCurve(u32 id, std::string_view settings, std::string_view inputs) {
 		return std::format(R"({{"id":{},"def":"Block/AttributeFromCurve","settings":{{{}}},"in":{{{}}}}})", id, settings, inputs);
@@ -1133,10 +1133,10 @@ namespace {
 TEST_F(GraphEffectBlockFixture, CurveAttributeSampleModeTimes) {
 	AnimationCurve ease;
 	str error;
-	ASSERT_TRUE(GraphCurves::Parse(EASE, ease, error)) << error;
+	ASSERT_TRUE(GraphCurves::Parse(Ease, ease, error)) << error;
 	std::array<f32, GRAPH_GRADIENT_COMPONENTS> ramp{};
-	ASSERT_TRUE(GraphGradients::Read(std::string_view(RAMP), ramp, error)) << error;
-	const str curveIn = std::format(R"("Size":{{"value":{}}})", EASE);
+	ASSERT_TRUE(GraphGradients::Read(std::string_view(Ramp), ramp, error)) << error;
+	const str curveIn = std::format(R"("Size":{{"value":{}}})", Ease);
 	const str lifetime = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[2]}}})";
 	const auto overLife = [](BlockRun& run, u32 spawn) {
 		Advance(run, 0.0f, 0.5f, {spawn});
@@ -1238,7 +1238,7 @@ TEST_F(GraphEffectBlockFixture, CurveAttributeSampleModeTimes) {
 		BlockRun run;
 		const str initialize = lifetime + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"value":[0.5,0.5,0.5]}}},
 			{"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"alpha"},"in":{"Alpha":{"value":[0.3]}}})";
-		const str update = FromCurve(13, R"("Attribute":"color","Composition":"Multiply")", std::format(R"("Color":{{"value":{}}})", RAMP));
+		const str update = FromCurve(13, R"("Attribute":"color","Composition":"Multiply")", std::format(R"("Color":{{"value":{}}})", Ramp));
 		ASSERT_TRUE(Begin(run, EffectWith("", initialize, update), "FromCurveColor"));
 		overLife(run, 4);
 		f32 first[4];
@@ -1258,7 +1258,7 @@ TEST_F(GraphEffectBlockFixture, CurveAttributeSampleModeTimes) {
 		SCOPED_TRACE("Set Color Over Life, Alpha, Uniform");
 		BlockRun run;
 		const str initialize = lifetime + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"value":[0.5,0.5,0.5]}}})";
-		const str update = FromCurve(13, R"("Attribute":"color","Color Mode":"Alpha","Mode":"Uniform")", std::format(R"("Color":{{"value":{}}})", EASE));
+		const str update = FromCurve(13, R"("Attribute":"color","Color Mode":"Alpha","Mode":"Uniform")", std::format(R"("Color":{{"value":{}}})", Ease));
 		ASSERT_TRUE(Begin(run, EffectWith("", initialize, update), "FromCurveAlpha"));
 		overLife(run, 4);
 		for (f32 value : Values(run, "alpha")) {
@@ -1284,8 +1284,8 @@ TEST_F(GraphEffectBlockFixture, CurveAttributeSampleModeTimes) {
 		SCOPED_TRACE("Set Scale and Angle Over Life");
 		BlockRun run;
 		const str flat = R"({"keys":[{"time":0,"value":7}]})";
-		const str update = FromCurve(12, R"("Attribute":"scale","Mode":"Uniform")", std::format(R"("Scale":{{"value":{}}})", EASE)) + "," +
-						   FromCurve(13, R"("Attribute":"angle")", std::format(R"("Angle_x":{{"value":{}}},"Angle_z":{{"value":{}}})", EASE, flat));
+		const str update = FromCurve(12, R"("Attribute":"scale","Mode":"Uniform")", std::format(R"("Scale":{{"value":{}}})", Ease)) + "," +
+						   FromCurve(13, R"("Attribute":"angle")", std::format(R"("Angle_x":{{"value":{}}},"Angle_z":{{"value":{}}})", Ease, flat));
 		ASSERT_TRUE(Begin(run, EffectWith("", lifetime, update), "FromCurveVector"));
 		overLife(run, 4);
 		for (u32 axis = 0; axis < 3; ++axis) {
@@ -1303,9 +1303,9 @@ TEST_F(GraphEffectBlockFixture, CurveAttributeSampleModeTimes) {
 }
 
 TEST_F(GraphEffectBlockFixture, SampledCurveInKernelIsCurve) {
-	for (const auto& wrap : WRAPS) {
+	for (const auto& wrap : Wraps) {
 		SCOPED_TRACE(std::format("{}/{}", wrap[0], wrap[1]));
-		const str json = CurveJson(wrap[0], wrap[1]);
+		const str json = CurveJSON(wrap[0], wrap[1]);
 		AnimationCurve curve;
 		str error;
 		ASSERT_TRUE(GraphCurves::Parse(json, curve, error)) << error;

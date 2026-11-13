@@ -740,11 +740,11 @@ namespace Shalltear::UI {
 			out.fontSize = Length::Pixel(hint ? hint->sizePx : parentSize);
 		}
 		if (!(declared & INHERIT_COLOR)) {
-			out.color = hint ? hint->color : (parent ? parent->color.value_or(INITIAL_TEXT_COLOR) : INITIAL_TEXT_COLOR);
+			out.color = hint ? hint->color : (parent ? parent->color.value_or(InitialTextColor) : InitialTextColor);
 		}
 		Inherit(out.fontStyle, declared, INHERIT_FONT_STYLE, parent ? &parent->fontStyle : nullptr, FontStyle::Normal);
 		Inherit(out.textOutlineWidth, declared, INHERIT_OUTLINE_WIDTH, parent ? &parent->textOutlineWidth : nullptr, 0.0f);
-		Inherit(out.textOutlineColor, declared, INHERIT_OUTLINE_COLOR, parent ? &parent->textOutlineColor : nullptr, INITIAL_OUTLINE_COLOR);
+		Inherit(out.textOutlineColor, declared, INHERIT_OUTLINE_COLOR, parent ? &parent->textOutlineColor : nullptr, InitialOutlineColor);
 		Inherit(out.letterSpacing, declared, INHERIT_LETTER_SPACING, parent ? &parent->letterSpacing : nullptr, 0.0f);
 		Inherit(out.lineHeight, declared, INHERIT_LINE_HEIGHT, parent ? &parent->lineHeight : nullptr, Length::Auto());
 		Inherit(out.fontWeight, declared, INHERIT_FONT_WEIGHT, parent ? &parent->fontWeight : nullptr, INITIAL_FONT_WEIGHT);

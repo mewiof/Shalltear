@@ -42,22 +42,22 @@ namespace {
 } // anonymous namespace
 
 TEST_F(TextureCubeShapeTest, LinearStripImportsAsCube) {
-	constexpr i32 side = 320;
-	WriteRadianceHDR(_root / "Strip.hdr", side * 6, side, [](f32, f32) { return Vec3(0.5f, 0.5f, 0.5f); });
+	constexpr i32 SIDE = 320;
+	WriteRadianceHDR(_root / "Strip.hdr", SIDE * 6, SIDE, [](f32, f32) { return Vec3(0.5f, 0.5f, 0.5f); });
 	JSONValue settings = JSONValue::MakeObject();
 	settings.AddMember("convolveIBL", JSONValue::MakeBool(false));
 	settings.AddMember("compression", JSONValue::MakeString("none"));
 	TextureAsset* texture = Import(_root / "Strip.hdr", std::move(settings));
 	ASSERT_NE(texture, nullptr);
 	EXPECT_TRUE(texture->isCube);
-	EXPECT_EQ(texture->size.x, side);
-	EXPECT_EQ(texture->size.y, side);
+	EXPECT_EQ(texture->size.x, SIDE);
+	EXPECT_EQ(texture->size.y, SIDE);
 	Delete(texture);
 }
 
 TEST_F(TextureCubeShapeTest, LdrStripStaysTexture) {
 	u8 image[96 * 16 * 4] = {};
-	TestImages::WriteTga(_root / "Sheet.tga", 96, 16, image);
+	TestImages::WriteTGA(_root / "Sheet.tga", 96, 16, image);
 	TextureAsset* texture = Import(_root / "Sheet.tga");
 	ASSERT_NE(texture, nullptr);
 	EXPECT_FALSE(texture->isCube);

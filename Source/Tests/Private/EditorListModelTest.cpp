@@ -347,8 +347,8 @@ TEST(EditorListModelTest, ShiftExtendsFromAnchor) {
 TEST(EditorListModelTest, ShiftAdoptsCursorRowAsAnchor) {
 	ListSelection list = MakeList();
 	list.ApplyClick(30, KeyMod::None);
-	constexpr u64 WITHOUT_30[] = {10, 20, 40, 50};
-	list.SetRows(WITHOUT_30);
+	constexpr u64 WITHOUT30[] = {10, 20, 40, 50};
+	list.SetRows(WITHOUT30);
 	ASSERT_EQ(list.GetCursor(), 40u);
 
 	EXPECT_TRUE(list.MoveCursor(1, KeyMod::Shift));
@@ -360,7 +360,7 @@ TEST(EditorListModelTest, KeyTableHas10Entries) {
 		Key key;
 		ListNavigation nav;
 	};
-	constexpr Entry TABLE[] = {
+	constexpr Entry Table[] = {
 		{Key::Up, ListNavigation::Prev},
 		{Key::Down, ListNavigation::Next},
 		{Key::Home, ListNavigation::First},
@@ -373,14 +373,14 @@ TEST(EditorListModelTest, KeyTableHas10Entries) {
 		{Key::KpEnter, ListNavigation::Activate},
 	};
 
-	for (const Entry& entry : TABLE) {
+	for (const Entry& entry : Table) {
 		EXPECT_EQ(TranslateKey(entry.key, KeyMod::None), entry.nav) << "key " << ToString(entry.key);
 	}
 
 	for (u16 raw = 0; raw < static_cast<u16>(Key::Count); ++raw) {
 		const Key key = static_cast<Key>(raw);
 		bool mapped = false;
-		for (const Entry& entry : TABLE) {
+		for (const Entry& entry : Table) {
 			mapped = mapped || entry.key == key;
 		}
 		if (!mapped) {

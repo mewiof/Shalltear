@@ -140,8 +140,8 @@ TEST_F(UIWidgetRegistryFixture, AttributeLiteralsAreValidatedAgainstDeclaredType
 	EXPECT_FALSE(valid(Type::Asset, "project://UI/Atlas.png#"));
 	EXPECT_FALSE(valid(Type::Asset, "#Heart"));
 
-	constexpr std::string_view sizes[] = {"small", "large"};
-	const UI::WidgetAttribute choice{"size", Type::Choice, sizes};
+	constexpr std::string_view Sizes[] = {"small", "large"};
+	const UI::WidgetAttribute choice{"size", Type::Choice, Sizes};
 	EXPECT_TRUE(UI::WidgetRegistry::IsValidLiteral(choice, "large"));
 	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(choice, "Large"));
 	EXPECT_FALSE(UI::WidgetRegistry::IsValidLiteral(choice, ""));

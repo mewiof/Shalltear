@@ -25,7 +25,7 @@ namespace Shalltear {
 	namespace {
 
 		Path GeneratedPath(const Path& sourcePath, const Path& virtualPath) {
-			Path library = FileSystem::Resolve(Path(str(GRAPH_GENERATED_DIRECTORY)));
+			Path library = FileSystem::Resolve(Path(str(GraphGeneratedDirectory)));
 			if (library.ToString().find("://") != str::npos) {
 				return {};
 			}
@@ -55,38 +55,38 @@ namespace Shalltear {
 			std::span<const std::string_view> blocks;
 		};
 
-		constexpr std::string_view LIT_BLOCKS[] = {"Block/BaseColor", "Block/NormalTS", "Block/Metallic", "Block/Roughness",
-												   "Block/Emission", "Block/Occlusion", "Block/Alpha"};
-		constexpr std::string_view UNLIT_BLOCKS[] = {"Block/BaseColor", "Block/Alpha"};
-		constexpr std::string_view SKY_BLOCKS[] = {"Block/BaseColor"};
+		constexpr std::string_view LitBlocks[] = {"Block/BaseColor", "Block/NormalTS", "Block/Metallic", "Block/Roughness",
+												  "Block/Emission", "Block/Occlusion", "Block/Alpha"};
+		constexpr std::string_view UnlitBlocks[] = {"Block/BaseColor", "Block/Alpha"};
+		constexpr std::string_view SkyBlocks[] = {"Block/BaseColor"};
 
-		constexpr GraphTemplate TEMPLATES[] = {
-			{"Node Shader/Lit", "lit", LIT_BLOCKS},
-			{"Node Shader/Unlit", "unlit", UNLIT_BLOCKS},
-			{"Node Shader/Custom Lighting", "customLighting", LIT_BLOCKS},
-			{"Node Shader/Fullscreen", "fullscreen", UNLIT_BLOCKS},
-			{"Node Shader/Sky", "sky", SKY_BLOCKS},
+		constexpr GraphTemplate Templates[] = {
+			{"Node Shader/Lit", "lit", LitBlocks},
+			{"Node Shader/Unlit", "unlit", UnlitBlocks},
+			{"Node Shader/Custom Lighting", "customLighting", LitBlocks},
+			{"Node Shader/Fullscreen", "fullscreen", UnlitBlocks},
+			{"Node Shader/Sky", "sky", SkyBlocks},
 		};
 
 	} // anonymous namespace
 
-	u32 NodeShaderImporter::GetCreateTemplateCount() const { return static_cast<u32>(std::size(TEMPLATES)); }
+	u32 NodeShaderImporter::GetCreateTemplateCount() const { return static_cast<u32>(std::size(Templates)); }
 
 	std::string_view NodeShaderImporter::GetCreateTemplateLabel(u32 index) const {
-		return index < std::size(TEMPLATES) ? TEMPLATES[index].label : std::string_view{};
+		return index < std::size(Templates) ? Templates[index].label : std::string_view{};
 	}
 
 	std::string_view NodeShaderImporter::GetCreateTemplateFileName(u32 index) const {
-		return index < std::size(TEMPLATES) ? GetCreateDefaultFileName() : std::string_view{};
+		return index < std::size(Templates) ? GetCreateDefaultFileName() : std::string_view{};
 	}
 
 	str NodeShaderImporter::TemplateDocument(u32 index) {
-		if (index >= std::size(TEMPLATES)) {
+		if (index >= std::size(Templates)) {
 			return {};
 		}
-		const GraphTemplate& chosen = TEMPLATES[index];
+		const GraphTemplate& chosen = Templates[index];
 		GraphDocument document;
-		document.type = str(GraphSurface::DOCUMENT_TYPE);
+		document.type = str(GraphSurface::DocumentType);
 		document.settings.push_back({str("target"), "\"" + str(chosen.target) + "\""});
 		GraphContext fragment;
 		fragment.node.id = document.nextId++;
@@ -152,7 +152,7 @@ namespace Shalltear {
 			return nullptr;
 		}
 		if (FileSystem::ReadTextFile(generatedPath, MemTag::Editor) != generated) {
-			FileSystem::CreateDirectory(FileSystem::Resolve(Path(str(GRAPH_GENERATED_DIRECTORY))));
+			FileSystem::CreateDirectory(FileSystem::Resolve(Path(str(GraphGeneratedDirectory))));
 			if (!FileSystem::WriteTextFile(generatedPath, generated)) {
 				SLT_LOG_ERROR("NodeShader", "'{}': couldn't write its generated shader to '{}'", graph, generatedPath.ToString());
 				return nullptr;

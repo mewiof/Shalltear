@@ -31,7 +31,7 @@ namespace Shalltear::AudioEditor {
 			const char* title;
 			f32 width;
 		};
-		constexpr Column COLUMNS[] = {
+		constexpr Column Columns[] = {
 			{"Object", 120.0f},
 			{"Asset", 120.0f},
 			{"Volume", 52.0f},
@@ -52,7 +52,7 @@ namespace Shalltear::AudioEditor {
 			{"Duration", 56.0f},
 			{"Stream", 64.0f},
 		};
-		constexpr u32 COLUMN_COUNT = static_cast<u32>(std::size(COLUMNS));
+		constexpr u32 COLUMN_COUNT = static_cast<u32>(std::size(Columns));
 
 		struct ProfilerState {
 			HashMap<u64, u32> plays{GetMemoryResource(MemTag::Audio)};
@@ -84,7 +84,7 @@ namespace Shalltear::AudioEditor {
 				return;
 			}
 			preferences->resetPlayCountOnPlay = reset;
-			Settings::NotifyChanged(PREFERENCES, "resetPlayCountOnPlay");
+			Settings::NotifyChanged(PreferencesCategory, "resetPlayCountOnPlay");
 			Settings::Save();
 		}
 
@@ -116,7 +116,7 @@ namespace Shalltear::AudioEditor {
 			style.flexDirection = UI::FlexDirection::Row;
 			style.width = UI::Length::Percent(1.0f);
 			context.SetStyle(row, style);
-			for (const Column& column : COLUMNS) {
+			for (const Column& column : Columns) {
 				UI::ElementHandle cell = Line(context, row, EditorTheme::GetMetric(MetricToken::FontSmall), color, "");
 				UI::Style cellStyle;
 				cellStyle.width = UI::Length::Pixel(column.width);
@@ -177,7 +177,7 @@ namespace Shalltear::AudioEditor {
 			context.SetStyle(table, tableStyle);
 			UI::ElementHandle header = Row(context, table, EditorTheme::GetColor(ColorToken::TextDim));
 			UI::ElementHandle cell = FirstChild(context, header);
-			for (const Column& column : COLUMNS) {
+			for (const Column& column : Columns) {
 				context.SetTextString(cell, column.title);
 				cell = NextSibling(context, cell);
 			}
@@ -284,7 +284,7 @@ namespace Shalltear::AudioEditor {
 		words.label = "Reset Play Count On Play";
 		words.tooltip = "Count the Audio profiler's plays from 0 each time Play is pressed.";
 		words.keywords = "profiler plays count reset";
-		SettingsPresentation::RegisterField(PREFERENCES, "resetPlayCountOnPlay", std::move(words), owner);
+		SettingsPresentation::RegisterField(PreferencesCategory, "resetPlayCountOnPlay", std::move(words), owner);
 	}
 
 	void ReleaseProfilerModule() {

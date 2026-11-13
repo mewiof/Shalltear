@@ -38,7 +38,7 @@ namespace Shalltear::VisualEffectsImpl {
 
 		EffectValue Key(u32 key) { return EffectValue{{std::bit_cast<f32>(key), 0.0f, 0.0f, 0.0f}}; }
 
-		constexpr std::string_view ON_PLAY = "OnPlay";
+		constexpr std::string_view OnPlay = "OnPlay";
 
 		u32 SpawnCountOf(const VisualEffectEventAttributes& attributes) {
 			Vec4 carried;
@@ -76,7 +76,7 @@ namespace Shalltear::VisualEffectsImpl {
 			Delete(system);
 		}
 		_systems.clear();
-		for (ParticleCpuSystem* cpu : _cpu) {
+		for (ParticleCPUSystem* cpu : _cpu) {
 			if (cpu) {
 				Delete(cpu);
 			}
@@ -113,7 +113,7 @@ namespace Shalltear::VisualEffectsImpl {
 		std::swap(events, _flowSent);
 	}
 
-	const ParticleCpuSystem* EffectInstance::FindCpuSystem(std::string_view name, const EffectSystem*& described) const {
+	const ParticleCPUSystem* EffectInstance::FindCPUSystem(std::string_view name, const EffectSystem*& described) const {
 		described = nullptr;
 		const VisualEffectAsset* asset = _asset.Get();
 		if (!asset || !IsBuiltFrom(*asset)) {
@@ -162,7 +162,7 @@ namespace Shalltear::VisualEffectsImpl {
 			desc.measuresBounds = compiled.measuresBounds;
 			desc.cpu = compiled.cpu;
 			if (compiled.cpu) {
-				_cpu[s] = New<ParticleCpuSystem>(MemTag::Graphics);
+				_cpu[s] = New<ParticleCPUSystem>(MemTag::Graphics);
 				if (!_cpu[s]->Build(description, s)) {
 					Release();
 					return false;
@@ -244,7 +244,7 @@ namespace Shalltear::VisualEffectsImpl {
 
 	void EffectInstance::Refeed() {
 		for (u32 s = 0; s < _systems.size(); ++s) {
-			if (const ParticleCpuSystem* cpu = _cpu[s]; cpu && _systems[s]->IsCreated()) {
+			if (const ParticleCPUSystem* cpu = _cpu[s]; cpu && _systems[s]->IsCreated()) {
 				_systems[s]->Feed(cpu->GetAlive(), cpu->GetAttributes(), cpu->GetDropped());
 			}
 		}
@@ -279,7 +279,7 @@ namespace Shalltear::VisualEffectsImpl {
 		_flowSent.clear();
 
 		for (const PendingEvent& event : _events) {
-			if (_reseedOnPlay && event.name == ON_PLAY) {
+			if (_reseedOnPlay && event.name == OnPlay) {
 				_seed = NewSeed();
 			}
 		}
@@ -335,7 +335,7 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 
 		for (u32 s = 0; s < _systems.size(); ++s) {
-			if (const ParticleCpuSystem* cpu = _cpu[s]; cpu && run > 0) {
+			if (const ParticleCPUSystem* cpu = _cpu[s]; cpu && run > 0) {
 				_systems[s]->Feed(cpu->GetAlive(), cpu->GetAttributes(), cpu->GetDropped());
 			}
 		}
@@ -485,10 +485,10 @@ namespace Shalltear::VisualEffectsImpl {
 			}
 			WriteFrame(s, system, deltaTime, localToWorld, _spawnedNow);
 			_systems[s]->Advance(deltaTime, total);
-			if (ParticleCpuSystem* cpu = _cpu[s]) {
+			if (ParticleCPUSystem* cpu = _cpu[s]) {
 				cpu->Advance(description, _frame, _slots, total, _meshViews);
 				const u32 base = static_cast<u32>(_sentValues.size());
-				for (ParticleCpuEvent event : cpu->GetEvents()) {
+				for (ParticleCPUEvent event : cpu->GetEvents()) {
 					event.values += base;
 					_sent.push_back({s, event});
 				}

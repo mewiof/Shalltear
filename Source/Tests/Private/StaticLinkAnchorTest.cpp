@@ -18,7 +18,7 @@ using namespace Shalltear;
 namespace {
 
 #define SLT_ANCHOR_NAME(TypeName) #TypeName,
-	constexpr std::array ROSTER{
+	constexpr std::array Roster{
 		SLT_SCENE_SYSTEM_ANCHORS(SLT_ANCHOR_NAME)
 			SLT_ASSET_DATABASE_ANCHORS(SLT_ANCHOR_NAME)
 				SLT_RENDER_SYSTEM_ANCHORS(SLT_ANCHOR_NAME)
@@ -31,7 +31,7 @@ namespace {
 	}
 
 	bool RosterNames(StringHash name) {
-		for (const char* entry : ROSTER) {
+		for (const char* entry : Roster) {
 			if (StringHash(entry) == name) {
 				return true;
 			}
@@ -73,7 +73,7 @@ TEST(StaticLinkAnchorTest, FactoryTypesInRoster) {
 		},
 		&sweep);
 
-	ASSERT_GE(sweep.factoryTypes, ROSTER.size());
+	ASSERT_GE(sweep.factoryTypes, Roster.size());
 
 	std::string names;
 	for (const std::string& name : sweep.unanchored) {
@@ -90,7 +90,7 @@ TEST(StaticLinkAnchorTest, RosterHasFactoryTypes) {
 	const void* coreImage = CoreImage();
 	ASSERT_NE(coreImage, nullptr);
 
-	for (const char* entry : ROSTER) {
+	for (const char* entry : Roster) {
 		const TypeInfo* type = TypeRegistry::FindType(StringHash(entry));
 		ASSERT_NE(type, nullptr) << entry;
 		EXPECT_EQ(type->ownerModule, coreImage) << entry;

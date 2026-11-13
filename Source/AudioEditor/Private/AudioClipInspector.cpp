@@ -203,12 +203,12 @@ namespace Shalltear::AudioEditor {
 				Widgets::Checkbox(context, normalize, shown.normalize, change([](AudioImportSettings& s, bool value) { s.normalize = value; }));
 			}
 
-			static constexpr std::array<std::string_view, 3> LOAD_TYPES{"Decompress On Load", "Compressed In Memory", "Streaming"};
-			AddDropdown(context, AddLabeledRow(context, parent, "Load Type"), LOAD_TYPES, static_cast<u32>(shown.loadType),
+			static constexpr std::array<std::string_view, 3> LoadTypes{"Decompress On Load", "Compressed In Memory", "Streaming"};
+			AddDropdown(context, AddLabeledRow(context, parent, "Load Type"), LoadTypes, static_cast<u32>(shown.loadType),
 						change([](AudioImportSettings& s, u32 value) { s.loadType = static_cast<AudioClipLoadType>(value); }));
 
-			static constexpr std::array<std::string_view, 3> FORMATS{"PCM", "QOA", "Opus"};
-			AddDropdown(context, AddLabeledRow(context, parent, "Compression Format"), FORMATS, static_cast<u32>(shown.compressionFormat),
+			static constexpr std::array<std::string_view, 3> Formats{"PCM", "QOA", "Opus"};
+			AddDropdown(context, AddLabeledRow(context, parent, "Compression Format"), Formats, static_cast<u32>(shown.compressionFormat),
 						change([](AudioImportSettings& s, u32 value) { s.compressionFormat = static_cast<AudioCompressionFormat>(value); }));
 
 			if (shown.compressionFormat == AudioCompressionFormat::Opus) {
@@ -228,8 +228,8 @@ namespace Shalltear::AudioEditor {
 				context.SetStyle(slider.root, grow);
 			}
 
-			static constexpr std::array<std::string_view, 3> RATE_SETTINGS{"Preserve Sample Rate", "Optimize Sample Rate", "Override Sample Rate"};
-			AddDropdown(context, AddLabeledRow(context, parent, "Sample Rate Setting"), RATE_SETTINGS, static_cast<u32>(shown.sampleRateSetting),
+			static constexpr std::array<std::string_view, 3> RateSettings{"Preserve Sample Rate", "Optimize Sample Rate", "Override Sample Rate"};
+			AddDropdown(context, AddLabeledRow(context, parent, "Sample Rate Setting"), RateSettings, static_cast<u32>(shown.sampleRateSetting),
 						change([](AudioImportSettings& s, u32 value) { s.sampleRateSetting = static_cast<AudioSampleRateSetting>(value); }));
 			if (shown.sampleRateSetting == AudioSampleRateSetting::OverrideSampleRate) {
 				const std::span<const u32> rates = AudioImpl::GetStandardSampleRates();

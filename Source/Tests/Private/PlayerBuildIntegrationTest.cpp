@@ -347,7 +347,7 @@ void PotionDrinker::OnEnable() {
 		return str((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 	}
 
-	void WriteSolidTga(const std::filesystem::path& path, u32 edge, const u8 (&rgba)[4]) {
+	void WriteSolidTGA(const std::filesystem::path& path, u32 edge, const u8 (&rgba)[4]) {
 		str bytes(18, '\0');
 		bytes[2] = 2;
 		bytes[12] = static_cast<char>(edge & 0xFF);
@@ -1683,7 +1683,7 @@ TEST_F(PlayerBuildIntegrationTest, BuiltGameShowsIcon) {
 		projectFile.SetString("Project", "name", "IconProbe");
 		ASSERT_TRUE(projectFile.Save(Path(project.generic_string() + "/Project.ini")));
 	}
-	WriteSolidTga(project / "Assets" / "Icon.tga", 256, COLOR);
+	WriteSolidTGA(project / "Assets" / "Icon.tga", 256, COLOR);
 	for (const char* name : {"Iconic", "Plain"}) {
 		BuildProfile profile;
 		profile.name = name;

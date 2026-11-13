@@ -799,7 +799,7 @@ TEST(UIPaintTest, TurnedRecordInkMatchesScreen) {
 
 namespace {
 
-	const UI::DropShadow SOFT_DROP{4.0f, 6.0f, 10.0f, Color(0.0f, 0.0f, 0.0f, 0.5f)};
+	const UI::DropShadow SoftDrop{4.0f, 6.0f, 10.0f, Color(0.0f, 0.0f, 0.0f, 0.5f)};
 
 	UI::Style CasterAt(f32 x, f32 y, f32 width, f32 height, const UI::DropShadow& drop) {
 		UI::Style style = SolidBox(width, height, Color::White());
@@ -831,7 +831,7 @@ namespace {
 
 TEST(UIPaintTest, DropShadowUnderCaster) {
 	UI::Context ctx(Desc(), nullptr);
-	MakeChild(ctx, ctx.GetRoot(), CasterAt(20.0f, 30.0f, 100.0f, 50.0f, SOFT_DROP));
+	MakeChild(ctx, ctx.GetRoot(), CasterAt(20.0f, 30.0f, 100.0f, 50.0f, SoftDrop));
 	ctx.Update();
 	UI::RenderList list;
 	ctx.BuildRenderList(list);
@@ -868,7 +868,7 @@ TEST(UIPaintTest, DropShadowUnderCaster) {
 
 TEST(UIPaintTest, ZIndexSortsInsideScope) {
 	UI::Context ctx(Desc(), nullptr);
-	UI::ElementHandle caster = MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 100.0f, 50.0f, SOFT_DROP));
+	UI::ElementHandle caster = MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 100.0f, 50.0f, SoftDrop));
 	UI::Style sunk = SolidBox(20.0f, 20.0f, Color(1.0f, 0.0f, 0.0f, 1.0f));
 	sunk.zIndex = -1;
 	MakeChild(ctx, caster, sunk);
@@ -885,8 +885,8 @@ TEST(UIPaintTest, ZIndexSortsInsideScope) {
 
 TEST(UIPaintTest, CastersGetBlurSizedSlots) {
 	UI::Context ctx(Desc(), nullptr);
-	MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 40.0f, 40.0f, SOFT_DROP));
-	UI::DropShadow hard = SOFT_DROP;
+	MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 40.0f, 40.0f, SoftDrop));
+	UI::DropShadow hard = SoftDrop;
 	hard.blur = 0.0f;
 	MakeChild(ctx, ctx.GetRoot(), CasterAt(80.0f, 10.0f, 40.0f, 40.0f, hard));
 	ctx.Update();
@@ -913,7 +913,7 @@ TEST(UIPaintTest, CastersGetBlurSizedSlots) {
 
 TEST(UIPaintTest, ATransparentDropShadowOpensNoScope) {
 	UI::Context ctx(Desc(), nullptr);
-	UI::DropShadow clear = SOFT_DROP;
+	UI::DropShadow clear = SoftDrop;
 	clear.color.a = 0.0f;
 	MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 40.0f, 40.0f, clear));
 	ctx.Update();
@@ -928,7 +928,7 @@ TEST(UIPaintTest, ATransparentDropShadowOpensNoScope) {
 
 TEST(UIPaintTest, ShadowTakesUncarriedOpacity) {
 	UI::Context ctx(Desc(), nullptr);
-	UI::DropShadow opaque = SOFT_DROP;
+	UI::DropShadow opaque = SoftDrop;
 	opaque.color.a = 1.0f;
 
 	UI::Style leafStyle = CasterAt(10.0f, 10.0f, 40.0f, 40.0f, opaque);
@@ -957,8 +957,8 @@ TEST(UIPaintTest, ShadowTakesUncarriedOpacity) {
 
 TEST(UIPaintTest, OversizedCasterCastsNothing) {
 	UI::Context ctx(Desc(3000, 200), nullptr);
-	MakeChild(ctx, ctx.GetRoot(), CasterAt(0.0f, 10.0f, 2100.0f, 40.0f, SOFT_DROP));
-	MakeChild(ctx, ctx.GetRoot(), CasterAt(2200.0f, 10.0f, 40.0f, 40.0f, SOFT_DROP));
+	MakeChild(ctx, ctx.GetRoot(), CasterAt(0.0f, 10.0f, 2100.0f, 40.0f, SoftDrop));
+	MakeChild(ctx, ctx.GetRoot(), CasterAt(2200.0f, 10.0f, 40.0f, 40.0f, SoftDrop));
 	ctx.Update();
 	UI::RenderList list;
 	ctx.BuildRenderList(list);
@@ -976,7 +976,7 @@ TEST(UIPaintTest, DropShadowScalesWithContent) {
 	UI::ContextDesc desc = Desc();
 	desc.contentScale = 2.0f;
 	UI::Context ctx(desc, nullptr);
-	MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 20.0f, 20.0f, SOFT_DROP));
+	MakeChild(ctx, ctx.GetRoot(), CasterAt(10.0f, 10.0f, 20.0f, 20.0f, SoftDrop));
 	ctx.Update();
 	UI::RenderList list;
 	ctx.BuildRenderList(list);

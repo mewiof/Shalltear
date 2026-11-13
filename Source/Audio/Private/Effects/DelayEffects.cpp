@@ -9,21 +9,21 @@ namespace Shalltear {
 
 			namespace {
 
-				constexpr AudioParameterDefinition ECHO[] = {
+				constexpr AudioParameterDefinition EchoParameters[] = {
 					{"Delay", "ms", 10.0f, 5000.0f, 500.0f},
 					{"Decay", "%", 0.0f, 100.0f, 50.0f},
 					{"Drymix", "%", 0.0f, 100.0f, 100.0f},
 					{"Wetmix", "%", 0.0f, 100.0f, 100.0f},
 				};
 
-				constexpr AudioParameterDefinition FLANGE[] = {
+				constexpr AudioParameterDefinition FlangeParameters[] = {
 					{"Drymix", "%", 0.0f, 100.0f, 45.0f},
 					{"Wetmix", "%", 0.0f, 100.0f, 55.0f},
 					{"Depth", "", 0.01f, 1.0f, 1.0f},
 					{"Rate", "Hz", 0.1f, 20.0f, 10.0f},
 				};
 
-				constexpr AudioParameterDefinition CHORUS[] = {
+				constexpr AudioParameterDefinition ChorusParameters[] = {
 					{"Dry mix", "", 0.0f, 1.0f, 0.5f},
 					{"Wet mix tap 1", "", 0.0f, 1.0f, 0.5f},
 					{"Wet mix tap 2", "", 0.0f, 1.0f, 0.5f},
@@ -54,7 +54,7 @@ namespace Shalltear {
 				public:
 					explicit Echo(const AudioEffectContext& context) : BuiltinEffect(context) {
 						Start(_parameters, context);
-						_lines.Allocate(_channels, LineFrames(ECHO[DELAY].maximum * 0.001f, _rate));
+						_lines.Allocate(_channels, LineFrames(EchoParameters[Delay].maximum * 0.001f, _rate));
 					}
 
 					void Process(AudioBlock& block, const AudioBlock* sidechain) [[clang::nonblocking]] override {
@@ -63,10 +63,10 @@ namespace Shalltear {
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
 						const f32 framesPerMillisecond = _rate / 1000.0f;
 						for (u32 frame = 0; frame < block.frames; ++frame) {
-							const f32 delay = _parameters[DELAY].At(frame) * framesPerMillisecond;
-							const f32 decay = _parameters[DECAY].At(frame) * 0.01f;
-							const f32 dry = _parameters[DRY].At(frame) * 0.01f;
-							const f32 wet = _parameters[WET].At(frame) * 0.01f;
+							const f32 delay = _parameters[Delay].At(frame) * framesPerMillisecond;
+							const f32 decay = _parameters[Decay].At(frame) * 0.01f;
+							const f32 dry = _parameters[Dry].At(frame) * 0.01f;
+							const f32 wet = _parameters[Wet].At(frame) * 0.01f;
 							f32 loudest = 0.0f;
 							for (u32 channel = 0; channel < channels; ++channel) {
 								f32& sample = block.data[static_cast<size_t>(channel) * block.stride + frame];
@@ -89,10 +89,10 @@ namespace Shalltear {
 
 					bool IsQuiet() const [[clang::nonblocking]] override { return _silence.Covers(_lines.GetLength()); }
 				private:
-					enum : u32 { DELAY = 0,
-								 DECAY,
-								 DRY,
-								 WET };
+					enum : u32 { Delay = 0,
+								 Decay,
+								 Dry,
+								 Wet };
 					AudioRamp _parameters[4];
 					DelayLines _lines;
 					SilenceCount _silence;
@@ -111,14 +111,14 @@ namespace Shalltear {
 					void Process(AudioBlock& block, const AudioBlock* sidechain) [[clang::nonblocking]] override {
 						(void)sidechain;
 						AdvanceAll(_parameters, block.frames);
-						_lfo.SetRate(_parameters[RATE].end, _rate);
+						_lfo.SetRate(_parameters[Rate].end, _rate);
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
 						const f32 base = FLANGE_BASE_SECONDS * _rate;
 						const f32 sweep = FLANGE_SWEEP_SECONDS * _rate;
 						for (u32 frame = 0; frame < block.frames; ++frame) {
-							const f32 delay = base + sweep * _parameters[DEPTH].At(frame) * (0.5f + 0.5f * _lfo.sine);
-							const f32 dry = _parameters[DRY].At(frame) * 0.01f;
-							const f32 wet = _parameters[WET].At(frame) * 0.01f;
+							const f32 delay = base + sweep * _parameters[Depth].At(frame) * (0.5f + 0.5f * _lfo.sine);
+							const f32 dry = _parameters[Dry].At(frame) * 0.01f;
+							const f32 wet = _parameters[Wet].At(frame) * 0.01f;
 							f32 loudest = 0.0f;
 							for (u32 channel = 0; channel < channels; ++channel) {
 								f32& sample = block.data[static_cast<size_t>(channel) * block.stride + frame];
@@ -140,10 +140,10 @@ namespace Shalltear {
 
 					bool IsQuiet() const [[clang::nonblocking]] override { return _silence.Covers(_lines.GetLength()); }
 				private:
-					enum : u32 { DRY = 0,
-								 WET,
-								 DEPTH,
-								 RATE };
+					enum : u32 { Dry = 0,
+								 Wet,
+								 Depth,
+								 Rate };
 					AudioRamp _parameters[4];
 					DelayLines _lines;
 					Quadrature _lfo;
@@ -154,26 +154,26 @@ namespace Shalltear {
 				public:
 					explicit Chorus(const AudioEffectContext& context) : BuiltinEffect(context) {
 						Start(_parameters, context);
-						_lines.Allocate(_channels, LineFrames(2.0f * CHORUS[DELAY].maximum * 0.001f, _rate));
+						_lines.Allocate(_channels, LineFrames(2.0f * ChorusParameters[Delay].maximum * 0.001f, _rate));
 					}
 
 					void Process(AudioBlock& block, const AudioBlock* sidechain) [[clang::nonblocking]] override {
 						(void)sidechain;
 						AdvanceAll(_parameters, block.frames);
-						_lfo.SetRate(_parameters[RATE].end, _rate);
+						_lfo.SetRate(_parameters[Rate].end, _rate);
 						const u32 channels = block.channels < _channels ? block.channels : _channels;
 						const f32 framesPerMillisecond = _rate / 1000.0f;
 						for (u32 frame = 0; frame < block.frames; ++frame) {
-							const f32 delay = _parameters[DELAY].At(frame) * framesPerMillisecond;
-							const f32 swing = _parameters[DEPTH].At(frame) * delay;
+							const f32 delay = _parameters[Delay].At(frame) * framesPerMillisecond;
+							const f32 swing = _parameters[Depth].At(frame) * delay;
 							const f32 first = delay + swing * _lfo.sine;
 							const f32 second = delay + swing * _lfo.cosine;
 							const f32 third = delay - swing * _lfo.sine;
-							const f32 dry = _parameters[DRY].At(frame);
-							const f32 tap1 = _parameters[TAP1].At(frame);
-							const f32 tap2 = _parameters[TAP2].At(frame);
-							const f32 tap3 = _parameters[TAP3].At(frame);
-							const f32 feedback = _parameters[FEEDBACK].At(frame);
+							const f32 dry = _parameters[Dry].At(frame);
+							const f32 tap1 = _parameters[Tap1].At(frame);
+							const f32 tap2 = _parameters[Tap2].At(frame);
+							const f32 tap3 = _parameters[Tap3].At(frame);
+							const f32 feedback = _parameters[Feedback].At(frame);
 							f32 loudest = 0.0f;
 							for (u32 channel = 0; channel < channels; ++channel) {
 								f32& sample = block.data[static_cast<size_t>(channel) * block.stride + frame];
@@ -199,23 +199,23 @@ namespace Shalltear {
 
 					bool IsQuiet() const [[clang::nonblocking]] override { return _silence.Covers(_lines.GetLength()); }
 				private:
-					enum : u32 { DRY = 0,
-								 TAP1,
-								 TAP2,
-								 TAP3,
-								 DELAY,
-								 RATE,
-								 DEPTH,
-								 FEEDBACK };
+					enum : u32 { Dry = 0,
+								 Tap1,
+								 Tap2,
+								 Tap3,
+								 Delay,
+								 Rate,
+								 Depth,
+								 Feedback };
 					AudioRamp _parameters[8];
 					DelayLines _lines;
 					Quadrature _lfo;
 					SilenceCount _silence;
 				};
 
-				BuiltinDefinition<Echo> _echo(ECHO);
-				BuiltinDefinition<Flange> _flange(FLANGE);
-				BuiltinDefinition<Chorus> _chorus(CHORUS);
+				BuiltinDefinition<Echo> _echo(EchoParameters);
+				BuiltinDefinition<Flange> _flange(FlangeParameters);
+				BuiltinDefinition<Chorus> _chorus(ChorusParameters);
 
 			} // anonymous namespace
 

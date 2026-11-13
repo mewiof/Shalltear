@@ -22,7 +22,7 @@ namespace Shalltear::GradientEditor {
 		constexpr f32 MARKER_PICK = 6.0f;
 		constexpr f32 RAMP_HEIGHT = 24.0f;
 		constexpr u32 PREVIEW_BANDS = 48;
-		constexpr std::string_view MODES[] = {"Blend", "Fixed", "Perceptual Blend"};
+		constexpr std::string_view Modes[] = {"Blend", "Fixed", "Perceptual Blend"};
 
 		template <typename Key>
 		i32 Sort(Vector<Key>& keys, i32 index) {
@@ -352,7 +352,7 @@ namespace Shalltear::GradientEditor {
 		context.SetStyle(modes, rowStyle);
 		AddLabel(context, modes, "Mode");
 		UI::Widgets::DropdownDesc desc;
-		desc.items = MODES;
+		desc.items = Modes;
 		desc.selected = static_cast<u32>(gradient.mode);
 		desc.font = UISystem::GetDefaultFont();
 		desc.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);

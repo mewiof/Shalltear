@@ -15,9 +15,9 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view STACK_ORDER[] = {"Block/BaseColor", "Block/NormalTS", "Block/NormalWS", "Block/NormalOS",
-													"Block/Metallic", "Block/Roughness", "Block/Reflectance", "Block/Emission",
-													"Block/Occlusion", "Block/Alpha"};
+		constexpr std::string_view StackOrder[] = {"Block/BaseColor", "Block/NormalTS", "Block/NormalWS", "Block/NormalOS",
+												   "Block/Metallic", "Block/Roughness", "Block/Reflectance", "Block/Emission",
+												   "Block/Occlusion", "Block/Alpha"};
 
 		GraphContext* FindContext(GraphDocument& document, u32 id) {
 			for (GraphContext& context : document.contexts) {
@@ -42,7 +42,7 @@ namespace Shalltear {
 		GraphNode* FindInterpolator(GraphDocument& document, u32 id) {
 			for (GraphContext& context : document.contexts) {
 				for (GraphNode& block : context.blocks) {
-					if (block.id == id && block.def == GraphSurface::INTERPOLATOR_BLOCK) {
+					if (block.id == id && block.def == GraphSurface::InterpolatorBlock) {
 						return &block;
 					}
 				}
@@ -53,7 +53,7 @@ namespace Shalltear {
 		bool InterpolatorNamed(const GraphDocument& document, std::string_view name, u32 except) {
 			for (const GraphContext& context : document.contexts) {
 				for (const GraphNode& block : context.blocks) {
-					if (block.def == GraphSurface::INTERPOLATOR_BLOCK && block.id != except && NodeText(block, "Name") == name) {
+					if (block.def == GraphSurface::InterpolatorBlock && block.id != except && NodeText(block, "Name") == name) {
 						return true;
 					}
 				}
@@ -62,7 +62,7 @@ namespace Shalltear {
 		}
 
 		bool IsInterpolatorOption(std::string_view key, std::string_view option) {
-			const GraphNodeDefinition* definition = GraphNodeLibrary::Find(GraphSurface::INTERPOLATOR_BLOCK);
+			const GraphNodeDefinition* definition = GraphNodeLibrary::Find(GraphSurface::InterpolatorBlock);
 			if (!definition) {
 				return false;
 			}
@@ -137,7 +137,7 @@ namespace Shalltear {
 			lighting.node.y = fragment ? fragment->node.y : 0;
 			GraphNode radiance;
 			radiance.id = document.nextId++;
-			radiance.def = str(GraphSurface::RADIANCE_BLOCK_ID);
+			radiance.def = str(GraphSurface::RadianceBlockId);
 			lighting.blocks.push_back(std::move(radiance));
 			document.contexts.push_back(std::move(lighting));
 			return true;
@@ -154,17 +154,17 @@ namespace Shalltear {
 			const bool vertex = stack->node.def == "Context/Vertex";
 			if (stack->node.def == "Context/Lighting") {
 				if (stack->blocks.empty()) {
-					out.push_back(GraphSurface::RADIANCE_BLOCK_ID);
+					out.push_back(GraphSurface::RadianceBlockId);
 				}
 				return;
 			}
-			if (stack->node.def == GRAPH_SUBGRAPH_OUTPUT_CONTEXT) {
+			if (stack->node.def == GraphSubgraphOutputContext) {
 				return;
 			}
 			if (!vertex && stack->node.def != "Context/Fragment") {
 				return;
 			}
-			const std::span<const std::string_view> order = vertex ? GraphSurface::VertexBlocks() : std::span<const std::string_view>(STACK_ORDER);
+			const std::span<const std::string_view> order = vertex ? GraphSurface::VertexBlocks() : std::span<const std::string_view>(StackOrder);
 			for (std::string_view def : order) {
 				const bool held = std::any_of(stack->blocks.begin(), stack->blocks.end(), [&](const GraphNode& block) { return block.def == def; });
 				if (!held) {
@@ -172,7 +172,7 @@ namespace Shalltear {
 				}
 			}
 			if (vertex) {
-				out.push_back(GraphSurface::INTERPOLATOR_BLOCK);
+				out.push_back(GraphSurface::InterpolatorBlock);
 			}
 		}
 
@@ -183,7 +183,7 @@ namespace Shalltear {
 			}
 			const bool vertex = stack->node.def == "Context/Vertex";
 			if (stack->node.def == "Context/Lighting") {
-				if (def != GraphSurface::RADIANCE_BLOCK_ID || !stack->blocks.empty()) {
+				if (def != GraphSurface::RadianceBlockId || !stack->blocks.empty()) {
 					return 0;
 				}
 				GraphNode radiance;
@@ -192,7 +192,7 @@ namespace Shalltear {
 				stack->blocks.push_back(std::move(radiance));
 				return stack->blocks.back().id;
 			}
-			if (vertex && def == GraphSurface::INTERPOLATOR_BLOCK) {
+			if (vertex && def == GraphSurface::InterpolatorBlock) {
 				str name = "CustomInterpolator";
 				for (u32 n = 1; InterpolatorNamed(document, name, 0); ++n) {
 					name = "CustomInterpolator" + std::to_string(n);
@@ -205,7 +205,7 @@ namespace Shalltear {
 				stack->blocks.push_back(std::move(block));
 				return id;
 			}
-			const std::span<const std::string_view> order = vertex ? GraphSurface::VertexBlocks() : std::span<const std::string_view>(STACK_ORDER);
+			const std::span<const std::string_view> order = vertex ? GraphSurface::VertexBlocks() : std::span<const std::string_view>(StackOrder);
 			auto rank = [&](std::string_view of) { return static_cast<size_t>(std::find(order.begin(), order.end(), of) - order.begin()); };
 			if ((!vertex && stack->node.def != "Context/Fragment") || rank(def) >= order.size()) {
 				return 0;
@@ -238,7 +238,7 @@ namespace Shalltear {
 			out.clear();
 			for (const GraphContext& context : document.contexts) {
 				for (const GraphNode& block : context.blocks) {
-					if (block.def == GraphSurface::INTERPOLATOR_BLOCK) {
+					if (block.def == GraphSurface::InterpolatorBlock) {
 						out.push_back(block.id);
 					}
 				}
@@ -247,13 +247,13 @@ namespace Shalltear {
 
 		u32 InterpolatorOf(const GraphDocument& document, u32 node) {
 			const GraphNode* held = GraphDocumentOps::FindNode(const_cast<GraphDocument&>(document), node);
-			if (!held || held->def != INTERPOLATOR_NODE) {
+			if (!held || held->def != InterpolatorNode) {
 				return 0;
 			}
 			const str name = NodeText(*held, "Interpolator");
 			for (const GraphContext& context : document.contexts) {
 				for (const GraphNode& block : context.blocks) {
-					if (block.def == GraphSurface::INTERPOLATOR_BLOCK && NodeText(block, "Name") == name) {
+					if (block.def == GraphSurface::InterpolatorBlock && NodeText(block, "Name") == name) {
 						return block.id;
 					}
 				}
@@ -268,7 +268,7 @@ namespace Shalltear {
 			}
 			const str name = NodeText(*interpolator, "Name");
 			const str type = NodeText(*interpolator, "Type");
-			const u32 id = NodeShaderEditOps::AddNode(document, INTERPOLATOR_NODE, position);
+			const u32 id = NodeShaderEditOps::AddNode(document, InterpolatorNode, position);
 			if (id != 0) {
 				NodeShaderEditOps::SetNodeSetting(document, id, "Interpolator", NodeShaderEditOps::Quote(name));
 				if (!type.empty()) {
@@ -289,7 +289,7 @@ namespace Shalltear {
 			}
 			NodeShaderEditOps::SetNodeSetting(document, block, "Name", NodeShaderEditOps::Quote(name));
 			for (GraphNode& node : document.nodes) {
-				if (node.def == INTERPOLATOR_NODE && NodeText(node, "Interpolator") == old) {
+				if (node.def == InterpolatorNode && NodeText(node, "Interpolator") == old) {
 					NodeShaderEditOps::SetNodeSetting(document, node.id, "Interpolator", NodeShaderEditOps::Quote(name));
 				}
 			}
@@ -304,7 +304,7 @@ namespace Shalltear {
 			const str name = NodeText(*interpolator, "Name");
 			NodeShaderEditOps::SetNodeSetting(document, block, "Type", NodeShaderEditOps::Quote(type));
 			for (GraphNode& node : document.nodes) {
-				if (node.def == INTERPOLATOR_NODE && NodeText(node, "Interpolator") == name) {
+				if (node.def == InterpolatorNode && NodeText(node, "Interpolator") == name) {
 					NodeShaderEditOps::SetNodeSetting(document, node.id, "Type", NodeShaderEditOps::Quote(type));
 				}
 			}
@@ -317,7 +317,7 @@ namespace Shalltear {
 		}
 
 		void UpgradeOnOpen(GraphDocument& document) {
-			if (document.type == GraphSurface::DOCUMENT_TYPE && GraphSurface::HasVertexStage(document)) {
+			if (document.type == GraphSurface::DocumentType && GraphSurface::HasVertexStage(document)) {
 				EnsureVertexStack(document);
 			}
 		}

@@ -14,8 +14,8 @@ namespace {
 											 "}\n"
 											 "void ShalltearSurfaceFunction(ShalltearSurfaceInput input, inout ShalltearSurface surface) {}\n";
 
-	constexpr Vec2I TARGET_SIZE{128, 128};
-	const Vec3 EYE(0.0f, 2.0f, -9.0f);
+	constexpr Vec2I TargetSize{128, 128};
+	const Vec3 Eye(0.0f, 2.0f, -9.0f);
 
 	class ViewPickFixture : public MaterialReadbackFixture {
 	protected:
@@ -47,17 +47,17 @@ namespace {
 			renderer->SetMaterial(0, Handle<MaterialAsset>(material));
 			SceneSystem::EndFrame();
 
-			_target = RenderSystem::CreateViewTarget(TARGET_SIZE);
-			_desc.view = Mat4::LookAt(EYE, Vec3(1.0f, 0.5f, 0.0f));
+			_target = RenderSystem::CreateViewTarget(TargetSize);
+			_desc.view = Mat4::LookAt(Eye, Vec3(1.0f, 0.5f, 0.0f));
 			_desc.projection = Mat4::PerspectiveReverseZ(60.0f, 1.0f, 0.1f, 100.0f);
-			_desc.cameraPosition = EYE;
+			_desc.cameraPosition = Eye;
 			return cube;
 		}
 
 		Vec2I PixelOf(Vec3 world) const {
 			const Vec4 clip = (_desc.projection * _desc.view) * Vec4(world, 1.0f);
-			const f32 x = (clip.x / clip.w * 0.5f + 0.5f) * static_cast<f32>(TARGET_SIZE.x);
-			const f32 y = (0.5f - clip.y / clip.w * 0.5f) * static_cast<f32>(TARGET_SIZE.y);
+			const f32 x = (clip.x / clip.w * 0.5f + 0.5f) * static_cast<f32>(TargetSize.x);
+			const f32 y = (0.5f - clip.y / clip.w * 0.5f) * static_cast<f32>(TargetSize.y);
 			return Vec2I(static_cast<i32>(x), static_cast<i32>(y));
 		}
 

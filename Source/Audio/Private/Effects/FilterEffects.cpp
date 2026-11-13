@@ -9,16 +9,16 @@ namespace Shalltear {
 
 			namespace {
 
-				constexpr AudioParameterDefinition RESONANT[] = {
+				constexpr AudioParameterDefinition ResonantParameters[] = {
 					{"Cutoff freq", "Hz", 10.0f, 22000.0f, 5000.0f},
 					{"Resonance", "", 1.0f, 10.0f, 1.0f},
 				};
 
-				constexpr AudioParameterDefinition SIMPLE[] = {
+				constexpr AudioParameterDefinition SimpleParameters[] = {
 					{"Cutoff freq", "Hz", 10.0f, 22000.0f, 5000.0f},
 				};
 
-				constexpr AudioParameterDefinition PARAM_EQ[] = {
+				constexpr AudioParameterDefinition ParamEqParameters[] = {
 					{"Center freq", "Hz", 20.0f, 22000.0f, 8000.0f},
 					{"Octave Range", "octaves", 0.2f, 5.0f, 1.0f},
 					{"Frequency Gain", "x", 0.05f, 3.0f, 1.0f},
@@ -84,12 +84,12 @@ namespace Shalltear {
 					BiquadMemory _memory[AUDIO_MAX_CHANNELS];
 				};
 
-				template <Pass PASS>
+				template <Pass Pass>
 				class ResonantPass final : public SectionEffect<2> {
 				public:
 					using SectionEffect<2>::SectionEffect;
 				protected:
-					Biquad Design(const f32* values) const [[clang::nonblocking]] override { return MakePass(PASS, values[0], values[1], _rate); }
+					Biquad Design(const f32* values) const [[clang::nonblocking]] override { return MakePass(Pass, values[0], values[1], _rate); }
 				};
 
 				class ParamEq final : public SectionEffect<3> {
@@ -99,7 +99,7 @@ namespace Shalltear {
 					Biquad Design(const f32* values) const [[clang::nonblocking]] override { return MakePeaking(values[0], values[1], values[2], _rate); }
 				};
 
-				template <Pass PASS>
+				template <Pass Pass>
 				class SimplePass final : public BuiltinEffect {
 				public:
 					explicit SimplePass(const AudioEffectContext& context) : BuiltinEffect(context) { _cutoff.Jump(context.parameters[0]); }
@@ -111,10 +111,10 @@ namespace Shalltear {
 						for (u32 from = 0; from < block.frames; from += SEGMENT_FRAMES) {
 							const u32 to = from + SEGMENT_FRAMES < block.frames ? from + SEGMENT_FRAMES : block.frames;
 							const f32 warped = std::tan(PI * DesignFrequency(_cutoff.At(to - 1), _rate) / _rate);
-							const f32 k = warped * (PASS == Pass::Low ? 1.55377397f : 0.64359425f);
+							const f32 k = warped * (Pass == Pass::Low ? 1.55377397f : 0.64359425f);
 							const f32 feedback = (k - 1.0f) / (k + 1.0f);
-							const f32 gain = PASS == Pass::Low ? k / (k + 1.0f) : 1.0f / (k + 1.0f);
-							const f32 b1 = PASS == Pass::Low ? gain : -gain;
+							const f32 gain = Pass == Pass::Low ? k / (k + 1.0f) : 1.0f / (k + 1.0f);
+							const f32 b1 = Pass == Pass::Low ? gain : -gain;
 							for (u32 channel = 0; channel < channels; ++channel) {
 								f32* row = block.data + static_cast<size_t>(channel) * block.stride;
 								f32 first = _memory[channel][0];
@@ -151,11 +151,11 @@ namespace Shalltear {
 					f32 _memory[AUDIO_MAX_CHANNELS][2]{};
 				};
 
-				BuiltinDefinition<ResonantPass<Pass::Low>> _lowPass(RESONANT);
-				BuiltinDefinition<ResonantPass<Pass::High>> _highPass(RESONANT);
-				BuiltinDefinition<SimplePass<Pass::Low>> _lowPassSimple(SIMPLE);
-				BuiltinDefinition<SimplePass<Pass::High>> _highPassSimple(SIMPLE);
-				BuiltinDefinition<ParamEq> _paramEq(PARAM_EQ);
+				BuiltinDefinition<ResonantPass<Pass::Low>> _lowPass(ResonantParameters);
+				BuiltinDefinition<ResonantPass<Pass::High>> _highPass(ResonantParameters);
+				BuiltinDefinition<SimplePass<Pass::Low>> _lowPassSimple(SimpleParameters);
+				BuiltinDefinition<SimplePass<Pass::High>> _highPassSimple(SimpleParameters);
+				BuiltinDefinition<ParamEq> _paramEq(ParamEqParameters);
 
 			} // anonymous namespace
 

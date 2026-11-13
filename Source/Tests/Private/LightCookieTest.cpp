@@ -84,7 +84,7 @@ namespace {
 		}
 
 		TextureAsset* Cookie(const char* file, i32 width, i32 height, const std::vector<u8>& rgba, bool cube) {
-			TestImages::WriteTga(_root / file, static_cast<u16>(width), static_cast<u16>(height), rgba.data());
+			TestImages::WriteTGA(_root / file, static_cast<u16>(width), static_cast<u16>(height), rgba.data());
 			const Path path(str("project://") + file);
 			AssetDatabase::EnsureAssetIdentity(path);
 			JSONValue settings = JSONValue::MakeObject();

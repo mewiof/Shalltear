@@ -66,8 +66,8 @@ namespace {
 						   family.childFirst ? child : parent, event, family.childFirst ? parent : child);
 	}
 
-	constexpr std::string_view LIFETIME_TEN = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}})";
-	constexpr std::string_view CHILD_LIFETIME_TEN =
+	constexpr std::string_view LifetimeTen = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}})";
+	constexpr std::string_view ChildLifetimeTen =
 		R"({"id":35,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}})";
 
 	str Trigger(std::string_view mode, std::string_view port = "Count", f32 value = 1.0f, bool clampToOne = true, u32 id = 20) {
@@ -81,10 +81,10 @@ TEST(GraphEffectEventTest, GpuEventFeedsInitialize) {
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	Family family;
-	family.parentInitialize = LIFETIME_TEN;
+	family.parentInitialize = LifetimeTen;
 	const str trigger = Trigger("Always", "Count", 3.0f);
 	family.parentUpdate = trigger;
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	ASSERT_TRUE(Compiles(FamilyEffect(family), effect, diagnostics)) << First(diagnostics);
 	ASSERT_EQ(effect.systems.size(), 2u);
 	const GraphEffectSystem& parent = effect.systems[0];
@@ -114,7 +114,7 @@ TEST(GraphEffectEventTest, ParentRunsFirst) {
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	Family family;
-	family.parentInitialize = LIFETIME_TEN;
+	family.parentInitialize = LifetimeTen;
 	const str trigger = Trigger("Always");
 	family.parentUpdate = trigger;
 	family.childFirst = true;
@@ -132,7 +132,7 @@ TEST(GraphEffectEventTest, ParentStoresChildSources) {
 		return std::any_of(system.stored.begin(), system.stored.end(), [&](const GraphEffectStored& stored) { return stored.attribute == attribute; });
 	};
 	Family family;
-	const str parentInitialize = str(LIFETIME_TEN) + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"targetPosition"},"in":{"TargetPosition":{"value":[1,2,3]}}})";
+	const str parentInitialize = str(LifetimeTen) + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"targetPosition"},"in":{"TargetPosition":{"value":[1,2,3]}}})";
 	family.parentInitialize = parentInitialize;
 	const str trigger = Trigger("Always");
 	family.parentUpdate = trigger;
@@ -161,10 +161,10 @@ TEST(GraphEffectEventTest, RateAccumulatorPerParticle) {
 		const auto& stored = effect.systems[0].stored;
 		return std::any_of(stored.begin(), stored.end(), [&](const GraphEffectStored& entry) { return entry.attribute == attribute; });
 	};
-	for (const std::string_view mode : GRAPH_EFFECT_TRIGGER_MODES) {
+	for (const std::string_view mode : GraphEffectTriggerModes) {
 		SCOPED_TRACE(mode);
 		Family family;
-		family.parentInitialize = LIFETIME_TEN;
+		family.parentInitialize = LifetimeTen;
 		const bool rate = mode == "OverTime" || mode == "OverDistance";
 		const str trigger = Trigger(mode, rate ? "Rate" : "Count", 2.0f);
 		family.parentUpdate = trigger;
@@ -294,57 +294,57 @@ TEST(GraphEffectEventTest, OutputEventSendsName) {
 	EXPECT_EQ(effect.relays[0].event, "Hit");
 	EXPECT_EQ(effect.relays[0].output, "Echo");
 
-	EXPECT_TRUE(GraphEffectRules::MayFeed(GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_OUTPUT_EVENT, GRAPH_EFFECT_IN));
-	EXPECT_TRUE(GraphEffectRules::MayFeed(GRAPH_EFFECT_EVENT, GRAPH_EFFECT_OUTPUT_EVENT, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(GraphEffectRules::MayFeed(GRAPH_EFFECT_GPU_EVENT, GRAPH_EFFECT_OUTPUT_EVENT, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(GraphEffectRules::MayFeed(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_OUTPUT_EVENT, GRAPH_EFFECT_IN));
+	EXPECT_TRUE(GraphEffectRules::MayFeed(GraphEffectSpawn, GraphEffectOutputEventDefinition, GraphEffectIn));
+	EXPECT_TRUE(GraphEffectRules::MayFeed(GraphEffectEvent, GraphEffectOutputEventDefinition, GraphEffectIn));
+	EXPECT_FALSE(GraphEffectRules::MayFeed(GraphEffectGPUEvent, GraphEffectOutputEventDefinition, GraphEffectIn));
+	EXPECT_FALSE(GraphEffectRules::MayFeed(GraphEffectInitialize, GraphEffectOutputEventDefinition, GraphEffectIn));
 	GraphDocument document;
-	document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 sent = Ops::AddContext(document, GRAPH_EFFECT_EVENT, Vec2());
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT_EVENT, Vec2());
-	EXPECT_TRUE(Ops::Link(document, spawn, output, GRAPH_EFFECT_IN));
-	EXPECT_TRUE(Ops::Link(document, sent, output, GRAPH_EFFECT_IN));
+	document.type = str(GraphEffectDocumentType);
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 sent = Ops::AddContext(document, GraphEffectEvent, Vec2());
+	const u32 output = Ops::AddContext(document, GraphEffectOutputEventDefinition, Vec2());
+	EXPECT_TRUE(Ops::Link(document, spawn, output, GraphEffectIn));
+	EXPECT_TRUE(Ops::Link(document, sent, output, GraphEffectIn));
 }
 
 TEST(GraphEffectEventTest, WindowLinksAndOffersWhatCompileTakes) {
-	EXPECT_TRUE(GraphEffectRules::MayFeed(GRAPH_EFFECT_GPU_EVENT, GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(GraphEffectRules::MayFeed(GRAPH_EFFECT_GPU_EVENT, GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(GraphEffectRules::MayFeed(GRAPH_EFFECT_GPU_EVENT, GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_START));
+	EXPECT_TRUE(GraphEffectRules::MayFeed(GraphEffectGPUEvent, GraphEffectInitialize, GraphEffectIn));
+	EXPECT_FALSE(GraphEffectRules::MayFeed(GraphEffectGPUEvent, GraphEffectUpdate, GraphEffectIn));
+	EXPECT_FALSE(GraphEffectRules::MayFeed(GraphEffectGPUEvent, GraphEffectSpawn, GraphEffectStart));
 	const auto contexts = Ops::Contexts();
-	EXPECT_EQ(std::count(contexts.begin(), contexts.end(), GRAPH_EFFECT_GPU_EVENT), 1);
+	EXPECT_EQ(std::count(contexts.begin(), contexts.end(), GraphEffectGPUEvent), 1);
 
 	GraphDocument document;
-	document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 event = Ops::AddContext(document, GRAPH_EFFECT_GPU_EVENT, Vec2());
-	const u32 other = Ops::AddContext(document, GRAPH_EFFECT_GPU_EVENT, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2());
+	document.type = str(GraphEffectDocumentType);
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 event = Ops::AddContext(document, GraphEffectGPUEvent, Vec2());
+	const u32 other = Ops::AddContext(document, GraphEffectGPUEvent, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	const u32 output = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2());
 	EXPECT_TRUE(Ops::FlowOutput(document, event));
 	EXPECT_TRUE(Ops::FlowInputs(document, event).empty());
-	EXPECT_FALSE(Ops::CanLink(document, event, update, GRAPH_EFFECT_IN));
-	ASSERT_TRUE(Ops::Link(document, event, initialize, GRAPH_EFFECT_IN));
+	EXPECT_FALSE(Ops::CanLink(document, event, update, GraphEffectIn));
+	ASSERT_TRUE(Ops::Link(document, event, initialize, GraphEffectIn));
 	str why;
-	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GRAPH_EFFECT_IN, &why));
-	EXPECT_FALSE(Ops::CanLink(document, other, initialize, GRAPH_EFFECT_IN, &why));
+	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GraphEffectIn, &why));
+	EXPECT_FALSE(Ops::CanLink(document, other, initialize, GraphEffectIn, &why));
 	EXPECT_NE(why.find("GPU Event"), str::npos) << why;
-	const u32 second = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	ASSERT_TRUE(Ops::Link(document, spawn, second, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(Ops::CanLink(document, event, second, GRAPH_EFFECT_IN));
-	const u32 sent = Ops::AddContext(document, GRAPH_EFFECT_EVENT, Vec2());
-	EXPECT_TRUE(Ops::CanLink(document, sent, second, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(Ops::CanLink(document, sent, initialize, GRAPH_EFFECT_IN, &why));
+	const u32 second = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	ASSERT_TRUE(Ops::Link(document, spawn, second, GraphEffectIn));
+	EXPECT_FALSE(Ops::CanLink(document, event, second, GraphEffectIn));
+	const u32 sent = Ops::AddContext(document, GraphEffectEvent, Vec2());
+	EXPECT_TRUE(Ops::CanLink(document, sent, second, GraphEffectIn));
+	EXPECT_FALSE(Ops::CanLink(document, sent, initialize, GraphEffectIn, &why));
 	EXPECT_NE(why.find("GPU Event"), str::npos) << why;
-	const u32 third = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	ASSERT_TRUE(Ops::Link(document, sent, third, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(Ops::CanLink(document, other, third, GRAPH_EFFECT_IN));
+	const u32 third = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	ASSERT_TRUE(Ops::Link(document, sent, third, GraphEffectIn));
+	EXPECT_FALSE(Ops::CanLink(document, other, third, GraphEffectIn));
 
 	const auto triggers = [&](u32 context) {
 		Vector<Ops::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 		Ops::BlockChoices(document, context, choices);
-		return std::count_if(choices.begin(), choices.end(), [](const Ops::BlockChoice& choice) { return choice.def == GRAPH_EFFECT_TRIGGER_EVENT; });
+		return std::count_if(choices.begin(), choices.end(), [](const Ops::BlockChoice& choice) { return choice.def == GraphEffectTriggerEvent; });
 	};
 	EXPECT_EQ(triggers(initialize), 5);
 	EXPECT_EQ(triggers(update), 5);
@@ -363,8 +363,8 @@ TEST(GraphEffectEventTest, WindowLinksAndOffersWhatCompileTakes) {
 	const GraphNodeDefinition* definition = definitions.Find(document, *made);
 	ASSERT_NE(definition, nullptr);
 	EXPECT_EQ(definition->name, std::string_view("Trigger Event Over Time"));
-	EXPECT_TRUE(NodeShaderEditOps::CanConnect(document, block, GRAPH_EFFECT_EVT, event, GRAPH_EFFECT_EVT, nullptr, &definitions));
-	EXPECT_FALSE(NodeShaderEditOps::CanConnect(document, block, GRAPH_EFFECT_EVT, initialize, "Bounds Size", nullptr, &definitions));
+	EXPECT_TRUE(NodeShaderEditOps::CanConnect(document, block, GraphEffectEvt, event, GraphEffectEvt, nullptr, &definitions));
+	EXPECT_FALSE(NodeShaderEditOps::CanConnect(document, block, GraphEffectEvt, initialize, "Bounds Size", nullptr, &definitions));
 }
 
 #ifndef SHALLTEAR_SHARED
@@ -384,11 +384,11 @@ namespace {
 TEST_F(GraphEffectSystemsFixture, ChildSpawnsSameFrame) {
 	SystemsRun run;
 	Family family;
-	family.parentInitialize = LIFETIME_TEN;
+	family.parentInitialize = LifetimeTen;
 	const str trigger = Trigger("Always", "Count", 3.0f);
 	family.parentUpdate = trigger;
 	family.nodes = R"({"id":40,"def":"Attribute/GetAttribute","settings":{"Attribute":"particleId"}})";
-	const str childInitialize = str(CHILD_LIFETIME_TEN) + R"(,{"id":31,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[40,"particleId"]}}})";
+	const str childInitialize = str(ChildLifetimeTen) + R"(,{"id":31,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[40,"particleId"]}}})";
 	family.childInitialize = childInitialize;
 	if (!Begin(run, FamilyEffect(family), "Exit")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
@@ -411,10 +411,10 @@ TEST_F(GraphEffectSystemsFixture, ChildSpawnsSameFrame) {
 TEST_F(GraphEffectSystemsFixture, UpdatesRunParentFirst) {
 	SystemsRun run;
 	Family family;
-	family.parentInitialize = LIFETIME_TEN;
+	family.parentInitialize = LifetimeTen;
 	const str trigger = Trigger("Always", "Count", 3.0f);
 	family.parentUpdate = trigger;
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	if (!Begin(run, FamilyEffect(family), "Updates")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
@@ -435,9 +435,9 @@ TEST_F(GraphEffectSystemsFixture, UpdatesRunParentFirst) {
 TEST_F(GraphEffectSystemsFixture, InitializeTriggerSpawnsChild) {
 	SystemsRun run;
 	Family family;
-	const str parentInitialize = str(LIFETIME_TEN) + "," + Trigger("Always", "Count", 2.0f);
+	const str parentInitialize = str(LifetimeTen) + "," + Trigger("Always", "Count", 2.0f);
 	family.parentInitialize = parentInitialize;
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	if (!Begin(run, FamilyEffect(family), "InInitialize")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
@@ -452,11 +452,11 @@ TEST_F(GraphEffectSystemsFixture, ChildReadsTriggerSource) {
 	Family family;
 	family.nodes = R"({"id":40,"def":"Attribute/GetAttribute","settings":{"Attribute":"particleId"}},
 		{"id":41,"def":"Attribute/GetAttribute","settings":{"Attribute":"spawnCount","Location":"Source"}})";
-	const str parentInitialize = str(LIFETIME_TEN) + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[40,"particleId"]}}})";
+	const str parentInitialize = str(LifetimeTen) + R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[40,"particleId"]}}})";
 	family.parentInitialize = parentInitialize;
 	const str trigger = Trigger("Always");
 	family.parentUpdate = trigger;
-	const str childInitialize = str(CHILD_LIFETIME_TEN) + R"(,{"id":30,"def":"Block/SetAttribute","settings":{"Attribute":"position","Source":"Source"}},
+	const str childInitialize = str(ChildLifetimeTen) + R"(,{"id":30,"def":"Block/SetAttribute","settings":{"Attribute":"position","Source":"Source"}},
 		{"id":31,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[41,"spawnCount"]}}})";
 	family.childInitialize = childInitialize;
 	if (!Begin(run, FamilyEffect(family), "Source")) {
@@ -481,7 +481,7 @@ TEST_F(GraphEffectSystemsFixture, OnDieTriggersOnceWhereParentDied) {
 		{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"velocity"},"in":{"Velocity":{"value":[1,0,0]}}})";
 	const str trigger = Trigger("OnDie", "Count", 2.0f);
 	family.parentUpdate = trigger;
-	const str childInitialize = str(CHILD_LIFETIME_TEN) + R"(,{"id":30,"def":"Block/SetAttribute","settings":{"Attribute":"position","Source":"Source"}})";
+	const str childInitialize = str(ChildLifetimeTen) + R"(,{"id":30,"def":"Block/SetAttribute","settings":{"Attribute":"position","Source":"Source"}})";
 	family.childInitialize = childInitialize;
 	if (!Begin(run, FamilyEffect(family), "OnDie")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
@@ -509,10 +509,10 @@ TEST_F(GraphEffectSystemsFixture, OverTimeCarriesFraction) {
 		SCOPED_TRACE(std::format("rate {} clamped {}", c.rate, c.clamp));
 		SystemsRun run;
 		Family family;
-		family.parentInitialize = LIFETIME_TEN;
+		family.parentInitialize = LifetimeTen;
 		const str trigger = Trigger("OverTime", "Rate", c.rate, c.clamp);
 		family.parentUpdate = trigger;
-		family.childInitialize = CHILD_LIFETIME_TEN;
+		family.childInitialize = ChildLifetimeTen;
 		if (!Begin(run, FamilyEffect(family), std::format("OverTime{}{}", c.rate, c.clamp))) {
 			GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 		}
@@ -532,7 +532,7 @@ TEST_F(GraphEffectSystemsFixture, OverDistanceCountsMotion) {
 	const str parentUpdate = str(R"({"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"position","Composition":"Add"},"in":{"Position":{"value":[0,0.5,0]}}},)") +
 							 Trigger("OverDistance", "Rate", 8.0f, false);
 	family.parentUpdate = parentUpdate;
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	if (!Begin(run, FamilyEffect(family), "OverDistance")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
@@ -552,7 +552,7 @@ TEST_F(GraphEffectSystemsFixture, OnCollideFollowsCollision) {
 	const str parentUpdate = str(R"({"id":13,"def":"Block/CollisionShape","settings":{"Collision Attributes":"WritePunctualContactOnly","Shape":"Plane"}},)") +
 							 Trigger("OnCollide");
 	family.parentUpdate = parentUpdate;
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	if (!Begin(run, FamilyEffect(family), "OnCollide")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
@@ -568,11 +568,11 @@ TEST_F(GraphEffectSystemsFixture, OnCollideFollowsCollision) {
 TEST_F(GraphEffectSystemsFixture, OverflowEventsCounted) {
 	SystemsRun run;
 	Family family;
-	family.parentInitialize = LIFETIME_TEN;
+	family.parentInitialize = LifetimeTen;
 	const str trigger = Trigger("Always", "Count", 3.0f);
 	family.parentUpdate = trigger;
 	family.childSettings = R"({"Capacity":16})";
-	family.childInitialize = CHILD_LIFETIME_TEN;
+	family.childInitialize = ChildLifetimeTen;
 	if (!Begin(run, FamilyEffect(family), "Capacity")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}

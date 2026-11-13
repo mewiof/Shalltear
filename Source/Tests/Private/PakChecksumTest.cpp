@@ -53,8 +53,8 @@ TEST(PakChecksumTest, MatchesPublishedCheckValues) {
 	EXPECT_EQ(PakCrc32c("a", 1), 0xC1D04330u);
 	EXPECT_EQ(PakCrc32c("123456789", 9), 0xE3069283u);
 
-	constexpr std::string_view PANGRAM = "The quick brown fox jumps over the lazy dog";
-	EXPECT_EQ(PakCrc32c(PANGRAM.data(), PANGRAM.size()), 0x22620404u);
+	constexpr std::string_view Pangram = "The quick brown fox jumps over the lazy dog";
+	EXPECT_EQ(PakCrc32c(Pangram.data(), Pangram.size()), 0x22620404u);
 }
 
 TEST(PakChecksumTest, SeedChainsHalves) {

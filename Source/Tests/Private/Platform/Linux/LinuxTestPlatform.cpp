@@ -36,7 +36,7 @@ namespace TestPlatform {
 
 	namespace {
 
-		struct XApi {
+		struct XlibAPI {
 			void* library = nullptr;
 			int (*sendEvent)(Display*, ::Window, int, long, XEvent*) = nullptr;
 			int (*flush)(Display*) = nullptr;
@@ -61,8 +61,8 @@ namespace TestPlatform {
 			out = reinterpret_cast<TFunction>(::dlsym(library, name));
 		}
 
-		const XApi* GetX() {
-			static XApi api;
+		const XlibAPI* GetX() {
+			static XlibAPI api;
 			static bool tried = false;
 			if (tried) {
 				return api.library ? &api : nullptr;
@@ -92,7 +92,7 @@ namespace TestPlatform {
 		}
 
 		struct Target {
-			const XApi* x = nullptr;
+			const XlibAPI* x = nullptr;
 			Display* display = nullptr;
 			::Window window = 0;
 			::Window root = 0;
@@ -344,7 +344,7 @@ namespace TestPlatform {
 			if (!_keymapDisplay) {
 				return;
 			}
-			const XApi* x = GetX();
+			const XlibAPI* x = GetX();
 			KeySym none[TEXT_LEVELS] = {};
 			for (TextKey& key : _textKeys) {
 				if (key.keysym != NoSymbol) {
@@ -375,7 +375,7 @@ namespace TestPlatform {
 			}
 		}
 
-		void CollectTextKeys(const XApi& x) {
+		void CollectTextKeys(const XlibAPI& x) {
 			constexpr size_t MAX_TEXT_KEYS = 64;
 			int first = 0;
 			int last = 0;
@@ -997,7 +997,7 @@ namespace TestPlatform {
 			return "<no sections>";
 		}
 		const Elf64_Shdr* sections = reinterpret_cast<const Elf64_Shdr*>(bytes.data() + header.e_shoff);
-		constexpr std::string_view ALLOWED[] = {"libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0",
+		constexpr std::string_view Allowed[] = {"libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0",
 												"librt.so.1", "libgcc_s.so.1", "ld-linux-x86-64.so.2"};
 		for (u32 index = 0; index < header.e_shnum; ++index) {
 			const Elf64_Shdr& section = sections[index];
@@ -1012,7 +1012,7 @@ namespace TestPlatform {
 				}
 				const std::string_view needed = bytes.data() + strings.sh_offset + entries[at].d_un.d_val;
 				bool allowed = false;
-				for (std::string_view name : ALLOWED) {
+				for (std::string_view name : Allowed) {
 					allowed = allowed || needed == name;
 				}
 				if (!allowed) {
@@ -1113,7 +1113,7 @@ namespace TestPlatform {
 	}
 
 	bool WaitForWindow(LaunchedProcess* process, std::string_view title, u32 timeoutMs, str& outSeen) {
-		const XApi* x = GetX();
+		const XlibAPI* x = GetX();
 		if (!process || !x) {
 			return false;
 		}
@@ -1178,7 +1178,7 @@ namespace TestPlatform {
 	}
 
 	bool CloseWindow(LaunchedProcess* process) {
-		const XApi* x = GetX();
+		const XlibAPI* x = GetX();
 		if (!process || !x || !process->display || process->window == 0) {
 			return false;
 		}
@@ -1197,7 +1197,7 @@ namespace TestPlatform {
 
 	namespace {
 
-		std::vector<IconImage> ReadNetWmIcon(const XApi* x, Display* display, ::Window window) {
+		std::vector<IconImage> ReadNetWmIcon(const XlibAPI* x, Display* display, ::Window window) {
 			std::vector<IconImage> out;
 			if (!x || !display || window == 0) {
 				return out;

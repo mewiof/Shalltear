@@ -110,7 +110,7 @@ namespace Shalltear {
 		if (!RenderPass::Cook(descriptor, payload)) {
 			return false;
 		}
-		descriptor.NoteAssetRef(AmbientOcclusionImpl::AMBIENT_OCCLUSION_SHADER);
+		descriptor.NoteAssetRef(AmbientOcclusionImpl::AmbientOcclusionShader);
 		return true;
 	}
 
@@ -122,7 +122,7 @@ namespace Shalltear {
 
 		if (!_shaderResolved) {
 			_shaderResolved = true;
-			if (Asset* asset = AssetDatabase::LoadAssetByGuid(AmbientOcclusionImpl::AMBIENT_OCCLUSION_SHADER)) {
+			if (Asset* asset = AssetDatabase::LoadAssetByGuid(AmbientOcclusionImpl::AmbientOcclusionShader)) {
 				if (asset->GetAssetTypeId() == StringHash("ShaderAsset")) {
 					_shader = Handle<ShaderAsset>(static_cast<ShaderAsset*>(asset));
 				} else {

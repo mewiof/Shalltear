@@ -103,13 +103,13 @@ namespace Shalltear {
 		};
 
 		bool ParseCMakeHeader(std::string_view line, CMakeHeader& out) {
-			constexpr std::pair<std::string_view, CompilerDiagnosticSeverity> KINDS[] = {
+			constexpr std::pair<std::string_view, CompilerDiagnosticSeverity> Kinds[] = {
 				{"CMake Deprecation Error", CompilerDiagnosticSeverity::Error},
 				{"CMake Deprecation Warning", CompilerDiagnosticSeverity::Warning},
 				{"CMake Error", CompilerDiagnosticSeverity::Error},
 				{"CMake Warning", CompilerDiagnosticSeverity::Warning},
 			};
-			for (const auto& [kind, severity] : KINDS) {
+			for (const auto& [kind, severity] : Kinds) {
 				if (!line.starts_with(kind)) {
 					continue;
 				}
@@ -117,10 +117,10 @@ namespace Shalltear {
 				out.severity = severity;
 				std::string_view rest = line.substr(kind.size());
 				size_t phraseLength = kind.size();
-				constexpr std::string_view DEV = " (dev)";
-				if (rest.starts_with(DEV)) {
-					rest.remove_prefix(DEV.size());
-					phraseLength += DEV.size();
+				constexpr std::string_view Dev = " (dev)";
+				if (rest.starts_with(Dev)) {
+					rest.remove_prefix(Dev.size());
+					phraseLength += Dev.size();
 				}
 				out.phrase = line.substr(0, phraseLength);
 				if (rest.starts_with(" at ") || rest.starts_with(" in ")) {

@@ -62,7 +62,7 @@ namespace Shalltear::AudioEditor {
 		preferences.audience = SettingsAudience::EditorOnly;
 		preferences.keywords = "sound preview auto play loop mute";
 		preferences.order = 15;
-		SettingsPresentation::RegisterCategory(PREFERENCES, std::move(preferences), owner);
+		SettingsPresentation::RegisterCategory(PreferencesCategory, std::move(preferences), owner);
 	}
 
 } // namespace Shalltear::AudioEditor

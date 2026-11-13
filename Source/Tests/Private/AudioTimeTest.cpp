@@ -32,7 +32,7 @@ namespace {
 TEST(AudioTimeTest, StoppedGameHoldsBuses) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(20000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	const OfflineBus wall = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Wall);
 	const AudioCommand onWall = OfflineMixer::Into(mixer.Play(0, clip.Get()), wall);
 	ASSERT_TRUE(mixer.Push(onWall));
@@ -63,7 +63,7 @@ TEST(AudioTimeTest, StoppedGameHoldsBuses) {
 
 TEST(AudioTimeTest, UngroupedVoiceHoldsWithGame) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(20000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(20000, 0.5f), 1, 48000));
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, clip.Get())));
 	mixer.Render(BLOCK);
 	ASSERT_TRUE(mixer.GameClock(false, 1.0f));
@@ -75,8 +75,8 @@ TEST(AudioTimeTest, UngroupedVoiceHoldsWithGame) {
 
 TEST(AudioTimeTest, ZeroTimeScaleHoldsGameplayBus) {
 	OfflineMixer mixer(1);
-	ClipBlock world(MakePcm(Constant(20000, 0.25f), 1, 48000));
-	ClipBlock menu(MakePcm(Constant(20000, 0.125f), 1, 48000));
+	ClipBlock world(MakePCM(Constant(20000, 0.25f), 1, 48000));
+	ClipBlock menu(MakePCM(Constant(20000, 0.125f), 1, 48000));
 	const OfflineBus gameplay = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Gameplay);
 	const OfflineBus wall = mixer.Bus(2, {}, 1.0f, 1.0f, AudioBusClock::Wall);
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, world.Get()), gameplay)));
@@ -100,7 +100,7 @@ TEST(AudioTimeTest, ZeroTimeScaleHoldsGameplayBus) {
 
 TEST(AudioTimeTest, FollowingBusPitchesWithTimeScale) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Counter(40000), 1, 48000));
+	ClipBlock clip(MakePCM(Counter(40000), 1, 48000));
 	const OfflineBus slow = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Wall, true);
 	AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), slow);
 	play.loop = true;
@@ -126,7 +126,7 @@ TEST(AudioTimeTest, FollowingBusPitchesWithTimeScale) {
 TEST(AudioTimeTest, WallGroupIgnoresTimeScale) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(40000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	const OfflineBus parent = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Wall, true);
 	const OfflineBus child = mixer.Bus(2, parent, 1.0f, 1.0f, AudioBusClock::Wall, false);
 	AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), child);
@@ -147,7 +147,7 @@ TEST(AudioTimeTest, WallGroupIgnoresTimeScale) {
 
 TEST(AudioTimeTest, NestedFollowingGroupsApplyTimeScaleOnce) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Counter(40000), 1, 48000));
+	ClipBlock clip(MakePCM(Counter(40000), 1, 48000));
 	const OfflineBus parent = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Wall, true);
 	const OfflineBus child = mixer.Bus(2, parent, 1.0f, 1.0f, AudioBusClock::Wall, true);
 	AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), child);
@@ -164,7 +164,7 @@ TEST(AudioTimeTest, NestedFollowingGroupsApplyTimeScaleOnce) {
 
 TEST(AudioTimeTest, InheritingBusFollowsParentClock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Counter(40000), 1, 48000));
+	ClipBlock clip(MakePCM(Counter(40000), 1, 48000));
 	const OfflineBus parent = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Wall, true);
 	const OfflineBus inheriting = mixer.Bus(2, parent, 1.0f, 1.0f, AudioBusClock::Inherit);
 	AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), inheriting);
@@ -189,7 +189,7 @@ TEST(AudioTimeTest, InheritingBusFollowsParentClock) {
 
 TEST(AudioTimeTest, HeldBusDelaysScheduledStart) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4000, 0.5f), 1, 48000));
 	const OfflineBus gameplay = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Gameplay);
 	mixer.Render(BLOCK);
 
@@ -215,7 +215,7 @@ TEST(AudioTimeTest, HeldBusDelaysScheduledStart) {
 
 TEST(AudioTimeTest, HeldBusSoundWaitsForClock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4000, 0.5f), 1, 48000));
 	const OfflineBus gameplay = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Gameplay);
 	ASSERT_TRUE(mixer.GameClock(true, 0.0f));
 	mixer.Render(BLOCK);
@@ -230,7 +230,7 @@ TEST(AudioTimeTest, HeldBusSoundWaitsForClock) {
 
 TEST(AudioTimeTest, AHeldVoiceThatIsStoppedEnds) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(20000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(20000, 0.5f), 1, 48000));
 	const AudioCommand play = mixer.Play(0, clip.Get());
 	ASSERT_TRUE(mixer.Push(play));
 	mixer.Render(BLOCK);
@@ -268,8 +268,8 @@ TEST(AudioTimeTest, DspClockStopsWithGame) {
 
 TEST(AudioTimeTest, DspStartLandsAcrossPause) {
 	OfflineMixer mixer(1);
-	ClipBlock early(MakePcm(Constant(4000, 0.5f), 1, 48000));
-	ClipBlock late(MakePcm(Constant(4000, 0.25f), 1, 48000));
+	ClipBlock early(MakePCM(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock late(MakePCM(Constant(4000, 0.25f), 1, 48000));
 	const u64 origin = mixer.Now();
 
 	const u64 named = origin + 3 * BLOCK + 100;
@@ -396,8 +396,8 @@ TEST_F(AudioClockFixture, GetTimeStopsWithoutGameplay) {
 TEST(AudioTimeTest, DeviceBusPlaysWithoutGame) {
 	OfflineMixer mixer(1);
 	const OfflineBus device = mixer.Bus(1, {}, 1.0f, 1.0f, AudioBusClock::Device);
-	ClipBlock outside(MakePcm(Constant(40000, 0.5f), 1, 48000));
-	ClipBlock game(MakePcm(Constant(40000, 0.25f), 1, 48000));
+	ClipBlock outside(MakePCM(Constant(40000, 0.5f), 1, 48000));
+	ClipBlock game(MakePCM(Constant(40000, 0.25f), 1, 48000));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, outside.Get()), device)));
 	ASSERT_TRUE(mixer.Push(mixer.Play(1, game.Get())));
 	mixer.Render(BLOCK);
@@ -416,8 +416,8 @@ TEST(AudioTimeTest, DeviceBusIgnoresListenerAndVolume) {
 	volume.kind = AudioCommandKind::SetGlobalVolume;
 	volume.value = 0.0f;
 	ASSERT_TRUE(mixer.Push(volume));
-	ClipBlock outside(MakePcm(Constant(40000, 0.5f), 1, 48000));
-	ClipBlock game(MakePcm(Constant(40000, 0.25f), 1, 48000));
+	ClipBlock outside(MakePCM(Constant(40000, 0.5f), 1, 48000));
+	ClipBlock game(MakePCM(Constant(40000, 0.25f), 1, 48000));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, outside.Get()), device)));
 	ASSERT_TRUE(mixer.Push(mixer.Play(1, game.Get())));
 	mixer.Render(BLOCK);
@@ -433,7 +433,7 @@ TEST(AudioTimeTest, DeviceBusStartUsesDeviceFrame) {
 	ASSERT_TRUE(mixer.GameClock(false, 1.0f));
 	mixer.Render(3 * BLOCK);
 	const u64 origin = mixer.Now();
-	ClipBlock clip(MakePcm(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4000, 0.5f), 1, 48000));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, clip.Get(), origin + 300), device)));
 	const std::vector<f32> out = mixer.Render(2 * BLOCK);
 	EXPECT_EQ(out[299], 0.0f);
@@ -445,7 +445,7 @@ TEST(AudioTimeTest, SoloElsewhereLeavesDeviceClockedBusHeard) {
 	const OfflineBus soloed = mixer.Bus(1);
 	const OfflineBus device = mixer.Bus(2, {}, 1.0f, 1.0f, AudioBusClock::Device);
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Flag(AudioCommandKind::SetBusSolo, soloed, true)));
-	ClipBlock outside(MakePcm(Constant(40000, 0.5f), 1, 48000));
+	ClipBlock outside(MakePCM(Constant(40000, 0.5f), 1, 48000));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, outside.Get()), device)));
 	mixer.Render(BLOCK);
 	const std::vector<f32> out = mixer.Render(2 * BLOCK);

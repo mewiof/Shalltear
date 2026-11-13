@@ -54,7 +54,7 @@ namespace {
 			PropertyDrawers::Initialize();
 
 			std::vector<u8> rgba(8 * 8 * 4, 255);
-			TestImages::WriteTga(_root / "Assets" / "Bricks.tga", 8, 8, rgba.data());
+			TestImages::WriteTGA(_root / "Assets" / "Bricks.tga", 8, 8, rgba.data());
 			const Path path("project://Assets/Bricks.tga");
 			_guid = AssetDatabase::EnsureAssetIdentity(path);
 			ASSERT_TRUE(_guid.IsValid());

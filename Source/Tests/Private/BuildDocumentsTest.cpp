@@ -51,7 +51,7 @@ namespace {
 		bool windowIcon = false;
 	};
 
-	str SolidTga(u32 edge, const u8 (&rgba)[4]) {
+	str SolidTGA(u32 edge, const u8 (&rgba)[4]) {
 		str bytes(18, '\0');
 		bytes[2] = 2;
 		bytes[12] = static_cast<char>(edge);
@@ -246,7 +246,7 @@ TEST_F(BuildDocumentsFixture, DefaultSettingsCarryNoDocument) {
 TEST_F(BuildDocumentsFixture, BuildPacksWindowIcon) {
 	constexpr u8 COLOR[4] = {40, 160, 220, 255};
 	_target.windowIcon = true;
-	WriteFile(_root / "Assets" / "Icon.tga", SolidTga(64, COLOR));
+	WriteFile(_root / "Assets" / "Icon.tga", SolidTGA(64, COLOR));
 	WriteProfile({{"icon", "Assets/Icon.tga"}});
 
 	BuildPipeline pipeline;

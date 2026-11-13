@@ -78,8 +78,8 @@ namespace Shalltear {
 		inline constexpr u32 EFFECT_NO_BINDING = ~0u;
 		inline constexpr u32 EFFECT_CAMERA_RECORD_BYTES = 4 * 64 + 16;
 		inline constexpr u32 EFFECT_MESH_RECORD_BYTES = 32;
-		inline constexpr std::string_view EFFECT_MESH_VERTEX_COUNT_INPUT = "/VertexCount";
-		inline constexpr std::string_view EFFECT_MESH_INDEX_COUNT_INPUT = "/IndexCount";
+		inline constexpr std::string_view EffectMeshVertexCountInput = "/VertexCount";
+		inline constexpr std::string_view EffectMeshIndexCountInput = "/IndexCount";
 
 		struct EffectMesh {
 			str binding;

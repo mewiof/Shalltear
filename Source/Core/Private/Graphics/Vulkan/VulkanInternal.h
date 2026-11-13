@@ -397,7 +397,7 @@ namespace Shalltear::RHI {
 		std::thread::id mainThread;
 
 		bool NoteLoss(VkResult result, const char* call);
-		bool WaitForSubmission(u64 timelineValue, u64 timeoutNs);
+		bool WaitForSubmission(u64 timelineValue, u64 timeoutNanoseconds);
 		bool WaitForPresent(SwapChainImpl& swapChain, u64 presentId, f64 refreshSeconds);
 		static FrameSync SyncFrame(std::span<SwapChain* const> presented, f64 refreshSeconds, u64 frameStartTicks);
 		void MarkLost(const char* call);

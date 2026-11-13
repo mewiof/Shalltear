@@ -197,8 +197,8 @@ namespace {
 			if (shape.inputs[i] == Feed::None) {
 				continue;
 			}
-			constexpr std::string_view NAMES[] = {"-", "F1", "F2", "F3", "F4", "M2", "M3", "M4", "B1"};
-			out += (i == 0 ? "" : ",") + str(NAMES[static_cast<u32>(shape.inputs[i])]);
+			constexpr std::string_view Names[] = {"-", "F1", "F2", "F3", "F4", "M2", "M3", "M4", "B1"};
+			out += (i == 0 ? "" : ",") + str(Names[static_cast<u32>(shape.inputs[i])]);
 		}
 		out += "] {" + str(variant.settings) + "}";
 		return out;
@@ -217,7 +217,7 @@ namespace {
 } // anonymous namespace
 
 bool CoveredElsewhere(const GraphNodeDefinition& definition) {
-	if (definition.id == "Input/Property" || definition.id == GraphDocumentOps::REDIRECT_DEF) {
+	if (definition.id == "Input/Property" || definition.id == GraphDocumentOps::RedirectDef) {
 		return true;
 	}
 	if (definition.category == "Context" || definition.category == "Block") {
@@ -226,21 +226,21 @@ bool CoveredElsewhere(const GraphNodeDefinition& definition) {
 	if (GraphEffectRules::IsEffectOnly(definition.id)) {
 		return true;
 	}
-	constexpr std::string_view THROUGH_THE_TARGET[] = {"Input/UV",
-													   "Input/VertexColor",
-													   "Input/SampleTexture2D",
-													   "Input/SampleTexture2DLOD",
-													   "Input/TextureSize",
-													   "Input/CalculateLevelOfDetailTexture2D",
-													   "UV/ParallaxMapping",
-													   "UV/ParallaxOcclusionMapping",
-													   "UV/Triplanar",
-													   "Artistic/NormalFromTexture",
-													   "Input/SampleTexture2DArray",
-													   "Input/SampleTexture3D",
-													   "Input/SampleCubemap",
-													   "Input/SampleReflectedCubemap"};
-	for (std::string_view id : THROUGH_THE_TARGET) {
+	constexpr std::string_view ThroughTheTarget[] = {"Input/UV",
+													 "Input/VertexColor",
+													 "Input/SampleTexture2D",
+													 "Input/SampleTexture2DLOD",
+													 "Input/TextureSize",
+													 "Input/CalculateLevelOfDetailTexture2D",
+													 "UV/ParallaxMapping",
+													 "UV/ParallaxOcclusionMapping",
+													 "UV/Triplanar",
+													 "Artistic/NormalFromTexture",
+													 "Input/SampleTexture2DArray",
+													 "Input/SampleTexture3D",
+													 "Input/SampleCubemap",
+													 "Input/SampleReflectedCubemap"};
+	for (std::string_view id : ThroughTheTarget) {
 		if (definition.id == id) {
 			return true;
 		}
@@ -331,12 +331,12 @@ TEST(NodeShaderLibraryTest, NodeOfConstantsFoldsToReference) {
 					if (dynamic && c.In(i).n > 1) {
 						u32 combine = 10 + i;
 						GraphNode& source = builder.Node(combine, "Channel/Combine");
-						constexpr std::string_view CHANNELS[] = {"R", "G", "B", "A"};
+						constexpr std::string_view Channels[] = {"R", "G", "B", "A"};
 						for (u32 j = 0; j < c.In(i).n; ++j) {
-							DocumentBuilder::Constant(source, CHANNELS[j], number(c.In(i).c[j]));
+							DocumentBuilder::Constant(source, Channels[j], number(c.In(i).c[j]));
 						}
-						constexpr std::string_view OUTPUTS[] = {"", "", "RG", "RGB", "RGBA"};
-						builder.Connect(combine, OUTPUTS[c.In(i).n], NODE_UNDER_TEST, definition->inputs[i].name);
+						constexpr std::string_view Outputs[] = {"", "", "RG", "RGB", "RGBA"};
+						builder.Connect(combine, Outputs[c.In(i).n], NODE_UNDER_TEST, definition->inputs[i].name);
 						continue;
 					}
 					str json = "[";
@@ -384,7 +384,7 @@ TEST(NodeShaderLibraryTest, NodeOfConstantsFoldsToReference) {
 
 namespace {
 
-	class NodeShaderGpuFixture : public ::testing::Test {
+	class NodeShaderGPUFixture : public ::testing::Test {
 	protected:
 		RHI::Device* _device = nullptr;
 		std::filesystem::path _root;
@@ -508,7 +508,7 @@ namespace {
 
 } // anonymous namespace
 
-TEST_F(NodeShaderGpuFixture, EveryNodeMatchesReferenceOnGPU) {
+TEST_F(NodeShaderGPUFixture, EveryNodeMatchesReferenceOnGPU) {
 	u32 checked = 0;
 	u32 undecidable = 0;
 	str measured;

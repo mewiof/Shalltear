@@ -40,7 +40,7 @@ endif()
 
 set_source_files_properties(
 	${CMAKE_CURRENT_SOURCE_DIR}/Private/Miniaudio.c
-	${CMAKE_CURRENT_SOURCE_DIR}/Private/Qoa.c
+	${CMAKE_CURRENT_SOURCE_DIR}/Private/QOA.c
 	PROPERTIES C_STANDARD 99 COMPILE_OPTIONS "-w")
 
 set(AUDIO_OPUS_DIR ${CMAKE_SOURCE_DIR}/External/Submodules/opus)

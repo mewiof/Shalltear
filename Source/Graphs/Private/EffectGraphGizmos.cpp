@@ -89,7 +89,7 @@ namespace Shalltear::EffectGraphGizmoOps {
 
 			bool World(u32 index) const {
 				const GraphInput* input = GraphWindowParts::FindInput(*node, Port(index).name);
-				return input && input->space == GRAPH_SPACE_WORLD;
+				return input && input->space == GraphSpaceWorld;
 			}
 		};
 
@@ -219,8 +219,8 @@ namespace Shalltear::EffectGraphGizmoOps {
 		}
 
 		Shape ShapeOf(const GraphNode& node) {
-			if (node.def == GRAPH_EFFECT_COLLISION_SHAPE) {
-				switch (Chosen(node, "Shape", B::COLLISION_SHAPES, B::CollidePlane)) {
+			if (node.def == GraphEffectCollisionShape) {
+				switch (Chosen(node, "Shape", B::CollisionShapes, B::CollidePlane)) {
 				case B::CollideSphere:
 					return Shape::Sphere;
 				case B::CollideBox:
@@ -233,8 +233,8 @@ namespace Shalltear::EffectGraphGizmoOps {
 					return Shape::None;
 				}
 			}
-			if (node.def == GRAPH_EFFECT_POSITION_SHAPE) {
-				switch (Chosen(node, "Shape", B::POSITION_SHAPES, B::Sphere)) {
+			if (node.def == GraphEffectPositionShape) {
+				switch (Chosen(node, "Shape", B::PositionShapes, B::Sphere)) {
 				case B::Sphere:
 					return Shape::Sphere;
 				case B::OrientedBox:
@@ -251,7 +251,7 @@ namespace Shalltear::EffectGraphGizmoOps {
 					return Shape::None;
 				}
 			}
-			if (node.def == GRAPH_EFFECT_CONFORM_TO_SPHERE) {
+			if (node.def == GraphEffectConformToSphere) {
 				return Shape::AttractorSphere;
 			}
 			return Shape::None;

@@ -123,8 +123,8 @@ namespace {
 		return text;
 	}
 
-	constexpr std::string_view TO_WORLD = "SltParticleEffectLocalToWorldRow";
-	constexpr std::string_view TO_LOCAL = "SltParticleEffectWorldToLocalRow";
+	constexpr std::string_view ToWorld = "SltParticleEffectLocalToWorldRow";
+	constexpr std::string_view ToLocal = "SltParticleEffectWorldToLocalRow";
 
 } // anonymous namespace
 
@@ -136,7 +136,7 @@ TEST(GraphEffectLibraryTest, OtherSpaceInputConverted) {
 		const str* block;
 		std::string_view reads;
 	};
-	const Case cases[] = {{"World", &localPosition, TO_WORLD}, {"Local", &worldPosition, TO_LOCAL}, {"Local", &localPosition, {}}, {"World", &worldPosition, {}}};
+	const Case cases[] = {{"World", &localPosition, ToWorld}, {"Local", &worldPosition, ToLocal}, {"Local", &localPosition, {}}, {"World", &worldPosition, {}}};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(std::format("{} system, {}", entry.system, entry.block == &localPosition ? "Local input" : "World input"));
 		GraphEffect effect;
@@ -144,9 +144,9 @@ TEST(GraphEffectLibraryTest, OtherSpaceInputConverted) {
 		ASSERT_TRUE(GraphEffectTarget::Compile(ReadGraph(OneSystemIn(entry.system, "", *entry.block)), "space.sleffect", effect, diagnostics))
 			<< diagnostics[0].message;
 		const str& text = effect.systems[0].initializeKernel;
-		EXPECT_EQ(text.find(entry.reads.empty() ? TO_WORLD : (entry.reads == TO_WORLD ? TO_LOCAL : TO_WORLD)), str::npos);
+		EXPECT_EQ(text.find(entry.reads.empty() ? ToWorld : (entry.reads == ToWorld ? ToLocal : ToWorld)), str::npos);
 		if (entry.reads.empty()) {
-			EXPECT_EQ(text.find(TO_LOCAL), str::npos);
+			EXPECT_EQ(text.find(ToLocal), str::npos);
 		} else {
 			EXPECT_NE(text.find(entry.reads), str::npos);
 		}
@@ -197,7 +197,7 @@ namespace {
 TEST(GraphEffectLibraryTest, SetPositionShapesPortsAreItsShapes) {
 	GraphDefinitions definitions;
 	GraphDocument holder;
-	const GraphNodeDefinition* sphere = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_SHAPE, R"({"Shape":"Sphere"})");
+	const GraphNodeDefinition* sphere = BlockShape(definitions, holder, GraphEffectPositionShape, R"({"Shape":"Sphere"})");
 	ASSERT_NE(sphere, nullptr);
 	EXPECT_EQ(sphere->name, "Set Position Shape Sphere");
 	EXPECT_EQ(InputNames(*sphere), Names({"Position", "Angles", "Scale", "Radius", "Arc"}));
@@ -206,7 +206,7 @@ TEST(GraphEffectLibraryTest, SetPositionShapesPortsAreItsShapes) {
 	ASSERT_EQ(sphere->outputs.size(), 2u);
 	EXPECT_EQ(sphere->outputs[1].name, "direction");
 
-	const GraphNodeDefinition* torus = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_SHAPE,
+	const GraphNodeDefinition* torus = BlockShape(definitions, holder, GraphEffectPositionShape,
 												  R"({"Shape":"Torus","Spawn Mode":"Custom","Position Mode":"ThicknessRelative","Apply Orientation":"Axes","Composition Position":"Blend"})");
 	ASSERT_NE(torus, nullptr);
 	EXPECT_EQ(InputNames(*torus), Names({"Position", "Angles", "Scale", "Major Radius", "Minor Radius", "Arc", "Height Sequencer", "Arc Sequencer", "Thickness",
@@ -215,39 +215,39 @@ TEST(GraphEffectLibraryTest, SetPositionShapesPortsAreItsShapes) {
 	ASSERT_EQ(torus->outputs.size(), 4u);
 	EXPECT_EQ(torus->outputs[3].name, "axisZ");
 
-	const GraphNodeDefinition* box = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_SHAPE, R"({"Shape":"OrientedBox","Spawn Mode":"Custom"})");
+	const GraphNodeDefinition* box = BlockShape(definitions, holder, GraphEffectPositionShape, R"({"Shape":"OrientedBox","Spawn Mode":"Custom"})");
 	ASSERT_NE(box, nullptr);
 	EXPECT_EQ(InputNames(*box), Names({"Center", "Angles", "Size"}));
 
-	const GraphNodeDefinition* line = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_SHAPE, R"({"Shape":"Line","Position Mode":"Volume"})");
+	const GraphNodeDefinition* line = BlockShape(definitions, holder, GraphEffectPositionShape, R"({"Shape":"Line","Position Mode":"Volume"})");
 	ASSERT_NE(line, nullptr);
 	EXPECT_EQ(InputNames(*line), Names({"Start", "End"}));
 	EXPECT_EQ(line->inputs[0].space, GraphPortSpace::Position);
 	EXPECT_EQ(line->inputs[1].defaultValue[0], 1.0f);
 
-	const GraphNodeDefinition* kill = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE, R"({"Behavior":"Kill","Shape":"Sphere","Radius Mode":"Custom"})");
+	const GraphNodeDefinition* kill = BlockShape(definitions, holder, GraphEffectCollisionShape, R"({"Behavior":"Kill","Shape":"Sphere","Radius Mode":"Custom"})");
 	ASSERT_NE(kill, nullptr);
 	EXPECT_EQ(kill->name, "Kill Shape Sphere");
 	EXPECT_EQ(InputNames(*kill), Names({"Position", "Angles", "Scale", "Radius", "Particle Radius"}));
 	ASSERT_EQ(kill->outputs.size(), 1u);
 	EXPECT_EQ(kill->outputs[0].name, "alive");
-	const GraphNodeDefinition* plane = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE, R"({"Behavior":"Kill","Shape":"Plane","Radius Mode":"Custom"})");
+	const GraphNodeDefinition* plane = BlockShape(definitions, holder, GraphEffectCollisionShape, R"({"Behavior":"Kill","Shape":"Plane","Radius Mode":"Custom"})");
 	ASSERT_NE(plane, nullptr);
 	EXPECT_EQ(GraphPortLabel(plane->inputs.back()), "Radius");
 	EXPECT_EQ(plane->inputs[1].space, GraphPortSpace::Direction);
 }
 
 TEST(GraphEffectLibraryTest, ForceIsUpdateOnly) {
-	for (std::string_view force : {GRAPH_EFFECT_FORCE, GRAPH_EFFECT_GRAVITY, GRAPH_EFFECT_LINEAR_DRAG, GRAPH_EFFECT_TURBULENCE, GRAPH_EFFECT_CONFORM_TO_SPHERE}) {
-		EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, force)) << force;
-		EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_INITIALIZE, force)) << force;
-		EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT, force)) << force;
+	for (std::string_view force : {GraphEffectForce, GraphEffectGravity, GraphEffectLinearDrag, GraphEffectTurbulence, GraphEffectConformToSphere}) {
+		EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectUpdate, force)) << force;
+		EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectInitialize, force)) << force;
+		EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectOutputDefinition, force)) << force;
 	}
-	for (std::string_view context : {GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_OUTPUT}) {
-		EXPECT_TRUE(GraphEffectRules::Holds(context, GRAPH_EFFECT_POSITION_SHAPE)) << context;
-		EXPECT_TRUE(GraphEffectRules::Holds(context, GRAPH_EFFECT_COLLISION_SHAPE)) << context;
+	for (std::string_view context : {GraphEffectInitialize, GraphEffectUpdate, GraphEffectOutputDefinition}) {
+		EXPECT_TRUE(GraphEffectRules::Holds(context, GraphEffectPositionShape)) << context;
+		EXPECT_TRUE(GraphEffectRules::Holds(context, GraphEffectCollisionShape)) << context;
 	}
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_POSITION_SHAPE));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectSpawn, GraphEffectPositionShape));
 
 	const auto offered = [](std::string_view context) {
 		GraphDocument document = ReadGraph(std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"contexts":[{{"id":1,"def":"{}"}}]}})", context));
@@ -263,14 +263,14 @@ TEST(GraphEffectLibraryTest, ForceIsUpdateOnly) {
 		}
 		return nullptr;
 	};
-	const Vector<EffectGraphEditOps::BlockChoice> update = offered(GRAPH_EFFECT_UPDATE);
+	const Vector<EffectGraphEditOps::BlockChoice> update = offered(GraphEffectUpdate);
 	for (std::string_view name : {"Force", "Gravity", "Linear Drag", "Turbulence", "Attractor Shape Sphere", "Set Position Shape Sphere", "Set Position Shape Cone / Cylinder"}) {
 		EXPECT_NE(find(update, name), nullptr) << name;
 	}
 	const EffectGraphEditOps::BlockChoice* plane = find(update, "Kill Shape Plane");
 	ASSERT_NE(plane, nullptr);
 	EXPECT_TRUE(std::any_of(plane->settings.begin(), plane->settings.end(), [](const GraphSetting& setting) { return setting.key == "Behavior" && setting.value == "\"Kill\""; }));
-	EXPECT_EQ(find(offered(GRAPH_EFFECT_INITIALIZE), "Gravity"), nullptr);
+	EXPECT_EQ(find(offered(GraphEffectInitialize), "Gravity"), nullptr);
 
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -288,7 +288,7 @@ TEST(GraphEffectLibraryTest, CollisionShapesPortsAndOutputsFollowBehavior) {
 		}
 		return names;
 	};
-	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE, "{}");
+	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GraphEffectCollisionShape, "{}");
 	ASSERT_NE(plain, nullptr);
 	EXPECT_EQ(plain->name, "Collision Shape Plane");
 	EXPECT_EQ(InputNames(*plain), Names({"Position", "Normal", "Bounce", "Friction", "Lifetime Loss"}));
@@ -296,7 +296,7 @@ TEST(GraphEffectLibraryTest, CollisionShapesPortsAndOutputsFollowBehavior) {
 	EXPECT_EQ(outputNames(*plain), Names({"position", "velocity", "age"}));
 
 	const GraphNodeDefinition* full =
-		BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE,
+		BlockShape(definitions, holder, GraphEffectCollisionShape,
 				   R"({"Shape":"Sphere","Radius Mode":"Custom","Rough Surface":true,"Override Bounce Threshold":true,"Collision Attributes":"WriteAlways"})");
 	ASSERT_NE(full, nullptr);
 	EXPECT_EQ(InputNames(*full), Names({"Position", "Angles", "Scale", "Radius", "Bounce", "Friction", "Bounce Speed Threshold", "Lifetime Loss", "Particle Radius",
@@ -304,16 +304,16 @@ TEST(GraphEffectLibraryTest, CollisionShapesPortsAndOutputsFollowBehavior) {
 	EXPECT_EQ(outputNames(*full),
 			  Names({"position", "velocity", "age", "hasCollisionEvent", "collisionEventNormal", "collisionEventPosition", "collisionEventCount"}));
 
-	const GraphNodeDefinition* silent = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE, R"({"Behavior":"None","Shape":"OrientedBox"})");
+	const GraphNodeDefinition* silent = BlockShape(definitions, holder, GraphEffectCollisionShape, R"({"Behavior":"None","Shape":"OrientedBox"})");
 	ASSERT_NE(silent, nullptr);
 	EXPECT_EQ(silent->name, "Trigger Shape Box");
 	EXPECT_EQ(InputNames(*silent), Names({"Center", "Angles", "Size"}));
 	EXPECT_TRUE(silent->outputs.empty());
-	const GraphNodeDefinition* trigger = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_SHAPE, R"({"Behavior":"None","Collision Attributes":"WriteAlways"})");
+	const GraphNodeDefinition* trigger = BlockShape(definitions, holder, GraphEffectCollisionShape, R"({"Behavior":"None","Collision Attributes":"WriteAlways"})");
 	ASSERT_NE(trigger, nullptr);
 	EXPECT_EQ(outputNames(*trigger), Names({"hasCollisionEvent", "collisionEventNormal", "collisionEventPosition", "collisionEventCount"}));
 
-	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GRAPH_EFFECT_COLLISION_SHAPE);
+	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GraphEffectCollisionShape);
 	ASSERT_NE(table, nullptr);
 	const auto shown = [&](std::string_view settings, std::string_view key) {
 		const GraphDocument document = ReadGraph(std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"contexts":[
@@ -345,10 +345,10 @@ TEST(GraphEffectLibraryTest, BouncingCollisionIsInitializesOrUpdates) {
 		{"id":1,"def":"Context/Update","blocks":[{"id":10,"def":"Block/CollisionShape"},{"id":11,"def":"Block/CollisionShape","settings":{"Behavior":"Kill"}}]}]})");
 	const GraphNode& bounce = blocks.contexts[0].blocks[0];
 	const GraphNode& kill = blocks.contexts[0].blocks[1];
-	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GRAPH_EFFECT_INITIALIZE, bounce));
-	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GRAPH_EFFECT_UPDATE, bounce));
-	EXPECT_FALSE(GraphEffectRules::HoldsBlock(GRAPH_EFFECT_OUTPUT, bounce));
-	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GRAPH_EFFECT_OUTPUT, kill));
+	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GraphEffectInitialize, bounce));
+	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GraphEffectUpdate, bounce));
+	EXPECT_FALSE(GraphEffectRules::HoldsBlock(GraphEffectOutputDefinition, bounce));
+	EXPECT_TRUE(GraphEffectRules::HoldsBlock(GraphEffectOutputDefinition, kill));
 
 	str graph = OneSystem("", "");
 	const std::string_view emptyOutput = R"("def":"Context/OutputParticlePrimitive","flow":[[2,"In"]],"blocks":[])";
@@ -375,7 +375,7 @@ TEST(GraphEffectLibraryTest, BouncingCollisionIsInitializesOrUpdates) {
 		EffectGraphEditOps::BlockChoices(document, 1, choices);
 		Vector<str> out{GetMemoryResource(MemTag::Editor)};
 		for (const EffectGraphEditOps::BlockChoice& choice : choices) {
-			if (choice.def == GRAPH_EFFECT_COLLISION_SHAPE) {
+			if (choice.def == GraphEffectCollisionShape) {
 				const bool stores = std::any_of(choice.settings.begin(), choice.settings.end(), [](const GraphSetting& setting) { return setting.key == "Behavior"; }) &&
 									std::any_of(choice.settings.begin(), choice.settings.end(), [](const GraphSetting& setting) { return setting.key == "Shape"; });
 				EXPECT_TRUE(stores) << choice.name;
@@ -384,33 +384,33 @@ TEST(GraphEffectLibraryTest, BouncingCollisionIsInitializesOrUpdates) {
 		}
 		return out;
 	};
-	EXPECT_EQ(names(GRAPH_EFFECT_UPDATE),
+	EXPECT_EQ(names(GraphEffectUpdate),
 			  Names({"Collision Shape Plane", "Collision Shape Sphere", "Collision Shape Box", "Collision Shape Cone / Cylinder", "Kill Shape Plane", "Kill Shape Sphere",
 					 "Kill Shape Box", "Kill Shape Cone / Cylinder", "Trigger Shape Box", "Trigger Shape Sphere", "Trigger Shape Cone / Cylinder", "Trigger Shape Plane"}));
-	EXPECT_EQ(names(GRAPH_EFFECT_OUTPUT), Names({"Kill Shape Plane", "Kill Shape Sphere", "Kill Shape Box", "Kill Shape Cone / Cylinder", "Trigger Shape Box",
-												 "Trigger Shape Sphere", "Trigger Shape Cone / Cylinder", "Trigger Shape Plane"}));
+	EXPECT_EQ(names(GraphEffectOutputDefinition), Names({"Kill Shape Plane", "Kill Shape Sphere", "Kill Shape Box", "Kill Shape Cone / Cylinder", "Trigger Shape Box",
+														 "Trigger Shape Sphere", "Trigger Shape Cone / Cylinder", "Trigger Shape Plane"}));
 }
 
 TEST(GraphEffectLibraryTest, ADepthCollisionsPortsFollowItsSettings) {
 	GraphDefinitions definitions;
 	GraphDocument holder;
-	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_DEPTH, "{}");
+	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GraphEffectCollisionDepth, "{}");
 	ASSERT_NE(plain, nullptr);
 	EXPECT_EQ(plain->name, "Collision Depth Buffer");
 	EXPECT_EQ(InputNames(*plain), Names({"Bounce", "Friction", "Lifetime Loss"}));
 	ASSERT_EQ(plain->outputs.size(), 3u);
 
-	const GraphNodeDefinition* thick = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_DEPTH, R"({"Surface Thickness":"Custom","Radius Mode":"Custom"})");
+	const GraphNodeDefinition* thick = BlockShape(definitions, holder, GraphEffectCollisionDepth, R"({"Surface Thickness":"Custom","Radius Mode":"Custom"})");
 	ASSERT_NE(thick, nullptr);
 	EXPECT_EQ(InputNames(*thick), Names({"Bounce", "Friction", "Lifetime Loss", "Particle Radius", "Surface Thickness"}));
 	EXPECT_EQ(thick->inputs[3].label, "Radius");
 
-	const GraphNodeDefinition* kill = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_DEPTH, R"({"Behavior":"Kill"})");
+	const GraphNodeDefinition* kill = BlockShape(definitions, holder, GraphEffectCollisionDepth, R"({"Behavior":"Kill"})");
 	ASSERT_NE(kill, nullptr);
 	EXPECT_EQ(kill->name, "Kill Depth Buffer");
 	ASSERT_EQ(kill->outputs.size(), 1u);
 	EXPECT_EQ(kill->outputs[0].name, "alive");
-	const GraphNodeDefinition* trigger = BlockShape(definitions, holder, GRAPH_EFFECT_COLLISION_DEPTH, R"({"Behavior":"None"})");
+	const GraphNodeDefinition* trigger = BlockShape(definitions, holder, GraphEffectCollisionDepth, R"({"Behavior":"None"})");
 	ASSERT_NE(trigger, nullptr);
 	EXPECT_EQ(trigger->name, "Trigger Depth Buffer");
 	EXPECT_TRUE(trigger->outputs.empty());
@@ -469,33 +469,33 @@ TEST(GraphEffectLibraryTest, DepthCollisionReadsCameraDepth) {
 		EffectGraphEditOps::BlockChoices(document, 1, choices);
 		Vector<str> out{GetMemoryResource(MemTag::Editor)};
 		for (const EffectGraphEditOps::BlockChoice& choice : choices) {
-			if (choice.def == GRAPH_EFFECT_COLLISION_DEPTH) {
+			if (choice.def == GraphEffectCollisionDepth) {
 				out.push_back(choice.name);
 			}
 		}
 		return out;
 	};
-	EXPECT_EQ(offered(GRAPH_EFFECT_UPDATE), Names({"Collision Depth Buffer", "Kill Depth Buffer", "Trigger Depth Buffer"}));
-	EXPECT_EQ(offered(GRAPH_EFFECT_INITIALIZE), Names({"Collision Depth Buffer", "Kill Depth Buffer", "Trigger Depth Buffer"}));
-	EXPECT_TRUE(offered(GRAPH_EFFECT_OUTPUT).empty());
+	EXPECT_EQ(offered(GraphEffectUpdate), Names({"Collision Depth Buffer", "Kill Depth Buffer", "Trigger Depth Buffer"}));
+	EXPECT_EQ(offered(GraphEffectInitialize), Names({"Collision Depth Buffer", "Kill Depth Buffer", "Trigger Depth Buffer"}));
+	EXPECT_TRUE(offered(GraphEffectOutputDefinition).empty());
 }
 
 TEST(GraphEffectLibraryTest, SetPositionDepthsPortsFollowSettings) {
 	GraphDefinitions definitions;
 	GraphDocument holder;
-	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_DEPTH, "{}");
+	const GraphNodeDefinition* plain = BlockShape(definitions, holder, GraphEffectPositionDepth, "{}");
 	ASSERT_NE(plain, nullptr);
 	EXPECT_EQ(plain->name, "Set Position (Depth)");
 	EXPECT_EQ(InputNames(*plain), Names({"Z Multiplier"}));
 	ASSERT_EQ(plain->outputs.size(), 1u);
 	EXPECT_EQ(plain->outputs[0].name, "position");
 
-	const GraphNodeDefinition* sequential = BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_DEPTH, R"({"Mode":"Sequential"})");
+	const GraphNodeDefinition* sequential = BlockShape(definitions, holder, GraphEffectPositionDepth, R"({"Mode":"Sequential"})");
 	ASSERT_NE(sequential, nullptr);
 	EXPECT_EQ(InputNames(*sequential), Names({"Z Multiplier", "Grid Step"}));
 
 	const GraphNodeDefinition* full =
-		BlockShape(definitions, holder, GRAPH_EFFECT_POSITION_DEPTH, R"({"Mode":"Custom","Cull Mode":"Range","Composition Position":"Blend"})");
+		BlockShape(definitions, holder, GraphEffectPositionDepth, R"({"Mode":"Custom","Cull Mode":"Range","Composition Position":"Blend"})");
 	ASSERT_NE(full, nullptr);
 	EXPECT_EQ(full->name, "Blend Position (Depth)");
 	ASSERT_EQ(InputNames(*full), Names({"Z Multiplier", "UV Spawn", "Depth Range", "Blend Position"}));
@@ -540,19 +540,19 @@ TEST(GraphEffectLibraryTest, SetPositionDepthReadsInInitialize) {
 		Vector<EffectGraphEditOps::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 		EffectGraphEditOps::BlockChoices(document, 1, choices);
 		return std::any_of(choices.begin(), choices.end(), [](const EffectGraphEditOps::BlockChoice& choice) {
-			return choice.def == GRAPH_EFFECT_POSITION_DEPTH && choice.name == "Set Position (Depth)" && choice.category == "Position Shape";
+			return choice.def == GraphEffectPositionDepth && choice.name == "Set Position (Depth)" && choice.category == "Position Shape";
 		});
 	};
-	EXPECT_TRUE(offered(GRAPH_EFFECT_INITIALIZE));
-	EXPECT_FALSE(offered(GRAPH_EFFECT_UPDATE));
-	EXPECT_FALSE(offered(GRAPH_EFFECT_OUTPUT));
+	EXPECT_TRUE(offered(GraphEffectInitialize));
+	EXPECT_FALSE(offered(GraphEffectUpdate));
+	EXPECT_FALSE(offered(GraphEffectOutputDefinition));
 }
 
 TEST(GraphEffectLibraryTest, OrientIsOutputsAndPortsAreModes) {
 	GraphDefinitions definitions;
 	GraphDocument holder;
 	const auto ports = [&](std::string_view settings) {
-		const GraphNodeDefinition* definition = BlockShape(definitions, holder, GRAPH_EFFECT_ORIENT, settings);
+		const GraphNodeDefinition* definition = BlockShape(definitions, holder, GraphEffectOrient, settings);
 		EXPECT_NE(definition, nullptr) << settings;
 		return definition ? InputNames(*definition) : Vector<str>{GetMemoryResource(MemTag::Editor)};
 	};
@@ -564,20 +564,20 @@ TEST(GraphEffectLibraryTest, OrientIsOutputsAndPortsAreModes) {
 	EXPECT_EQ(ports(R"({"Mode":"FixedAxis"})"), Names({"Up"}));
 	EXPECT_EQ(ports(R"({"Mode":"CustomZ"})"), Names({"Front"}));
 	EXPECT_EQ(ports(R"({"Mode":"CustomY"})"), Names({"Up"}));
-	const GraphNodeDefinition* line = BlockShape(definitions, holder, GRAPH_EFFECT_ORIENT, R"({"Mode":"LookAtLine"})");
+	const GraphNodeDefinition* line = BlockShape(definitions, holder, GraphEffectOrient, R"({"Mode":"LookAtLine"})");
 	ASSERT_NE(line, nullptr);
 	EXPECT_EQ(line->name, "Orient: Look At Line");
 	EXPECT_EQ(line->inputs[1].defaultValue[0], -1.0f);
 	ASSERT_EQ(line->outputs.size(), 3u);
 	EXPECT_EQ(line->outputs[2].name, "axisZ");
 
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_ORIENT));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_ORIENT));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_ORIENT));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectOutputDefinition, GraphEffectOrient));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectOrient));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectInitialize, GraphEffectOrient));
 	for (const GraphEffectKernel kernel : {GraphEffectKernel::Initialize, GraphEffectKernel::Update, GraphEffectKernel::Output}) {
 		Vector<GraphBinding> bindings{GetMemoryResource(MemTag::Editor)};
 		GraphEffectTarget::KernelBindings(kernel, bindings);
-		const auto found = std::find_if(bindings.begin(), bindings.end(), [](const GraphBinding& binding) { return binding.name == GRAPH_EFFECT_CAMERA_FORWARD; });
+		const auto found = std::find_if(bindings.begin(), bindings.end(), [](const GraphBinding& binding) { return binding.name == GraphEffectCameraForward; });
 		ASSERT_NE(found, bindings.end());
 		EXPECT_EQ(found->unavailable.empty(), kernel == GraphEffectKernel::Output);
 	}
@@ -587,7 +587,7 @@ TEST(GraphEffectLibraryTest, OrientIsOutputsAndPortsAreModes) {
 	EffectGraphEditOps::BlockChoices(document, 1, choices);
 	Vector<str> orients{GetMemoryResource(MemTag::Editor)};
 	for (const EffectGraphEditOps::BlockChoice& choice : choices) {
-		if (choice.def == GRAPH_EFFECT_ORIENT) {
+		if (choice.def == GraphEffectOrient) {
 			orients.push_back(choice.name);
 		}
 	}
@@ -626,7 +626,7 @@ namespace {
 } // anonymous namespace
 
 TEST(GraphEffectLibraryTest, OutputSamplesMainTextureAsSettingsSay) {
-	const GraphNodeDefinition* output = GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT);
+	const GraphNodeDefinition* output = GraphNodeLibrary::Find(GraphEffectOutputDefinition);
 	ASSERT_NE(output, nullptr);
 	const auto shown = [&](std::string_view settings) {
 		const GraphDocument document = ReadGraph(OneSystemShown("", "", "", settings, ""));
@@ -695,12 +695,12 @@ TEST(GraphEffectLibraryTest, EachOutputKindCompilesToDraw) {
 		const char* says;
 	};
 	const Case cases[] = {
-		{"Triangle", GRAPH_EFFECT_OUTPUT, R"({"Primitive Type":"Triangle"})", 3, "SltParticleTriangleCorner("},
-		{"Quad", GRAPH_EFFECT_OUTPUT, "{}", 6, "SltParticleQuadCorner("},
-		{"Octagon", GRAPH_EFFECT_OUTPUT, R"({"Primitive Type":"Octagon"})", 24, "SltParticleOctagonCorner("},
-		{"Point", GRAPH_EFFECT_OUTPUT_POINT, "{}", 1, "#pragma shalltear_topology point"},
-		{"Line", GRAPH_EFFECT_OUTPUT_LINE, "{}", 6, "SltParticleLineCorner("},
-		{"NativeLine", GRAPH_EFFECT_OUTPUT_LINE, R"({"Use Native Lines":true})", 2, "#pragma shalltear_topology line"},
+		{"Triangle", GraphEffectOutputDefinition, R"({"Primitive Type":"Triangle"})", 3, "SltParticleTriangleCorner("},
+		{"Quad", GraphEffectOutputDefinition, "{}", 6, "SltParticleQuadCorner("},
+		{"Octagon", GraphEffectOutputDefinition, R"({"Primitive Type":"Octagon"})", 24, "SltParticleOctagonCorner("},
+		{"Point", GraphEffectOutputPoint, "{}", 1, "#pragma shalltear_topology point"},
+		{"Line", GraphEffectOutputLine, "{}", 6, "SltParticleLineCorner("},
+		{"NativeLine", GraphEffectOutputLine, R"({"Use Native Lines":true})", 2, "#pragma shalltear_topology line"},
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
@@ -718,8 +718,8 @@ TEST(GraphEffectLibraryTest, EachOutputKindCompilesToDraw) {
 
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	const str four = Output(3, GRAPH_EFFECT_OUTPUT_POINT) + "," + Output(4, GRAPH_EFFECT_OUTPUT_MESH) + "," + Output(5, GRAPH_EFFECT_OUTPUT) + "," +
-					 Output(6, GRAPH_EFFECT_OUTPUT_LINE);
+	const str four = Output(3, GraphEffectOutputPoint) + "," + Output(4, GraphEffectOutputMesh) + "," + Output(5, GraphEffectOutputDefinition) + "," +
+					 Output(6, GraphEffectOutputLine);
 	ASSERT_TRUE(GraphEffectTarget::Compile(ReadGraph(Drawn("", four)), "four.sleffect", effect, diagnostics)) << diagnostics[0].message;
 	const Vector<GraphEffectOutput>& outputs = effect.systems[0].outputs;
 	ASSERT_EQ(outputs.size(), 4u);
@@ -743,16 +743,16 @@ TEST(GraphEffectLibraryTest, AnOutputReadsWhatItsKindDraws) {
 			<< (diagnostics.empty() ? str() : diagnostics[0].message);
 		return effect;
 	};
-	EXPECT_TRUE(Stores(compiled("", Output(3, GRAPH_EFFECT_OUTPUT)).systems[0], "size"));
-	EXPECT_FALSE(Stores(compiled("", Output(3, GRAPH_EFFECT_OUTPUT_POINT)).systems[0], "size"));
+	EXPECT_TRUE(Stores(compiled("", Output(3, GraphEffectOutputDefinition)).systems[0], "size"));
+	EXPECT_FALSE(Stores(compiled("", Output(3, GraphEffectOutputPoint)).systems[0], "size"));
 	const std::string_view target = R"(,{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"targetPosition"},"in":{"TargetPosition":{"value":[0,1,0]}}})";
-	const GraphEffect toTarget = compiled(target, Output(3, GRAPH_EFFECT_OUTPUT_LINE, R"({"Use Target Offset":false})"));
+	const GraphEffect toTarget = compiled(target, Output(3, GraphEffectOutputLine, R"({"Use Target Offset":false})"));
 	EXPECT_TRUE(Stores(toTarget.systems[0], "targetPosition"));
 	EXPECT_FALSE(Stores(toTarget.systems[0], "size"));
-	const GraphEffect toOffset = compiled(target, Output(3, GRAPH_EFFECT_OUTPUT_LINE));
+	const GraphEffect toOffset = compiled(target, Output(3, GraphEffectOutputLine));
 	EXPECT_FALSE(Stores(toOffset.systems[0], "targetPosition"));
 	EXPECT_TRUE(Stores(toOffset.systems[0], "size"));
-	EXPECT_TRUE(compiled("", Output(3, GRAPH_EFFECT_OUTPUT_POINT)).systems[0].outputs[0].textures.empty());
+	EXPECT_TRUE(compiled("", Output(3, GraphEffectOutputPoint)).systems[0].outputs[0].textures.empty());
 }
 
 TEST(GraphEffectLibraryTest, OutputShowsPortsSettingsUse) {
@@ -760,13 +760,13 @@ TEST(GraphEffectLibraryTest, OutputShowsPortsSettingsUse) {
 		const GraphDocument document = ReadGraph(Drawn("", Output(3, def, settings)));
 		return ShownInputs(*GraphNodeLibrary::Find(def), document.contexts[2].node);
 	};
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT, "{}"), Names({"Main Texture"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT, R"({"Primitive Type":"Octagon"})"), Names({"Main Texture", "Crop Factor"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LINE, "{}"), Names({"Target Offset"}));
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_LINE, R"({"Use Target Offset":false})").empty());
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_POINT, "{}").empty());
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_MESH, "{}"), Names({"Mesh", "Main Texture"}));
-	const GraphNodeDefinition* primitive = GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT);
+	EXPECT_EQ(shown(GraphEffectOutputDefinition, "{}"), Names({"Main Texture"}));
+	EXPECT_EQ(shown(GraphEffectOutputDefinition, R"({"Primitive Type":"Octagon"})"), Names({"Main Texture", "Crop Factor"}));
+	EXPECT_EQ(shown(GraphEffectOutputLine, "{}"), Names({"Target Offset"}));
+	EXPECT_TRUE(shown(GraphEffectOutputLine, R"({"Use Target Offset":false})").empty());
+	EXPECT_TRUE(shown(GraphEffectOutputPoint, "{}").empty());
+	EXPECT_EQ(shown(GraphEffectOutputMesh, "{}"), Names({"Mesh", "Main Texture"}));
+	const GraphNodeDefinition* primitive = GraphNodeLibrary::Find(GraphEffectOutputDefinition);
 	EXPECT_EQ(primitive->settings[0].options[primitive->settings[0].defaultIndex], "Quad");
 }
 
@@ -812,7 +812,7 @@ TEST(GraphEffectLibraryTest, OutputSortsAsHasSortingSays) {
 		SCOPED_TRACE(entry.settings);
 		GraphEffect effect;
 		str error;
-		ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, entry.settings), effect, error)) << error;
+		ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, entry.settings), effect, error)) << error;
 		const GraphEffectOutput& output = effect.systems[0].outputs[0];
 		EXPECT_EQ(output.sort, entry.sort);
 		EXPECT_FALSE(output.revertSorting);
@@ -826,7 +826,7 @@ TEST(GraphEffectLibraryTest, OutputSortsAsHasSortingSays) {
 	}
 	GraphEffect reverted;
 	str error;
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_POINT, R"({"Sort":"On","Revert Sorting":true})"), reverted, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputPoint, R"({"Sort":"On","Revert Sorting":true})"), reverted, error)) << error;
 	EXPECT_TRUE(reverted.systems[0].outputs[0].revertSorting);
 	EXPECT_EQ(reverted.systems[0].outputs[0].sort, GraphEffectSort::DistanceToCamera);
 }
@@ -835,13 +835,13 @@ TEST(GraphEffectLibraryTest, SortReadsParticleAsSimulationStoredIt) {
 	GraphEffect effect;
 	str error;
 	const std::string_view moved = R"({"id":30,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"value":[0,9,0]}}})";
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, "{}", "{}", moved), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, "{}", "{}", moved), effect, error)) << error;
 	const str& kernel = effect.systems[0].outputs[0].sortKernel;
 	EXPECT_NE(kernel.find("SltParticleLoad("), str::npos);
 	EXPECT_EQ(kernel.find("9.0"), str::npos);
 	EXPECT_NE(kernel.find("mul(SltParticleEffectLocalToWorld(), float4("), str::npos);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, R"({"Sort Mode":"YoungestInFront"})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, R"({"Sort Mode":"YoungestInFront"})"), effect, error)) << error;
 	EXPECT_TRUE(Stores(effect.systems[0], "age"));
 	EXPECT_NE(effect.systems[0].updateKernel.find("sltAttr_age"), str::npos);
 }
@@ -850,14 +850,14 @@ TEST(GraphEffectLibraryTest, SortKeySamplesNoTexture) {
 	GraphEffect effect;
 	str error;
 	const str custom = R"({"Sort Mode":"Custom"})";
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, custom, R"({"Sort Key":{"from":[20,"size"]}})", "",
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, custom, R"({"Sort Key":{"from":[20,"size"]}})", "",
 									   R"({"id":20,"def":"Attribute/GetAttribute","settings":{"Attribute":"size"}})"),
 							  effect, error))
 		<< error;
 	EXPECT_NE(effect.systems[0].outputs[0].sortKernel.find("-(sltAttr_size)"), str::npos) << effect.systems[0].outputs[0].sortKernel;
 
 	const str sampled = R"({"id":20,"def":"Sampling/SampleTexture2D","in":{"Texture":{"value":"00000000000000a1-00000000000000b1"},"UV":{"value":[0.5,0.5]}}})";
-	EXPECT_FALSE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, custom, R"({"Sort Key":{"from":[20,"s"]}})", "", sampled), effect, error));
+	EXPECT_FALSE(CompileSorted(SortedBy(GraphEffectOutputDefinition, custom, R"({"Sort Key":{"from":[20,"s"]}})", "", sampled), effect, error));
 	EXPECT_NE(error.find("samples no texture"), str::npos) << error;
 }
 
@@ -866,20 +866,20 @@ TEST(GraphEffectLibraryTest, AnOutputShowsItsSharedSettingsPorts) {
 		const GraphDocument document = ReadGraph(SortedBy(def, settings));
 		return ShownInputs(*GraphNodeLibrary::Find(def), document.contexts[2].node);
 	};
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, "{}"), Names({}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Use Alpha Clipping":true})"), Names({"Alpha Threshold"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Use Soft Particle":true})"), Names({"Soft Particle Fade Distance"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Use Soft Particle":true,"Blend Mode":"Opaque"})"), Names({}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LINE, R"({"Sort Mode":"Custom"})"), Names({"Target Offset", "Sort Key"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_MESH, R"({"Sort Mode":"Custom","Sort":"Off"})"), Names({"Mesh", "Main Texture"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT, R"({"Use Alpha Clipping":true,"Use Soft Particle":true,"Sort Mode":"Custom"})"),
+	EXPECT_EQ(shown(GraphEffectOutputPoint, "{}"), Names({}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Use Alpha Clipping":true})"), Names({"Alpha Threshold"}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Use Soft Particle":true})"), Names({"Soft Particle Fade Distance"}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Use Soft Particle":true,"Blend Mode":"Opaque"})"), Names({}));
+	EXPECT_EQ(shown(GraphEffectOutputLine, R"({"Sort Mode":"Custom"})"), Names({"Target Offset", "Sort Key"}));
+	EXPECT_EQ(shown(GraphEffectOutputMesh, R"({"Sort Mode":"Custom","Sort":"Off"})"), Names({"Mesh", "Main Texture"}));
+	EXPECT_EQ(shown(GraphEffectOutputDefinition, R"({"Use Alpha Clipping":true,"Use Soft Particle":true,"Sort Mode":"Custom"})"),
 			  Names({"Main Texture", "Alpha Threshold", "Soft Particle Fade Distance", "Sort Key"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Cast Shadows":true})"), Names({"Alpha Threshold"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})"), Names({}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_POINT, R"({"Cast Shadows":true,"Blend Mode":"Opaque","Use Alpha Clipping":true})"), Names({"Alpha Threshold"}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Cast Shadows":true})"), Names({"Alpha Threshold"}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})"), Names({}));
+	EXPECT_EQ(shown(GraphEffectOutputPoint, R"({"Cast Shadows":true,"Blend Mode":"Opaque","Use Alpha Clipping":true})"), Names({"Alpha Threshold"}));
 
-	for (std::string_view def : {GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_OUTPUT_POINT, GRAPH_EFFECT_OUTPUT_LINE, GRAPH_EFFECT_OUTPUT_LIT,
-								 GRAPH_EFFECT_OUTPUT_LIT_MESH}) {
+	for (std::string_view def : {GraphEffectOutputDefinition, GraphEffectOutputMesh, GraphEffectOutputPoint, GraphEffectOutputLine, GraphEffectOutputLit,
+								 GraphEffectOutputLitMesh}) {
 		SCOPED_TRACE(def);
 		const GraphNodeDefinition* definition = GraphNodeLibrary::Find(def);
 		ASSERT_NE(definition, nullptr);
@@ -907,7 +907,7 @@ TEST(GraphEffectLibraryTest, AnOutputShowsItsSharedSettingsPorts) {
 TEST(GraphEffectLibraryTest, SoftParticleFadesClippedDiscards) {
 	GraphEffect effect;
 	str error;
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, R"({"Use Soft Particle":true,"Use Alpha Clipping":true})",
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, R"({"Use Soft Particle":true,"Use Alpha Clipping":true})",
 									   R"({"Soft Particle Fade Distance":{"value":[0.25]},"Alpha Threshold":{"value":[0.3]}})"),
 							  effect, error))
 		<< error;
@@ -921,18 +921,18 @@ TEST(GraphEffectLibraryTest, SoftParticleFadesClippedDiscards) {
 	EXPECT_NE(shader.find("sltOut.softDistance = "), str::npos);
 	EXPECT_NE(shader.find("sltOut.threshold = "), str::npos);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_MESH, R"({"Use Soft Particle":true,"Blend Mode":"Opaque","Use Alpha Clipping":true})"), effect, error))
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputMesh, R"({"Use Soft Particle":true,"Blend Mode":"Opaque","Use Alpha Clipping":true})"), effect, error))
 		<< error;
 	EXPECT_EQ(effect.systems[0].outputs[0].shader.find("sltSceneDepth"), str::npos);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("clip(sltColor.a"), str::npos);
 }
 
 TEST(GraphEffectLibraryTest, CameraFadeUsesClipW) {
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_CAMERA_FADE));
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT_LINE, GRAPH_EFFECT_CAMERA_FADE));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_CAMERA_FADE));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_CAMERA_FADE));
-	const GraphNodeDefinition* fade = GraphNodeLibrary::Find(GRAPH_EFFECT_CAMERA_FADE);
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectOutputDefinition, GraphEffectCameraFade));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectOutputLine, GraphEffectCameraFade));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectCameraFade));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectInitialize, GraphEffectCameraFade));
+	const GraphNodeDefinition* fade = GraphNodeLibrary::Find(GraphEffectCameraFade);
 	ASSERT_NE(fade, nullptr);
 	EXPECT_EQ(fade->settings[0].options[fade->settings[0].defaultIndex], "Alpha");
 	EXPECT_EQ(fade->settings[1].defaultIndex, 1u);
@@ -944,13 +944,13 @@ TEST(GraphEffectLibraryTest, CameraFadeUsesClipW) {
 	GraphEffect effect;
 	str error;
 	const std::string_view block = R"({"id":30,"def":"Block/CameraFade","settings":{"Fade Mode":"ColorAndAlpha"}})";
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, "{}", "{}", block), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, "{}", "{}", block), effect, error)) << error;
 	const str& shader = effect.systems[0].outputs[0].shader;
 	EXPECT_NE(shader.find("#include \"VisualEffects/ParticleCamera.hlsli\""), str::npos);
 	EXPECT_NE(shader.find("mul(SltParticleCameraClipWRow(), SltParticleEffectLocalToWorld())"), str::npos);
 	EXPECT_NE(shader.find("SltParticleShadowPass()"), str::npos);
 	const std::string_view shadows = R"({"id":30,"def":"Block/CameraFade","settings":{"Affect Shadows":true}})";
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT, "{}", "{}", shadows), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputDefinition, "{}", "{}", shadows), effect, error)) << error;
 	EXPECT_EQ(effect.systems[0].outputs[0].shader.find("SltParticleShadowPass()"), str::npos);
 
 	const std::string_view inUpdate = R"({"_type":"EffectGraph","version":4,"nextId":100,"contexts":[
@@ -963,7 +963,7 @@ TEST(GraphEffectLibraryTest, TheFlipbookPlayersPortsAreItsModes) {
 	GraphDefinitions definitions;
 	GraphDocument holder;
 	const auto ports = [&](std::string_view settings) {
-		const GraphNodeDefinition* definition = BlockShape(definitions, holder, GRAPH_EFFECT_FLIPBOOK_PLAYER, settings);
+		const GraphNodeDefinition* definition = BlockShape(definitions, holder, GraphEffectFlipbookPlayer, settings);
 		EXPECT_NE(definition, nullptr) << settings;
 		return definition ? InputNames(*definition) : Vector<str>{GetMemoryResource(MemTag::Editor)};
 	};
@@ -977,16 +977,16 @@ TEST(GraphEffectLibraryTest, TheFlipbookPlayersPortsAreItsModes) {
 	EXPECT_EQ(ports(R"({"Use Custom Range":true,"Animation Range":"StartEndFrames"})"), Names({"Frame Rate", "Frame Range"}));
 	EXPECT_EQ(ports(R"({"Animation Range":"StartEndFrames"})"), Names({"Frame Rate"}));
 
-	const GraphNodeDefinition* curve = BlockShape(definitions, holder, GRAPH_EFFECT_FLIPBOOK_PLAYER, R"({"Frame Rate Mode":"OverLifetime"})");
+	const GraphNodeDefinition* curve = BlockShape(definitions, holder, GraphEffectFlipbookPlayer, R"({"Frame Rate Mode":"OverLifetime"})");
 	ASSERT_NE(curve, nullptr);
 	EXPECT_EQ(GraphPortLabel(curve->inputs[0]), "Frame Rate");
-	EXPECT_NE(curve->inputs[0].defaultJson.find("24"), std::string_view::npos);
-	const GraphNodeDefinition* row = BlockShape(definitions, holder, GRAPH_EFFECT_FLIPBOOK_PLAYER, R"({"Mode":"Cycles","Animation Range":"FlipbookRow"})");
+	EXPECT_NE(curve->inputs[0].defaultJSON.find("24"), std::string_view::npos);
+	const GraphNodeDefinition* row = BlockShape(definitions, holder, GraphEffectFlipbookPlayer, R"({"Mode":"Cycles","Animation Range":"FlipbookRow"})");
 	ASSERT_NE(row, nullptr);
 	ASSERT_EQ(row->outputs.size(), 2u);
 	EXPECT_EQ(row->outputs[1].name, "texIndexBlend");
 
-	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GRAPH_EFFECT_FLIPBOOK_PLAYER);
+	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GraphEffectFlipbookPlayer);
 	ASSERT_NE(table, nullptr);
 	const auto rangeShown = [&](std::string_view settings) {
 		const GraphDocument document = ReadGraph(std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"contexts":[
@@ -998,16 +998,16 @@ TEST(GraphEffectLibraryTest, TheFlipbookPlayersPortsAreItsModes) {
 	EXPECT_TRUE(rangeShown(R"({"Mode":"Cycles"})"));
 	EXPECT_TRUE(rangeShown(R"({"Use Custom Range":true})"));
 
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_FLIPBOOK_PLAYER));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_FLIPBOOK_PLAYER));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_FLIPBOOK_PLAYER));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectFlipbookPlayer));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectInitialize, GraphEffectFlipbookPlayer));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectOutputDefinition, GraphEffectFlipbookPlayer));
 }
 
 namespace {
 
-	constexpr std::string_view IMAGE_GUID = "00000000000000a1-00000000000000b1";
-	constexpr std::string_view FIELD_GUID = "00000000000000a2-00000000000000b2";
-	constexpr std::string_view VOLUME_GUID = "00000000000000a3-00000000000000b3";
+	constexpr std::string_view ImageGuid = "00000000000000a1-00000000000000b1";
+	constexpr std::string_view FieldGuid = "00000000000000a2-00000000000000b2";
+	constexpr std::string_view VolumeGuid = "00000000000000a3-00000000000000b3";
 
 	str SampledEverywhere() {
 		return std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"nodes":[
@@ -1017,7 +1017,7 @@ namespace {
 			{{"id":1,"def":"Context/Initialize","blocks":[{{"id":10,"def":"Block/SetAttribute","settings":{{"Attribute":"color"}},"in":{{"Color":{{"from":[20,"s"]}}}}}}]}},
 			{{"id":2,"def":"Context/Update","flow":[[1,"In"]],"blocks":[{{"id":11,"def":"Block/SetAttribute","settings":{{"Attribute":"velocity"}},"in":{{"Velocity":{{"from":[31,"s"]}}}}}}]}},
 			{{"id":3,"def":"Context/OutputParticlePrimitive","flow":[[2,"In"]],"blocks":[{{"id":12,"def":"Block/SetAttribute","settings":{{"Attribute":"alpha"}},"in":{{"Alpha":{{"from":[30,"s"]}}}}}}]}}]}})",
-						   IMAGE_GUID, FIELD_GUID, VOLUME_GUID);
+						   ImageGuid, FieldGuid, VolumeGuid);
 	}
 
 } // anonymous namespace
@@ -1031,26 +1031,26 @@ TEST(GraphEffectLibraryTest, TextureDeclaredWhereSampled) {
 	ASSERT_EQ(system.initializeTextures.size(), 1u);
 	EXPECT_EQ(system.initializeTextures[0].binding, 4u);
 	EXPECT_EQ(system.initializeTextures[0].samplerBinding, 5u);
-	EXPECT_EQ(system.initializeTextures[0].texture.ToString(), IMAGE_GUID);
+	EXPECT_EQ(system.initializeTextures[0].texture.ToString(), ImageGuid);
 	EXPECT_NE(system.initializeKernel.find("[[vk::binding(4, 0)]] Texture2D sltTexture20_0;"), str::npos);
 	EXPECT_NE(system.initializeKernel.find("[[vk::binding(5, 0)]] SamplerState sltTexture20_0Sampler;"), str::npos);
 	EXPECT_EQ(system.initializeKernel.find("sltTexture31_0"), str::npos);
 
 	ASSERT_EQ(system.updateTextures.size(), 1u);
 	EXPECT_EQ(system.updateTextures[0].binding, 4u);
-	EXPECT_EQ(system.updateTextures[0].texture.ToString(), FIELD_GUID);
+	EXPECT_EQ(system.updateTextures[0].texture.ToString(), FieldGuid);
 	EXPECT_NE(system.updateKernel.find("[[vk::binding(4, 0)]] Texture3D sltTexture31_0;"), str::npos);
 
 	const GraphEffectOutput& output = system.outputs[0];
 	ASSERT_EQ(output.textures.size(), 2u);
 	EXPECT_EQ(output.textures[0].slot, "mainTexture");
 	EXPECT_EQ(output.textures[1].slot, "sltTexture30_0");
-	EXPECT_EQ(output.textures[1].texture.ToString(), VOLUME_GUID);
+	EXPECT_EQ(output.textures[1].texture.ToString(), VolumeGuid);
 	EXPECT_NE(output.shader.find("[[vk::binding(2, 1)]] Texture3D sltTexture30_0;"), str::npos);
 	EXPECT_NE(output.shader.find("[[vk::binding(3, 1)]] SamplerState sltTexture30_0Sampler;"), str::npos);
 
 	str empty = SampledEverywhere();
-	const str held = std::format(R"("Texture":{{"value":"{}"}})", FIELD_GUID);
+	const str held = std::format(R"("Texture":{{"value":"{}"}})", FieldGuid);
 	empty.replace(empty.find(held), held.size(), R"("Texture":{"value":null})");
 	ASSERT_TRUE(GraphEffectTarget::Compile(ReadGraph(empty), "unheld.sleffect", effect, diagnostics));
 	ASSERT_EQ(effect.systems[0].updateTextures.size(), 1u);
@@ -1058,7 +1058,7 @@ TEST(GraphEffectLibraryTest, TextureDeclaredWhereSampled) {
 }
 
 TEST(GraphEffectLibraryTest, TextureInSpawnOrBoundRefused) {
-	const str sample = std::format(R"({{"id":20,"def":"Sampling/SampleTexture2D","in":{{"Texture":{{"value":"{}"}}}}}})", IMAGE_GUID);
+	const str sample = std::format(R"({{"id":20,"def":"Sampling/SampleTexture2D","in":{{"Texture":{{"value":"{}"}}}}}})", ImageGuid);
 	const str rated = std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"nodes":[{}],"contexts":[
 		{{"id":5,"def":"Context/Spawn","blocks":[{{"id":6,"def":"Block/ConstantSpawnRate","in":{{"Rate":{{"from":[20,"s"]}}}}}}]}},
 		{{"id":1,"def":"Context/Initialize","flow":[[5,"In"]],"blocks":[]}}]}})",
@@ -1085,19 +1085,19 @@ TEST(GraphEffectLibraryTest, SearcherOffersEffectsSamplingOperatorsAlone) {
 			offered.push_back(str(definition->id));
 		}
 	}
-	for (std::string_view own : {GRAPH_EFFECT_SAMPLE_TEXTURE_2D, GRAPH_EFFECT_SAMPLE_TEXTURE_2D_ARRAY, GRAPH_EFFECT_SAMPLE_TEXTURE_3D,
-								 GRAPH_EFFECT_SAMPLE_TEXTURE_CUBE}) {
+	for (std::string_view own : {GraphEffectSampleTexture2D, GraphEffectSampleTexture2DArray, GraphEffectSampleTexture3D,
+								 GraphEffectSampleTextureCube}) {
 		EXPECT_NE(std::find(offered.begin(), offered.end(), own), offered.end()) << own;
 	}
 	EXPECT_EQ(std::find(offered.begin(), offered.end(), "Input/TextureSize"), offered.end());
 }
 
 TEST(GraphEffectLibraryTest, FieldsAreUpdatesAndShapesOfferField) {
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_VECTOR_FIELD_FORCE));
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_CONFORM_TO_SDF));
-	for (std::string_view context : {GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_OUTPUT}) {
-		EXPECT_FALSE(GraphEffectRules::Holds(context, GRAPH_EFFECT_VECTOR_FIELD_FORCE)) << context;
-		EXPECT_FALSE(GraphEffectRules::Holds(context, GRAPH_EFFECT_CONFORM_TO_SDF)) << context;
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectVectorFieldForce));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectConformToSDF));
+	for (std::string_view context : {GraphEffectInitialize, GraphEffectOutputDefinition}) {
+		EXPECT_FALSE(GraphEffectRules::Holds(context, GraphEffectVectorFieldForce)) << context;
+		EXPECT_FALSE(GraphEffectRules::Holds(context, GraphEffectConformToSDF)) << context;
 	}
 
 	GraphDefinitions definitions;
@@ -1136,14 +1136,14 @@ TEST(GraphEffectLibraryTest, FieldsAreUpdatesAndShapesOfferField) {
 	EXPECT_EQ(built(R"({"id":10,"def":"Block/CollisionShape","settings":{"Shape":"SignedDistanceField","Behavior":"Kill"}})"),
 			  list({"Distance Field", "Center", "Angles", "Size", "->", "alive"}));
 
-	const GraphNodeDefinition* sample = GraphNodeLibrary::Find(GRAPH_EFFECT_SAMPLE_SDF);
+	const GraphNodeDefinition* sample = GraphNodeLibrary::Find(GraphEffectSampleSDF);
 	ASSERT_NE(sample, nullptr);
 	EXPECT_TRUE(EffectGraphEditOps::IsOperator(*sample));
 }
 
 namespace {
 
-	constexpr std::string_view MESH_GUID = "00000000000000a5-00000000000000b5";
+	constexpr std::string_view MeshGuid = "00000000000000a5-00000000000000b5";
 
 	str MeshedEverywhere() {
 		return std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"nodes":[
@@ -1152,7 +1152,7 @@ namespace {
 			{{"id":1,"def":"Context/Initialize","blocks":[{{"id":10,"def":"Block/PositionMesh","in":{{"Mesh":{{"value":"{0}"}}}}}}]}},
 			{{"id":2,"def":"Context/Update","flow":[[1,"In"]],"blocks":[{{"id":11,"def":"Block/SetAttribute","settings":{{"Attribute":"size"}},"in":{{"Size":{{"from":[20,"Count"]}}}}}}]}},
 			{{"id":3,"def":"Context/OutputParticlePrimitive","flow":[[2,"In"]],"blocks":[{{"id":12,"def":"Block/SetAttribute","settings":{{"Attribute":"alpha"}},"in":{{"Alpha":{{"from":[21,"Position"]}}}}}}]}}]}})",
-						   MESH_GUID);
+						   MeshGuid);
 	}
 
 } // anonymous namespace
@@ -1169,7 +1169,7 @@ TEST(GraphEffectLibraryTest, MeshPortReservedAndCarried) {
 	EXPECT_EQ(effect.meshes[1].offset, GraphEffectTarget::FRAME_HEADER_BYTES + GRAPH_EFFECT_MESH_RECORD_BYTES);
 	EXPECT_EQ(effect.meshes[2].binding, "PortMesh/10/Mesh");
 	EXPECT_EQ(effect.meshes[2].offset, GraphEffectTarget::FRAME_HEADER_BYTES + 2 * GRAPH_EFFECT_MESH_RECORD_BYTES);
-	EXPECT_EQ(effect.meshes[2].mesh.ToString(), MESH_GUID);
+	EXPECT_EQ(effect.meshes[2].mesh.ToString(), MeshGuid);
 	EXPECT_EQ(effect.batchesOffset, GraphEffectTarget::FRAME_HEADER_BYTES + 3 * GRAPH_EFFECT_MESH_RECORD_BYTES);
 
 	const GraphEffectSystem& system = effect.systems[0];
@@ -1194,7 +1194,7 @@ TEST(GraphEffectLibraryTest, MeshsCountsAndSamplesReachCpu) {
 		{{"id":20,"def":"Sampling/MeshTriangleCount","in":{{"Mesh":{{"value":"{}"}}}}}}],"contexts":[
 		{{"id":5,"def":"Context/Spawn","blocks":[{{"id":6,"def":"Block/Burst","in":{{"Count":{{"from":[20,"Count"]}}}}}}]}},
 		{{"id":1,"def":"Context/Initialize","flow":[[5,"In"]],"blocks":[]}}]}})",
-									MESH_GUID);
+									MeshGuid);
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	ASSERT_TRUE(GraphEffectTarget::Compile(ReadGraph(counted), "counted.sleffect", effect, diagnostics)) << diagnostics[0].message;
@@ -1278,20 +1278,20 @@ TEST(GraphEffectLibraryTest, MeshPortsFollowSettings) {
 }
 
 TEST(GraphEffectLibraryTest, MeshPortTakesOnlyMesh) {
-	for (std::string_view context : {GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_OUTPUT}) {
-		EXPECT_TRUE(GraphEffectRules::Holds(context, GRAPH_EFFECT_POSITION_MESH)) << context;
+	for (std::string_view context : {GraphEffectInitialize, GraphEffectUpdate, GraphEffectOutputDefinition}) {
+		EXPECT_TRUE(GraphEffectRules::Holds(context, GraphEffectPositionMesh)) << context;
 	}
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_POSITION_MESH));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectSpawn, GraphEffectPositionMesh));
 	const GraphDocument document = ReadGraph(OneSystem("", ""));
 	Vector<EffectGraphEditOps::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 	EffectGraphEditOps::BlockChoices(document, 1, choices);
 	const bool offered = std::any_of(choices.begin(), choices.end(), [](const EffectGraphEditOps::BlockChoice& choice) {
-		return choice.def == GRAPH_EFFECT_POSITION_MESH && choice.name == "Set Position (Mesh)" && choice.category == "Position Shape";
+		return choice.def == GraphEffectPositionMesh && choice.name == "Set Position (Mesh)" && choice.category == "Position Shape";
 	});
 	EXPECT_TRUE(offered);
 
-	for (std::string_view own : {GRAPH_EFFECT_SAMPLE_MESH, GRAPH_EFFECT_SAMPLE_MESH_INDEX, GRAPH_EFFECT_MESH_VERTEX_COUNT, GRAPH_EFFECT_MESH_INDEX_COUNT,
-								 GRAPH_EFFECT_MESH_TRIANGLE_COUNT}) {
+	for (std::string_view own : {GraphEffectSampleMesh, GraphEffectSampleMeshIndex, GraphEffectMeshVertexCount, GraphEffectMeshIndexCount,
+								 GraphEffectMeshTriangleCount}) {
 		const GraphNodeDefinition* definition = GraphNodeLibrary::Find(own);
 		ASSERT_NE(definition, nullptr) << own;
 		EXPECT_TRUE(EffectGraphEditOps::IsOperator(*definition)) << own;
@@ -1349,16 +1349,16 @@ TEST(GraphEffectLibraryTest, SequentialPortsFollowSettings) {
 	ASSERT_EQ(refused.size(), 1u);
 	EXPECT_NE(refused[0].find("isn't one of its options"), str::npos) << refused[0];
 
-	for (std::string_view context : {GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_OUTPUT}) {
-		EXPECT_TRUE(GraphEffectRules::Holds(context, GRAPH_EFFECT_POSITION_SEQUENTIAL)) << context;
+	for (std::string_view context : {GraphEffectInitialize, GraphEffectUpdate, GraphEffectOutputDefinition}) {
+		EXPECT_TRUE(GraphEffectRules::Holds(context, GraphEffectPositionSequential)) << context;
 	}
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_POSITION_SEQUENTIAL));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectSpawn, GraphEffectPositionSequential));
 	const GraphDocument document = ReadGraph(OneSystem("", ""));
 	Vector<EffectGraphEditOps::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 	EffectGraphEditOps::BlockChoices(document, 2, choices);
 	Vector<str> offered{GetMemoryResource(MemTag::Editor)};
 	for (const EffectGraphEditOps::BlockChoice& choice : choices) {
-		if (choice.def == GRAPH_EFFECT_POSITION_SEQUENTIAL) {
+		if (choice.def == GraphEffectPositionSequential) {
 			offered.push_back(choice.name);
 			GraphNode made;
 			made.def = choice.def;
@@ -1403,10 +1403,10 @@ namespace {
 		}
 	};
 
-	constexpr std::string_view NOISE_TYPES[] = {"Value", "Perlin", "Cellular"};
-	constexpr std::string_view NOISE_DIMENSIONS[] = {"One", "Two", "Three"};
+	constexpr std::string_view NoiseTypes[] = {"Value", "Perlin", "Cellular"};
+	constexpr std::string_view NoiseDimensions[] = {"One", "Two", "Three"};
 
-	str JsonVector(std::span<const f32> components) {
+	str JSONVector(std::span<const f32> components) {
 		str out = "[";
 		for (size_t i = 0; i < components.size(); ++i) {
 			out += std::format("{}{}", i == 0 ? "" : ",", components[i]);
@@ -1481,9 +1481,9 @@ TEST_F(GraphEffectLibraryFixture, ValueNoiseIsIEEEOnDevice) {
 		std::string_view attribute;
 		u32 component;
 	};
-	constexpr Read READS[] = {{"alpha", 0}, {"pivot", 0}, {"size", 0}, {"scale", 0}, {"scale", 1}};
+	constexpr Read Reads[] = {{"alpha", 0}, {"pivot", 0}, {"size", 0}, {"scale", 0}, {"scale", 1}};
 	Vector<Vector<f32>> drawn{GetMemoryResource(MemTag::Graphics)};
-	for (const Read& read : READS) {
+	for (const Read& read : Reads) {
 		drawn.push_back(Values(run, read.attribute, read.component));
 		ASSERT_EQ(drawn.back().size(), coordinates.size()) << read.attribute;
 	}
@@ -1498,10 +1498,10 @@ TEST_F(GraphEffectLibraryFixture, ValueNoiseIsIEEEOnDevice) {
 		const f32 alongX[2] = {half(corner[0], corner[1]), half(corner[2], corner[3])};
 		const f32 want[] = {half(line[0], line[1]), (line[1] - line[0]) * 1.875f, half(alongY[0], alongY[1]), (alongY[1] - alongY[0]) * 1.875f,
 							(alongX[1] - alongX[0]) * 1.875f};
-		for (size_t r = 0; r < std::size(READS); ++r) {
+		for (size_t r = 0; r < std::size(Reads); ++r) {
 			if (std::bit_cast<u32>(drawn[r][i]) != std::bit_cast<u32>(want[r])) {
 				if (moved < 8) {
-					first += std::format("  at {}, {}[{}]: drew {} where IEEE gives {}\n", coordinates[i], READS[r].attribute, READS[r].component, drawn[r][i], want[r]);
+					first += std::format("  at {}, {}[{}]: drew {} where IEEE gives {}\n", coordinates[i], Reads[r].attribute, Reads[r].component, drawn[r][i], want[r]);
 				}
 				++moved;
 			}
@@ -1517,7 +1517,7 @@ TEST_F(GraphEffectLibraryFixture, ANoisesDerivativesAreItsValuesSlope) {
 	constexpr f32 BASE[3] = {0.37f, 1.61f, 2.29f};
 	for (u32 type = 0; type < 3; ++type) {
 		for (u32 width = 1; width <= 3; ++width) {
-			SCOPED_TRACE(std::format("{} Noise {}D", NOISE_TYPES[type], width));
+			SCOPED_TRACE(std::format("{} Noise {}D", NoiseTypes[type], width));
 			str nodes;
 			const std::string_view range = type == 1 ? "[-1,1]" : "[0,1]";
 			const auto noise = [&](u32 id, i32 axis, f32 sign) {
@@ -1526,7 +1526,7 @@ TEST_F(GraphEffectLibraryFixture, ANoisesDerivativesAreItsValuesSlope) {
 					at[axis] += sign * STEP;
 				}
 				nodes += std::format(R"({}{{"id":{},"def":"Noise/Noise","settings":{{"Type":"{}","Dimensions":"{}"}},"in":{{"Coordinate":{{"value":{}}},"Range":{{"value":{}}}}}}})",
-									 nodes.empty() ? "" : ",", id, NOISE_TYPES[type], NOISE_DIMENSIONS[width - 1], JsonVector({at, width}), range);
+									 nodes.empty() ? "" : ",", id, NoiseTypes[type], NoiseDimensions[width - 1], JSONVector({at, width}), range);
 			};
 			noise(20, -1, 0.0f);
 			for (u32 axis = 0; axis < width; ++axis) {
@@ -1564,10 +1564,10 @@ TEST_F(GraphEffectLibraryFixture, ANoisesDerivativesAreItsValuesSlope) {
 
 TEST_F(GraphEffectLibraryFixture, TheOctavesAreAFractalSum) {
 	for (u32 type = 0; type < 3; ++type) {
-		SCOPED_TRACE(NOISE_TYPES[type]);
+		SCOPED_TRACE(NoiseTypes[type]);
 		const auto noise = [&](u32 id, f32 frequency, f32 octaves) {
 			return std::format(R"({{"id":{},"def":"Noise/Noise","settings":{{"Type":"{}","Dimensions":"Three"}},"in":{{"Coordinate":{{"value":[0.41,1.73,2.9]}},"Frequency":{{"value":[{}]}},"Octaves":{{"value":[{}]}},"Roughness":{{"value":[0.4]}},"Lacunarity":{{"value":[2.1]}}}}}})",
-							   id, NOISE_TYPES[type], frequency, octaves);
+							   id, NoiseTypes[type], frequency, octaves);
 		};
 		const str nodes = noise(20, 0.7f, 1.0f) + "," + noise(21, 0.7f * 2.1f, 1.0f) + "," + noise(22, 0.7f, 2.0f);
 		const str blocks = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[20,"Noise"]}}},
@@ -1588,14 +1588,14 @@ TEST_F(GraphEffectLibraryFixture, TheOctavesAreAFractalSum) {
 TEST_F(GraphEffectLibraryFixture, CurlIs2DimensionalNoisesDerivativesCrossed) {
 	constexpr f32 AT[3] = {0.53f, 1.27f, 2.11f};
 	for (u32 type = 0; type < 3; ++type) {
-		SCOPED_TRACE(NOISE_TYPES[type]);
+		SCOPED_TRACE(NoiseTypes[type]);
 		const auto plane = [&](u32 id, f32 x, f32 y) {
 			return std::format(R"({{"id":{},"def":"Noise/Noise","settings":{{"Type":"{}","Dimensions":"Two"}},"in":{{"Coordinate":{{"value":[{},{}]}},"Range":{{"value":[0,1]}}}}}})",
-							   id, NOISE_TYPES[type], x, y);
+							   id, NoiseTypes[type], x, y);
 		};
 		{
 			const str nodes = std::format(R"({{"id":20,"def":"Noise/CurlNoise","settings":{{"Type":"{}","Dimensions":"Three"}},"in":{{"Coordinate":{{"value":[{},{},{}]}}}}}},)",
-										  NOISE_TYPES[type], AT[0], AT[1], AT[2]) +
+										  NoiseTypes[type], AT[0], AT[1], AT[2]) +
 							  plane(21, AT[2], AT[1]) + "," + plane(22, AT[0] + 100.0f, AT[2] + 100.0f) + "," + plane(23, AT[1] + 200.0f, AT[0] + 200.0f) +
 							  R"(,{"id":24,"def":"Channel/Split","in":{"In":{"from":[23,"Derivatives"]}}})";
 			const str blocks = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[20,"Noise"]}}},
@@ -1618,7 +1618,7 @@ TEST_F(GraphEffectLibraryFixture, CurlIs2DimensionalNoisesDerivativesCrossed) {
 		}
 		{
 			const str nodes = std::format(R"({{"id":20,"def":"Noise/CurlNoise","settings":{{"Type":"{}","Dimensions":"Two"}},"in":{{"Coordinate":{{"value":[{},{}]}}}}}},)",
-										  NOISE_TYPES[type], AT[0], AT[1]) +
+										  NoiseTypes[type], AT[0], AT[1]) +
 							  plane(21, AT[0], AT[1]);
 			const str blocks = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[20,"Noise"]}}},
 				{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[21,"Derivatives"]}}})";
@@ -2107,26 +2107,26 @@ TEST_F(GraphEffectLibraryFixture, FlipbookAdvancesTexIndex) {
 		f32 texIndex;
 		f32 blend;
 	};
-	constexpr std::string_view FLIPBOOK = R"({"UV Mode":"Flipbook"})";
-	constexpr std::string_view BLENDING = R"({"UV Mode":"Flipbook","Flipbook Blend Frames":true})";
-	constexpr std::string_view SHEET_4X1 = R"({"Flip Book Size":{"value":[4,1]}})";
-	constexpr std::string_view SHEET_3X1 = R"({"Flip Book Size":{"value":[3,1]}})";
-	constexpr std::string_view SHEET_4X2 = R"({"Flip Book Size":{"value":[4,2]}})";
+	constexpr std::string_view Flipbook = R"({"UV Mode":"Flipbook"})";
+	constexpr std::string_view Blending = R"({"UV Mode":"Flipbook","Flipbook Blend Frames":true})";
+	constexpr std::string_view Sheet4X1 = R"({"Flip Book Size":{"value":[4,1]}})";
+	constexpr std::string_view Sheet3X1 = R"({"Flip Book Size":{"value":[3,1]}})";
+	constexpr std::string_view Sheet4X2 = R"({"Flip Book Size":{"value":[4,2]}})";
 	const Case cases[] = {
 		{"Rate", "{}", "{}", "", "", 2, 4.8f, NAN},
-		{"RateInRange", R"({"Use Custom Range":true})", "{}", FLIPBOOK, SHEET_3X1, 2, 1.8f, NAN},
-		{"Reversed", R"({"Use Custom Range":true,"Reverse":true})", "{}", FLIPBOOK, SHEET_3X1, 1, 0.6f, NAN},
+		{"RateInRange", R"({"Use Custom Range":true})", "{}", Flipbook, Sheet3X1, 2, 1.8f, NAN},
+		{"Reversed", R"({"Use Custom Range":true,"Reverse":true})", "{}", Flipbook, Sheet3X1, 1, 0.6f, NAN},
 		{"BySpeed", R"({"Frame Rate Mode":"BySpeed"})",
 		 R"({"Frame Rate Curve":{"value":{"keys":[{"time":0,"value":0,"outTangent":30},{"time":1,"value":30,"inTangent":30}]}}})", "", "", 1, 1.5f, NAN},
-		{"Cycles", R"({"Mode":"Cycles"})", "{}", FLIPBOOK, SHEET_4X1, 2, 0.4f, NAN},
-		{"CyclesOffset", R"({"Mode":"Cycles"})", R"({"Start Offset":{"value":[1]}})", FLIPBOOK, SHEET_4X1, 1, 1.2f, NAN},
-		{"Row", R"({"Mode":"Cycles","Animation Range":"FlipbookRow"})", R"({"Index":{"value":[1]}})", FLIPBOOK, SHEET_4X2, 1, 4.2f, 1.0f},
-		{"Column", R"({"Mode":"Cycles","Animation Range":"FlipbookColumn"})", R"({"Index":{"value":[1]}})", FLIPBOOK, SHEET_4X2, 1, 1.2f, 4.0f},
-		{"StartEnd", R"({"Mode":"Cycles","Animation Range":"StartEndFrames"})", R"({"Frame Range":{"value":[2,5]}})", FLIPBOOK, SHEET_4X1, 1, 2.2f, 1.0f},
-		{"ClampedBlending", R"({"Mode":"Cycles","Clamp Blending":true})", "{}", BLENDING, SHEET_4X1, 1, 0.0f, NAN},
-		{"ClampedNotBlending", R"({"Mode":"Cycles","Clamp Blending":true})", "{}", FLIPBOOK, SHEET_4X1, 1, 0.2f, NAN},
+		{"Cycles", R"({"Mode":"Cycles"})", "{}", Flipbook, Sheet4X1, 2, 0.4f, NAN},
+		{"CyclesOffset", R"({"Mode":"Cycles"})", R"({"Start Offset":{"value":[1]}})", Flipbook, Sheet4X1, 1, 1.2f, NAN},
+		{"Row", R"({"Mode":"Cycles","Animation Range":"FlipbookRow"})", R"({"Index":{"value":[1]}})", Flipbook, Sheet4X2, 1, 4.2f, 1.0f},
+		{"Column", R"({"Mode":"Cycles","Animation Range":"FlipbookColumn"})", R"({"Index":{"value":[1]}})", Flipbook, Sheet4X2, 1, 1.2f, 4.0f},
+		{"StartEnd", R"({"Mode":"Cycles","Animation Range":"StartEndFrames"})", R"({"Frame Range":{"value":[2,5]}})", Flipbook, Sheet4X1, 1, 2.2f, 1.0f},
+		{"ClampedBlending", R"({"Mode":"Cycles","Clamp Blending":true})", "{}", Blending, Sheet4X1, 1, 0.0f, NAN},
+		{"ClampedNotBlending", R"({"Mode":"Cycles","Clamp Blending":true})", "{}", Flipbook, Sheet4X1, 1, 0.2f, NAN},
 		{"CustomCurve", R"({"Mode":"Cycles","Custom Curve":true})",
-		 R"({"Custom Curve":{"value":{"keys":[{"time":0,"value":0,"outTangent":0},{"time":1,"value":1,"inTangent":2}]}}})", FLIPBOOK, SHEET_4X1, 1, 0.04f, NAN},
+		 R"({"Custom Curve":{"value":{"keys":[{"time":0,"value":0,"outTangent":0},{"time":1,"value":1,"inTangent":2}]}}})", Flipbook, Sheet4X1, 1, 0.04f, NAN},
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
@@ -2236,7 +2236,7 @@ TEST_F(GraphEffectLibraryFixture, TheSimpleTrailLeavesItsCircle) {
 
 namespace {
 
-	constexpr std::string_view LAYERS_GUID = "00000000000000a4-00000000000000b4";
+	constexpr std::string_view LayersGuid = "00000000000000a4-00000000000000b4";
 
 	void PlanarField(LoadableTexture& texture) {
 		texture.Volume(8, [](f32, f32, f32 z) { return std::array<f32, 4>{z, 0.0f, 0.0f, 1.0f}; });
@@ -2267,14 +2267,14 @@ TEST_F(GraphEffectLibraryFixture, SamplingOperatorsReadTexturesPortsHold) {
 	LoadableTexture volume;
 	volume.Volume(2, [](f32 x, f32 y, f32 z) { return std::array<f32, 4>{x, y, z, 1.0f}; }, false);
 	ASSERT_TRUE(image.texture.IsValid() && layers.texture.IsValid() && volume.texture.IsValid());
-	const HeldTexture held[] = {{Guid::FromString(IMAGE_GUID), &image}, {Guid::FromString(LAYERS_GUID), &layers}, {Guid::FromString(VOLUME_GUID), &volume}};
+	const HeldTexture held[] = {{Guid::FromString(ImageGuid), &image}, {Guid::FromString(LayersGuid), &layers}, {Guid::FromString(VolumeGuid), &volume}};
 
 	const str nodes = std::format(R"({{"id":20,"def":"Sampling/SampleTexture2D","in":{{"Texture":{{"value":"{0}"}},"UV":{{"value":[0.5,0.25]}}}}}},
 		{{"id":21,"def":"Sampling/SampleTexture2D","in":{{"Texture":{{"value":"{0}"}},"UV":{{"value":[0.5,0.75]}}}}}},
 		{{"id":22,"def":"Sampling/SampleTexture2DArray","in":{{"Texture":{{"value":"{1}"}},"Slice":{{"value":[1]}}}}}},
 		{{"id":23,"def":"Sampling/SampleTexture3D","in":{{"Texture":{{"value":"{2}"}},"UVW":{{"value":[0.75,0.25,0.75]}}}}}},
 		{{"id":24,"def":"Sampling/SampleTexture3D","in":{{"Texture":{{"value":null}}}}}})",
-								  IMAGE_GUID, LAYERS_GUID, VOLUME_GUID);
+								  ImageGuid, LayersGuid, VolumeGuid);
 	const str initialize = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[20,"s"]}}},
 		{"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[21,"s"]}}},
 		{"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"pivot"},"in":{"Pivot":{"from":[22,"s"]}}},
@@ -2299,7 +2299,7 @@ TEST_F(GraphEffectLibraryFixture, VectorFieldPushesAsFormulaSays) {
 	signedField.Volume(2, [](f32, f32, f32) { return std::array<f32, 4>{2.0f, -1.0f, 0.5f, 1.0f}; });
 	LoadableTexture unsignedField;
 	unsignedField.Volume(2, [](f32, f32, f32) { return std::array<f32, 4>{1.0f, 0.0f, 0.75f, 1.0f}; });
-	const HeldTexture held[] = {{Guid::FromString(FIELD_GUID), &signedField}, {Guid::FromString(VOLUME_GUID), &unsignedField}};
+	const HeldTexture held[] = {{Guid::FromString(FieldGuid), &signedField}, {Guid::FromString(VolumeGuid), &unsignedField}};
 	const str initialize = Particle("[0.3,0.7,1.1]", "[1,2,3]");
 	const auto after = [&](std::string_view name, std::string_view settings, std::string_view guid, std::string_view size) {
 		BlockRun run;
@@ -2319,25 +2319,25 @@ TEST_F(GraphEffectLibraryFixture, VectorFieldPushesAsFormulaSays) {
 		EXPECT_NEAR(v.y, expected.y, 1.0e-4f) << what;
 		EXPECT_NEAR(v.z, expected.z, 1.0e-4f) << what;
 	};
-	expect(after("FieldAbsolute", R"({"Mode":"Absolute","Data Encoding":"Signed"})", FIELD_GUID, "[4,4,4]"), {1.0f + 1.2f, 2.0f - 0.6f, 3.0f + 0.3f}, "an absolute field");
-	expect(after("FieldConserved", R"({"Mode":"Absolute","Data Encoding":"Signed","Conserve Magnitude":true})", FIELD_GUID, "[4,4,4]"),
+	expect(after("FieldAbsolute", R"({"Mode":"Absolute","Data Encoding":"Signed"})", FieldGuid, "[4,4,4]"), {1.0f + 1.2f, 2.0f - 0.6f, 3.0f + 0.3f}, "an absolute field");
+	expect(after("FieldConserved", R"({"Mode":"Absolute","Data Encoding":"Signed","Conserve Magnitude":true})", FieldGuid, "[4,4,4]"),
 		   {1.0f + 0.3f, 2.0f - 0.15f, 3.0f + 0.075f}, "a field keeping its texel's length");
-	expect(after("FieldUnsigned", R"({"Mode":"Absolute"})", VOLUME_GUID, "[4,4,4]"), {1.0f + 0.6f, 2.0f - 0.6f, 3.0f + 0.3f}, "an unsigned field");
-	expect(after("FieldRelative", R"({"Data Encoding":"Signed"})", FIELD_GUID, "[4,4,4]"), {1.0f + 23.0f * 0.05f, 2.0f - 14.0f * 0.05f, 3.0f + 3.0f * 0.05f},
+	expect(after("FieldUnsigned", R"({"Mode":"Absolute"})", VolumeGuid, "[4,4,4]"), {1.0f + 0.6f, 2.0f - 0.6f, 3.0f + 0.3f}, "an unsigned field");
+	expect(after("FieldRelative", R"({"Data Encoding":"Signed"})", FieldGuid, "[4,4,4]"), {1.0f + 23.0f * 0.05f, 2.0f - 14.0f * 0.05f, 3.0f + 3.0f * 0.05f},
 		   "a relative field");
-	expect(after("FieldClosed", R"({"Mode":"Absolute","Data Encoding":"Signed","Closed Field":true})", FIELD_GUID, "[1,1,1]"), {1.0f, 2.0f, 3.0f},
+	expect(after("FieldClosed", R"({"Mode":"Absolute","Data Encoding":"Signed","Closed Field":true})", FieldGuid, "[1,1,1]"), {1.0f, 2.0f, 3.0f},
 		   "a closed field pushed a particle outside its box");
-	expect(after("FieldOpen", R"({"Mode":"Absolute","Data Encoding":"Signed"})", FIELD_GUID, "[1,1,1]"), {1.0f + 0.3f, 2.0f - 0.15f, 3.0f + 0.075f},
+	expect(after("FieldOpen", R"({"Mode":"Absolute","Data Encoding":"Signed"})", FieldGuid, "[1,1,1]"), {1.0f + 0.3f, 2.0f - 0.15f, 3.0f + 0.075f},
 		   "an open field read nothing at its edge");
 }
 
 TEST_F(GraphEffectLibraryFixture, AttractorPullsToSurface) {
 	LoadableTexture plane;
 	PlanarField(plane);
-	const HeldTexture held[] = {{Guid::FromString(FIELD_GUID), &plane}};
+	const HeldTexture held[] = {{Guid::FromString(FieldGuid), &plane}};
 	const auto pulled = [&](std::string_view name, f32 z) {
 		BlockRun run;
-		const str update = std::format(R"({{"id":20,"def":"Block/ConformToSignedDistanceField","in":{{"Distance Field":{{"value":"{}"}}}}}})", FIELD_GUID);
+		const str update = std::format(R"({{"id":20,"def":"Block/ConformToSignedDistanceField","in":{{"Distance Field":{{"value":"{}"}}}}}})", FieldGuid);
 		if (!Begin(run, EffectWith("", Particle(std::format("[0,0,{}]", z), "[1,2,3]"), update), name, held)) {
 			return Float3{NAN, NAN, NAN};
 		}
@@ -2363,11 +2363,11 @@ TEST_F(GraphEffectLibraryFixture, AttractorPullsToSurface) {
 TEST_F(GraphEffectLibraryFixture, FieldCollisionMeetsWhereMarchDoes) {
 	LoadableTexture plane;
 	PlanarField(plane);
-	const HeldTexture held[] = {{Guid::FromString(FIELD_GUID), &plane}};
+	const HeldTexture held[] = {{Guid::FromString(FieldGuid), &plane}};
 	const auto run = [&](std::string_view name, f32 z, f32 speed, std::string_view settings, Vector<Float3>& positions, Vector<Float3>& velocities) {
 		BlockRun effect;
 		const str update = std::format(R"({{"id":20,"def":"Block/CollisionShape","settings":{},"in":{{"Distance Field":{{"value":"{}"}},"Bounce":{{"value":[1]}}}}}})",
-									   settings, FIELD_GUID);
+									   settings, FieldGuid);
 		if (!Begin(effect, EffectWith("", Particle(std::format("[0,0,{}]", z), std::format("[0,0,{}]", speed)), update), name, held)) {
 			return;
 		}
@@ -2395,12 +2395,12 @@ TEST_F(GraphEffectLibraryFixture, FieldCollisionMeetsWhereMarchDoes) {
 TEST_F(GraphEffectLibraryFixture, FieldPlacesOnSurfaceOrVolume) {
 	LoadableTexture sphere;
 	SphereField(sphere, 0.45f);
-	const HeldTexture held[] = {{Guid::FromString(FIELD_GUID), &sphere}};
+	const HeldTexture held[] = {{Guid::FromString(FieldGuid), &sphere}};
 	const auto place = [&](std::string_view name, std::string_view mode) {
 		BlockRun run;
 		const str block = std::format(R"({{"id":10,"def":"Block/PositionShape","settings":{{"Shape":"SignedDistanceField","Position Mode":"{}","Projection Steps":4}},
 			"in":{{"SDF":{{"value":"{}"}},"Center":{{"value":[1,2,3]}},"Size":{{"value":[2,2,2]}}}}}})",
-									  mode, FIELD_GUID);
+									  mode, FieldGuid);
 		if (!Begin(run, EffectWith("", block, ""), name, held)) {
 			return Vector<f32>{GetMemoryResource(MemTag::Graphics)};
 		}
@@ -2429,12 +2429,12 @@ TEST_F(GraphEffectLibraryFixture, FieldPlacesOnSurfaceOrVolume) {
 TEST_F(GraphEffectLibraryFixture, SdfSampleReadsDistanceAndDirection) {
 	LoadableTexture plane;
 	PlanarField(plane);
-	const HeldTexture held[] = {{Guid::FromString(FIELD_GUID), &plane}};
+	const HeldTexture held[] = {{Guid::FromString(FieldGuid), &plane}};
 	const auto sample = [&](std::string_view name, f32 z, std::string_view size, f32& distance, Float3& direction) {
 		BlockRun run;
 		const str nodes = std::format(R"({{"id":30,"def":"Attribute/GetAttribute","settings":{{"Attribute":"position"}}}},
 			{{"id":31,"def":"Sampling/SampleSignedDistanceField","in":{{"Texture":{{"value":"{}"}},"Size":{{"value":{}}},"Position":{{"from":[30,"position"]}}}}}})",
-									  FIELD_GUID, size);
+									  FieldGuid, size);
 		const str initialize = std::format(R"({{"id":10,"def":"Block/SetAttribute","settings":{{"Attribute":"position"}},"in":{{"Position":{{"value":[0,0,{}]}}}}}},
 			{{"id":11,"def":"Block/SetAttribute","settings":{{"Attribute":"size"}},"in":{{"Size":{{"from":[31,"distance"]}}}}}},
 			{{"id":12,"def":"Block/SetAttribute","settings":{{"Attribute":"color"}},"in":{{"Color":{{"from":[31,"direction"]}}}}}})",
@@ -2748,7 +2748,7 @@ namespace {
 		u8 color[4];
 		f32 uv[2];
 	};
-	constexpr MeshCorner CORNERS[] = {
+	constexpr MeshCorner Corners[] = {
 		{{1.0f, 2.0f, 3.0f}, {0.0f, 0.0f, 2.0f}, {1.0f, 0.0f, 0.0f}, 1.0f, {255, 0, 0, 255}, {0.25f, 0.5f}},
 		{{4.0f, -5.0f, 6.0f}, {0.0f, 3.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, -1.0f, {0, 255, 0, 128}, {0.75f, 0.125f}},
 		{{-7.0f, 8.0f, 9.0f}, {4.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 1.0f, {0, 0, 255, 255}, {0.5f, 1.0f}},
@@ -2757,7 +2757,7 @@ namespace {
 	constexpr u32 CORNER_INDICES[] = {2, 0, 1, 3, 2, 1};
 
 	void FillCorners(LoadableMesh& mesh) {
-		for (const MeshCorner& corner : CORNERS) {
+		for (const MeshCorner& corner : Corners) {
 			MeshVertex vertex;
 			vertex.position = Vec3(corner.position[0], corner.position[1], corner.position[2]);
 			vertex.normal = Vec3(corner.normal[0], corner.normal[1], corner.normal[2]);
@@ -2773,7 +2773,7 @@ namespace {
 		mesh.OnLoad();
 	}
 
-	Float3 Corner(u32 vertex) { return {CORNERS[vertex].position[0], CORNERS[vertex].position[1], CORNERS[vertex].position[2]}; }
+	Float3 Corner(u32 vertex) { return {Corners[vertex].position[0], Corners[vertex].position[1], Corners[vertex].position[2]}; }
 
 	Float3 Mix(Float3 a, Float3 b, f32 t) { return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t}; }
 
@@ -2792,7 +2792,7 @@ namespace {
 				return;
 			}
 			FillCorners(_mesh);
-			_staged[0] = {Guid::FromString(MESH_GUID), &_mesh};
+			_staged[0] = {Guid::FromString(MeshGuid), &_mesh};
 		}
 
 		void TearDown() override {
@@ -2822,7 +2822,7 @@ namespace {
 	};
 
 	str SampleNode(u32 id, std::string_view settings, std::string_view inputs) {
-		return std::format(R"({{"id":{},"def":"Sampling/SampleMesh","settings":{{{}}},"in":{{"Mesh":{{"value":"{}"}}{}{}}}}})", id, settings, MESH_GUID,
+		return std::format(R"({{"id":{},"def":"Sampling/SampleMesh","settings":{{{}}},"in":{{"Mesh":{{"value":"{}"}}{}{}}}}})", id, settings, MeshGuid,
 						   inputs.empty() ? "" : ",", inputs);
 	}
 
@@ -2920,7 +2920,7 @@ TEST_F(MeshSamplingFixture, CountsAndIndexReadMeshPortHolds) {
 		{{"id":40,"def":"Input/Vector3","in":{{"X":{{"from":[20,"Count"]}},"Y":{{"from":[21,"Count"]}},"Z":{{"from":[22,"Count"]}}}}}},
 		{{"id":41,"def":"Input/Vector3","in":{{"X":{{"from":[23,"Index"]}},"Y":{{"from":[24,"Index"]}},"Z":{{"from":[25,"Index"]}}}}}},
 		{{"id":42,"def":"Input/Vector3","in":{{"X":{{"from":[26,"Count"]}},"Y":{{"from":[27,"Count"]}}}}}})",
-								  MESH_GUID);
+								  MeshGuid);
 	const str initialize = SetFrom(10, "axisX", 40, "Out") + "," + SetFrom(11, "axisY", 41, "Out") + "," + SetFrom(12, "axisZ", 42, "Out") + "," +
 						   SetFrom(13, "position", 28, "Position");
 	BlockRun run;
@@ -2938,7 +2938,7 @@ TEST_F(MeshSamplingFixture, MeshPositionIsRandomOnMesh) {
 		return Spawn(out, R"({"id":30,"def":"Attribute/GetAttribute","settings":{"Attribute":"direction"}})",
 					 std::format(R"({{"id":10,"def":"Block/PositionMesh","settings":{{"Placement Mode":"{}"}},"in":{{"Mesh":{{"value":"{}"}}}}}},
 						{{"id":11,"def":"Block/SetAttribute","settings":{{"Attribute":"scale"}},"in":{{"Scale":{{"from":[30,"direction"]}}}}}})",
-								 placement, MESH_GUID),
+								 placement, MeshGuid),
 					 name, 64);
 	};
 	BlockRun vertices;
@@ -3016,7 +3016,7 @@ TEST_F(MeshSamplingFixture, MeshPositionOrientsAndComposes) {
 	if (!Spawn(axes, "",
 			   std::format(R"({{"id":10,"def":"Block/PositionMesh","settings":{{"Spawn Mode":"Custom","Apply Orientation":"Axes"}},
 				"in":{{"Mesh":{{"value":"{}"}},"Vertex":{{"value":[0]}}}}}})",
-						   MESH_GUID),
+						   MeshGuid),
 			   "MeshAxes")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
@@ -3031,7 +3031,7 @@ TEST_F(MeshSamplingFixture, MeshPositionOrientsAndComposes) {
 				{{"id":11,"def":"Block/PositionMesh","settings":{{"Spawn Mode":"Custom","Placement Mode":"Edge","Composition Position":"Add"}},
 				"in":{{"Mesh":{{"value":"{}"}},"Index":{{"value":[1]}},"Edge":{{"value":[0.25]}}}}}},
 				{{"id":12,"def":"Block/SetAttribute","settings":{{"Attribute":"scale"}},"in":{{"Scale":{{"from":[30,"direction"]}}}}}})",
-								  MESH_GUID),
+								  MeshGuid),
 					  "MeshAdded"));
 	const Float3 on = Mix(Corner(0), Corner(1), 0.25f);
 	ExpectNear(Only(added, "position"), {on.x + 10.0f, on.y, on.z}, "the edge's point was not added onto the position before it");
@@ -3197,8 +3197,8 @@ namespace {
 } // anonymous namespace
 
 TEST(GraphEffectLibraryTest, OutputCarriesDepthProgram) {
-	for (std::string_view def : {GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_OUTPUT_POINT, GRAPH_EFFECT_OUTPUT_LINE, GRAPH_EFFECT_OUTPUT_LIT,
-								 GRAPH_EFFECT_OUTPUT_LIT_MESH}) {
+	for (std::string_view def : {GraphEffectOutputDefinition, GraphEffectOutputMesh, GraphEffectOutputPoint, GraphEffectOutputLine, GraphEffectOutputLit,
+								 GraphEffectOutputLitMesh}) {
 		SCOPED_TRACE(def);
 		const GraphNodeDefinition* definition = GraphNodeLibrary::Find(def);
 		ASSERT_NE(definition, nullptr);
@@ -3221,17 +3221,17 @@ TEST(GraphEffectLibraryTest, OutputCarriesDepthProgram) {
 		u32 clips;
 	};
 	const Case cases[] = {
-		{GRAPH_EFFECT_OUTPUT, "{}", false, Depth::Declared, 0},
-		{GRAPH_EFFECT_OUTPUT, R"({"Blend Mode":"Opaque"})", false, Depth::Declared, 0},
-		{GRAPH_EFFECT_OUTPUT, R"({"Blend Mode":"Opaque","Use Alpha Clipping":true})", false, Depth::Clips, 4},
-		{GRAPH_EFFECT_OUTPUT, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
-		{GRAPH_EFFECT_OUTPUT, R"({"Cast Shadows":true,"Use Alpha Clipping":true})", true, Depth::Clips, 4},
-		{GRAPH_EFFECT_OUTPUT, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
-		{GRAPH_EFFECT_OUTPUT_MESH, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
-		{GRAPH_EFFECT_OUTPUT_POINT, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
-		{GRAPH_EFFECT_OUTPUT_LINE, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
-		{GRAPH_EFFECT_OUTPUT_LIT, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
-		{GRAPH_EFFECT_OUTPUT_LIT_MESH, R"({"Blend Mode":"Opaque"})", false, Depth::Declared, 0},
+		{GraphEffectOutputDefinition, "{}", false, Depth::Declared, 0},
+		{GraphEffectOutputDefinition, R"({"Blend Mode":"Opaque"})", false, Depth::Declared, 0},
+		{GraphEffectOutputDefinition, R"({"Blend Mode":"Opaque","Use Alpha Clipping":true})", false, Depth::Clips, 4},
+		{GraphEffectOutputDefinition, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
+		{GraphEffectOutputDefinition, R"({"Cast Shadows":true,"Use Alpha Clipping":true})", true, Depth::Clips, 4},
+		{GraphEffectOutputDefinition, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
+		{GraphEffectOutputMesh, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
+		{GraphEffectOutputPoint, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
+		{GraphEffectOutputLine, R"({"Cast Shadows":true,"Blend Mode":"Opaque"})", true, Depth::Declared, 0},
+		{GraphEffectOutputLit, R"({"Cast Shadows":true})", true, Depth::Clips, 3},
+		{GraphEffectOutputLitMesh, R"({"Blend Mode":"Opaque"})", false, Depth::Declared, 0},
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(std::format("{} {}", entry.def, entry.settings));
@@ -3253,8 +3253,8 @@ TEST(GraphEffectLibraryTest, OutputCarriesDepthProgram) {
 }
 
 TEST(GraphEffectLibraryTest, LitOutputUsesEngineIntegrator) {
-	const GraphNodeDefinition* lit = GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT_LIT);
-	const GraphNodeDefinition* litMesh = GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT_LIT_MESH);
+	const GraphNodeDefinition* lit = GraphNodeLibrary::Find(GraphEffectOutputLit);
+	const GraphNodeDefinition* litMesh = GraphNodeLibrary::Find(GraphEffectOutputLitMesh);
 	ASSERT_NE(lit, nullptr);
 	ASSERT_NE(litMesh, nullptr);
 	EXPECT_EQ(lit->name, "Output Particle Lit Primitive");
@@ -3286,19 +3286,19 @@ TEST(GraphEffectLibraryTest, LitOutputUsesEngineIntegrator) {
 		const GraphDocument document = ReadGraph(SortedBy(def, settings));
 		return ShownInputs(*GraphNodeLibrary::Find(def), document.contexts[2].node);
 	};
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT, "{}"), Names({"Base Color Map", "Smoothness", "Metallic"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT, R"({"Color Mode":"None"})"), Names({"Base Color Map", "Smoothness", "Metallic", "Base Color"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT, R"({"Use Emissive":true})"), Names({"Base Color Map", "Smoothness", "Metallic", "Emissive Color"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT, R"({"Color Mode":"Emissive","Use Emissive":true})"),
+	EXPECT_EQ(shown(GraphEffectOutputLit, "{}"), Names({"Base Color Map", "Smoothness", "Metallic"}));
+	EXPECT_EQ(shown(GraphEffectOutputLit, R"({"Color Mode":"None"})"), Names({"Base Color Map", "Smoothness", "Metallic", "Base Color"}));
+	EXPECT_EQ(shown(GraphEffectOutputLit, R"({"Use Emissive":true})"), Names({"Base Color Map", "Smoothness", "Metallic", "Emissive Color"}));
+	EXPECT_EQ(shown(GraphEffectOutputLit, R"({"Color Mode":"Emissive","Use Emissive":true})"),
 			  Names({"Base Color Map", "Smoothness", "Metallic", "Base Color"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT, R"({"Use Base Color Map":"None","Use Normal Map":true,"Use Emissive Map":true,"Normal Bending":true})"),
+	EXPECT_EQ(shown(GraphEffectOutputLit, R"({"Use Base Color Map":"None","Use Normal Map":true,"Use Emissive Map":true,"Normal Bending":true})"),
 			  Names({"Smoothness", "Metallic", "Normal Map", "Normal Scale", "Emissive Map", "Emissive Scale", "Normal Bending Factor"}));
-	EXPECT_EQ(shown(GRAPH_EFFECT_OUTPUT_LIT_MESH, R"({"Use Occlusion Map":true,"Use Metallic Map":true})"),
+	EXPECT_EQ(shown(GraphEffectOutputLitMesh, R"({"Use Occlusion Map":true,"Use Metallic Map":true})"),
 			  Names({"Mesh", "Base Color Map", "Smoothness", "Metallic", "Occlusion Map", "Metallic Map"}));
 
 	GraphEffect effect;
 	str error;
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, R"({"Use Normal Map":true,"Use Emissive Map":true})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, R"({"Use Normal Map":true,"Use Emissive Map":true})"), effect, error)) << error;
 	const str& shader = effect.systems[0].outputs[0].shader;
 	EXPECT_NE(shader.find("#include \"VisualEffects/ParticleLit.hlsli\""), str::npos);
 	EXPECT_NE(shader.find("ShalltearShadeSurface(sltInput, sltSurface, sltNormal, SltParticleReceivesShadows(true, true))"), str::npos);
@@ -3311,48 +3311,48 @@ TEST(GraphEffectLibraryTest, LitOutputUsesEngineIntegrator) {
 	}
 	EXPECT_EQ(slots, 2u);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, R"({"Blend Mode":"Opaque","Receive Shadows":false})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, R"({"Blend Mode":"Opaque","Receive Shadows":false})"), effect, error)) << error;
 	const str& opaque = effect.systems[0].outputs[0].shader;
 	EXPECT_NE(opaque.find("sltSurface.alpha = 1.0;"), str::npos);
 	EXPECT_NE(opaque.find("SltParticleReceivesShadows(false, false)"), str::npos);
 	const size_t depthInclude = opaque.find("#ifdef SHALLTEAR_DEPTH_PROGRAM\n#include \"Surface.hlsli\"\n#else\n#include \"VisualEffects/ParticleLit.hlsli\"");
 	EXPECT_NE(depthInclude, str::npos);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, R"({"Color Mode":"BaseColorAndEmissive"})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, R"({"Color Mode":"BaseColorAndEmissive"})"), effect, error)) << error;
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("sltSurface.emissive = sltEmission;"), str::npos);
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, "{}"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, "{}"), effect, error)) << error;
 	EXPECT_EQ(effect.systems[0].outputs[0].shader.find("sltEmission"), str::npos);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT_MESH, R"({"Double Sided":true})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLitMesh, R"({"Double Sided":true})"), effect, error)) << error;
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("if (!sltFront) {"), str::npos);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("#pragma shalltear_cull back"), str::npos);
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT_MESH, R"({"Double Sided":true,"Cull Mode":"Off"})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLitMesh, R"({"Double Sided":true,"Cull Mode":"Off"})"), effect, error)) << error;
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("#pragma shalltear_cull off"), str::npos);
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT_MESH, "{}"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLitMesh, "{}"), effect, error)) << error;
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("#pragma shalltear_cull back"), str::npos);
 	EXPECT_EQ(effect.systems[0].outputs[0].shader.find("if (!sltFront) {"), str::npos);
 
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, R"({"Use Base Color Map":"None","Smoothness Source":"AlbedoAlpha"})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, R"({"Use Base Color Map":"None","Smoothness Source":"AlbedoAlpha"})"), effect, error)) << error;
 	EXPECT_EQ(effect.systems[0].outputs[0].shader.find("sltSmoothness *="), str::npos);
-	ASSERT_TRUE(CompileSorted(SortedBy(GRAPH_EFFECT_OUTPUT_LIT, R"({"Smoothness Source":"AlbedoAlpha"})"), effect, error)) << error;
+	ASSERT_TRUE(CompileSorted(SortedBy(GraphEffectOutputLit, R"({"Smoothness Source":"AlbedoAlpha"})"), effect, error)) << error;
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("sltSmoothness *= sltTexel.a;"), str::npos);
 }
 
 TEST(GraphEffectLibraryTest, OutputsCarryRenderStatePragmas) {
-	const std::string_view outputs[] = {GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_OUTPUT_POINT, GRAPH_EFFECT_OUTPUT_LINE,
-										GRAPH_EFFECT_OUTPUT_LIT, GRAPH_EFFECT_OUTPUT_LIT_MESH, GRAPH_EFFECT_OUTPUT_STRIP};
+	const std::string_view outputs[] = {GraphEffectOutputDefinition, GraphEffectOutputMesh, GraphEffectOutputPoint, GraphEffectOutputLine,
+										GraphEffectOutputLit, GraphEffectOutputLitMesh, GraphEffectOutputStrip};
 	const auto declares = [](std::string_view def, std::string_view key) {
 		const GraphNodeDefinition* definition = GraphNodeLibrary::Find(def);
 		return definition && std::any_of(definition->settings.begin(), definition->settings.end(),
 										 [key](const GraphSettingDefinition& setting) { return setting.key == key; });
 	};
 	for (const std::string_view def : outputs) {
-		for (const std::string_view key : {GRAPH_EFFECT_CULL_MODE, GRAPH_EFFECT_Z_WRITE_MODE, GRAPH_EFFECT_Z_TEST_MODE}) {
+		for (const std::string_view key : {GraphEffectCullMode, GraphEffectZWriteMode, GraphEffectZTestMode}) {
 			EXPECT_TRUE(declares(def, key)) << def << " has no " << key;
 		}
 	}
-	for (const std::string_view def : {GRAPH_EFFECT_OUTPUT_NODE_SHADER, GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH, GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP}) {
-		EXPECT_FALSE(declares(def, GRAPH_EFFECT_Z_TEST_MODE)) << def;
+	for (const std::string_view def : {GraphEffectOutputNodeShader, GraphEffectOutputNodeShaderMesh, GraphEffectOutputNodeShaderStrip}) {
+		EXPECT_FALSE(declares(def, GraphEffectZTestMode)) << def;
 	}
 
 	struct Row {
@@ -3363,16 +3363,16 @@ TEST(GraphEffectLibraryTest, OutputsCarryRenderStatePragmas) {
 		std::string_view cull;
 	};
 	const Row rows[] = {
-		{GRAPH_EFFECT_OUTPUT, "", "test_only", "", "off"},
-		{GRAPH_EFFECT_OUTPUT, R"("Blend Mode":"Opaque")", "test_write", "", "off"},
-		{GRAPH_EFFECT_OUTPUT_MESH, "", "test_only", "", "back"},
-		{GRAPH_EFFECT_OUTPUT, R"("Z Write Mode":"On","Z Test Mode":"Always")", "test_write", "always", "off"},
-		{GRAPH_EFFECT_OUTPUT, R"("Blend Mode":"Opaque","Z Write Mode":"Off","Z Test Mode":"Greater")", "test_only", "farther", "off"},
-		{GRAPH_EFFECT_OUTPUT, R"("Z Test Mode":"Less","Cull Mode":"Front")", "test_only", "nearer", "front"},
-		{GRAPH_EFFECT_OUTPUT_MESH, R"("Z Test Mode":"GEqual","Cull Mode":"Off")", "test_only", "farther_or_equal", "off"},
-		{GRAPH_EFFECT_OUTPUT_POINT, R"("Z Test Mode":"NotEqual","Cull Mode":"Back")", "test_only", "not_equal", "back"},
-		{GRAPH_EFFECT_OUTPUT_LIT_MESH, R"("Double Sided":true)", "test_only", "", "back"},
-		{GRAPH_EFFECT_OUTPUT, R"("Z Test Mode":"Equal")", "test_only", "equal", "off"},
+		{GraphEffectOutputDefinition, "", "test_only", "", "off"},
+		{GraphEffectOutputDefinition, R"("Blend Mode":"Opaque")", "test_write", "", "off"},
+		{GraphEffectOutputMesh, "", "test_only", "", "back"},
+		{GraphEffectOutputDefinition, R"("Z Write Mode":"On","Z Test Mode":"Always")", "test_write", "always", "off"},
+		{GraphEffectOutputDefinition, R"("Blend Mode":"Opaque","Z Write Mode":"Off","Z Test Mode":"Greater")", "test_only", "farther", "off"},
+		{GraphEffectOutputDefinition, R"("Z Test Mode":"Less","Cull Mode":"Front")", "test_only", "nearer", "front"},
+		{GraphEffectOutputMesh, R"("Z Test Mode":"GEqual","Cull Mode":"Off")", "test_only", "farther_or_equal", "off"},
+		{GraphEffectOutputPoint, R"("Z Test Mode":"NotEqual","Cull Mode":"Back")", "test_only", "not_equal", "back"},
+		{GraphEffectOutputLitMesh, R"("Double Sided":true)", "test_only", "", "back"},
+		{GraphEffectOutputDefinition, R"("Z Test Mode":"Equal")", "test_only", "equal", "off"},
 	};
 	for (const Row& row : rows) {
 		SCOPED_TRACE(std::format("{} {{{}}}", row.output, row.settings));

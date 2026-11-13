@@ -72,7 +72,7 @@ namespace {
 	constexpr std::string_view ClTextureOnly[] = {"TextureAsset"};
 	constexpr UI::WidgetAttribute ClIconAttributes[] = {{"icon", UI::WidgetAttributeType::Asset, {}, ClSpriteOnly}};
 	constexpr UI::WidgetAttribute ClTextureOnlyAttributes[] = {{"icon", UI::WidgetAttributeType::Asset, {}, ClTextureOnly}};
-	const int ClWidgetOwner = 0;
+	const int CL_WIDGET_OWNER = 0;
 	const Asset* _clIconReceived = nullptr;
 
 	UI::WidgetResult MakeClIcon(UI::Context& context, UI::ElementHandle parent, const UI::WidgetArgs& args) {
@@ -105,7 +105,7 @@ namespace {
 		}
 
 		void TearDown() override {
-			UI::WidgetRegistry::UnregisterOwnedBy(&ClWidgetOwner);
+			UI::WidgetRegistry::UnregisterOwnedBy(&CL_WIDGET_OWNER);
 			AssetImporterRegistry::Unregister(&_productImporter);
 			SceneSystem::Terminate();
 			AssetDatabase::Terminate();
@@ -129,7 +129,7 @@ namespace {
 		Path StageGemAtlas() const {
 			std::vector<u8> pixels(16 * 8 * 4, 255);
 			std::filesystem::create_directories(_root / "Assets" / "UI");
-			TestImages::WriteTga(_root / "Assets" / "UI" / "Atlas.tga", 16, 8, pixels.data());
+			TestImages::WriteTGA(_root / "Assets" / "UI" / "Atlas.tga", 16, 8, pixels.data());
 			Rescan();
 			const Path atlasPath("project://Assets/UI/Atlas.tga");
 			JSONValue rect = JSONValue::MakeArray();
@@ -876,7 +876,7 @@ TEST_F(CookClosureFixture, ImageSpriteCooksItsTexture) {
 }
 
 TEST_F(CookClosureFixture, CustomWidgetSpriteReachesPackage) {
-	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClIconAttributes}, &ClWidgetOwner));
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClIconAttributes}, &CL_WIDGET_OWNER));
 	const Path atlasPath = StageGemAtlas();
 	StageText("Assets/UI/Hud.slxml", R"(<ui version="1"><panel><item-icon icon="project://Assets/UI/Atlas.tga#Gem"/></panel></ui>)");
 	Rescan();
@@ -923,7 +923,7 @@ TEST_F(CookClosureFixture, CustomWidgetSpriteReachesPackage) {
 }
 
 TEST_F(CookClosureFixture, CookedBindChecksEveryUse) {
-	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClIconAttributes}, &ClWidgetOwner));
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClIconAttributes}, &CL_WIDGET_OWNER));
 	StageGemAtlas();
 	StageText("Assets/UI/Hud.slxml", R"(<ui version="1"><panel><image src="project://Assets/UI/Atlas.tga#Gem"/>)"
 									 R"(<item-icon icon="project://Assets/UI/Atlas.tga#Gem"/></panel></ui>)");
@@ -951,6 +951,6 @@ TEST_F(CookClosureFixture, CookedBindChecksEveryUse) {
 	}
 	ASSERT_EQ(AssetDatabase::FindLoadedByGuid(documentGuid), nullptr);
 
-	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClTextureOnlyAttributes}, &ClWidgetOwner));
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeClIcon, ClTextureOnlyAttributes}, &CL_WIDGET_OWNER));
 	EXPECT_EQ(AssetDatabase::LoadAssetByGuid(documentGuid), nullptr);
 }

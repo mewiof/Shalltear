@@ -540,14 +540,14 @@ namespace Shalltear::UI {
 						EmitParams caret;
 						caret.rect = {Snap(dx + caretX), dy + static_cast<f32>(at.line) * lineHeight + run.halfLeading,
 									  std::max(1.0f, Snap(state.scale)), band - 2.0f * run.halfLeading};
-						caret.colorSRGB = style.color.value_or(INITIAL_TEXT_COLOR);
+						caret.colorSRGB = style.color.value_or(InitialTextColor);
 						caret.snap = false;
 						EmitRect(*state.list, state.ink, caret, opacity, z, clipRect, clipRadii);
 					}
 				}
 			}
 
-			const Color textColor = style.color.value_or(INITIAL_TEXT_COLOR);
+			const Color textColor = style.color.value_or(InitialTextColor);
 			const Vector<RichPaint>* paints =
 				!run.spans.empty() && text->richSlot != INVALID_UI_INDEX ? &ctx.richSlots[text->richSlot].text.paints : nullptr;
 			auto paintOf = [paints](u16 paint) -> const RichPaint* {
@@ -599,7 +599,7 @@ namespace Shalltear::UI {
 
 			emitDecorations(true);
 			if (!run.outlineGlyphs.empty()) {
-				emitGlyphs(run.outlineGlyphs, style.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR), true);
+				emitGlyphs(run.outlineGlyphs, style.textOutlineColor.value_or(InitialOutlineColor), true);
 			}
 			emitGlyphs(run.glyphs, textColor, false);
 			emitDecorations(false);

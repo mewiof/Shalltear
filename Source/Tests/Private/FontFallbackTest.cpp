@@ -27,9 +27,9 @@ using namespace UITest;
 
 namespace {
 
-	constexpr std::string_view INTER_ONLY = "\xEE\x80\xA0";
-	constexpr std::string_view HAN = "\xE4\xB8\xAD";
-	constexpr std::string_view UNASSIGNED = "\xCD\xB8";
+	constexpr std::string_view InterOnly = "\xEE\x80\xA0";
+	constexpr std::string_view Han = "\xE4\xB8\xAD";
+	constexpr std::string_view Unassigned = "\xCD\xB8";
 
 	std::filesystem::path RepoFile(const char* relative) {
 		std::error_code ec;
@@ -196,11 +196,11 @@ TEST_F(FontFallbackFixture, MissingGlyphDrawsFromFallback) {
 	ASSERT_NE(inter, nullptr);
 	ASSERT_EQ(code->fallbacks.size(), 1u);
 
-	const f32 fromInter = Width(inter, INTER_ONLY);
+	const f32 fromInter = Width(inter, InterOnly);
 	EXPECT_NEAR(fromInter, 12.0f, 1.0f);
-	EXPECT_EQ(Width(plain, INTER_ONLY), Width(plain, "?"));
+	EXPECT_EQ(Width(plain, InterOnly), Width(plain, "?"));
 	EXPECT_NE(Width(plain, "?"), fromInter);
-	EXPECT_EQ(Width(code, INTER_ONLY), fromInter);
+	EXPECT_EQ(Width(code, InterOnly), fromInter);
 
 	EXPECT_EQ(Width(code, "i"), Width(plain, "i"));
 	EXPECT_NE(Width(code, "i"), Width(inter, "i"));
@@ -218,7 +218,7 @@ TEST_F(FontFallbackFixture, FallbacksSearchedDepthFirst) {
 	ASSERT_NE(code, nullptr);
 	ASSERT_NE(inter, nullptr);
 
-	EXPECT_EQ(Width(code, INTER_ONLY), Width(inter, INTER_ONLY));
+	EXPECT_EQ(Width(code, InterOnly), Width(inter, InterOnly));
 	EXPECT_EQ(RefsOf("Code2"), 1u);
 
 	AssetDatabase::UnloadAsset(inter);
@@ -234,7 +234,7 @@ TEST_F(FontFallbackFixture, LaterFallbacksStayUnloaded) {
 	Width(code, "A");
 	EXPECT_EQ(RefsOf("Inter"), 0u);
 
-	Width(code, INTER_ONLY);
+	Width(code, InterOnly);
 	EXPECT_EQ(RefsOf("Inter"), 1u);
 	EXPECT_EQ(RefsOf("Code2"), 0u);
 
@@ -252,8 +252,8 @@ TEST_F(FontFallbackFixture, CycleEndsInMissingMark) {
 	ASSERT_NE(inter, nullptr);
 	ASSERT_NE(code, nullptr);
 
-	EXPECT_EQ(Width(inter, UNASSIGNED), Width(inter, "?"));
-	EXPECT_EQ(Width(code, UNASSIGNED), Width(code, "?"));
+	EXPECT_EQ(Width(inter, Unassigned), Width(inter, "?"));
+	EXPECT_EQ(Width(code, Unassigned), Width(code, "?"));
 	EXPECT_NE(Width(inter, "?"), Width(code, "?"));
 
 	AssetDatabase::UnloadAsset(code);
@@ -267,7 +267,7 @@ TEST_F(FontFallbackFixture, InstalledFontsCoverChainGaps) {
 	FontAsset* inter = Load("Inter");
 	ASSERT_NE(inter, nullptr);
 	EXPECT_NEAR(Width(inter, "?"), 8.0f, 1.0f);
-	EXPECT_NEAR(Width(inter, HAN), 16.0f, 1.0f);
+	EXPECT_NEAR(Width(inter, Han), 16.0f, 1.0f);
 	AssetDatabase::UnloadAsset(inter);
 }
 
@@ -279,7 +279,7 @@ TEST_F(FontFallbackFixture, RunKeepsPrimaryLineHeight) {
 	const f32 lineHeight = fonts->GetLineHeight(Handle<FontAsset>(code), 16.0f);
 	ASSERT_GT(lineHeight, 0.0f);
 
-	for (std::string_view text : {std::string_view("A"), INTER_ONLY, HAN}) {
+	for (std::string_view text : {std::string_view("A"), InterOnly, Han}) {
 		UI::ShapedRun run;
 		ASSERT_TRUE(fonts->ShapeText(Query(code, text), run));
 		EXPECT_EQ(run.lineHeight, lineHeight);
@@ -329,7 +329,7 @@ TEST_F(FontFallbackFixture, ReimportReachesLaidOutText) {
 	ASSERT_NE(code, nullptr);
 	ASSERT_NE(inter, nullptr);
 	const f32 missing = Width(code, "?");
-	const f32 found = Width(inter, INTER_ONLY);
+	const f32 found = Width(inter, InterOnly);
 	ASSERT_NE(missing, found);
 
 	UI::ContextDesc desc;
@@ -340,7 +340,7 @@ TEST_F(FontFallbackFixture, ReimportReachesLaidOutText) {
 	lineStyle.flexDirection = UI::FlexDirection::Row;
 	UI::ElementHandle line = MakeChild(ctx, ctx.GetRoot(), lineStyle);
 	UI::ElementHandle label = MakeChild(ctx, line, UI::Style{});
-	ctx.SetText(label, Handle<FontAsset>(code), 16.0f, Color::White(), INTER_ONLY);
+	ctx.SetText(label, Handle<FontAsset>(code), 16.0f, Color::White(), InterOnly);
 	ctx.Update();
 	EXPECT_EQ(ctx.GetLayout(label).content.w, missing);
 

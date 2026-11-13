@@ -21,7 +21,7 @@ namespace Shalltear {
 
 	namespace GraphSurface {
 
-		inline constexpr std::string_view DOCUMENT_TYPE = GRAPH_SHADER_DOCUMENT_TYPE;
+		inline constexpr std::string_view DocumentType = GraphShaderDocumentType;
 
 		SHALLTEAR_NODESHADER_API bool Generate(const GraphDocument& document, std::string_view sourceName, str& out,
 											   Vector<GraphDiagnostic>& diagnostics, GraphDefinitions* definitions = nullptr,
@@ -56,8 +56,8 @@ namespace Shalltear {
 
 		SHALLTEAR_NODESHADER_API std::span<const std::string_view> FragmentBlocks();
 		SHALLTEAR_NODESHADER_API std::span<const std::string_view> VertexBlocks();
-		inline constexpr std::string_view INTERPOLATOR_BLOCK = "Block/CustomInterpolator";
-		inline constexpr std::string_view RADIANCE_BLOCK_ID = "Block/Radiance";
+		inline constexpr std::string_view InterpolatorBlock = "Block/CustomInterpolator";
+		inline constexpr std::string_view RadianceBlockId = "Block/Radiance";
 		SHALLTEAR_NODESHADER_API std::span<const GraphBinding> LightingBindings();
 
 		SHALLTEAR_NODESHADER_API std::span<const GraphBinding> FullscreenBindings();

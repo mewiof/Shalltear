@@ -876,15 +876,15 @@ TEST_F(ConsoleCostTest, FrontedConsoleOpensOnNewest) {
 				rig.Frame();
 			}
 			ASSERT_TRUE(newestOnScreen());
-			rig.ShowTab(EditorTest::DockedPanelRig::OTHER_TAB);
+			rig.ShowTab(EditorTest::DockedPanelRig::OtherTab);
 		} else {
-			rig.ShowTab(EditorTest::DockedPanelRig::OTHER_TAB);
+			rig.ShowTab(EditorTest::DockedPanelRig::OtherTab);
 			push(300);
 			rig.Frame();
 			rig.Frame();
 		}
 		ASSERT_FALSE(rig.context.IsAlive(viewport()));
-		rig.ShowTab(EditorTest::DockedPanelRig::PANEL_TAB);
+		rig.ShowTab(EditorTest::DockedPanelRig::PanelTab);
 
 		ASSERT_TRUE(rig.context.IsAlive(viewport()));
 		ASSERT_FALSE(rig.context.IsAlive(FindByClass(rig.context, rig.Root(), StringHash("slt-scroll-viewport"), 1)));

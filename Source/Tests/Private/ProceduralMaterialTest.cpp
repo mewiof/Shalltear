@@ -110,7 +110,7 @@ namespace {
 
 	class ProceduralMaterialFixture : public MaterialReadbackFixture {
 	protected:
-		static constexpr Vec2I SIZE{64, 64};
+		static constexpr Vec2I Size{64, 64};
 		ViewTargetId _target = INVALID_VIEW_TARGET;
 
 		void TearDown() override {
@@ -125,7 +125,7 @@ namespace {
 			if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 				return false;
 			}
-			_target = RenderSystem::CreateViewTarget(SIZE);
+			_target = RenderSystem::CreateViewTarget(Size);
 			return _target != INVALID_VIEW_TARGET;
 		}
 

@@ -31,8 +31,8 @@ namespace {
 	constexpr u32 RATE = 48000;
 	constexpr u32 BLOCK = AudioRenderer::BLOCK_FRAMES;
 
-	constexpr std::string_view BUILTIN_NAMES[] = {"LowPass", "HighPass", "Echo", "Flange", "Distortion", "Normalize", "Param EQ", "Pitch Shifter", "Chorus",
-												  "Compressor", "SFX Reverb", "LowPass Simple", "HighPass Simple", "Duck Volume"};
+	constexpr std::string_view BuiltinNames[] = {"LowPass", "HighPass", "Echo", "Flange", "Distortion", "Normalize", "Param EQ", "Pitch Shifter", "Chorus",
+												 "Compressor", "SFX Reverb", "LowPass Simple", "HighPass Simple", "Duck Volume"};
 
 	IAudioEffectDefinition* Builtin(std::string_view name) {
 		for (const AudioBuiltinEffect& effect : GetBuiltinEffects()) {
@@ -327,8 +327,8 @@ TEST(AudioBuiltinEffectTest, DuckVolumeReleasesOverItsReleaseTime) {
 	EXPECT_GT(after.back(), ducked);
 	EXPECT_LT(after.back(), 0.25f * 0.99f);
 	EXPECT_FALSE(rig.Get().IsQuiet());
-	const std::vector<f32> long_silence = Constant(0.0f, 3.0f);
-	EXPECT_NEAR(rig.Run(Constant(0.25f, 3.0f), &long_silence).back(), 0.25f, 1e-3f);
+	const std::vector<f32> longSilence = Constant(0.0f, 3.0f);
+	EXPECT_NEAR(rig.Run(Constant(0.25f, 3.0f), &longSilence).back(), 0.25f, 1e-3f);
 	EXPECT_TRUE(rig.Get().IsQuiet());
 }
 
@@ -528,7 +528,7 @@ TEST(AudioBuiltinEffectTest, SfxReverbLateFollowsReverbDelay) {
 }
 
 TEST(AudioBuiltinEffectTest, EveryBuiltinBypassedIsTheIdentity) {
-	ClipBlock clip(MakePcm(Noise(8 * BLOCK), 1, RATE));
+	ClipBlock clip(MakePCM(Noise(8 * BLOCK), 1, RATE));
 	const auto render = [&](IAudioEffect* effect, bool unitBypass, bool groupBypass) {
 		OfflineMixer mixer(2);
 		const OfflineBus bus = mixer.Bus(1);
@@ -595,8 +595,8 @@ namespace {
 } // namespace
 
 TEST_F(BuiltinEffectFixture, SetRegisteredByName) {
-	EXPECT_EQ(GetBuiltinEffects().size(), std::size(BUILTIN_NAMES));
-	for (const std::string_view name : BUILTIN_NAMES) {
+	EXPECT_EQ(GetBuiltinEffects().size(), std::size(BuiltinNames));
+	for (const std::string_view name : BuiltinNames) {
 		EXPECT_NE(Builtin(name), nullptr) << name;
 		EXPECT_EQ(FindEffect(name), Builtin(name)) << name;
 		for (const AudioParameterDefinition& parameter : Builtin(name)->GetParameters()) {
@@ -614,7 +614,7 @@ TEST_F(BuiltinEffectFixture, SetFollowsPackageImage) {
 	EXPECT_NE(FindEffect("Echo"), nullptr);
 
 	ModuleEvents::ImageUnloading.Publish(EventBus::GetGlobal(), ImageUnloadingEvent{&_token});
-	for (const std::string_view name : BUILTIN_NAMES) {
+	for (const std::string_view name : BuiltinNames) {
 		EXPECT_EQ(FindEffect(name), nullptr) << name;
 	}
 	RegisterBuiltinEffects(&_token);

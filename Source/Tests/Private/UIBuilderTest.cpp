@@ -398,7 +398,7 @@ TEST_F(UIBuilderOpsTest, LibraryGroupsEveryRegisteredWidgetByCategory) {
 }
 
 TEST_F(UIBuilderOpsTest, ModuleWidgetJoinsLibrary) {
-	static constexpr std::string_view GAUGE = "gauge";
+	static constexpr std::string_view Gauge = "gauge";
 	auto factory = [](UI::Context& context, UI::ElementHandle parent, const UI::WidgetArgs&) -> UI::WidgetResult {
 		UI::ElementHandle element = context.CreateElement();
 		context.AppendChild(parent, element);
@@ -407,7 +407,7 @@ TEST_F(UIBuilderOpsTest, ModuleWidgetJoinsLibrary) {
 	const void* owner = reinterpret_cast<const void*>(0x1234);
 
 	UI::WidgetDesc gauge;
-	gauge.tag = GAUGE;
+	gauge.tag = Gauge;
 	gauge.factory = factory;
 	gauge.category = "Instruments";
 	ASSERT_TRUE(UI::WidgetRegistry::Register(gauge, owner));
@@ -417,7 +417,7 @@ TEST_F(UIBuilderOpsTest, ModuleWidgetJoinsLibrary) {
 	ASSERT_EQ(all.size(), 7u);
 	EXPECT_EQ(all[0]->tag, "button");
 	EXPECT_EQ(all[5]->tag, "image");
-	EXPECT_EQ(all[6]->tag, GAUGE);
+	EXPECT_EQ(all[6]->tag, Gauge);
 
 	Vector<UIBuilderOps::LibraryGroup> groups{GetMemoryResource(MemTag::Debug)};
 	UIBuilderOps::BuildLibrary(groups);
@@ -972,26 +972,26 @@ TEST_F(UIBuilderOpsTest, RepeatedPropertyReportsOneThatWins) {
 }
 
 TEST_F(UIBuilderOpsTest, UnsetKeepsRestOfSource) {
-	constexpr std::string_view SOURCE = ".row {\n\tpadding: 8px;\n\tcolor: red;\n\twidth: 4px;\n}\n";
+	constexpr std::string_view Source = ".row {\n\tpadding: 8px;\n\tcolor: red;\n\twidth: 4px;\n}\n";
 	Vector<UI::StyleRuleSource> rules{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, rules);
+	UI::StyleSheet::SplitSource(Source, rules);
 	ASSERT_EQ(rules.size(), 1u);
 	ASSERT_EQ(rules[0].declarations.size(), 3u);
 
 	std::string_view runs[] = {rules[0].declarations[1].text};
-	str result = UIBuilderOps::EraseRuns(SOURCE, runs);
+	str result = UIBuilderOps::EraseRuns(Source, runs);
 
 	EXPECT_EQ(result, ".row {\n\tpadding: 8px;\n\twidth: 4px;\n}\n");
 }
 
 TEST_F(UIBuilderOpsTest, UnsettingFromFragmentLeavesNoOrphanSemicolon) {
-	constexpr std::string_view FRAGMENT = "width: 10px; color: red; height: 4px";
+	constexpr std::string_view Fragment = "width: 10px; color: red; height: 4px";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 	ASSERT_EQ(declarations.size(), 3u);
 
 	std::string_view runs[] = {declarations[1].text};
-	str result = UIBuilderOps::EraseRuns(FRAGMENT, runs);
+	str result = UIBuilderOps::EraseRuns(Fragment, runs);
 	EXPECT_EQ(result, "width: 10px; height: 4px");
 
 	Vector<UI::StyleDeclarationSource> after{GetMemoryResource(MemTag::Debug)};
@@ -1002,23 +1002,23 @@ TEST_F(UIBuilderOpsTest, UnsettingFromFragmentLeavesNoOrphanSemicolon) {
 }
 
 TEST_F(UIBuilderOpsTest, UnsetAllTakesEveryRun) {
-	constexpr std::string_view FRAGMENT = "width: 10px; color: red; height: 4px";
+	constexpr std::string_view Fragment = "width: 10px; color: red; height: 4px";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 	ASSERT_EQ(declarations.size(), 3u);
 
 	std::string_view runs[] = {declarations[2].text, declarations[0].text, declarations[1].text};
-	EXPECT_TRUE(UIBuilderOps::EraseRuns(FRAGMENT, runs).empty());
+	EXPECT_TRUE(UIBuilderOps::EraseRuns(Fragment, runs).empty());
 
-	constexpr std::string_view OTHER = "width: 10px";
-	std::string_view foreign[] = {OTHER};
-	EXPECT_EQ(UIBuilderOps::EraseRuns(FRAGMENT, foreign), FRAGMENT);
+	constexpr std::string_view Other = "width: 10px";
+	std::string_view foreign[] = {Other};
+	EXPECT_EQ(UIBuilderOps::EraseRuns(Fragment, foreign), Fragment);
 }
 
 TEST_F(UIBuilderOpsTest, UnsetRevertsToSheetStyle) {
-	constexpr std::string_view WITH =
+	constexpr std::string_view With =
 		R"(<ui version="1"><panel id="a" class="row" style="opacity: 0.25; letter-spacing: 3px"/></ui>)";
-	constexpr std::string_view WITHOUT = R"(<ui version="1"><panel id="a" class="row"/></ui>)";
+	constexpr std::string_view Without = R"(<ui version="1"><panel id="a" class="row"/></ui>)";
 
 	auto computed = [](std::string_view source) {
 		UIDocumentAsset document;
@@ -1034,12 +1034,12 @@ TEST_F(UIBuilderOpsTest, UnsetRevertsToSheetStyle) {
 		return context.GetComputedStyle(root);
 	};
 
-	const UI::Style set = computed(WITH);
+	const UI::Style set = computed(With);
 	EXPECT_FLOAT_EQ(set.letterSpacing.value_or(-1.0f), 3.0f);
 
 	UIDocumentAsset document;
 	str error;
-	ASSERT_TRUE(document.Parse(WITH, error)) << error;
+	ASSERT_TRUE(document.Parse(With, error)) << error;
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
 	UI::StyleSheet::SplitDeclarations(document.root.style, declarations);
 	ASSERT_EQ(declarations.size(), 2u);
@@ -1057,7 +1057,7 @@ TEST_F(UIBuilderOpsTest, UnsetRevertsToSheetStyle) {
 	UI::ElementHandle root = document.Instantiate(context, context.GetRoot(), instantiate);
 	context.Update();
 
-	EXPECT_EQ(context.GetComputedStyle(root), computed(WITHOUT));
+	EXPECT_EQ(context.GetComputedStyle(root), computed(Without));
 	EXPECT_FLOAT_EQ(context.GetComputedStyle(root).opacity, 0.75f);
 }
 
@@ -1536,23 +1536,23 @@ TEST_F(UIBuilderOpsTest, SetClassesHandlesAliasing) {
 }
 
 TEST_F(UIBuilderOpsTest, SetRewritesOneRun) {
-	constexpr std::string_view SOURCE = ".row {\n\twidth: 10px; /* keep me */\n\tcolor: red;\n}\n";
+	constexpr std::string_view Source = ".row {\n\twidth: 10px; /* keep me */\n\tcolor: red;\n}\n";
 	Vector<UI::StyleRuleSource> rules{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, rules);
+	UI::StyleSheet::SplitSource(Source, rules);
 	ASSERT_EQ(rules.size(), 1u);
 
-	str written = UIBuilderOps::SetDeclaration(SOURCE, rules[0].body, rules[0].declarations, "width", "22px",
+	str written = UIBuilderOps::SetDeclaration(Source, rules[0].body, rules[0].declarations, "width", "22px",
 											   UIBuilderOps::DeclarationLayout::Block);
 	EXPECT_EQ(written, ".row {\n\twidth: 22px; /* keep me */\n\tcolor: red;\n}\n");
 }
 
 TEST_F(UIBuilderOpsTest, SettingRepeatedPropertyRewritesRunThatWins) {
-	constexpr std::string_view SOURCE = ".row {\n\twidth: 10px;\n\tcolor: red;\n\twidth: 30px;\n}\n";
+	constexpr std::string_view Source = ".row {\n\twidth: 10px;\n\tcolor: red;\n\twidth: 30px;\n}\n";
 	Vector<UI::StyleRuleSource> rules{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, rules);
+	UI::StyleSheet::SplitSource(Source, rules);
 	ASSERT_EQ(rules.size(), 1u);
 
-	str written = UIBuilderOps::SetDeclaration(SOURCE, rules[0].body, rules[0].declarations, "width", "22px",
+	str written = UIBuilderOps::SetDeclaration(Source, rules[0].body, rules[0].declarations, "width", "22px",
 											   UIBuilderOps::DeclarationLayout::Block);
 	EXPECT_EQ(written, ".row {\n\twidth: 10px;\n\tcolor: red;\n\twidth: 22px;\n}\n");
 
@@ -1569,13 +1569,13 @@ TEST_F(UIBuilderOpsTest, SettingRepeatedPropertyRewritesRunThatWins) {
 }
 
 TEST_F(UIBuilderOpsTest, SetOnEmptyRuleLandsInBraces) {
-	constexpr std::string_view SOURCE = ".before { color: red; }\n\n.empty {\n}\n";
+	constexpr std::string_view Source = ".before { color: red; }\n\n.empty {\n}\n";
 	Vector<UI::StyleRuleSource> rules{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, rules);
+	UI::StyleSheet::SplitSource(Source, rules);
 	ASSERT_EQ(rules.size(), 2u);
 	ASSERT_TRUE(rules[1].declarations.empty());
 
-	str written = UIBuilderOps::SetDeclaration(SOURCE, rules[1].body, rules[1].declarations, "width", "5px",
+	str written = UIBuilderOps::SetDeclaration(Source, rules[1].body, rules[1].declarations, "width", "5px",
 											   UIBuilderOps::DeclarationLayout::Block);
 
 	Vector<UI::StyleRuleSource> reread{GetMemoryResource(MemTag::Debug)};
@@ -1589,11 +1589,11 @@ TEST_F(UIBuilderOpsTest, SetOnEmptyRuleLandsInBraces) {
 }
 
 TEST_F(UIBuilderOpsTest, InlineFragmentGrowsAtEnd) {
-	constexpr std::string_view FRAGMENT = "width: 1px";
+	constexpr std::string_view Fragment = "width: 1px";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 
-	str written = UIBuilderOps::SetDeclaration(FRAGMENT, FRAGMENT, declarations, "height", "2px",
+	str written = UIBuilderOps::SetDeclaration(Fragment, Fragment, declarations, "height", "2px",
 											   UIBuilderOps::DeclarationLayout::Inline);
 	EXPECT_EQ(written, "width: 1px; height: 2px;");
 	EXPECT_EQ(written.find('\n'), str::npos);
@@ -1607,12 +1607,12 @@ TEST_F(UIBuilderOpsTest, InlineFragmentGrowsAtEnd) {
 }
 
 TEST_F(UIBuilderOpsTest, EmptyInlineTakesFirstDeclaration) {
-	constexpr std::string_view FRAGMENT = "";
+	constexpr std::string_view Fragment = "";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 	ASSERT_TRUE(declarations.empty());
 
-	str written = UIBuilderOps::SetDeclaration(FRAGMENT, FRAGMENT, declarations, "width", "3px",
+	str written = UIBuilderOps::SetDeclaration(Fragment, Fragment, declarations, "width", "3px",
 											   UIBuilderOps::DeclarationLayout::Inline);
 	EXPECT_EQ(written, "width: 3px;");
 }
@@ -1676,9 +1676,9 @@ TEST_F(UIBuilderOpsTest, InlineStyleWritesNoNewline) {
 }
 
 TEST_F(UIBuilderOpsTest, AppendedRuleCarriesAuthoredRunsVerbatim) {
-	constexpr std::string_view FRAGMENT = "background-color: var(--slt-accent); width: 4px";
+	constexpr std::string_view Fragment = "background-color: var(--slt-accent); width: 4px";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 	Vector<std::string_view> runs{GetMemoryResource(MemTag::Debug)};
 	for (const UI::StyleDeclarationSource& declaration : declarations) {
 		runs.push_back(declaration.text);
@@ -3210,9 +3210,9 @@ TEST(UIBuilderCodeTest, AdjacentRunsOfOneKindAreMerged) {
 }
 
 TEST(UIBuilderCodeTest, EveryByteOfTheSourceSurvivesTokenizing) {
-	constexpr std::string_view SOURCE =
+	constexpr std::string_view Source =
 		"<ui version=\"1\">\n\t<!-- hi -->\n\t<Element id=\"a\" style=\"width: 10px;\"/>\n</ui>\n";
-	const Vector<UIBuilderOps::CodeLine> lines = Tokenize(SOURCE, CodeLanguage::Markup);
+	const Vector<UIBuilderOps::CodeLine> lines = Tokenize(Source, CodeLanguage::Markup);
 	str rebuilt;
 	for (size_t i = 0; i < lines.size(); ++i) {
 		for (const UIBuilderOps::CodeSpan& span : lines[i].spans) {
@@ -3222,7 +3222,7 @@ TEST(UIBuilderCodeTest, EveryByteOfTheSourceSurvivesTokenizing) {
 			rebuilt += "\n";
 		}
 	}
-	EXPECT_EQ(rebuilt, str(SOURCE));
+	EXPECT_EQ(rebuilt, str(Source));
 }
 
 TEST(UIBuilderCodeTest, UnterminatedRunsEndAtSource) {

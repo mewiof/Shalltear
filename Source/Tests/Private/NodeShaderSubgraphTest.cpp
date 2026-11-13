@@ -27,12 +27,12 @@ namespace {
 		GraphContext* output = nullptr;
 
 		SubgraphBuilder() {
-			document.type = str(GRAPH_SUBGRAPH_DOCUMENT_TYPE);
-			output = &Context(1, GRAPH_SUBGRAPH_OUTPUT_CONTEXT);
+			document.type = str(GraphSubgraphDocumentType);
+			output = &Context(1, GraphSubgraphOutputContext);
 		}
 
 		GraphNode& Output(u32 id, std::string_view name, std::string_view type) {
-			GraphNode& block = Block(*output, id, GRAPH_SUBGRAPH_OUTPUT_BLOCK);
+			GraphNode& block = Block(*output, id, GraphSubgraphOutputBlock);
 			Setting(block, "Name", NodeShaderEditOps::Quote(name));
 			Setting(block, "Type", NodeShaderEditOps::Quote(type));
 			return block;
@@ -40,8 +40,8 @@ namespace {
 	};
 
 	GraphNode& UseSubgraph(DocumentBuilder& b, u32 id, const Guid& asset) {
-		GraphNode& node = b.Node(id, GRAPH_SUBGRAPH_NODE);
-		DocumentBuilder::Setting(node, GRAPH_SUBGRAPH_ASSET_SETTING, NodeShaderEditOps::Quote(asset.ToString()));
+		GraphNode& node = b.Node(id, GraphSubgraphNode);
+		DocumentBuilder::Setting(node, GraphSubgraphAssetSetting, NodeShaderEditOps::Quote(asset.ToString()));
 		return node;
 	}
 
@@ -130,7 +130,7 @@ TEST_F(NodeShaderSubgraphFixture, SubgraphPortsById) {
 	const GraphNodeDefinition* definition = definitions.Find(b.document, node, &error);
 	ASSERT_NE(definition, nullptr) << error;
 	EXPECT_EQ(definition->name, "Ports");
-	EXPECT_EQ(definition->category, GRAPH_SUBGRAPH_DEFAULT_CATEGORY);
+	EXPECT_EQ(definition->category, GraphSubgraphDefaultCategory);
 	ASSERT_EQ(definition->inputs.size(), 2u);
 	EXPECT_EQ(definition->inputs[0].name, "2");
 	EXPECT_EQ(definition->inputs[0].label, "Amount");
@@ -355,9 +355,9 @@ namespace {
 		b.Node(21, "Utility/BranchOnInputConnection");
 		DocumentBuilder::Constant(b.document.nodes.back(), "NotConnected", "9");
 		if (redirect) {
-			b.Node(22, GraphDocumentOps::REDIRECT_DEF);
-			b.Connect(20, "Out", 22, GraphDocumentOps::REDIRECT_IN);
-			b.Connect(22, GraphDocumentOps::REDIRECT_OUT, 21, "Input");
+			b.Node(22, GraphDocumentOps::RedirectDef);
+			b.Connect(20, "Out", 22, GraphDocumentOps::RedirectIn);
+			b.Connect(22, GraphDocumentOps::RedirectOut, 21, "Input");
 		} else {
 			b.Connect(20, "Out", 21, "Input");
 		}
@@ -502,9 +502,9 @@ TEST_F(NodeShaderSubgraphFixture, ASubgraphsKeywordsAreTheGraphsOwn) {
 }
 
 TEST_F(NodeShaderSubgraphFixture, SubgraphsEnumKeywordIsGraphsGroup) {
-	constexpr std::string_view LOD_ENTRIES = R"([{"id":1,"name":"High","reference":"HIGH"},{"id":2,"name":"Low","reference":"LOW"}])";
+	constexpr std::string_view LODEntries = R"([{"id":1,"name":"High","reference":"HIGH"},{"id":2,"name":"Low","reference":"LOW"}])";
 	SubgraphBuilder s;
-	s.Blackboard(10, "Detail", "_LOD", "EnumKeyword", "1").settings.push_back({"entries", str(LOD_ENTRIES)});
+	s.Blackboard(10, "Detail", "_LOD", "EnumKeyword", "1").settings.push_back({"entries", str(LODEntries)});
 	s.Node(20, "Utility/Keyword");
 	DocumentBuilder::Setting(s.document.nodes.back(), "property", "10");
 	DocumentBuilder::Constant(s.document.nodes.back(), "1", "[0,1,0,1]");
@@ -542,13 +542,13 @@ TEST_F(NodeShaderSubgraphFixture, NewSubgraphFollowsTemplate) {
 	GraphDocument document;
 	str error;
 	ASSERT_TRUE(GraphDocumentOps::Read(ShaderSubgraphImporter::TemplateDocument(), document, error)) << error;
-	EXPECT_EQ(document.type, GRAPH_SUBGRAPH_DOCUMENT_TYPE);
-	EXPECT_EQ(NodeShaderEditOps::GraphSettingText(document, GRAPH_SUBGRAPH_CATEGORY_SETTING), GRAPH_SUBGRAPH_DEFAULT_CATEGORY);
+	EXPECT_EQ(document.type, GraphSubgraphDocumentType);
+	EXPECT_EQ(NodeShaderEditOps::GraphSettingText(document, GraphSubgraphCategorySetting), GraphSubgraphDefaultCategory);
 	const u32 output = GraphSubgraphs::OutputContext(document);
 	ASSERT_NE(output, 0u);
 	ASSERT_EQ(document.contexts[0].blocks.size(), 1u);
 	EXPECT_EQ(GraphSubgraphs::OutputNameOf(document.contexts[0].blocks[0]), "Out_Vector4");
-	EXPECT_EQ(GRAPH_SUBGRAPH_OUTPUT_TYPES[GraphSubgraphs::OutputTypeOf(document.contexts[0].blocks[0])], "Vector4");
+	EXPECT_EQ(GraphSubgraphOutputTypes[GraphSubgraphs::OutputTypeOf(document.contexts[0].blocks[0])], "Vector4");
 
 	const u32 first = NodeShaderEditOps::AddSubgraphOutput(document, output, "Vector3");
 	const u32 second = NodeShaderEditOps::AddSubgraphOutput(document, output, "Vector3");

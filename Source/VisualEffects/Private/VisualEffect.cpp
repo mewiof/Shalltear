@@ -19,15 +19,15 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view ON_PLAY = "OnPlay";
-		constexpr std::string_view ON_STOP = "OnStop";
-		constexpr std::string_view PARTICLE_ID = "particleId";
+		constexpr std::string_view OnPlay = "OnPlay";
+		constexpr std::string_view OnStop = "OnStop";
+		constexpr std::string_view ParticleId = "particleId";
 
 		template <typename Write>
 		u32 ReadParticles(const EffectInstance* instance, std::string_view system, std::string_view attribute, u32 width, u32 offset, size_t room,
 						  Write&& write) {
 			const EffectSystem* described = nullptr;
-			const ParticleCpuSystem* cpu = instance ? instance->FindCpuSystem(system, described) : nullptr;
+			const ParticleCPUSystem* cpu = instance ? instance->FindCPUSystem(system, described) : nullptr;
 			if (!cpu) {
 				return 0;
 			}
@@ -38,7 +38,7 @@ namespace Shalltear {
 			if (!stored || stored->components != width) {
 				return 0;
 			}
-			const bool id = attribute == PARTICLE_ID;
+			const bool id = attribute == ParticleId;
 			const std::span<const u32> alive = cpu->GetAlive();
 			u32 written = 0;
 			for (size_t i = offset; i < alive.size() && written < room; ++i, ++written) {
@@ -108,9 +108,9 @@ namespace Shalltear {
 		ProceduralRenderer::OnDisable();
 	}
 
-	void VisualEffect::Play() { SendEvent(ON_PLAY); }
+	void VisualEffect::Play() { SendEvent(OnPlay); }
 
-	void VisualEffect::Stop() { SendEvent(ON_STOP); }
+	void VisualEffect::Stop() { SendEvent(OnStop); }
 
 	void VisualEffect::SendEvent(std::string_view name) {
 		if (_instance) {
@@ -195,7 +195,7 @@ namespace Shalltear {
 
 	u32 VisualEffect::GetParticleCount(std::string_view system) const {
 		const EffectSystem* described = nullptr;
-		const ParticleCpuSystem* cpu = _instance ? _instance->FindCpuSystem(system, described) : nullptr;
+		const ParticleCPUSystem* cpu = _instance ? _instance->FindCPUSystem(system, described) : nullptr;
 		return cpu ? static_cast<u32>(cpu->GetAlive().size()) : 0u;
 	}
 

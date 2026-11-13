@@ -17,7 +17,7 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view HASH_TCHOU = R"(uint ShalltearGraphHashTchou21(uint2 v)
+		constexpr std::string_view HashTchou = R"(uint ShalltearGraphHashTchou21(uint2 v)
 {
 	v.y ^= 1103515245u;
 	v.x += v.y;
@@ -52,7 +52,7 @@ float2 ShalltearGraphHash22Deterministic(float2 i)
 
 )";
 
-		constexpr std::string_view HASH_LEGACY_SINE = R"(float ShalltearGraphHash21LegacySine(float2 i)
+		constexpr std::string_view HashLegacySine = R"(float ShalltearGraphHash21LegacySine(float2 i)
 {
 	float angle = dot(i, float2(12.9898, 78.233));
 	return frac(sin(angle) * 43758.5453);
@@ -66,7 +66,7 @@ float2 ShalltearGraphHash22LegacySine(float2 i)
 
 )";
 
-		constexpr std::string_view HASH_LEGACY_MOD = R"(float ShalltearGraphHash21LegacyMod(float2 i)
+		constexpr std::string_view HashLegacyMod = R"(float ShalltearGraphHash21LegacyMod(float2 i)
 {
 	i = i % 289;
 	float x = float(34 * i.x + 1) * i.x % 289 + i.y;
@@ -76,7 +76,7 @@ float2 ShalltearGraphHash22LegacySine(float2 i)
 
 )";
 
-		constexpr std::string_view VALUE_NOISE = R"(float ShalltearGraphValueNoise%HASH%(float2 uv)
+		constexpr std::string_view ValueNoise = R"(float ShalltearGraphValueNoise%HASH%(float2 uv)
 {
 	float2 i = floor(uv);
 	float2 f = frac(uv);
@@ -92,7 +92,7 @@ float2 ShalltearGraphHash22LegacySine(float2 i)
 
 )";
 
-		constexpr std::string_view GRADIENT_NOISE = R"(float2 ShalltearGraphGradientDirection%HASH%(float2 p)
+		constexpr std::string_view GradientNoise = R"(float2 ShalltearGraphGradientDirection%HASH%(float2 p)
 {
 	float x = ShalltearGraphHash21%HASH%(p);
 	return normalize(float2(x - floor(x + 0.5), abs(x) - 0.5));
@@ -112,7 +112,7 @@ float ShalltearGraphGradientNoise%HASH%(float2 p)
 
 )";
 
-		constexpr std::string_view VORONOI = R"(float2 ShalltearGraphVoronoiRandomVector%HASH%(float2 uv, float offset)
+		constexpr std::string_view Voronoi = R"(float2 ShalltearGraphVoronoiRandomVector%HASH%(float2 uv, float offset)
 {
 	uv = ShalltearGraphHash22%HASH%(uv);
 	return float2(sin(uv.y * offset), cos(uv.x * offset)) * 0.5 + 0.5;
@@ -141,7 +141,7 @@ float2 ShalltearGraphVoronoi%HASH%(float2 uv, float angleOffset, float cellDensi
 
 )";
 
-		constexpr std::string_view TEXTURE_SIZE = R"(float4 ShalltearGraphTextureSize(Texture2D source)
+		constexpr std::string_view TextureSize = R"(float4 ShalltearGraphTextureSize(Texture2D source)
 {
 	uint width;
 	uint height;
@@ -160,7 +160,7 @@ float4 ShalltearGraphTextureSize(Texture3D source)
 
 )";
 
-		constexpr std::string_view RANDOM = R"(uint ShalltearGraphRandomHash(uint h)
+		constexpr std::string_view Random = R"(uint ShalltearGraphRandomHash(uint h)
 {
 	h = ((h >> 16) ^ h) * 0x45d9f3bu;
 	h = ((h >> 16) ^ h) * 0x45d9f3bu;
@@ -175,7 +175,7 @@ float ShalltearGraphRandom(float key, float seed, uint salt)
 
 )";
 
-		constexpr std::string_view PARALLAX_OCCLUSION = R"(float3 ShalltearGraphParallaxOcclusion(Texture2D heightMap, SamplerState heightSampler, float2 uv, float3 viewDirUV, float3 parameters, uint channel)
+		constexpr std::string_view ParallaxOcclusion = R"(float3 ShalltearGraphParallaxOcclusion(Texture2D heightMap, SamplerState heightSampler, float2 uv, float3 viewDirUV, float3 parameters, uint channel)
 {
 	float lod = parameters.x;
 	float lodThreshold = parameters.y;
@@ -231,7 +231,7 @@ float ShalltearGraphRandom(float key, float seed, uint salt)
 )";
 
 		// the effect noise is Brian Sharpe's GPU-Noise-Lib (github.com/BrianSharpe/GPU-Noise-Lib)
-		constexpr std::string_view EFFECT_NOISE_COMMON = R"(float3 ShalltearGraphNoiseC2(float3 x) { return x * x * x * (x * (x * 6.0 - 15.0) + 10.0); }
+		constexpr std::string_view EffectNoiseCommon = R"(float3 ShalltearGraphNoiseC2(float3 x) { return x * x * x * (x * (x * 6.0 - 15.0) + 10.0); }
 float4 ShalltearGraphNoiseC2Pair(float2 x) { return x.xyxy * x.xyxy * (x.xyxy * (x.xyxy * (x.xyxy * float2(6.0, 0.0).xxyy + float2(-15.0, 30.0).xxyy) + float2(10.0, -60.0).xxyy) + float2(0.0, 30.0).xxyy); }
 float2 ShalltearGraphNoiseC2Pair(float x) { return x * x * (x * (x * (x * float2(6.0, 0.0) + float2(-15.0, 30.0)) + float2(10.0, -60.0)) + float2(0.0, 30.0)); }
 float3 ShalltearGraphNoiseC2Derivative(float3 x) { return x * x * (x * (x * 30.0 - 60.0) + 30.0); }
@@ -317,7 +317,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 
 )";
 
-		constexpr std::string_view EFFECT_NOISE_BASES[3][3] = {
+		constexpr std::string_view EffectNoiseBases[3][3] = {
 			{R"(float2 ShalltearGraphValueNoise1D(float coordinate)
 {
 	float i = floor(coordinate);
@@ -520,7 +520,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 
 )"}};
 
-		constexpr std::string_view EFFECT_NOISE_FRACTAL = R"(%R% ShalltearGraph%T%Fractal%N%D(%C% coordinate, float3 parameters, float octaves)
+		constexpr std::string_view EffectNoiseFractal = R"(%R% ShalltearGraph%T%Fractal%N%D(%C% coordinate, float3 parameters, float octaves)
 {
 	%R% total = (%R%)0.0;
 	float frequency = parameters.x;
@@ -538,7 +538,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 
 )";
 
-		constexpr std::string_view EFFECT_NOISE_CURL_2D = R"(float2 ShalltearGraph%T%Curl2D(float2 coordinate, float3 parameters, float octaves)
+		constexpr std::string_view EffectNoiseCurl2D = R"(float2 ShalltearGraph%T%Curl2D(float2 coordinate, float3 parameters, float octaves)
 {
 	float2 total = float2(0.0, 0.0);
 	float frequency = parameters.x;
@@ -556,7 +556,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 
 )";
 
-		constexpr std::string_view EFFECT_NOISE_CURL_3D = R"(float3 ShalltearGraph%T%Curl3D(float3 coordinate, float3 parameters, float octaves)
+		constexpr std::string_view EffectNoiseCurl3D = R"(float3 ShalltearGraph%T%Curl3D(float3 coordinate, float3 parameters, float octaves)
 {
 	float2 total0 = float2(0.0, 0.0);
 	float2 total1 = float2(0.0, 0.0);
@@ -578,7 +578,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 
 )";
 
-		constexpr std::array<std::string_view, 3> EFFECT_NOISE_NAMES = {"Value", "Perlin", "Cellular"};
+		constexpr std::array<std::string_view, 3> EffectNoiseNames = {"Value", "Perlin", "Cellular"};
 
 		str Substitute(std::string_view text, std::span<const std::pair<std::string_view, std::string_view>> pairs) {
 			str out(text);
@@ -590,7 +590,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 			return out;
 		}
 
-		constexpr std::array<std::string_view, 3> HASH_NAMES = {"Deterministic", "LegacySine", "LegacyMod"};
+		constexpr std::array<std::string_view, 3> HashNames = {"Deterministic", "LegacySine", "LegacyMod"};
 
 		str Instantiate(std::string_view text, std::string_view hash) {
 			str out;
@@ -866,7 +866,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 				case GraphOp::ValueNoise:
 				case GraphOp::GradientNoise:
 				case GraphOp::Voronoi: {
-					str out = str(NoiseFunction(value.op)) + str(HASH_NAMES[value.payload]) + "(";
+					str out = str(NoiseFunction(value.op)) + str(HashNames[value.payload]) + "(";
 					for (u32 i = 0; i < value.operandCount; ++i) {
 						out += (i == 0 ? "" : ", ") + operand(i);
 					}
@@ -875,7 +875,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 				case GraphOp::FractalNoise:
 				case GraphOp::CurlNoise: {
 					const u32 dimension = GraphTypes::VectorWidth(_program.values[value.operands[0]].type);
-					return std::format("ShalltearGraph{}{}{}D({}, {}, {})", EFFECT_NOISE_NAMES[value.payload],
+					return std::format("ShalltearGraph{}{}{}D({}, {}, {})", EffectNoiseNames[value.payload],
 									   value.op == GraphOp::FractalNoise ? "Fractal" : "Curl", dimension, operand(0), operand(1), operand(2));
 				}
 				case GraphOp::SampleTexture:
@@ -1068,50 +1068,50 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 				helpers.definitions.insert(helpers.definitions.end(), _definitions.begin(), _definitions.end());
 
 				if ((_hashes & (1u << static_cast<u32>(GraphNoiseHash::Deterministic))) != 0) {
-					Write(HASH_TCHOU, 0);
+					Write(HashTchou, 0);
 				}
 				if ((_hashes & (1u << static_cast<u32>(GraphNoiseHash::LegacySine))) != 0) {
-					Write(HASH_LEGACY_SINE, 0);
+					Write(HashLegacySine, 0);
 				}
 				if ((_hashes & (1u << static_cast<u32>(GraphNoiseHash::LegacyMod))) != 0) {
-					Write(HASH_LEGACY_MOD, 0);
+					Write(HashLegacyMod, 0);
 				}
-				constexpr std::array<std::string_view, 3> NOISES = {VALUE_NOISE, GRADIENT_NOISE, VORONOI};
-				for (u32 noise = 0; noise < NOISES.size(); ++noise) {
-					for (u32 hash = 0; hash < HASH_NAMES.size(); ++hash) {
+				constexpr std::array<std::string_view, 3> Noises = {ValueNoise, GradientNoise, Voronoi};
+				for (u32 noise = 0; noise < Noises.size(); ++noise) {
+					for (u32 hash = 0; hash < HashNames.size(); ++hash) {
 						if ((_noises & (1u << (noise * 3 + hash))) != 0) {
-							Write(Instantiate(NOISES[noise], HASH_NAMES[hash]), 0);
+							Write(Instantiate(Noises[noise], HashNames[hash]), 0);
 						}
 					}
 				}
 				if (_textureSize) {
-					Write(TEXTURE_SIZE, 0);
+					Write(TextureSize, 0);
 				}
 				if (_random) {
-					Write(RANDOM, 0);
+					Write(Random, 0);
 				}
 				if (_parallaxOcclusion) {
-					Write(PARALLAX_OCCLUSION, 0);
+					Write(ParallaxOcclusion, 0);
 				}
 				if (_effectBases != 0 && _writeEffectCommon) {
-					Write(EFFECT_NOISE_COMMON, 0);
+					Write(EffectNoiseCommon, 0);
 				}
-				constexpr std::string_view COORDINATES[] = {"float", "float2", "float3"};
-				constexpr std::string_view RESULTS[] = {"float2", "float3", "float4"};
+				constexpr std::string_view Coordinates[] = {"float", "float2", "float3"};
+				constexpr std::string_view Results[] = {"float2", "float3", "float4"};
 				for (u32 type = 0; type < 3; ++type) {
 					for (u32 dimension = 1; dimension <= 3; ++dimension) {
 						const u32 bit = 1u << (type * 3 + dimension - 1);
 						if ((_effectBases & bit) != 0) {
-							Write(EFFECT_NOISE_BASES[type][dimension - 1], 0);
+							Write(EffectNoiseBases[type][dimension - 1], 0);
 						}
 						const std::string_view dimensionText = std::string_view("123").substr(dimension - 1, 1);
 						const std::pair<std::string_view, std::string_view> names[] = {
-							{"%T%", EFFECT_NOISE_NAMES[type]}, {"%N%", dimensionText}, {"%C%", COORDINATES[dimension - 1]}, {"%R%", RESULTS[dimension - 1]}};
+							{"%T%", EffectNoiseNames[type]}, {"%N%", dimensionText}, {"%C%", Coordinates[dimension - 1]}, {"%R%", Results[dimension - 1]}};
 						if ((_effectFractals & bit) != 0) {
-							Write(Substitute(EFFECT_NOISE_FRACTAL, names), 0);
+							Write(Substitute(EffectNoiseFractal, names), 0);
 						}
 						if ((_effectCurls & bit) != 0) {
-							Write(Substitute(dimension == 2 ? EFFECT_NOISE_CURL_2D : EFFECT_NOISE_CURL_3D, names), 0);
+							Write(Substitute(dimension == 2 ? EffectNoiseCurl2D : EffectNoiseCurl3D, names), 0);
 						}
 					}
 				}
@@ -1195,23 +1195,23 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 			const str generated = PathKey(path);
 			const std::filesystem::path directory = std::filesystem::path(path).parent_path();
 			Vector<std::pair<str, u32>> includes{GetMemoryResource(MemTag::Editor)};
-			constexpr std::string_view INCLUDE = "#include \"";
+			constexpr std::string_view Include = "#include \"";
 			u32 number = 1;
 			for (std::string_view rest = text; !rest.empty(); ++number) {
 				const size_t newline = rest.find('\n');
 				const std::string_view line = rest.substr(0, newline);
 				rest = newline == std::string_view::npos ? std::string_view{} : rest.substr(newline + 1);
-				const size_t at = line.find(INCLUDE);
-				const size_t close = at == std::string_view::npos ? at : line.find('"', at + INCLUDE.size());
+				const size_t at = line.find(Include);
+				const size_t close = at == std::string_view::npos ? at : line.find('"', at + Include.size());
 				if (close != std::string_view::npos) {
-					const std::filesystem::path named(line.substr(at + INCLUDE.size(), close - at - INCLUDE.size()));
+					const std::filesystem::path named(line.substr(at + Include.size(), close - at - Include.size()));
 					includes.emplace_back(PathKey((named.is_absolute() ? named : directory / named).generic_string()), number);
 				}
 			}
 			u32 added = 0;
 			u32 includedAt = 0;
-			constexpr std::string_view INCLUDED = "In file included from ";
-			constexpr std::string_view ERRORS[] = {": fatal error: ", ": error: "};
+			constexpr std::string_view Included = "In file included from ";
+			constexpr std::string_view Errors[] = {": fatal error: ", ": error: "};
 			while (!messages.empty()) {
 				const size_t newline = messages.find('\n');
 				std::string_view line = messages.substr(0, newline);
@@ -1221,8 +1221,8 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 				}
 				std::string_view file;
 				u32 number = 0;
-				if (line.starts_with(INCLUDED)) {
-					std::string_view place = line.substr(INCLUDED.size());
+				if (line.starts_with(Included)) {
+					std::string_view place = line.substr(Included.size());
 					if (!place.empty() && place.back() == ':') {
 						place.remove_suffix(1);
 					}
@@ -1233,7 +1233,7 @@ float4 ShalltearGraphNoiseCellularWeight(float4 samples)
 				}
 				size_t at = std::string_view::npos;
 				std::string_view severity;
-				for (std::string_view marker : ERRORS) {
+				for (std::string_view marker : Errors) {
 					at = line.find(marker);
 					if (at != std::string_view::npos) {
 						severity = marker;

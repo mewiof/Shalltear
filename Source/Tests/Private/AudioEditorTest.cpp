@@ -70,7 +70,7 @@ namespace {
 		ModuleHandle _module;
 		const void* _moduleBase = nullptr;
 		Handle<EditorPanel> _inspector;
-		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CACHE_EVERYTHING};
 		bool _ownsJobSystem = false;
 
 		void SetUp() override {
@@ -1055,26 +1055,26 @@ namespace {
 	]
 })";
 
-	constexpr StringHash MIXER_STRIP = StringHash("ed-mixer-strip");
-	constexpr StringHash MIXER_FADER = StringHash("ed-mixer-fader");
-	constexpr StringHash MIXER_SOLO = StringHash("ed-mixer-solo");
-	constexpr StringHash MIXER_MUTE = StringHash("ed-mixer-mute");
-	constexpr StringHash MIXER_SLOT = StringHash("ed-mixer-slot");
-	constexpr StringHash MIXER_ADD = StringHash("ed-mixer-add");
-	constexpr StringHash MIXER_CHAIN = StringHash("ed-mixer-chain");
-	constexpr StringHash MIXER_UNIT = StringHash("ed-mixer-unit");
-	constexpr StringHash MIXER_EDIT_IN_PLAY = StringHash("ed-mixer-edit-in-play");
-	constexpr StringHash MIXER_SNAPSHOT_ADD = StringHash("ed-mixer-snapshot-add");
-	constexpr StringHash MIXER_GROUP_ADD = StringHash("ed-mixer-group-add");
-	constexpr StringHash MIXER_EXPOSED = StringHash("ed-mixer-exposed");
-	constexpr StringHash MIXER_EXPOSED_ROW = StringHash("ed-mixer-exposed-row");
-	constexpr StringHash MIXER_VIEW_ADD = StringHash("ed-mixer-view-add");
-	constexpr StringHash MIXER_EYE = StringHash("ed-mixer-eye");
-	constexpr StringHash MIXER_COLOR_TAG = StringHash("ed-mixer-color");
-	constexpr StringHash MIXER_MIXER_ADD = StringHash("ed-mixer-mixer-add");
+	constexpr StringHash MixerStrip = StringHash("ed-mixer-strip");
+	constexpr StringHash MixerFader = StringHash("ed-mixer-fader");
+	constexpr StringHash MixerSolo = StringHash("ed-mixer-solo");
+	constexpr StringHash MixerMute = StringHash("ed-mixer-mute");
+	constexpr StringHash MixerSlot = StringHash("ed-mixer-slot");
+	constexpr StringHash MixerAdd = StringHash("ed-mixer-add");
+	constexpr StringHash MixerChain = StringHash("ed-mixer-chain");
+	constexpr StringHash MixerUnit = StringHash("ed-mixer-unit");
+	constexpr StringHash MixerEditInPlay = StringHash("ed-mixer-edit-in-play");
+	constexpr StringHash MixerSnapshotAdd = StringHash("ed-mixer-snapshot-add");
+	constexpr StringHash MixerGroupAdd = StringHash("ed-mixer-group-add");
+	constexpr StringHash MixerExposed = StringHash("ed-mixer-exposed");
+	constexpr StringHash MixerExposedRow = StringHash("ed-mixer-exposed-row");
+	constexpr StringHash MixerViewAdd = StringHash("ed-mixer-view-add");
+	constexpr StringHash MixerEye = StringHash("ed-mixer-eye");
+	constexpr StringHash MixerColorTag = StringHash("ed-mixer-color");
+	constexpr StringHash MixerMixerAdd = StringHash("ed-mixer-mixer-add");
 	constexpr const char* EXPOSED_VOLUME = "Volume \xE2\x86\x92";
-	constexpr StringHash SLIDER_TRACK = StringHash("slt-slider-track");
-	constexpr StringHash SLIDER_KNOB = StringHash("slt-slider-knob");
+	constexpr StringHash SliderTrack = StringHash("slt-slider-track");
+	constexpr StringHash SliderKnob = StringHash("slt-slider-knob");
 
 	class AudioMixerWindowFixture : public AudioEditorFixture {
 	protected:
@@ -1128,7 +1128,7 @@ namespace {
 		str StripTitles() {
 			str out;
 			for (u32 index = 0;; ++index) {
-				const UI::ElementHandle strip = UITest::FindByClass(*_context, _windowRoot, MIXER_STRIP, index);
+				const UI::ElementHandle strip = UITest::FindByClass(*_context, _windowRoot, MixerStrip, index);
 				if (!strip.IsValid()) {
 					break;
 				}
@@ -1139,8 +1139,8 @@ namespace {
 			return out;
 		}
 
-		UI::ElementHandle Strip(u32 index) { return UITest::FindByClass(*_context, _windowRoot, MIXER_STRIP, index); }
-		UI::ElementHandle Fader(u32 strip) { return UITest::FindByClass(*_context, Strip(strip), MIXER_FADER, 0); }
+		UI::ElementHandle Strip(u32 index) { return UITest::FindByClass(*_context, _windowRoot, MixerStrip, index); }
+		UI::ElementHandle Fader(u32 strip) { return UITest::FindByClass(*_context, Strip(strip), MixerFader, 0); }
 
 		str FaderText(u32 strip) {
 			const UI::Element* fader = _context->GetElement(Fader(strip));
@@ -1188,7 +1188,7 @@ namespace {
 			return missing;
 		}
 
-		UI::ElementHandle Chain() { return UITest::FindByClass(*_context, _windowRoot, MIXER_CHAIN, 0); }
+		UI::ElementHandle Chain() { return UITest::FindByClass(*_context, _windowRoot, MixerChain, 0); }
 
 		bool ClickIn(UI::ElementHandle root, std::string_view text) {
 			const UI::ElementHandle target = UITest::FindByText(*_context, root, text);
@@ -1221,7 +1221,7 @@ namespace {
 
 		str HeardInPlay() { return FaderText(1); }
 
-		UI::ElementHandle EditInPlay() { return UITest::FindByClass(*_context, _windowRoot, MIXER_EDIT_IN_PLAY, 0); }
+		UI::ElementHandle EditInPlay() { return UITest::FindByClass(*_context, _windowRoot, MixerEditInPlay, 0); }
 		void ClickEditInPlay() {
 			UITest::ClickElement(*_context, EditInPlay());
 			Tick();
@@ -1262,11 +1262,11 @@ namespace {
 		}
 
 		bool EditInPlayShown() {
-			const UI::ElementHandle toggle = UITest::FindByClass(*_context, _windowRoot, MIXER_EDIT_IN_PLAY, 0);
+			const UI::ElementHandle toggle = UITest::FindByClass(*_context, _windowRoot, MixerEditInPlay, 0);
 			return toggle.IsValid() && _context->GetStyle(toggle).display != UI::Display::None;
 		}
 
-		UI::ElementHandle Eye(u32 row) { return UITest::FindByClass(*_context, _windowRoot, MIXER_EYE, row); }
+		UI::ElementHandle Eye(u32 row) { return UITest::FindByClass(*_context, _windowRoot, MixerEye, row); }
 
 		bool ClickTopMenu(std::string_view text) {
 			if (_context->GetOpenPopupCount() == 0) {
@@ -1411,8 +1411,8 @@ TEST_F(AudioMixerWindowFixture, FaderDragWritesStartSnapshot) {
 
 TEST_F(AudioMixerWindowFixture, SoloAndMuteWriteGroup) {
 	OpenOn(StageMixer());
-	const UI::ElementHandle solo = UITest::FindByClass(*_context, Strip(2), MIXER_SOLO, 0);
-	const UI::ElementHandle mute = UITest::FindByClass(*_context, Strip(1), MIXER_MUTE, 0);
+	const UI::ElementHandle solo = UITest::FindByClass(*_context, Strip(2), MixerSolo, 0);
+	const UI::ElementHandle mute = UITest::FindByClass(*_context, Strip(1), MixerMute, 0);
 	ASSERT_TRUE(solo.IsValid() && mute.IsValid());
 	const UI::Brush off = _context->GetStyle(solo).background;
 
@@ -1438,7 +1438,7 @@ TEST_F(AudioMixerWindowFixture, AddedGroupNamedAndSaved) {
 	const Guid mixer = StageMixer();
 	OpenOn(mixer);
 	ASSERT_TRUE(Click("SFX"));
-	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MIXER_GROUP_ADD, 0);
+	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MixerGroupAdd, 0);
 	ASSERT_TRUE(add.IsValid());
 	UITest::ClickElement(*_context, add);
 	Tick();
@@ -1519,7 +1519,7 @@ TEST_F(AudioMixerWindowFixture, WindowsShareMixerEdits) {
 	tickBoth();
 	const auto strips = [&](UI::ElementHandle root) {
 		u32 count = 0;
-		while (UITest::FindByClass(*_context, root, MIXER_STRIP, count).IsValid()) {
+		while (UITest::FindByClass(*_context, root, MixerStrip, count).IsValid()) {
 			++count;
 		}
 		return count;
@@ -1540,7 +1540,7 @@ TEST_F(AudioMixerWindowFixture, PlayModeHoldsTopologyAndFader) {
 	SetPlayMode(PlayModeState::Playing);
 	Tick();
 
-	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MIXER_GROUP_ADD, 0));
+	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MixerGroupAdd, 0));
 	Tick();
 	_window.Get()->OnCommand(PanelCommand::Duplicate);
 	_window.Get()->OnCommand(PanelCommand::Delete);
@@ -1550,7 +1550,7 @@ TEST_F(AudioMixerWindowFixture, PlayModeHoldsTopologyAndFader) {
 	UITest::DragElementBy(*_context, Fader(1), 0, 40);
 	Tick();
 	EXPECT_EQ(FaderText(1), "-6");
-	const UI::ElementHandle solo = UITest::FindByClass(*_context, Strip(2), MIXER_SOLO, 0);
+	const UI::ElementHandle solo = UITest::FindByClass(*_context, Strip(2), MixerSolo, 0);
 	const UI::Brush off = _context->GetStyle(solo).background;
 	UITest::ClickElement(*_context, solo);
 	Tick();
@@ -1569,16 +1569,16 @@ TEST_F(AudioMixerWindowFixture, ChainShowsGroupUnitsAddsEffect) {
 	OpenOn(StageMixer());
 	const UI::ElementHandle chain = Chain();
 	ASSERT_TRUE(chain.IsValid());
-	EXPECT_EQ(UITest::CountByClass(*_context, chain, MIXER_UNIT), 0u);
+	EXPECT_EQ(UITest::CountByClass(*_context, chain, MixerUnit), 0u);
 	ASSERT_TRUE(Click("SFX"));
-	EXPECT_EQ(UITest::CountByClass(*_context, chain, MIXER_UNIT), 2u);
+	EXPECT_EQ(UITest::CountByClass(*_context, chain, MixerUnit), 2u);
 	for (const char* text : {"Pitch", "Send", "Receive", "Reverb", "Send level", "Attenuation", "Volume"}) {
 		EXPECT_TRUE(UITest::FindByText(*_context, chain, text).IsValid()) << text;
 	}
 
 	ASSERT_TRUE(ClickIn(chain, "Add Effect"));
 	ASSERT_TRUE(ClickMenu("Echo"));
-	EXPECT_EQ(UITest::CountByClass(*_context, chain, MIXER_UNIT), 3u);
+	EXPECT_EQ(UITest::CountByClass(*_context, chain, MixerUnit), 3u);
 	EXPECT_TRUE(UITest::FindByText(*_context, chain, "Delay").IsValid());
 	EXPECT_TRUE(Unsaved());
 	Save();
@@ -1612,17 +1612,17 @@ TEST_F(AudioMixerWindowFixture, MenuSendFeedsPickedTarget) {
 
 TEST_F(AudioMixerWindowFixture, StripSlotAddsAndRemovesEffect) {
 	OpenOn(StageMixer());
-	const UI::ElementHandle add = UITest::FindByClass(*_context, Strip(1), MIXER_ADD, 0);
+	const UI::ElementHandle add = UITest::FindByClass(*_context, Strip(1), MixerAdd, 0);
 	ASSERT_TRUE(add.IsValid());
 	UITest::ClickElement(*_context, add);
 	Tick();
 	ASSERT_TRUE(ClickMenu("Echo"));
-	EXPECT_EQ(UITest::CountByClass(*_context, Strip(1), MIXER_SLOT), 2u);
+	EXPECT_EQ(UITest::CountByClass(*_context, Strip(1), MixerSlot), 2u);
 
-	UITest::RightClickElement(*_context, UITest::FindByClass(*_context, Strip(1), MIXER_SLOT, 1));
+	UITest::RightClickElement(*_context, UITest::FindByClass(*_context, Strip(1), MixerSlot, 1));
 	Tick();
 	ASSERT_TRUE(ClickMenu("Remove"));
-	EXPECT_EQ(UITest::CountByClass(*_context, Strip(1), MIXER_SLOT), 1u);
+	EXPECT_EQ(UITest::CountByClass(*_context, Strip(1), MixerSlot), 1u);
 	Save();
 	EXPECT_EQ((*SavedGroup("Music"))["units"].Size(), 1u);
 }
@@ -1631,7 +1631,7 @@ TEST_F(AudioMixerWindowFixture, ChainSliderWritesSnapshot) {
 	OpenOn(StageMixer());
 	ASSERT_TRUE(Click("Music"));
 	const UI::ElementHandle chain = Chain();
-	const UI::ElementHandle pitch = UITest::FindByClass(*_context, chain, SLIDER_TRACK, 0);
+	const UI::ElementHandle pitch = UITest::FindByClass(*_context, chain, SliderTrack, 0);
 	ASSERT_TRUE(pitch.IsValid());
 	UITest::ClickElement(*_context, pitch);
 	Tick();
@@ -1640,7 +1640,7 @@ TEST_F(AudioMixerWindowFixture, ChainSliderWritesSnapshot) {
 	EXPECT_GT(written, 2.0);
 	const auto knobTakesThePointer = [&]() {
 		const UI::ElementHandle slider = UITest::FindByClass(*_context, chain, StringHash("slt-slider"), 0);
-		const UI::ElementHandle knob = UITest::FindByClass(*_context, chain, SLIDER_KNOB, 0);
+		const UI::ElementHandle knob = UITest::FindByClass(*_context, chain, SliderKnob, 0);
 		const UI::Rect box = _context->GetLayout(knob).borderBox;
 		for (UI::ElementHandle at = _context->HitTest(Vec2(box.x + box.w * 0.5f, box.y + box.h * 0.5f)); at.IsValid();) {
 			if (at == slider) {
@@ -1656,7 +1656,7 @@ TEST_F(AudioMixerWindowFixture, ChainSliderWritesSnapshot) {
 	SetPlayMode(PlayModeState::Playing);
 	Tick();
 	EXPECT_FALSE(knobTakesThePointer());
-	UITest::DragElementBy(*_context, UITest::FindByClass(*_context, chain, SLIDER_KNOB, 0), -300, 0);
+	UITest::DragElementBy(*_context, UITest::FindByClass(*_context, chain, SliderKnob, 0), -300, 0);
 	Tick();
 	SetPlayMode(PlayModeState::Editing);
 	Tick();
@@ -1667,7 +1667,7 @@ TEST_F(AudioMixerWindowFixture, ChainSliderWritesSnapshot) {
 TEST_F(AudioMixerWindowFixture, UnitDropOnLowerHalfGoesBelow) {
 	OpenOn(StageMixer());
 	ASSERT_TRUE(Click("SFX"));
-	const UI::ElementHandle below = UITest::FindByClass(*_context, Chain(), MIXER_UNIT, 1);
+	const UI::ElementHandle below = UITest::FindByClass(*_context, Chain(), MixerUnit, 1);
 	ASSERT_TRUE(below.IsValid());
 	UI::DragPayload payload;
 	payload.type = StringHash("AudioMixerUnit");
@@ -1729,7 +1729,7 @@ TEST_F(AudioMixerWindowFixture, NewGroupHeardAtSelectedSnapshot) {
 TEST_F(AudioMixerWindowFixture, PlusCopiesSnapshotMenuEdits) {
 	OpenOn(StageMixer());
 	ASSERT_TRUE(Click("Combat"));
-	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MIXER_SNAPSHOT_ADD, 0));
+	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MixerSnapshotAdd, 0));
 	Tick();
 	Type("Paused");
 	Save();
@@ -1770,7 +1770,7 @@ TEST_F(AudioMixerWindowFixture, WindowsEditOneTargetSnapshot) {
 	};
 	tickBoth();
 	const auto musicFader = [&](UI::ElementHandle root) {
-		const UI::ElementHandle fader = UITest::FindByClass(*_context, UITest::FindByClass(*_context, root, MIXER_STRIP, 1), MIXER_FADER, 0);
+		const UI::ElementHandle fader = UITest::FindByClass(*_context, UITest::FindByClass(*_context, root, MixerStrip, 1), MixerFader, 0);
 		const UI::Element* element = _context->GetElement(fader);
 		return element ? _context->GetTextString(_context->MakeHandle(element->firstChild)) : str("<no fader>");
 	};
@@ -1825,30 +1825,30 @@ TEST_F(AudioMixerWindowFixture, RightClickExposesNameToolbarEdits) {
 	EXPECT_EQ(_saved["exposedParameters"][0]["name"].AsString(), "MyExposedParam");
 	EXPECT_EQ(_saved["exposedParameters"][0]["group"].AsString(), "Music");
 
-	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MIXER_EXPOSED, 0));
+	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MixerExposed, 0));
 	Tick();
-	const UI::ElementHandle row = UITest::FindByClass(*_context, _context->GetRoot(), MIXER_EXPOSED_ROW, 0);
+	const UI::ElementHandle row = UITest::FindByClass(*_context, _context->GetRoot(), MixerExposedRow, 0);
 	ASSERT_TRUE(row.IsValid());
 	EXPECT_TRUE(UITest::FindByText(*_context, row, "Volume (of Music)").IsValid());
 	UITest::RightClickElement(*_context, row);
 	Tick();
 	ASSERT_TRUE(ClickMenu("Rename"));
 	Type("MusicVolume");
-	EXPECT_TRUE(UITest::FindByText(*_context, UITest::FindByClass(*_context, _context->GetRoot(), MIXER_EXPOSED_ROW, 0), "MusicVolume").IsValid());
+	EXPECT_TRUE(UITest::FindByText(*_context, UITest::FindByClass(*_context, _context->GetRoot(), MixerExposedRow, 0), "MusicVolume").IsValid());
 	CloseTopPopup();
 	ASSERT_EQ(_context->GetOpenPopupCount(), 0u);
 	Save();
 	EXPECT_EQ(_saved["exposedParameters"][0]["name"].AsString(), "MusicVolume");
 
-	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MIXER_EXPOSED, 0));
+	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MixerExposed, 0));
 	Tick();
-	const UI::ElementHandle again = UITest::FindByClass(*_context, _context->GetRoot(), MIXER_EXPOSED_ROW, 0);
+	const UI::ElementHandle again = UITest::FindByClass(*_context, _context->GetRoot(), MixerExposedRow, 0);
 	ASSERT_TRUE(again.IsValid());
 	EXPECT_TRUE(UITest::FindByText(*_context, again, "MusicVolume").IsValid());
 	UITest::RightClickElement(*_context, again);
 	Tick();
 	ASSERT_TRUE(ClickMenu("Unexpose"));
-	EXPECT_FALSE(UITest::FindByClass(*_context, _context->GetRoot(), MIXER_EXPOSED_ROW, 0).IsValid());
+	EXPECT_FALSE(UITest::FindByClass(*_context, _context->GetRoot(), MixerExposedRow, 0).IsValid());
 	CloseTopPopup();
 	Save();
 	EXPECT_EQ(_saved["exposedParameters"].Size(), 0u);
@@ -1889,7 +1889,7 @@ TEST_F(AudioMixerWindowFixture, EyeHidesStripPerView) {
 	EXPECT_EQ(StripTitles(), "Master SFX Reverb");
 	EXPECT_TRUE(Unsaved());
 
-	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MIXER_VIEW_ADD, 0);
+	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MixerViewAdd, 0);
 	ASSERT_TRUE(add.IsValid());
 	UITest::ClickElement(*_context, add);
 	Tick();
@@ -1908,7 +1908,7 @@ TEST_F(AudioMixerWindowFixture, EyeHidesStripPerView) {
 	ASSERT_TRUE(Click("View"));
 	EXPECT_EQ(StripTitles(), "Master SFX Reverb");
 	ASSERT_TRUE(Click("SFX"));
-	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MIXER_GROUP_ADD, 0));
+	UITest::ClickElement(*_context, UITest::FindByClass(*_context, _windowRoot, MixerGroupAdd, 0));
 	Tick();
 	Type("Steps");
 	EXPECT_EQ(StripTitles(), "Master SFX Steps Reverb");
@@ -1918,7 +1918,7 @@ TEST_F(AudioMixerWindowFixture, EyeHidesStripPerView) {
 
 TEST_F(AudioMixerWindowFixture, PickedColorTagsGroup) {
 	OpenOn(StageMixer());
-	const auto tagged = [&](u32 strip) { return UITest::FindByClass(*_context, Strip(strip), MIXER_COLOR_TAG, 0).IsValid(); };
+	const auto tagged = [&](u32 strip) { return UITest::FindByClass(*_context, Strip(strip), MixerColorTag, 0).IsValid(); };
 	EXPECT_FALSE(tagged(1));
 
 	UITest::RightClickElement(*_context, Eye(1));
@@ -2003,7 +2003,7 @@ TEST_F(AudioMixerWindowFixture, DroppedMixerRoutesIntoGroup) {
 
 TEST_F(AudioMixerWindowFixture, PlusMakesMixerMenuEdits) {
 	OpenOn(StageMixer());
-	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MIXER_MIXER_ADD, 0);
+	const UI::ElementHandle add = UITest::FindByClass(*_context, _windowRoot, MixerMixerAdd, 0);
 	ASSERT_TRUE(add.IsValid());
 	UITest::ClickElement(*_context, add);
 	Tick();

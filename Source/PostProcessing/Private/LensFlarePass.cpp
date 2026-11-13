@@ -59,7 +59,7 @@ namespace Shalltear {
 		constexpr u32 FLAG_PREMULTIPLIED = 0x400u;
 		constexpr u32 GRADIENT_STEPS = 16;
 
-		constexpr std::string_view TEXTURE_SLOT = "flareTexture";
+		constexpr std::string_view TextureSlot = "flareTexture";
 
 		RHI::BlendMode ToBlendMode(LensFlareBlend blend) {
 			switch (blend) {
@@ -154,7 +154,7 @@ namespace Shalltear {
 			material->blend = blend;
 			if (texture) {
 				for (MaterialAsset::TextureParam& param : material->textures) {
-					if (param.name == TEXTURE_SLOT) {
+					if (param.name == TextureSlot) {
 						param.texture = texture->assetId;
 						param.resolved = Handle<TextureAsset>(texture);
 					}
@@ -187,7 +187,7 @@ namespace Shalltear {
 		if (!RenderPass::Cook(descriptor, payload)) {
 			return false;
 		}
-		descriptor.NoteAssetRef(LensFlareImpl::LENS_FLARE_SHADER);
+		descriptor.NoteAssetRef(LensFlareImpl::LensFlareShader);
 		return true;
 	}
 
@@ -199,7 +199,7 @@ namespace Shalltear {
 
 		if (!_shaderResolved) {
 			_shaderResolved = true;
-			if (Asset* asset = AssetDatabase::LoadAssetByGuid(LensFlareImpl::LENS_FLARE_SHADER)) {
+			if (Asset* asset = AssetDatabase::LoadAssetByGuid(LensFlareImpl::LensFlareShader)) {
 				if (asset->GetAssetTypeId() == StringHash("ShaderAsset")) {
 					_shader = Handle<ShaderAsset>(static_cast<ShaderAsset*>(asset));
 				} else {

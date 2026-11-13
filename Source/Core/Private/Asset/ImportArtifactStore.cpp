@@ -289,16 +289,16 @@ namespace Shalltear {
 
 	namespace {
 
-		u64 g_costThresholdMicros = IMPORT_ARTIFACT_COST_THRESHOLD_US;
+		u64 _costThresholdMicros = IMPORT_ARTIFACT_COST_THRESHOLD_US;
 
 	} // namespace
 
 	u64 ImportArtifactStore::GetCostThresholdMicros() {
-		return g_costThresholdMicros;
+		return _costThresholdMicros;
 	}
 
 	void ImportArtifactStore::SetCostThresholdMicros(u64 micros) {
-		g_costThresholdMicros = micros;
+		_costThresholdMicros = micros;
 	}
 
 	void ImportArtifactStore::Fill(const ImportArtifactRequest& request, const Asset& asset,

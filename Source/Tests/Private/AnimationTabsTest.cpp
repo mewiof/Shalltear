@@ -341,12 +341,12 @@ TEST_F(AnimationTabsFixture, MirrorOfferedOnlyForSidedRig) {
 		bool expected;
 		const char* why;
 	};
-	const Row ROWS[] = {
+	const Row rows[] = {
 		{"project://HumanoidRig.gltf", true, "auto mapped rig offered no Mirror"},
 		{"project://Fox.glb", false, "quadruped offered Mirror"},
 	};
 
-	for (const Row& row : ROWS) {
+	for (const Row& row : rows) {
 		Asset* model = AssetDatabase::LoadAsset(Path(row.file));
 		ASSERT_NE(model, nullptr) << row.file;
 		const Guid modelGuid = model->assetId;

@@ -6,7 +6,7 @@ namespace Shalltear {
 
 	class LinuxTarget : public IBuildTarget {
 	public:
-		static constexpr std::string_view TRIPLE = "x86_64-unknown-linux-gnu";
+		static constexpr std::string_view Triple = "x86_64-unknown-linux-gnu";
 
 		std::string_view GetId() const override { return "Linux"; }
 		std::string_view GetDisplayName() const override { return "Linux"; }

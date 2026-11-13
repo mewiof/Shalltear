@@ -29,12 +29,12 @@ namespace Shalltear {
 		using EditorTheme::MetricToken;
 		namespace Ops = SpriteEditorOps;
 
-		constexpr std::array<std::string_view, 3> SLICE_MODES{"Grid By Cell Size", "Grid By Cell Count", "Automatic"};
-		constexpr std::array<std::string_view, 2> TEXTURE_TYPES{"Default", "Normal Map"};
-		constexpr std::array<std::string_view, 5> TEXTURE_SHAPES{"Auto", "2D", "Cube", "2D Array", "3D"};
-		constexpr std::array<std::string_view, 3> WRAP_MODES{"Repeat", "Clamp", "Mirror"};
-		constexpr std::array<std::string_view, 3> FILTER_MODES{"Point (no filter)", "Bilinear", "Trilinear"};
-		constexpr std::array<std::string_view, 2> COMPRESSIONS{"None", "High Quality"};
+		constexpr std::array<std::string_view, 3> SliceModes{"Grid By Cell Size", "Grid By Cell Count", "Automatic"};
+		constexpr std::array<std::string_view, 2> TextureTypes{"Default", "Normal Map"};
+		constexpr std::array<std::string_view, 5> TextureShapes{"Auto", "2D", "Cube", "2D Array", "3D"};
+		constexpr std::array<std::string_view, 3> WrapModes{"Repeat", "Clamp", "Mirror"};
+		constexpr std::array<std::string_view, 3> FilterModes{"Point (no filter)", "Bilinear", "Trilinear"};
+		constexpr std::array<std::string_view, 2> Compressions{"None", "High Quality"};
 		constexpr f32 IMPORT_LABEL_PX = 140.0f;
 
 		struct ImportDraft {
@@ -361,7 +361,7 @@ namespace Shalltear {
 			SpriteDraft& draft = *_draft;
 			ElementHandle mode = AddLabeledRow(context, parent, "Slice");
 			Widgets::DropdownDesc modes;
-			modes.items = SLICE_MODES;
+			modes.items = SliceModes;
 			modes.selected = static_cast<u32>(draft.slice.mode);
 			modes.font = UISystem::GetDefaultFont();
 			modes.fontSizePx = BodyPx();
@@ -556,9 +556,9 @@ namespace Shalltear {
 			};
 			auto labeled = [&context, parent](std::string_view text) { return AddLabeledRow(context, parent, text, IMPORT_LABEL_PX); };
 
-			AddDropdown(context, labeled("Texture Type"), TEXTURE_TYPES, static_cast<u32>(shown.type),
+			AddDropdown(context, labeled("Texture Type"), TextureTypes, static_cast<u32>(shown.type),
 						change([](Settings& s, u32 value) { s.type = static_cast<TextureType>(std::min<u32>(value, 1)); }));
-			AddDropdown(context, labeled("Texture Shape"), TEXTURE_SHAPES, static_cast<u32>(shown.shape),
+			AddDropdown(context, labeled("Texture Shape"), TextureShapes, static_cast<u32>(shown.shape),
 						change([](Settings& s, u32 value) { s.shape = static_cast<TextureShape>(std::min<u32>(value, 4)); }));
 			if (shown.shape == TextureShape::Texture2D ||
 				(shown.shape == TextureShape::Auto && texture.GetDimension() == RHI::TextureDimension::Texture2D)) {
@@ -597,9 +597,9 @@ namespace Shalltear {
 			}
 			Widgets::Checkbox(context, labeled("Generate Mipmaps"), shown.generateMips, change([](Settings& s, bool value) { s.generateMips = value; }));
 
-			AddDropdown(context, labeled("Wrap Mode"), WRAP_MODES, static_cast<u32>(shown.addressMode),
+			AddDropdown(context, labeled("Wrap Mode"), WrapModes, static_cast<u32>(shown.addressMode),
 						change([](Settings& s, u32 value) { s.addressMode = static_cast<RHI::AddressMode>(std::min<u32>(value, 2)); }));
-			AddDropdown(context, labeled("Filter Mode"), FILTER_MODES, static_cast<u32>(shown.filter),
+			AddDropdown(context, labeled("Filter Mode"), FilterModes, static_cast<u32>(shown.filter),
 						change([](Settings& s, u32 value) { s.filter = static_cast<TextureFilter>(std::min<u32>(value, 2)); }));
 			ElementHandle aniso = labeled("Aniso Level");
 			if (shown.filter == TextureFilter::Point || shown.shape == TextureShape::Texture3D) {
@@ -625,7 +625,7 @@ namespace Shalltear {
 					AddLine(context, parent, "Anisotropic filtering forced on for all textures by the graphics profile");
 				}
 			}
-			AddDropdown(context, labeled("Compression"), COMPRESSIONS, static_cast<u32>(shown.compression),
+			AddDropdown(context, labeled("Compression"), Compressions, static_cast<u32>(shown.compression),
 						change([](Settings& s, u32 value) { s.compression = static_cast<TextureCompression>(std::min<u32>(value, 1)); }));
 
 			ElementHandle row = AddRow(context, parent);

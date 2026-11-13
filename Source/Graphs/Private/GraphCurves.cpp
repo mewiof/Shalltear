@@ -38,7 +38,7 @@ namespace Shalltear {
 			return mode <= static_cast<u32>(AnimationCurveWrapMode::PingPong) ? static_cast<AnimationCurveWrapMode>(mode) : AnimationCurveWrapMode::Clamp;
 		}
 
-		constexpr std::string_view GRADIENT_MODES[] = {"Blend", "Fixed", "PerceptualBlend"};
+		constexpr std::string_view GradientModes[] = {"Blend", "Fixed", "PerceptualBlend"};
 
 		bool ReadKeys(const JSONValue& json, std::string_view key, u32 width, u32 at, std::span<f32> out, u32& count, str& error) {
 			const JSONValue* list = json.Find(key);
@@ -235,11 +235,11 @@ namespace Shalltear {
 			}
 			u32 mode = 0;
 			if (const JSONValue* stored = json.Find("mode")) {
-				mode = static_cast<u32>(std::size(GRADIENT_MODES));
-				for (u32 i = 0; i < std::size(GRADIENT_MODES); ++i) {
-					mode = stored->AsString() == GRADIENT_MODES[i] ? i : mode;
+				mode = static_cast<u32>(std::size(GradientModes));
+				for (u32 i = 0; i < std::size(GradientModes); ++i) {
+					mode = stored->AsString() == GradientModes[i] ? i : mode;
 				}
-				if (mode == std::size(GRADIENT_MODES)) {
+				if (mode == std::size(GradientModes)) {
 					error = "has a mode that isn't Blend, Fixed or PerceptualBlend";
 					return false;
 				}

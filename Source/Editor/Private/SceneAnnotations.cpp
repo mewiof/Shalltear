@@ -351,11 +351,11 @@ namespace Shalltear {
 		Path LegacySidecarPath(Handle<Scene> scene) {
 			Path scenePath = EditorSceneOps::GetScenePath(scene);
 			const str& text = scenePath.ToString();
-			constexpr std::string_view MOUNT = "project://";
-			if (text.empty() || !text.starts_with(MOUNT)) {
+			constexpr std::string_view Mount = "project://";
+			if (text.empty() || !text.starts_with(Mount)) {
 				return {};
 			}
-			return Path("project://EditorData/Scenes/" + text.substr(MOUNT.size()) + ".json");
+			return Path("project://EditorData/Scenes/" + text.substr(Mount.size()) + ".json");
 		}
 
 		bool ReparentInto(Handle<SceneObject> object, Handle<SceneObject> anchor) {

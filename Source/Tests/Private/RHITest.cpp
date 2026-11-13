@@ -602,14 +602,14 @@ TEST_F(RHIFixture, BufferUploadReachesGPUMemory) {
 }
 
 TEST_F(RHIFixture, QueuedUploadsLandFirst) {
-	constexpr u64 kSize = 64;
-	constexpr int kCount = 3;
-	std::array<RHI::BufferHandle, kCount> gpu{};
-	std::array<std::array<u8, kSize>, kCount> payloads{};
+	constexpr u64 SIZE = 64;
+	constexpr int COUNT = 3;
+	std::array<RHI::BufferHandle, COUNT> gpu{};
+	std::array<std::array<u8, SIZE>, COUNT> payloads{};
 
-	for (int i = 0; i < kCount; ++i) {
+	for (int i = 0; i < COUNT; ++i) {
 		RHI::BufferDesc desc;
-		desc.size = kSize;
+		desc.size = SIZE;
 		desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::TransferDst | RHI::BufferUsage::TransferSrc;
 		gpu[i] = _device->CreateBufferResource(desc);
 		ASSERT_TRUE(gpu[i].IsValid());
@@ -618,23 +618,23 @@ TEST_F(RHIFixture, QueuedUploadsLandFirst) {
 	}
 
 	RHI::BufferDesc readDesc;
-	readDesc.size = kSize * kCount;
+	readDesc.size = SIZE * COUNT;
 	readDesc.usage = RHI::BufferUsage::TransferDst;
 	readDesc.access = RHI::MemoryAccess::Readback;
 	RHI::BufferHandle readback = _device->CreateBufferResource(readDesc);
 	ASSERT_TRUE(readback.IsValid());
 
 	RHI::CommandList* cmd = _device->BeginFrame();
-	for (int i = 0; i < kCount; ++i) {
-		cmd->CopyBufferRegion(gpu[i], readback, 0, static_cast<u64>(i) * kSize, kSize);
+	for (int i = 0; i < COUNT; ++i) {
+		cmd->CopyBufferRegion(gpu[i], readback, 0, static_cast<u64>(i) * SIZE, SIZE);
 	}
 	_device->EndFrame();
 	_device->WaitIdle();
 
 	const u8* mapped = static_cast<const u8*>(_device->GetMappedPointer(readback));
 	ASSERT_NE(mapped, nullptr);
-	for (int i = 0; i < kCount; ++i) {
-		EXPECT_EQ(std::memcmp(mapped + static_cast<size_t>(i) * kSize, payloads[i].data(), kSize), 0) << "buffer " << i;
+	for (int i = 0; i < COUNT; ++i) {
+		EXPECT_EQ(std::memcmp(mapped + static_cast<size_t>(i) * SIZE, payloads[i].data(), SIZE), 0) << "buffer " << i;
 	}
 
 	for (RHI::BufferHandle handle : gpu) {

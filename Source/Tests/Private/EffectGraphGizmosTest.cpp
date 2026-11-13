@@ -36,11 +36,11 @@ namespace {
 		return document;
 	}
 
-	const Quat EFFECT_TURN = Quat::AngleAxis(90.0f, Vec3::Up());
-	const Mat4 EFFECT = Mat4::TRS(Vec3(10.0f, 0.0f, 0.0f), EFFECT_TURN, Vec3(2.0f, 2.0f, 2.0f));
+	const Quat EffectTurn = Quat::AngleAxis(90.0f, Vec3::Up());
+	const Mat4 Effect = Mat4::TRS(Vec3(10.0f, 0.0f, 0.0f), EffectTurn, Vec3(2.0f, 2.0f, 2.0f));
 
 	bool Build(const GraphDocument& document, u32 block, GraphDefinitions& definitions, Gizmos::BlockGizmo& out) {
-		return Gizmos::Build(document, block, definitions, EFFECT, EFFECT_TURN, Color32{255, 255, 255, 255}, Color32{255, 255, 255, 255}, "Shape", out);
+		return Gizmos::Build(document, block, definitions, Effect, EffectTurn, Color32{255, 255, 255, 255}, Color32{255, 255, 255, 255}, "Shape", out);
 	}
 
 	const SceneHandle* OfKind(const Gizmos::BlockGizmo& gizmo, SceneHandleKind kind, u32 skip = 0) {
@@ -87,18 +87,18 @@ TEST(EffectGraphGizmosTest, PlaneGizmoMovesAndTurns) {
 	const SceneHandle* normal = OfKind(gizmo, SceneHandleKind::Rotation);
 	ASSERT_TRUE(position && normal);
 	EXPECT_EQ(gizmo.handles.size(), 2u);
-	EXPECT_NEAR(Vec3::Distance(EditorGizmoOps::SceneHandleOrigin(*position), EFFECT.TransformPoint(Vec3(0.0f, 1.0f, 0.0f))), 0.0f, 1.0e-4f);
-	EXPECT_TRUE(Touches(gizmo, EFFECT.TransformPoint(Vec3(5.0f, 6.0f, 0.0f))));
+	EXPECT_NEAR(Vec3::Distance(EditorGizmoOps::SceneHandleOrigin(*position), Effect.TransformPoint(Vec3(0.0f, 1.0f, 0.0f))), 0.0f, 1.0e-4f);
+	EXPECT_TRUE(Touches(gizmo, Effect.TransformPoint(Vec3(5.0f, 6.0f, 0.0f))));
 
 	SceneHandle moved = *position;
 	moved.position = Vec3(0.0f, 3.0f, 0.0f);
-	ASSERT_TRUE(Gizmos::Write(document, 10, definitions, EFFECT, moved));
+	ASSERT_TRUE(Gizmos::Write(document, 10, definitions, Effect, moved));
 	EXPECT_NEAR(HeldVec3(document, 10, "Position").y, 3.0f, 1.0e-5f);
-	EXPECT_FALSE(Gizmos::Write(document, 10, definitions, EFFECT, moved));
+	EXPECT_FALSE(Gizmos::Write(document, 10, definitions, Effect, moved));
 
 	SceneHandle turned = *normal;
 	turned.rotation = Quat::AngleAxis(90.0f, Vec3::Right());
-	ASSERT_TRUE(Gizmos::Write(document, 10, definitions, EFFECT, turned));
+	ASSERT_TRUE(Gizmos::Write(document, 10, definitions, Effect, turned));
 	const Vec3 facing = Quat::AngleAxis(90.0f, Vec3::Right()) * Vec3::Forward();
 	EXPECT_NEAR(Vec3::Distance(HeldVec3(document, 10, "Normal"), facing), 0.0f, 1.0e-4f);
 	EXPECT_NEAR(HeldVec3(document, 10, "Position").y, 3.0f, 1.0e-5f);
@@ -122,23 +122,23 @@ TEST(EffectGraphGizmosTest, SphereGizmoMatchesCompiler) {
 	ASSERT_NE(slider, nullptr);
 	EXPECT_NEAR(slider->distance, 2.0f, 1.0e-5f);
 	const Vec3 dot = EditorGizmoOps::SliderDot(*slider).position;
-	const Vec3 expected = EFFECT.TransformPoint(Vec3(1.0f, 0.0f, 0.0f) + frame->rotation * (slider->direction * 2.0f));
+	const Vec3 expected = Effect.TransformPoint(Vec3(1.0f, 0.0f, 0.0f) + frame->rotation * (slider->direction * 2.0f));
 	EXPECT_NEAR(Vec3::Distance(dot, expected), 0.0f, 1.0e-4f);
 	SceneHandle grown = *slider;
 	grown.distance = -3.0f;
-	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, EFFECT, grown));
+	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, Effect, grown));
 	EXPECT_EQ(Held(document, 11, "Radius"), "3");
 
 	SceneHandle moved = *frame;
 	moved.position = Vec3(1.0f, 4.0f, 0.0f);
-	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, EFFECT, moved));
+	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, Effect, moved));
 	EXPECT_NEAR(HeldVec3(document, 11, "Position").y, 4.0f, 1.0e-5f);
 	EXPECT_EQ(Held(document, 11, "Angles"), "[30,45,60]");
 	EXPECT_TRUE(Held(document, 11, "Scale").empty());
 
 	SceneHandle turned = moved;
 	turned.rotation = Quat::FromEuler(Vec3(10.0f, 20.0f, 30.0f));
-	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, EFFECT, turned));
+	ASSERT_TRUE(Gizmos::Write(document, 11, definitions, Effect, turned));
 	const Vec3 angles = HeldVec3(document, 11, "Angles");
 	EXPECT_NEAR(Vec3::Distance(angles, Vec3(10.0f, 20.0f, 30.0f)), 0.0f, 1.0e-3f);
 }
@@ -159,7 +159,7 @@ TEST(EffectGraphGizmosTest, BoxFaceMovesAlone) {
 
 	SceneHandle pulled = *face;
 	pulled.distance = 1.0f;
-	ASSERT_TRUE(Gizmos::Write(document, 12, definitions, EFFECT, pulled));
+	ASSERT_TRUE(Gizmos::Write(document, 12, definitions, Effect, pulled));
 	EXPECT_NEAR(HeldVec3(document, 12, "Size").x, 1.5f, 1.0e-5f);
 	const Vec3 shifted = Quat::FromEuler(Vec3(0.0f, 90.0f, 0.0f)) * Vec3(0.25f, 0.0f, 0.0f);
 	EXPECT_NEAR(Vec3::Distance(HeldVec3(document, 12, "Center"), shifted), 0.0f, 1.0e-4f);
@@ -176,7 +176,7 @@ TEST(EffectGraphGizmosTest, ConeGizmoHeightLines) {
 	EXPECT_NEAR(height->distance, 2.0f, 1.0e-5f);
 	SceneHandle taller = *height;
 	taller.distance = 3.0f;
-	ASSERT_TRUE(Gizmos::Write(document, 13, definitions, EFFECT, taller));
+	ASSERT_TRUE(Gizmos::Write(document, 13, definitions, Effect, taller));
 	EXPECT_EQ(Held(document, 13, "Height"), "3");
 	EXPECT_TRUE(Held(document, 13, "Base Radius").empty());
 
@@ -184,7 +184,7 @@ TEST(EffectGraphGizmosTest, ConeGizmoHeightLines) {
 	const SceneHandle* start = OfKind(gizmo, SceneHandleKind::Position, 0);
 	const SceneHandle* end = OfKind(gizmo, SceneHandleKind::Position, 1);
 	ASSERT_TRUE(start && end);
-	EXPECT_NEAR(Vec3::Distance(EditorGizmoOps::SceneHandleOrigin(*start), EFFECT.TransformPoint(Vec3())), 0.0f, 1.0e-4f);
+	EXPECT_NEAR(Vec3::Distance(EditorGizmoOps::SceneHandleOrigin(*start), Effect.TransformPoint(Vec3())), 0.0f, 1.0e-4f);
 	EXPECT_NEAR(Vec3::Distance(EditorGizmoOps::SceneHandleOrigin(*end), Vec3(0.0f, 2.0f, 0.0f)), 0.0f, 1.0e-4f);
 	EXPECT_TRUE(Touches(gizmo, Vec3(0.0f, 2.0f, 0.0f)));
 

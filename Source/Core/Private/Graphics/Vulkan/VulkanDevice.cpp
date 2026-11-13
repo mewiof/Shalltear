@@ -1176,7 +1176,7 @@ namespace Shalltear::RHI {
 		return lost;
 	}
 
-	bool DeviceImpl::WaitForSubmission(u64 timelineValue, u64 timeoutNs) {
+	bool DeviceImpl::WaitForSubmission(u64 timelineValue, u64 timeoutNanoseconds) {
 		if (lost) {
 			return false;
 		}
@@ -1187,7 +1187,7 @@ namespace Shalltear::RHI {
 		waitInfo.semaphoreCount = 1;
 		waitInfo.pSemaphores = &timeline;
 		waitInfo.pValues = &timelineValue;
-		const VkResult result = fd.vkWaitSemaphores(device, &waitInfo, timeoutNs);
+		const VkResult result = fd.vkWaitSemaphores(device, &waitInfo, timeoutNanoseconds);
 		if (result == VK_TIMEOUT) {
 			return false;
 		}

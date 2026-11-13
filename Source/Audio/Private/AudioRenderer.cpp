@@ -1199,7 +1199,7 @@ namespace Shalltear {
 			const u32 index = _freeDecoders[--_freeDecoderCount];
 			AudioVoiceDecoder& decoder = _decoders[index];
 			decoder.gainsValid = false;
-			decoder.qoa = QoaCursor{};
+			decoder.qoa = QOACursor{};
 			voice.decoder = index;
 			return &decoder;
 		}

@@ -110,7 +110,7 @@ TEST(NodeShaderCompilerTest, EveryDefinitionCompilesAtItsDefaults) {
 		DocumentBuilder b;
 		b.Node(1, definition->id);
 		if (definition->subgraphOnly) {
-			b.document.type = str(GRAPH_SUBGRAPH_DOCUMENT_TYPE);
+			b.document.type = str(GraphSubgraphDocumentType);
 		}
 		Vector<GraphCompileRoot> roots{GetMemoryResource(MemTag::Editor)};
 		for (const GraphPortDefinition& output : definition->outputs) {
@@ -502,10 +502,10 @@ TEST(NodeShaderCompilerTest, MultiplyTakesMixedOperands) {
 
 TEST(NodeShaderCompilerTest, ARedirectCompilesToNothing) {
 	DocumentBuilder b = TwoPropertiesInto("Math/Add", "Vector3", "Vector3");
-	b.Node(4, GraphDocumentOps::REDIRECT_DEF);
-	b.Connect(3, "Out", 4, GraphDocumentOps::REDIRECT_IN);
+	b.Node(4, GraphDocumentOps::RedirectDef);
+	b.Connect(3, "Out", 4, GraphDocumentOps::RedirectIn);
 	b.Node(5, "Math/Negate");
-	b.Connect(4, GraphDocumentOps::REDIRECT_OUT, 5, "In");
+	b.Connect(4, GraphDocumentOps::RedirectOut, 5, "In");
 	Compiled c = Compile(b.document, {{5, "Out"}});
 	ASSERT_TRUE(c.ok) << c.Report();
 	EXPECT_EQ(Lines(c.text.body), 2u) << c.text.body;

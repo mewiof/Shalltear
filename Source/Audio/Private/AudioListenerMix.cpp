@@ -149,7 +149,7 @@ namespace Shalltear {
 				}
 			}
 
-			constexpr std::string_view ZONE_REVERB = "SFX Reverb";
+			constexpr std::string_view ZoneReverb = "SFX Reverb";
 
 			IAudioEffect* MakeZoneReverb(AudioListenerMix& mix, const f32* values) {
 				AudioSystem& system = GetAudioSystem();
@@ -186,7 +186,7 @@ namespace Shalltear {
 					return;
 				}
 				mix.zonesParent = mix.output;
-				mix.zoneDefinition = FindEffect(ZONE_REVERB);
+				mix.zoneDefinition = FindEffect(ZoneReverb);
 				mix.zoneReverb = MakeZoneReverb(mix, values);
 				AudioBusRowDesc rows[2];
 				rows[0].kind = AudioBusRowKind::Effect;
@@ -362,7 +362,7 @@ namespace Shalltear {
 					instance->Release();
 				}
 			}
-			if (mix.zones.IsValid() && !mix.zoneDefinition && name == ZONE_REVERB) {
+			if (mix.zones.IsValid() && !mix.zoneDefinition && name == ZoneReverb) {
 				mix.zoneDefinition = FindEffect(name);
 				IAudioEffect* instance = MakeZoneReverb(mix, mix.zoneValues);
 				if (instance && system.SetBusRowEffect(mix.zones, 0, instance)) {

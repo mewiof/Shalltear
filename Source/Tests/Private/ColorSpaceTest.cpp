@@ -21,7 +21,7 @@ namespace {
 	protected:
 		bool Tinted(f32 tint, f32& outTexel) {
 			const u8 gray[4] = {128, 128, 128, 255};
-			TestImages::WriteTga(_root / "Gray.tga", gray);
+			TestImages::WriteTGA(_root / "Gray.tga", gray);
 			WriteProjectFile("Tinted.hlsl", TINTED_SHADER);
 			Asset* texture = AssetDatabase::LoadAsset(Path("project://Gray.tga"));
 			Asset* shader = AssetDatabase::LoadAsset(Path("project://Tinted.hlsl"));

@@ -45,15 +45,15 @@ namespace {
 } // anonymous namespace
 
 TEST(EnvironmentIBLTest, FaceOffsetsTileChain) {
-	constexpr u32 faceSize = 32;
-	const u32 mipCount = RadianceCubeMipCount(faceSize);
-	const u64 total = RadianceCubeBytes(faceSize, mipCount);
+	constexpr u32 FACE_SIZE = 32;
+	const u32 mipCount = RadianceCubeMipCount(FACE_SIZE);
+	const u64 total = RadianceCubeBytes(FACE_SIZE, mipCount);
 
 	u64 expected = 0;
 	for (u32 mip = 0; mip < mipCount; ++mip) {
-		const u32 side = std::max(faceSize >> mip, 1u);
+		const u32 side = std::max(FACE_SIZE >> mip, 1u);
 		for (u32 face = 0; face < CUBE_FACE_COUNT; ++face) {
-			EXPECT_EQ(RadianceCubeFaceOffset(faceSize, mipCount, mip, face), expected)
+			EXPECT_EQ(RadianceCubeFaceOffset(FACE_SIZE, mipCount, mip, face), expected)
 				<< "mip " << mip << " face " << face;
 			expected += static_cast<u64>(side) * side * 8;
 		}
@@ -190,14 +190,14 @@ TEST(EnvironmentIBLTest, MipZeroKeepsTheSharpRadiance) {
 }
 
 TEST(EnvironmentIBLTest, TheEquirectCenterColumnFacesForward) {
-	constexpr i32 width = 64;
-	constexpr i32 height = 32;
-	std::vector<u16> source(static_cast<size_t>(width) * height * 4, 0);
+	constexpr i32 WIDTH = 64;
+	constexpr i32 HEIGHT = 32;
+	std::vector<u16> source(static_cast<size_t>(WIDTH) * HEIGHT * 4, 0);
 	const Vec3 bands[4] = {Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 0.0f)};
-	for (i32 y = 0; y < height; ++y) {
-		for (i32 x = 0; x < width; ++x) {
-			const Vec3& band = bands[(x * 4) / width];
-			const size_t index = (static_cast<size_t>(y) * width + x) * 4;
+	for (i32 y = 0; y < HEIGHT; ++y) {
+		for (i32 x = 0; x < WIDTH; ++x) {
+			const Vec3& band = bands[(x * 4) / WIDTH];
+			const size_t index = (static_cast<size_t>(y) * WIDTH + x) * 4;
 			source[index + 0] = Shalltear::Math::FloatToHalf(band.x);
 			source[index + 1] = Shalltear::Math::FloatToHalf(band.y);
 			source[index + 2] = Shalltear::Math::FloatToHalf(band.z);
@@ -207,7 +207,7 @@ TEST(EnvironmentIBLTest, TheEquirectCenterColumnFacesForward) {
 
 	RadianceCube cube;
 	ASSERT_TRUE(BuildCubeFromEquirect({reinterpret_cast<const u8*>(source.data()), source.size() * sizeof(u16)},
-									  Vec2I(width, height), RHI::Format::RGBA16Float, 16, cube));
+									  Vec2I(WIDTH, HEIGHT), RHI::Format::RGBA16Float, 16, cube));
 
 	EXPECT_NEAR(ReadTexel(cube, 0, 4, 8, 8, 2), 1.0f, 0.05f);
 	EXPECT_LT(ReadTexel(cube, 0, 4, 8, 8, 0), 0.05f);
@@ -258,21 +258,21 @@ namespace {
 } // anonymous namespace
 
 TEST(EnvironmentIBLTest, StripFacesMapTexelExact) {
-	constexpr i32 side = 8;
-	const std::vector<u16> source = NumberedStrip(side, true);
+	constexpr i32 SIDE = 8;
+	const std::vector<u16> source = NumberedStrip(SIDE, true);
 	RadianceCube cube;
 	ASSERT_TRUE(BuildCubeFromStrip({reinterpret_cast<const u8*>(source.data()), source.size() * sizeof(u16)},
-								   Vec2I(side * 6, side), RHI::Format::RGBA16Float, side, cube));
-	ExpectNumberedFaces(cube, side, "a horizontal strip");
+								   Vec2I(SIDE * 6, SIDE), RHI::Format::RGBA16Float, SIDE, cube));
+	ExpectNumberedFaces(cube, SIDE, "a horizontal strip");
 }
 
 TEST(EnvironmentIBLTest, VerticalStripReadsFacesTopToBottom) {
-	constexpr i32 side = 8;
-	const std::vector<u16> source = NumberedStrip(side, false);
+	constexpr i32 SIDE = 8;
+	const std::vector<u16> source = NumberedStrip(SIDE, false);
 	RadianceCube cube;
 	ASSERT_TRUE(BuildCubeFromStrip({reinterpret_cast<const u8*>(source.data()), source.size() * sizeof(u16)},
-								   Vec2I(side, side * 6), RHI::Format::RGBA16Float, side, cube));
-	ExpectNumberedFaces(cube, side, "a vertical strip");
+								   Vec2I(SIDE, SIDE * 6), RHI::Format::RGBA16Float, SIDE, cube));
+	ExpectNumberedFaces(cube, SIDE, "a vertical strip");
 }
 
 TEST(EnvironmentIBLTest, OnlySixToOneIsStrip) {
@@ -285,12 +285,12 @@ TEST(EnvironmentIBLTest, OnlySixToOneIsStrip) {
 }
 
 TEST(EnvironmentIBLTest, ResampledStripStaysInFace) {
-	constexpr i32 side = 16;
-	std::vector<u16> source(static_cast<size_t>(side) * 6 * side * 4, 0);
-	for (i32 y = 0; y < side; ++y) {
-		for (i32 x = 0; x < side * 6; ++x) {
-			const f32 face = static_cast<f32>(x / side + 1);
-			const size_t index = (static_cast<size_t>(y) * side * 6 + x) * 4;
+	constexpr i32 SIDE = 16;
+	std::vector<u16> source(static_cast<size_t>(SIDE) * 6 * SIDE * 4, 0);
+	for (i32 y = 0; y < SIDE; ++y) {
+		for (i32 x = 0; x < SIDE * 6; ++x) {
+			const f32 face = static_cast<f32>(x / SIDE + 1);
+			const size_t index = (static_cast<size_t>(y) * SIDE * 6 + x) * 4;
 			source[index + 0] = Shalltear::Math::FloatToHalf(face);
 			source[index + 3] = Shalltear::Math::FloatToHalf(1.0f);
 		}
@@ -298,7 +298,7 @@ TEST(EnvironmentIBLTest, ResampledStripStaysInFace) {
 	for (const u32 faceSize : {8u, 32u}) {
 		RadianceCube cube;
 		ASSERT_TRUE(BuildCubeFromStrip({reinterpret_cast<const u8*>(source.data()), source.size() * sizeof(u16)},
-									   Vec2I(side * 6, side), RHI::Format::RGBA16Float, faceSize, cube));
+									   Vec2I(SIDE * 6, SIDE), RHI::Format::RGBA16Float, faceSize, cube));
 		ASSERT_EQ(cube.faceSize, faceSize);
 		for (u32 face = 0; face < CUBE_FACE_COUNT; ++face) {
 			EXPECT_EQ(ReadTexel(cube, 0, face, 0, faceSize / 2, 0), static_cast<f32>(face + 1)) << faceSize << ": face " << face << " left edge";

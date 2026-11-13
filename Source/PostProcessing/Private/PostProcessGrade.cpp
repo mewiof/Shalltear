@@ -6,20 +6,20 @@ namespace Shalltear::PostProcessOps {
 
 	namespace {
 
-		struct Matrix3d {
+		struct Matrix3D {
 			f64 m[3][3];
 		};
 
-		constexpr Matrix3d CAT02 = {{{0.7328, 0.4296, -0.1624}, {-0.7036, 1.6975, 0.0061}, {0.0030, 0.0136, 0.9834}}};
+		constexpr Matrix3D Cat02 = {{{0.7328, 0.4296, -0.1624}, {-0.7036, 1.6975, 0.0061}, {0.0030, 0.0136, 0.9834}}};
 
-		constexpr Matrix3d REC709_TO_XYZ = {{{0.4124, 0.3576, 0.1805}, {0.2126, 0.7152, 0.0722}, {0.0193, 0.1192, 0.9505}}};
+		constexpr Matrix3D Rec709ToXYZ = {{{0.4124, 0.3576, 0.1805}, {0.2126, 0.7152, 0.0722}, {0.0193, 0.1192, 0.9505}}};
 
 		constexpr f64 D65_X = 0.31271;
 
 		constexpr f64 TEMPERATURE_SCALE = 65.0;
 
-		Matrix3d Multiply(const Matrix3d& a, const Matrix3d& b) {
-			Matrix3d out{};
+		Matrix3D Multiply(const Matrix3D& a, const Matrix3D& b) {
+			Matrix3D out{};
 			for (u32 row = 0; row < 3; ++row) {
 				for (u32 column = 0; column < 3; ++column) {
 					out.m[row][column] = a.m[row][0] * b.m[0][column] + a.m[row][1] * b.m[1][column] + a.m[row][2] * b.m[2][column];
@@ -28,9 +28,9 @@ namespace Shalltear::PostProcessOps {
 			return out;
 		}
 
-		Matrix3d Inverse(const Matrix3d& a) {
+		Matrix3D Inverse(const Matrix3D& a) {
 			const f64(&m)[3][3] = a.m;
-			Matrix3d out{};
+			Matrix3D out{};
 			out.m[0][0] = m[1][1] * m[2][2] - m[1][2] * m[2][1];
 			out.m[0][1] = m[0][2] * m[2][1] - m[0][1] * m[2][2];
 			out.m[0][2] = m[0][1] * m[1][2] - m[0][2] * m[1][1];
@@ -56,7 +56,7 @@ namespace Shalltear::PostProcessOps {
 		void WhiteToLms(f64 x, f64 y, f64 (&out)[3]) {
 			const f64 xyz[3] = {x / y, 1.0, (1.0 - x - y) / y};
 			for (u32 row = 0; row < 3; ++row) {
-				out[row] = CAT02.m[row][0] * xyz[0] + CAT02.m[row][1] * xyz[1] + CAT02.m[row][2] * xyz[2];
+				out[row] = Cat02.m[row][0] * xyz[0] + Cat02.m[row][1] * xyz[1] + Cat02.m[row][2] * xyz[2];
 			}
 		}
 
@@ -73,14 +73,14 @@ namespace Shalltear::PostProcessOps {
 		WhiteToLms(D65_X, DaylightY(D65_X), neutral);
 		WhiteToLms(x, y, target);
 
-		const Matrix3d toLms = Multiply(CAT02, REC709_TO_XYZ);
-		Matrix3d adapted = toLms;
+		const Matrix3D toLms = Multiply(Cat02, Rec709ToXYZ);
+		Matrix3D adapted = toLms;
 		for (u32 row = 0; row < 3; ++row) {
 			for (f64& value : adapted.m[row]) {
 				value *= neutral[row] / target[row];
 			}
 		}
-		const Matrix3d result = Multiply(Inverse(toLms), adapted);
+		const Matrix3D result = Multiply(Inverse(toLms), adapted);
 		return Mat3::FromRows(
 			Vec3(static_cast<f32>(result.m[0][0]), static_cast<f32>(result.m[0][1]), static_cast<f32>(result.m[0][2])),
 			Vec3(static_cast<f32>(result.m[1][0]), static_cast<f32>(result.m[1][1]), static_cast<f32>(result.m[1][2])),

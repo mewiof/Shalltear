@@ -318,9 +318,9 @@ namespace Shalltear::AssetBrowserOps {
 		while (!typed.empty() && blank(typed.back())) {
 			typed.remove_suffix(1);
 		}
-		constexpr std::string_view SCHEME = "project://";
-		if (typed.starts_with(SCHEME)) {
-			typed.remove_prefix(SCHEME.size());
+		constexpr std::string_view Scheme = "project://";
+		if (typed.starts_with(Scheme)) {
+			typed.remove_prefix(Scheme.size());
 		}
 
 		Vector<std::string_view> segments{GetMemoryResource(MemTag::Editor)};
@@ -927,11 +927,11 @@ namespace Shalltear::AssetBrowserOps {
 
 		str ProjectRelativeOf(const Path& virtualPath) {
 			std::string_view text = virtualPath.ToString();
-			constexpr std::string_view SCHEME = "project://";
-			if (!text.starts_with(SCHEME)) {
+			constexpr std::string_view Scheme = "project://";
+			if (!text.starts_with(Scheme)) {
 				return {};
 			}
-			return str(text.substr(SCHEME.size()));
+			return str(text.substr(Scheme.size()));
 		}
 
 	} // anonymous namespace

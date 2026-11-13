@@ -71,7 +71,7 @@ namespace {
 } // namespace
 
 TEST(AudioVoiceTest, VirtualVoiceAdvancesWithoutSound) {
-	ClipBlock clip(MakePcm(Ramp(48000), 1, 48000));
+	ClipBlock clip(MakePCM(Ramp(48000), 1, 48000));
 	OfflineMixer mixer;
 	ASSERT_TRUE(mixer.Push(Virtual(mixer.Play(0, clip.Get()))));
 
@@ -82,7 +82,7 @@ TEST(AudioVoiceTest, VirtualVoiceAdvancesWithoutSound) {
 }
 
 TEST(AudioVoiceTest, RealVoiceFadesInAtClock) {
-	ClipBlock clip(MakePcm(Ramp(48000), 1, 48000));
+	ClipBlock clip(MakePCM(Ramp(48000), 1, 48000));
 	OfflineMixer heard;
 	OfflineMixer virtualised;
 	ASSERT_TRUE(heard.Push(heard.Play(0, clip.Get())));
@@ -104,7 +104,7 @@ TEST(AudioVoiceTest, RealVoiceFadesInAtClock) {
 }
 
 TEST(AudioVoiceTest, VirtualVoiceFadesOverOneBlock) {
-	ClipBlock clip(MakePcm(Constant(4800, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4800, 0.5f), 1, 48000));
 	OfflineMixer mixer;
 	const AudioCommand play = Looping(mixer.Play(0, clip.Get()));
 	ASSERT_TRUE(mixer.Push(play));
@@ -121,7 +121,7 @@ TEST(AudioVoiceTest, VirtualVoiceFadesOverOneBlock) {
 }
 
 TEST(AudioVoiceTest, VirtualOneShotEndsOnTime) {
-	ClipBlock clip(MakePcm(Ramp(1000), 1, 48000));
+	ClipBlock clip(MakePCM(Ramp(1000), 1, 48000));
 	OfflineMixer heard;
 	OfflineMixer virtualised;
 	const AudioCommand heardPlay = heard.Play(0, clip.Get());
@@ -146,7 +146,7 @@ TEST(AudioVoiceTest, VirtualOneShotEndsOnTime) {
 }
 
 TEST(AudioVoiceTest, VirtualLoopKeepsLoopingAndNeverEnds) {
-	ClipBlock clip(MakePcm(Ramp(300), 1, 48000));
+	ClipBlock clip(MakePCM(Ramp(300), 1, 48000));
 	OfflineMixer mixer;
 	const AudioCommand play = Virtual(Looping(mixer.Play(0, clip.Get())));
 	ASSERT_TRUE(mixer.Push(play));
@@ -156,7 +156,7 @@ TEST(AudioVoiceTest, VirtualLoopKeepsLoopingAndNeverEnds) {
 }
 
 TEST(AudioVoiceTest, VirtualVoiceTracksPitch) {
-	ClipBlock clip(MakePcm(Ramp(48000), 1, 48000));
+	ClipBlock clip(MakePCM(Ramp(48000), 1, 48000));
 	OfflineMixer heard;
 	OfflineMixer virtualised;
 	const AudioCommand heardPlay = heard.Play(0, clip.Get());
@@ -183,7 +183,7 @@ TEST(AudioVoiceTest, VirtualVoiceTracksPitch) {
 }
 
 TEST(AudioVoiceTest, StealReleaseFadesThenEnds) {
-	ClipBlock clip(MakePcm(Constant(4800, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4800, 0.5f), 1, 48000));
 	OfflineMixer mixer;
 	const AudioCommand play = Looping(mixer.Play(0, clip.Get()));
 	ASSERT_TRUE(mixer.Push(play));
@@ -202,7 +202,7 @@ TEST(AudioVoiceTest, StealReleaseFadesThenEnds) {
 }
 
 TEST(AudioVoiceTest, EarlyRealVoiceStartsUnfaded) {
-	ClipBlock clip(MakePcm(Constant(500, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(500, 0.5f), 1, 48000));
 	OfflineMixer heard;
 	OfflineMixer virtualised;
 	const u64 onset = heard.Now() + 2 * BLOCK + 100;
@@ -221,7 +221,7 @@ TEST(AudioVoiceTest, EarlyRealVoiceStartsUnfaded) {
 }
 
 TEST(AudioVoiceTest, DoubleDecoderPoolNoShortfall) {
-	ClipBlock clip(MakePcm(Constant(4800, 0.1f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4800, 0.1f), 1, 48000));
 	OfflineMixer mixer(2, 48000, true, 32, 16);
 	std::vector<AudioCommand> plays;
 	for (u32 slot = 0; slot < 16; ++slot) {
@@ -247,7 +247,7 @@ TEST(AudioVoiceTest, DoubleDecoderPoolNoShortfall) {
 }
 
 TEST(AudioVoiceTest, DecoderShortfallCounted) {
-	ClipBlock clip(MakePcm(Constant(4800, 0.1f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4800, 0.1f), 1, 48000));
 	OfflineMixer mixer(2, 48000, true, 32, 4);
 	for (u32 slot = 0; slot < 8; ++slot) {
 		ASSERT_TRUE(mixer.Push(Looping(mixer.Play(slot, clip.Get()))));
@@ -258,7 +258,7 @@ TEST(AudioVoiceTest, DecoderShortfallCounted) {
 }
 
 TEST(AudioVoiceTest, AVirtualVoiceStoppedEndsAtOnce) {
-	ClipBlock clip(MakePcm(Constant(4800, 0.1f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4800, 0.1f), 1, 48000));
 	OfflineMixer mixer;
 	const AudioCommand play = Virtual(Looping(mixer.Play(0, clip.Get())));
 	ASSERT_TRUE(mixer.Push(play));

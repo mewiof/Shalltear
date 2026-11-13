@@ -88,7 +88,7 @@ namespace {
 			FileSystem::WriteTextFile(resolved, "x");
 		}
 
-		UI::Context& Ui() { return *UISystem::GetContext(_window); }
+		UI::Context& UI() { return *UISystem::GetContext(_window); }
 
 		void Frame() {
 			WindowSystem::PumpEvents();
@@ -122,32 +122,32 @@ namespace {
 		}
 
 		UI::ElementHandle BackButton() {
-			return ControlWearing(Ui(), Ui().GetRoot(), EditorIcons::GetGlyph(EditorIcons::Glyph::Back), EditorTheme::Class::ToolButton);
+			return ControlWearing(UI(), UI().GetRoot(), EditorIcons::GetGlyph(EditorIcons::Glyph::Back), EditorTheme::Class::ToolButton);
 		}
 		UI::ElementHandle Up(UI::ElementHandle from, u32 levels) {
-			for (u32 i = 0; i < levels && Ui().IsAlive(from); ++i) {
-				const UI::Element* pod = Ui().GetElement(from);
-				from = pod && pod->parent != UI::INVALID_UI_INDEX ? Ui().MakeHandle(pod->parent) : UI::ElementHandle{};
+			for (u32 i = 0; i < levels && UI().IsAlive(from); ++i) {
+				const UI::Element* pod = UI().GetElement(from);
+				from = pod && pod->parent != UI::INVALID_UI_INDEX ? UI().MakeHandle(pod->parent) : UI::ElementHandle{};
 			}
 			return from;
 		}
 		Vec2 BrowserPoint() {
 			UI::ElementHandle filePane = Up(BackButton(), 3);
-			const UI::Element* split = Ui().IsAlive(filePane) ? Ui().GetElement(Up(filePane, 1)) : nullptr;
+			const UI::Element* split = UI().IsAlive(filePane) ? UI().GetElement(Up(filePane, 1)) : nullptr;
 			if (!split) {
 				ADD_FAILURE() << "browser panes not found";
 				return {};
 			}
-			const UI::Rect tree = Ui().GetLayout(Ui().MakeHandle(split->firstChild)).borderBox;
+			const UI::Rect tree = UI().GetLayout(UI().MakeHandle(split->firstChild)).borderBox;
 			return {tree.x + 12.0f, tree.y + tree.h - 12.0f};
 		}
 		Vec2 ConsolePoint() {
-			UI::ElementHandle field = FindByClass(Ui(), Ui().GetRoot(), StringHash("slt-textfield"), 0);
-			if (!Ui().IsAlive(field)) {
+			UI::ElementHandle field = FindByClass(UI(), UI().GetRoot(), StringHash("slt-textfield"), 0);
+			if (!UI().IsAlive(field)) {
 				ADD_FAILURE() << "no Console filter field";
 				return {};
 			}
-			return CenterOf(Ui(), field);
+			return CenterOf(UI(), field);
 		}
 
 		static Vec2 CenterOf(UI::Context& context, UI::ElementHandle handle) {
@@ -193,7 +193,7 @@ namespace {
 TEST_F(AssetBrowserNavigationTest, KeysStepOnlyWithKeyboardFocus) {
 	Write("project://Assets/Sub/Deep/x.txt");
 	ASSERT_NO_FATAL_FAILURE(OpenBoth());
-	ASSERT_TRUE(Ui().IsAlive(BackButton()));
+	ASSERT_TRUE(UI().IsAlive(BackButton()));
 	ASSERT_NO_FATAL_FAILURE(Show("Assets/Sub"));
 	ASSERT_NO_FATAL_FAILURE(Show("Assets/Sub/Deep"));
 	ASSERT_EQ(Folder(), "Assets/Sub/Deep");
@@ -237,12 +237,12 @@ TEST_F(AssetBrowserNavigationTest, SideButtonsStepBrowserUnderPointer) {
 	SideButton(BrowserPoint(), true);
 	EXPECT_EQ(Folder(), "Assets/Sub/Deep");
 
-	UI::ElementHandle card = Ui().CreateElement();
-	Ui().OpenPopup(card, {}, UI::PopupFlags::NoOutsideDismiss | UI::PopupFlags::Center);
+	UI::ElementHandle card = UI().CreateElement();
+	UI().OpenPopup(card, {}, UI::PopupFlags::NoOutsideDismiss | UI::PopupFlags::Center);
 	Frame();
 	SideButton(BrowserPoint(), false);
 	EXPECT_EQ(Folder(), "Assets/Sub/Deep");
-	Ui().ClosePopup(card);
+	UI().ClosePopup(card);
 	Frame();
 	SideButton(BrowserPoint(), false);
 	EXPECT_EQ(Folder(), "Assets/Sub");

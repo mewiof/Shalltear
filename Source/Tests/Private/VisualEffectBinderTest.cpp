@@ -73,7 +73,7 @@ namespace {
 		}
 
 		static void SetEffectTimes(f32 fixedTimeStep, f32 maxDeltaTime) {
-			if (VisualEffectsSettings* settings = Settings::DeclareCategory<VisualEffectsSettings>(EFFECT_SETTINGS_PATH, SettingScope::Project)) {
+			if (VisualEffectsSettings* settings = Settings::DeclareCategory<VisualEffectsSettings>(EffectSettingsPath, SettingScope::Project)) {
 				settings->fixedTimeStep = fixedTimeStep;
 				settings->maxDeltaTime = maxDeltaTime;
 			}

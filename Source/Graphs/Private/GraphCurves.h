@@ -17,7 +17,7 @@ namespace Shalltear {
 
 	namespace GraphCurves {
 
-		inline constexpr std::string_view DEFAULT_JSON = R"({"keys":[{"time":0,"value":0,"outTangent":1},{"time":1,"value":1,"inTangent":1}]})";
+		inline constexpr std::string_view DefaultJSON = R"({"keys":[{"time":0,"value":0,"outTangent":1},{"time":1,"value":1,"inTangent":1}]})";
 
 		SHALLTEAR_GRAPHS_API bool Parse(std::string_view json, AnimationCurve& out, str& error);
 		SHALLTEAR_GRAPHS_API str Write(const AnimationCurve& curve);

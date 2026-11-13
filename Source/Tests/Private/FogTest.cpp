@@ -16,9 +16,9 @@ using ShadingTest::ShadingStage;
 
 namespace {
 
-	const Vec3 SURFACE{0.80f, 0.20f, 0.10f};
-	const Vec3 FOG{0.10f, 0.30f, 0.90f};
-	const Vec3 OTHER_FOG{0.70f, 0.60f, 0.05f};
+	const Vec3 Surface{0.80f, 0.20f, 0.10f};
+	const Vec3 Fog{0.10f, 0.30f, 0.90f};
+	const Vec3 OtherFog{0.70f, 0.60f, 0.05f};
 
 	constexpr f32 CENTER_DISTANCE = 3.0f;
 
@@ -49,7 +49,7 @@ namespace {
 		return Vec3(static_cast<f32>(pixels[index]), static_cast<f32>(pixels[index + 1]), static_cast<f32>(pixels[index + 2]));
 	}
 
-	f32 SRGBToLinearChannel(f32 encoded) {
+	f32 sRGBToLinearChannel(f32 encoded) {
 		const f32 c = encoded / 255.0f;
 		return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
 	}
@@ -114,7 +114,7 @@ TEST_F(FogReadbackFixture, EachModeLetsThroughWhatCurveSays) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -122,22 +122,22 @@ TEST_F(FogReadbackFixture, EachModeLetsThroughWhatCurveSays) {
 
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE), "fog off by default, quad keeps its color");
+	ExpectTexelNear(texel, ExpectedTexel(Surface), "fog off by default, quad keeps its color");
 
-	SetFog(*environment, FogMode::Linear, FOG);
+	SetFog(*environment, FogMode::Linear, Fog);
 	environment->SetFogStart(1.0f);
 	environment->SetFogEnd(5.0f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(Fogged(SURFACE, FOG, LinearVisibility(1.0f, 5.0f, CENTER_DISTANCE))), "Linear");
+	ExpectTexelNear(texel, ExpectedTexel(Fogged(Surface, Fog, LinearVisibility(1.0f, 5.0f, CENTER_DISTANCE))), "Linear");
 
 	environment->SetFogMode(FogMode::Exponential);
 	environment->SetFogDensity(0.25f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(Fogged(SURFACE, FOG, ExponentialVisibility(0.25f, CENTER_DISTANCE))), "Exponential");
+	ExpectTexelNear(texel, ExpectedTexel(Fogged(Surface, Fog, ExponentialVisibility(0.25f, CENTER_DISTANCE))), "Exponential");
 
 	environment->SetFogMode(FogMode::ExponentialSquared);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(Fogged(SURFACE, FOG, ExponentialSquaredVisibility(0.25f, CENTER_DISTANCE))),
+	ExpectTexelNear(texel, ExpectedTexel(Fogged(Surface, Fog, ExponentialSquaredVisibility(0.25f, CENTER_DISTANCE))),
 					"Exponential Squared");
 
 	TearDownStage(stage);
@@ -147,23 +147,23 @@ TEST_F(FogReadbackFixture, RangelessLinearFogHasHardEdge) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 	Handle<Environment> environment = AddEnvironment(stage);
-	SetFog(*environment, FogMode::Linear, FOG);
+	SetFog(*environment, FogMode::Linear, Fog);
 
 	environment->SetFogStart(3.5f);
 	environment->SetFogEnd(3.5f);
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE), "a surface nearer than the edge is clear");
+	ExpectTexelNear(texel, ExpectedTexel(Surface), "a surface nearer than the edge is clear");
 
 	environment->SetFogStart(4.0f);
 	environment->SetFogEnd(2.5f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(FOG), "a surface past an End before its Start is the fog's color");
+	ExpectTexelNear(texel, ExpectedTexel(Fog), "a surface past an End before its Start is the fog's color");
 
 	TearDownStage(stage);
 }
@@ -172,13 +172,13 @@ TEST_F(FogReadbackFixture, FogMeasuresAlongRay) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
 	Handle<Environment> environment = AddEnvironment(stage);
-	SetFog(*environment, FogMode::ExponentialSquared, FOG);
+	SetFog(*environment, FogMode::ExponentialSquared, Fog);
 	environment->SetFogDensity(0.3f);
 
 	const ViewDesc desc = QuadView();
@@ -191,7 +191,7 @@ TEST_F(FogReadbackFixture, FogMeasuresAlongRay) {
 	for (const Vec2I pixel : {Vec2I{size.x / 2, size.y / 2}, Vec2I{3, 4}, Vec2I{size.x - 5, size.y - 3}}) {
 		const f32 distance = DistanceToQuadPlane(desc, size, pixel.x, pixel.y);
 		ExpectTexelNear(Texel(pixels, size, pixel.x, pixel.y),
-						ExpectedTexel(Fogged(SURFACE, FOG, ExponentialSquaredVisibility(0.3f, distance))),
+						ExpectedTexel(Fogged(Surface, Fog, ExponentialSquaredVisibility(0.3f, distance))),
 						std::format("pixel ({}, {}) at {} along its ray", pixel.x, pixel.y, distance).c_str());
 	}
 	EXPECT_GT(DistanceToQuadPlane(desc, size, 3, 4), CENTER_DISTANCE * 1.2f);
@@ -203,13 +203,13 @@ TEST_F(FogReadbackFixture, OrthographicFogMeasuresFromCamerasPlane) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
 	Handle<Environment> environment = AddEnvironment(stage);
-	SetFog(*environment, FogMode::ExponentialSquared, FOG);
+	SetFog(*environment, FogMode::ExponentialSquared, Fog);
 	environment->SetFogDensity(0.3f);
 
 	ViewDesc desc = QuadView();
@@ -220,7 +220,7 @@ TEST_F(FogReadbackFixture, OrthographicFogMeasuresFromCamerasPlane) {
 	RenderSystem::RenderAll();
 	ASSERT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
 
-	const Vec3 expected = ExpectedTexel(Fogged(SURFACE, FOG, ExponentialSquaredVisibility(0.3f, CENTER_DISTANCE)));
+	const Vec3 expected = ExpectedTexel(Fogged(Surface, Fog, ExponentialSquaredVisibility(0.3f, CENTER_DISTANCE)));
 	for (const Vec2I pixel : {Vec2I{size.x / 2, size.y / 2}, Vec2I{2, 2}, Vec2I{size.x - 3, size.y - 3}}) {
 		ExpectTexelNear(Texel(pixels, size, pixel.x, pixel.y), expected, std::format("pixel ({}, {})", pixel.x, pixel.y).c_str());
 	}
@@ -232,28 +232,28 @@ TEST_F(FogReadbackFixture, MixedModeZonesComposite) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 	Handle<Environment> lower = AddEnvironment(stage, 0.0f, 1.0f);
-	SetFog(*lower, FogMode::Linear, FOG);
+	SetFog(*lower, FogMode::Linear, Fog);
 	lower->SetFogStart(0.0f);
 	lower->SetFogEnd(4.0f);
 	Handle<Environment> upper = AddEnvironment(stage, 1.0f, 0.5f);
-	SetFog(*upper, FogMode::ExponentialSquared, OTHER_FOG);
+	SetFog(*upper, FogMode::ExponentialSquared, OtherFog);
 	upper->SetFogDensity(0.4f);
 
 	const f32 lowerTaken = 0.5f * (1.0f - LinearVisibility(0.0f, 4.0f, CENTER_DISTANCE));
 	const f32 upperTaken = 0.5f * (1.0f - ExponentialSquaredVisibility(0.4f, CENTER_DISTANCE));
-	const Vec3 composite = SURFACE * (1.0f - lowerTaken - upperTaken) + FOG * lowerTaken + OTHER_FOG * upperTaken;
+	const Vec3 composite = Surface * (1.0f - lowerTaken - upperTaken) + Fog * lowerTaken + OtherFog * upperTaken;
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
 	ExpectTexelNear(texel, ExpectedTexel(composite), "both zones' fogs by their shares");
 
 	upper->SetFog(false);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE * (1.0f - lowerTaken) + FOG * lowerTaken), "the lower zone's fog at half its share");
+	ExpectTexelNear(texel, ExpectedTexel(Surface * (1.0f - lowerTaken) + Fog * lowerTaken), "the lower zone's fog at half its share");
 
 	TearDownStage(stage);
 }
@@ -262,7 +262,7 @@ TEST_F(FogReadbackFixture, LocalZonesFogFadesOverBlendDistance) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -270,7 +270,7 @@ TEST_F(FogReadbackFixture, LocalZonesFogFadesOverBlendDistance) {
 	zone->SetIsGlobal(false);
 	zone->SetSize(Vec3(2.0f, 2.0f, 2.0f));
 	zone->SetBlendDistance(4.0f);
-	SetFog(*zone, FogMode::Exponential, FOG);
+	SetFog(*zone, FogMode::Exponential, Fog);
 	zone->SetFogDensity(0.3f);
 	ASSERT_FLOAT_EQ(Eye.z - 1.0f, 2.0f);
 
@@ -278,11 +278,11 @@ TEST_F(FogReadbackFixture, LocalZonesFogFadesOverBlendDistance) {
 	const f32 taken = share * (1.0f - ExponentialVisibility(0.3f, CENTER_DISTANCE));
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE * (1.0f - taken) + FOG * taken), "three quarters of the zone's fog");
+	ExpectTexelNear(texel, ExpectedTexel(Surface * (1.0f - taken) + Fog * taken), "three quarters of the zone's fog");
 
 	zone->SetBlendDistance(1.5f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE), "a camera past the blend distance sees through no fog");
+	ExpectTexelNear(texel, ExpectedTexel(Surface), "a camera past the blend distance sees through no fog");
 
 	TearDownStage(stage);
 }
@@ -300,21 +300,21 @@ TEST_F(FogReadbackFixture, EachBlendIsFoggedAsItComposites) {
 		Vec3 expected;
 	};
 	const BlendCase cases[] = {
-		{"alpha", Fogged(SURFACE, FOG, visibility) * alpha + behind * (1.0f - alpha)},
-		{"additive", behind + SURFACE * (visibility * alpha)},
-		{"premultiplied", SURFACE * visibility + FOG * (taken * alpha) + behind * (1.0f - alpha)},
-		{"multiply", Vec3(behind.x * (SURFACE.x * visibility + taken), behind.y * (SURFACE.y * visibility + taken),
-						  behind.z * (SURFACE.z * visibility + taken))},
+		{"alpha", Fogged(Surface, Fog, visibility) * alpha + behind * (1.0f - alpha)},
+		{"additive", behind + Surface * (visibility * alpha)},
+		{"premultiplied", Surface * visibility + Fog * (taken * alpha) + behind * (1.0f - alpha)},
+		{"multiply", Vec3(behind.x * (Surface.x * visibility + taken), behind.y * (Surface.y * visibility + taken),
+						  behind.z * (Surface.z * visibility + taken))},
 	};
 	for (const BlendCase& blendCase : cases) {
 		SCOPED_TRACE(blendCase.blend);
-		MaterialAsset* material = LoadUnlit(std::format("Surface_{}.mat", blendCase.blend).c_str(), SURFACE, alpha, blendCase.blend);
+		MaterialAsset* material = LoadUnlit(std::format("Surface_{}.mat", blendCase.blend).c_str(), Surface, alpha, blendCase.blend);
 		ASSERT_NE(material, nullptr);
 		ASSERT_TRUE(material->blend.has_value());
 		ShadingStage stage;
 		ASSERT_TRUE(BuildStage(material, stage));
 		Handle<Environment> environment = AddEnvironment(stage);
-		SetFog(*environment, FogMode::Linear, FOG);
+		SetFog(*environment, FogMode::Linear, Fog);
 		environment->SetFogStart(1.0f);
 		environment->SetFogEnd(5.0f);
 
@@ -324,7 +324,7 @@ TEST_F(FogReadbackFixture, EachBlendIsFoggedAsItComposites) {
 		ASSERT_TRUE(RenderCenter(stage, desc, texel));
 		ExpectTexelNear(texel, ExpectedTexel(blendCase.expected), blendCase.blend);
 		if (str(blendCase.blend) == "additive") {
-			const Vec3 towardFog = behind + Fogged(SURFACE, FOG, visibility) * alpha;
+			const Vec3 towardFog = behind + Fogged(Surface, Fog, visibility) * alpha;
 			EXPECT_GT(Math::Abs(ExpectedTexel(towardFog).z - texel.z), 10.0f);
 		}
 		TearDownStage(stage);
@@ -335,7 +335,7 @@ TEST_F(FogReadbackFixture, SkyUnfoggedSurfaceFogged) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -343,7 +343,7 @@ TEST_F(FogReadbackFixture, SkyUnfoggedSurfaceFogged) {
 	Handle<Environment> environment = AddEnvironment(stage);
 	environment->SetSkyMode(SkyMode::Color);
 	environment->SetSkyColor(Color(sky.x, sky.y, sky.z, 1.0f));
-	SetFog(*environment, FogMode::ExponentialSquared, FOG);
+	SetFog(*environment, FogMode::ExponentialSquared, Fog);
 	environment->SetFogDensity(0.25f);
 
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
@@ -352,7 +352,7 @@ TEST_F(FogReadbackFixture, SkyUnfoggedSurfaceFogged) {
 	RenderSystem::RenderAll();
 	ASSERT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
 	ExpectTexelNear(Texel(pixels, size, 2, 2), ExpectedTexel(sky), "the sky took the fog");
-	ExpectTexelNear(CenterTexel(pixels, size), ExpectedTexel(Fogged(SURFACE, FOG, ExponentialSquaredVisibility(0.25f, CENTER_DISTANCE))),
+	ExpectTexelNear(CenterTexel(pixels, size), ExpectedTexel(Fogged(Surface, Fog, ExponentialSquaredVisibility(0.25f, CENTER_DISTANCE))),
 					"the quad in front of the sky");
 
 	TearDownStage(stage);
@@ -374,19 +374,19 @@ TEST_F(FogReadbackFixture, LitSurfaceIsFoggedOverShading) {
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), unfogged));
 	ASSERT_GT(unfogged.x, 40.0f);
 	ASSERT_LT(Math::Max(unfogged.x, Math::Max(unfogged.y, unfogged.z)), 250.0f);
-	const Vec3 lit(SRGBToLinearChannel(unfogged.x), SRGBToLinearChannel(unfogged.y), SRGBToLinearChannel(unfogged.z));
+	const Vec3 lit(sRGBToLinearChannel(unfogged.x), sRGBToLinearChannel(unfogged.y), sRGBToLinearChannel(unfogged.z));
 
-	SetFog(*environment, FogMode::Linear, FOG);
+	SetFog(*environment, FogMode::Linear, Fog);
 	environment->SetFogStart(1.0f);
 	environment->SetFogEnd(5.0f);
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(Fogged(lit, FOG, LinearVisibility(1.0f, 5.0f, CENTER_DISTANCE))), "half fogged");
+	ExpectTexelNear(texel, ExpectedTexel(Fogged(lit, Fog, LinearVisibility(1.0f, 5.0f, CENTER_DISTANCE))), "half fogged");
 
 	environment->SetFogStart(0.5f);
 	environment->SetFogEnd(1.0f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(FOG), "wholly fogged");
+	ExpectTexelNear(texel, ExpectedTexel(Fog), "wholly fogged");
 
 	TearDownStage(stage);
 }

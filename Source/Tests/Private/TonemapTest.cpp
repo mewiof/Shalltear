@@ -19,7 +19,7 @@ using ShadingTest::Tonemap;
 
 namespace {
 
-	constexpr Vec3 HDR_TEXEL{4.0f, 1.0f, 0.25f};
+	constexpr Vec3 HDRTexel{4.0f, 1.0f, 0.25f};
 
 	constexpr const char* HDR_MATERIAL_ROW = "\t\"colors\": { \"baseColor\": [4.0, 1.0, 0.25, 1] }";
 
@@ -99,7 +99,7 @@ TEST_F(TonemapFixture, CurvesMapKnownTexel) {
 			TearDownStage(stage);
 			GTEST_SKIP() << "quad didn't draw";
 		}
-		const Vec3 expected = ExpectedTexel(Tonemap(CURVES[index], HDR_TEXEL));
+		const Vec3 expected = ExpectedTexel(Tonemap(CURVES[index], HDRTexel));
 		EXPECT_NEAR(measured.x, expected.x, 2.0f) << CURVE_NAMES[index] << " red";
 		EXPECT_NEAR(measured.y, expected.y, 2.0f) << CURVE_NAMES[index] << " green";
 		EXPECT_NEAR(measured.z, expected.z, 2.0f) << CURVE_NAMES[index] << " blue";
@@ -164,7 +164,7 @@ TEST_F(TonemapFixture, ValueViewSkipsCurve) {
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 
-	const Vec3 untouched = ExpectedTexel(Tonemap(TonemapCurve::None, HDR_TEXEL));
+	const Vec3 untouched = ExpectedTexel(Tonemap(TonemapCurve::None, HDRTexel));
 	for (u32 index = 0; index < static_cast<u32>(std::size(CURVES)); ++index) {
 		const Vec3 values = RenderAtLevel(stage, static_cast<i32>(index), false);
 		if (values.x + values.y + values.z == 0.0f) {
@@ -176,7 +176,7 @@ TEST_F(TonemapFixture, ValueViewSkipsCurve) {
 		EXPECT_NEAR(values.z, untouched.z, 2.0f) << CURVE_NAMES[index];
 	}
 	const Vec3 curved = RenderAtLevel(stage, 1);
-	const Vec3 expected = ExpectedTexel(Tonemap(TonemapCurve::Neutral, HDR_TEXEL));
+	const Vec3 expected = ExpectedTexel(Tonemap(TonemapCurve::Neutral, HDRTexel));
 	EXPECT_NEAR(curved.x, expected.x, 2.0f);
 
 	TearDownStage(stage);

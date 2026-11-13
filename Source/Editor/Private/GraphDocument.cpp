@@ -767,11 +767,11 @@ namespace Shalltear {
 			HashSet<u32> gone{GetMemoryResource(MemTag::Editor)};
 
 			for (const GraphNode& node : document.nodes) {
-				if (!doomed.contains(node.id) || node.def != REDIRECT_DEF) {
+				if (!doomed.contains(node.id) || node.def != RedirectDef) {
 					continue;
 				}
 				auto source = std::find_if(node.inputs.begin(), node.inputs.end(),
-										   [](const GraphInput& input) { return input.port == REDIRECT_IN; });
+										   [](const GraphInput& input) { return input.port == RedirectIn; });
 				if (source == node.inputs.end() || source->fromNode == 0) {
 					continue;
 				}
@@ -780,7 +780,7 @@ namespace Shalltear {
 				const u32 redirect = node.id;
 				ForEachElement(document, [&](GraphNode& reader) {
 					for (GraphInput& input : reader.inputs) {
-						if (input.fromNode == redirect && input.fromPort == REDIRECT_OUT && reader.id != redirect) {
+						if (input.fromNode == redirect && input.fromPort == RedirectOut && reader.id != redirect) {
 							input.fromNode = fromNode;
 							input.fromPort = fromPort;
 						}
@@ -990,11 +990,11 @@ namespace Shalltear {
 			}
 			GraphNode redirect;
 			redirect.id = document.nextId++;
-			redirect.def = str(REDIRECT_DEF);
+			redirect.def = str(RedirectDef);
 			redirect.x = RoundPosition(position.x);
 			redirect.y = RoundPosition(position.y);
 			GraphInput feed;
-			feed.port = str(REDIRECT_IN);
+			feed.port = str(RedirectIn);
 			feed.fromNode = input->fromNode;
 			feed.fromPort = input->fromPort;
 			redirect.inputs.push_back(std::move(feed));
@@ -1003,7 +1003,7 @@ namespace Shalltear {
 				redirect.group = source->group;
 			}
 			input->fromNode = redirect.id;
-			input->fromPort = str(REDIRECT_OUT);
+			input->fromPort = str(RedirectOut);
 			document.nodes.push_back(std::move(redirect));
 			return document.nodes.back().id;
 		}

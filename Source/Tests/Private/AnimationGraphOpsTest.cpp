@@ -124,10 +124,10 @@ namespace {
 		}
 
 		SkeletonAsset* MakeSpine() {
-			static const char* NAMES[] = {"Hips", "Spine1", "Spine2", "Chest", "Arm"};
+			static const char* names[] = {"Hips", "Spine1", "Spine2", "Chest", "Arm"};
 			SkeletonAsset* skeleton = New<SkeletonAsset>(MemTag::Asset);
 			for (i32 index = 0; index < 5; ++index) {
-				skeleton->boneNames.push_back(NAMES[index]);
+				skeleton->boneNames.push_back(names[index]);
 				skeleton->parents.push_back(static_cast<i16>(index - 1));
 				skeleton->restPose.push_back(BoneTransform{});
 			}

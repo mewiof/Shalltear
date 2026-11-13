@@ -6,14 +6,14 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr GraphPortDefinition REDIRECT_INPUTS[] = {{GraphDocumentOps::REDIRECT_IN, GraphPortType::Any}};
-		constexpr GraphPortDefinition REDIRECT_OUTPUTS[] = {{GraphDocumentOps::REDIRECT_OUT, GraphPortType::Any}};
+		constexpr GraphPortDefinition RedirectInputs[] = {{GraphDocumentOps::RedirectIn, GraphPortType::Any}};
+		constexpr GraphPortDefinition RedirectOutputs[] = {{GraphDocumentOps::RedirectOut, GraphPortType::Any}};
 
 		void RedirectBody(GraphBodyContext& c) { c.outputs[0] = c.In(0); }
 
-		constexpr GraphSettingDefinition KEYWORD_SETTINGS[] = {{"property", GraphSettingKind::Property}};
-		constexpr GraphPortDefinition KEYWORD_INPUTS[] = {{"On", GraphPortType::DynamicVector}, {"Off", GraphPortType::DynamicVector}};
-		constexpr GraphPortDefinition KEYWORD_OUTPUTS[] = {{"Out", GraphPortType::DynamicVector}};
+		constexpr GraphSettingDefinition KeywordSettings[] = {{"property", GraphSettingKind::Property}};
+		constexpr GraphPortDefinition KeywordInputs[] = {{"On", GraphPortType::DynamicVector}, {"Off", GraphPortType::DynamicVector}};
+		constexpr GraphPortDefinition KeywordOutputs[] = {{"Out", GraphPortType::DynamicVector}};
 
 		void KeywordBody(GraphBodyContext& c) {
 			if (c.settings[0].type != GraphValueType::None) {
@@ -35,18 +35,18 @@ namespace Shalltear {
 		using P = GraphPortType;
 		using M = GraphPreviewMode;
 
-		constexpr GraphPortDefinition BOOL_PAIR[] = {{"A", P::Boolean}, {"B", P::Boolean}};
-		constexpr GraphPortDefinition BOOL_IN[] = {{"In", P::Boolean}};
-		constexpr GraphPortDefinition BOOL_OUT[] = {{"Out", P::Boolean}};
-		constexpr GraphPortDefinition FLOAT_IN[] = {{"In", P::Float}};
-		constexpr GraphPortDefinition FLOAT_PAIR[] = {{"A", P::Float}, {"B", P::Float}};
-		constexpr GraphPortDefinition VECTOR_IN[] = {{"In", P::DynamicVector}};
-		constexpr GraphPortDefinition VECTOR_OUT[] = {{"Out", P::DynamicVector}};
-		constexpr GraphPortDefinition BRANCH_INPUTS[] = {
+		constexpr GraphPortDefinition BoolPair[] = {{"A", P::Boolean}, {"B", P::Boolean}};
+		constexpr GraphPortDefinition BoolIn[] = {{"In", P::Boolean}};
+		constexpr GraphPortDefinition BoolOut[] = {{"Out", P::Boolean}};
+		constexpr GraphPortDefinition FloatIn[] = {{"In", P::Float}};
+		constexpr GraphPortDefinition FloatPair[] = {{"A", P::Float}, {"B", P::Float}};
+		constexpr GraphPortDefinition VectorIn[] = {{"In", P::DynamicVector}};
+		constexpr GraphPortDefinition VectorOut[] = {{"Out", P::DynamicVector}};
+		constexpr GraphPortDefinition BranchInputs[] = {
 			{"Predicate", P::Boolean}, {"True", P::DynamicVector, {1.0f, 1.0f, 1.0f, 1.0f}}, {"False", P::DynamicVector}};
 
-		constexpr std::string_view COMPARISON_TYPES[] = {"Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual"};
-		constexpr GraphSettingDefinition COMPARISON_SETTINGS[] = {{"Comparison Type", GraphSettingKind::Choice, COMPARISON_TYPES}};
+		constexpr std::string_view ComparisonTypes[] = {"Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual"};
+		constexpr GraphSettingDefinition ComparisonSettings[] = {{"Comparison Type", GraphSettingKind::Choice, ComparisonTypes}};
 
 		void AndBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Binary(GraphOp::LogicalAnd, c.In(0), c.In(1)); }
 		void OrBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Binary(GraphOp::LogicalOr, c.In(0), c.In(1)); }
@@ -62,7 +62,7 @@ namespace Shalltear {
 
 		void BranchBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Select(c.In(0), c.In(1), c.In(2)); }
 
-		constexpr GraphPortDefinition CONNECTION_INPUTS[] = {
+		constexpr GraphPortDefinition ConnectionInputs[] = {
 			{"Input", P::ConnectionState}, {"Connected", P::DynamicVector, {1.0f, 1.0f, 1.0f, 1.0f}}, {"NotConnected", P::DynamicVector}};
 
 		void ComparisonBody(GraphBodyContext& c) {
@@ -93,27 +93,27 @@ namespace Shalltear {
 
 		void PreviewBody(GraphBodyContext& c) { c.outputs[0] = c.In(0); }
 
-		constexpr GraphNodeDefinition UTILITY_DEFINITIONS[] = {
-			{GraphDocumentOps::REDIRECT_DEF, "Redirect", "Utility", "", REDIRECT_INPUTS, REDIRECT_OUTPUTS, {}, RedirectBody},
-			{"Utility/Keyword", "Keyword", "Utility", "shader feature variant toggle", KEYWORD_INPUTS, KEYWORD_OUTPUTS, KEYWORD_SETTINGS, KeywordBody},
-			{"Utility/Preview", "Preview", "Utility", "", VECTOR_IN, VECTOR_OUT, {}, PreviewBody},
-			{"Utility/All", "All", "Utility/Logic", "", VECTOR_IN, BOOL_OUT, {}, AllBody, M::None},
-			{"Utility/And", "And", "Utility/Logic", "", BOOL_PAIR, BOOL_OUT, {}, AndBody, M::None},
-			{"Utility/Any", "Any", "Utility/Logic", "", VECTOR_IN, BOOL_OUT, {}, AnyBody, M::None},
-			{"Utility/Branch", "Branch", "Utility/Logic", "switch if else", BRANCH_INPUTS, VECTOR_OUT, {}, BranchBody},
-			{"Utility/BranchOnInputConnection", "Branch On Input Connection", "Utility/Logic", "", CONNECTION_INPUTS, VECTOR_OUT, {}, BranchBody, M::Inherit, true},
-			{"Utility/Comparison", "Comparison", "Utility/Logic", "equal greater than less than", FLOAT_PAIR, BOOL_OUT, COMPARISON_SETTINGS, ComparisonBody,
+		constexpr GraphNodeDefinition UtilityDefinitions[] = {
+			{GraphDocumentOps::RedirectDef, "Redirect", "Utility", "", RedirectInputs, RedirectOutputs, {}, RedirectBody},
+			{"Utility/Keyword", "Keyword", "Utility", "shader feature variant toggle", KeywordInputs, KeywordOutputs, KeywordSettings, KeywordBody},
+			{"Utility/Preview", "Preview", "Utility", "", VectorIn, VectorOut, {}, PreviewBody},
+			{"Utility/All", "All", "Utility/Logic", "", VectorIn, BoolOut, {}, AllBody, M::None},
+			{"Utility/And", "And", "Utility/Logic", "", BoolPair, BoolOut, {}, AndBody, M::None},
+			{"Utility/Any", "Any", "Utility/Logic", "", VectorIn, BoolOut, {}, AnyBody, M::None},
+			{"Utility/Branch", "Branch", "Utility/Logic", "switch if else", BranchInputs, VectorOut, {}, BranchBody},
+			{"Utility/BranchOnInputConnection", "Branch On Input Connection", "Utility/Logic", "", ConnectionInputs, VectorOut, {}, BranchBody, M::Inherit, true},
+			{"Utility/Comparison", "Comparison", "Utility/Logic", "equal greater than less than", FloatPair, BoolOut, ComparisonSettings, ComparisonBody,
 			 M::None},
-			{"Utility/IsFrontFace", "Is Front Face", "Utility/Logic", "face side", {}, BOOL_OUT, {}, IsFrontFaceBody, M::None},
-			{"Utility/IsInfinite", "Is Infinite", "Utility/Logic", "", FLOAT_IN, BOOL_OUT, {}, IsInfiniteBody, M::None},
-			{"Utility/IsNaN", "Is NaN", "Utility/Logic", "", FLOAT_IN, BOOL_OUT, {}, IsNaNBody, M::None},
-			{"Utility/Nand", "Nand", "Utility/Logic", "", BOOL_PAIR, BOOL_OUT, {}, NandBody, M::None},
-			{"Utility/Not", "Not", "Utility/Logic", "", BOOL_IN, BOOL_OUT, {}, NotBody, M::None},
-			{"Utility/Or", "Or", "Utility/Logic", "", BOOL_PAIR, BOOL_OUT, {}, OrBody, M::None},
+			{"Utility/IsFrontFace", "Is Front Face", "Utility/Logic", "face side", {}, BoolOut, {}, IsFrontFaceBody, M::None},
+			{"Utility/IsInfinite", "Is Infinite", "Utility/Logic", "", FloatIn, BoolOut, {}, IsInfiniteBody, M::None},
+			{"Utility/IsNaN", "Is NaN", "Utility/Logic", "", FloatIn, BoolOut, {}, IsNaNBody, M::None},
+			{"Utility/Nand", "Nand", "Utility/Logic", "", BoolPair, BoolOut, {}, NandBody, M::None},
+			{"Utility/Not", "Not", "Utility/Logic", "", BoolIn, BoolOut, {}, NotBody, M::None},
+			{"Utility/Or", "Or", "Utility/Logic", "", BoolPair, BoolOut, {}, OrBody, M::None},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphUtilityDefinitions() { return UTILITY_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphUtilityDefinitions() { return UtilityDefinitions; }
 
 } // namespace Shalltear

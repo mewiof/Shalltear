@@ -778,7 +778,7 @@ TEST_F(AudioMixerAssetFixture, MixerOutputFeedsOtherMixer) {
 }
 
 TEST_F(AudioMixerAssetFixture, LiveMixerGroupLoadsAfterDrain) {
-	ScopedImportCostThreshold noCache{ScopedImportCostThreshold::CacheNothing};
+	ScopedImportCostThreshold noCache{ScopedImportCostThreshold::CACHE_NOTHING};
 	Write("Main.mixer", str(TWO_GROUPS));
 	Asset* first = AssetDatabase::LoadAsset(AssetPath("Main.mixer"));
 	ASSERT_NE(first, nullptr);

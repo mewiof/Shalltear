@@ -10,14 +10,14 @@ namespace Shalltear {
 		using P = GraphPortType;
 		using B = GraphProgramBuilder;
 
-		constexpr GraphPortDefinition COMBINE_INPUTS[] = {{"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
-		constexpr GraphPortDefinition COMBINE_OUTPUTS[] = {{"RGBA", P::Float4}, {"RGB", P::Float3}, {"RG", P::Float2}};
-		constexpr GraphPortDefinition VECTOR_IN[] = {{"In", P::DynamicVector}};
-		constexpr GraphPortDefinition VECTOR_OUT[] = {{"Out", P::DynamicVector}};
-		constexpr GraphPortDefinition SPLIT_OUTPUTS[] = {{"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
-		constexpr GraphSettingDefinition FLIP_SETTINGS[] = {
+		constexpr GraphPortDefinition CombineInputs[] = {{"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
+		constexpr GraphPortDefinition CombineOutputs[] = {{"RGBA", P::Float4}, {"RGB", P::Float3}, {"RG", P::Float2}};
+		constexpr GraphPortDefinition VectorIn[] = {{"In", P::DynamicVector}};
+		constexpr GraphPortDefinition VectorOut[] = {{"Out", P::DynamicVector}};
+		constexpr GraphPortDefinition SplitOutputs[] = {{"R", P::Float}, {"G", P::Float}, {"B", P::Float}, {"A", P::Float}};
+		constexpr GraphSettingDefinition FlipSettings[] = {
 			{"Red", GraphSettingKind::Toggle}, {"Green", GraphSettingKind::Toggle}, {"Blue", GraphSettingKind::Toggle}, {"Alpha", GraphSettingKind::Toggle}};
-		constexpr GraphSettingDefinition SWIZZLE_SETTINGS[] = {{"Mask", GraphSettingKind::Text, {}, 0, "xxxx"}};
+		constexpr GraphSettingDefinition SwizzleSettings[] = {{"Mask", GraphSettingKind::Text, {}, 0, "xxxx"}};
 
 		void CombineBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -41,13 +41,13 @@ namespace Shalltear {
 
 		void SplitBody(GraphBodyContext& c) {
 			B& b = c.builder;
-			constexpr std::string_view CHANNELS[] = {"x", "y", "z", "w"};
+			constexpr std::string_view Channels[] = {"x", "y", "z", "w"};
 			u32 width = GraphTypes::VectorWidth(c.TypeOf(0));
 			for (u32 i = 0; i < 4; ++i) {
 				if (i >= width) {
 					c.outputs[i] = b.Scalar(0.0f);
 				} else {
-					c.outputs[i] = width == 1 ? c.In(0) : b.Swizzle(c.In(0), CHANNELS[i]);
+					c.outputs[i] = width == 1 ? c.In(0) : b.Swizzle(c.In(0), Channels[i]);
 				}
 			}
 		}
@@ -81,15 +81,15 @@ namespace Shalltear {
 			c.outputs[0] = b.Swizzle(b.Convert(c.In(0), GraphTypes::Vector(furthest)), converted);
 		}
 
-		constexpr GraphNodeDefinition CHANNEL_DEFINITIONS[] = {
-			{"Channel/Combine", "Combine", "Channel", "append", COMBINE_INPUTS, COMBINE_OUTPUTS, {}, CombineBody},
-			{"Channel/Flip", "Flip", "Channel", "", VECTOR_IN, VECTOR_OUT, FLIP_SETTINGS, FlipBody},
-			{"Channel/Split", "Split", "Channel", "separate", VECTOR_IN, SPLIT_OUTPUTS, {}, SplitBody, GraphPreviewMode::None},
-			{"Channel/Swizzle", "Swizzle", "Channel", "swap reorder component mask", VECTOR_IN, VECTOR_OUT, SWIZZLE_SETTINGS, SwizzleBody},
+		constexpr GraphNodeDefinition ChannelDefinitions[] = {
+			{"Channel/Combine", "Combine", "Channel", "append", CombineInputs, CombineOutputs, {}, CombineBody},
+			{"Channel/Flip", "Flip", "Channel", "", VectorIn, VectorOut, FlipSettings, FlipBody},
+			{"Channel/Split", "Split", "Channel", "separate", VectorIn, SplitOutputs, {}, SplitBody, GraphPreviewMode::None},
+			{"Channel/Swizzle", "Swizzle", "Channel", "swap reorder component mask", VectorIn, VectorOut, SwizzleSettings, SwizzleBody},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphChannelDefinitions() { return CHANNEL_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphChannelDefinitions() { return ChannelDefinitions; }
 
 } // namespace Shalltear

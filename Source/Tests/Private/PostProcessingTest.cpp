@@ -161,7 +161,7 @@ TEST(PostProcessingShaderTest, CommittedSidecarCarriesGuidPackageResolvesBy) {
 	EXPECT_EQ(onDisk, expected);
 
 #ifndef SHALLTEAR_SHARED
-	EXPECT_EQ(PostProcessingImpl::POST_PROCESS_SHADER, onDisk);
+	EXPECT_EQ(PostProcessingImpl::PostProcessShader, onDisk);
 #endif
 }
 
@@ -298,19 +298,19 @@ TEST(PostProcessBlendTest, AGlobalVolumeContributesItsWeightAnywhere) {
 TEST(PostProcessBlendTest, LocalVolumeFallsOffByCurve) {
 	const Mat4 identity = Mat4::Identity();
 	const Vec3 size(4, 4, 4);
-	constexpr f32 blend = 4.0f;
-	constexpr f32 weight = 1.0f;
+	constexpr f32 BLEND = 4.0f;
+	constexpr f32 WEIGHT = 1.0f;
 
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(0, 0, 0)), 1.0f, 1e-5f);
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(1.9f, 0, 0)), 1.0f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(0, 0, 0)), 1.0f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(1.9f, 0, 0)), 1.0f, 1e-5f);
 
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(3, 0, 0)), 0.9375f, 1e-5f);
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(4, 0, 0)), 0.75f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(3, 0, 0)), 0.9375f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(4, 0, 0)), 0.75f, 1e-5f);
 
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(6, 0, 0)), 0.0f, 1e-5f);
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, weight, Vec3(60, 0, 0)), 0.0f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(6, 0, 0)), 0.0f, 1e-5f);
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, WEIGHT, Vec3(60, 0, 0)), 0.0f, 1e-5f);
 
-	EXPECT_NEAR(VolumeContribution(false, identity, size, blend, 0.5f, Vec3(3, 0, 0)),
+	EXPECT_NEAR(VolumeContribution(false, identity, size, BLEND, 0.5f, Vec3(3, 0, 0)),
 				0.46875f, 1e-5f);
 }
 
@@ -356,11 +356,11 @@ namespace {
 	}
 
 	Vec3 Rec709OfWhite(f64 x, f64 y) {
-		const f64 X = x / y;
-		const f64 Z = (1.0 - x - y) / y;
-		return Vec3(static_cast<f32>(3.2406 * X - 1.5372 - 0.4986 * Z),
-					static_cast<f32>(-0.9689 * X + 1.8758 + 0.0415 * Z),
-					static_cast<f32>(0.0557 * X - 0.2040 + 1.0570 * Z));
+		const f64 tristimulusX = x / y;
+		const f64 tristimulusZ = (1.0 - x - y) / y;
+		return Vec3(static_cast<f32>(3.2406 * tristimulusX - 1.5372 - 0.4986 * tristimulusZ),
+					static_cast<f32>(-0.9689 * tristimulusX + 1.8758 + 0.0415 * tristimulusZ),
+					static_cast<f32>(0.0557 * tristimulusX - 0.2040 + 1.0570 * tristimulusZ));
 	}
 
 } // namespace

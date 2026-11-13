@@ -753,14 +753,14 @@ panel.card { width: 10px; ; broken; height: 2px; }
 }
 
 TEST(UIStyleTest, RuleBodyMatchesDeclarationWalk) {
-	constexpr std::string_view SOURCE = ".a { /* } */ color: red; }\n.empty {}\n.tail { color: red";
+	constexpr std::string_view Source = ".a { /* } */ color: red; }\n.empty {}\n.tail { color: red";
 
 	Vector<UI::StyleRuleSource> split{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, split);
+	UI::StyleSheet::SplitSource(Source, split);
 	ASSERT_EQ(split.size(), 3u);
 
 	EXPECT_EQ(split[0].body, " /* } */ color: red; ");
-	EXPECT_LT(SOURCE.find('}'), static_cast<size_t>(split[0].body.data() + split[0].body.size() - SOURCE.data()));
+	EXPECT_LT(Source.find('}'), static_cast<size_t>(split[0].body.data() + split[0].body.size() - Source.data()));
 
 	EXPECT_TRUE(split[1].body.empty());
 	ASSERT_NE(split[1].body.data(), nullptr);
@@ -768,29 +768,29 @@ TEST(UIStyleTest, RuleBodyMatchesDeclarationWalk) {
 
 	EXPECT_EQ(split[2].body, " color: red");
 
-	EXPECT_GE(split[0].body.data(), SOURCE.data());
-	EXPECT_LE(split[2].body.data() + split[2].body.size(), SOURCE.data() + SOURCE.size());
+	EXPECT_GE(split[0].body.data(), Source.data());
+	EXPECT_LE(split[2].body.data() + split[2].body.size(), Source.data() + Source.size());
 }
 
 TEST(UIStyleTest, CommentBraceOpensRule) {
-	constexpr std::string_view SOURCE = ".row /* { */ { width: 10px; }";
+	constexpr std::string_view Source = ".row /* { */ { width: 10px; }";
 
 	Vector<UI::StyleRuleSource> split{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitSource(SOURCE, split);
+	UI::StyleSheet::SplitSource(Source, split);
 	ASSERT_EQ(split.size(), 1u);
 	EXPECT_EQ(split[0].selector, ".row /*");
 	EXPECT_EQ(split[0].body, " */ { width: 10px; ");
 
 	UI::StyleSheet parsed;
-	parsed.Parse(SOURCE);
+	parsed.Parse(Source);
 	ASSERT_EQ(parsed.GetRules().size(), 1u);
 	EXPECT_NE(parsed.GetRules()[0].targetClass, StringHash("row"));
 }
 
 TEST(UIStyleTest, DeclarationRunSpansTextIncludingSemicolon) {
-	constexpr std::string_view FRAGMENT = "width: 10px; height: 4px";
+	constexpr std::string_view Fragment = "width: 10px; height: 4px";
 	Vector<UI::StyleDeclarationSource> declarations{GetMemoryResource(MemTag::Debug)};
-	UI::StyleSheet::SplitDeclarations(FRAGMENT, declarations);
+	UI::StyleSheet::SplitDeclarations(Fragment, declarations);
 
 	ASSERT_EQ(declarations.size(), 2u);
 	EXPECT_EQ(declarations[0].name, "width");
@@ -798,7 +798,7 @@ TEST(UIStyleTest, DeclarationRunSpansTextIncludingSemicolon) {
 	EXPECT_EQ(declarations[0].text, "width: 10px;");
 	EXPECT_EQ(declarations[1].text, "height: 4px");
 
-	EXPECT_EQ(declarations[0].text.data(), FRAGMENT.data());
-	EXPECT_GE(declarations[1].text.data(), FRAGMENT.data());
-	EXPECT_LE(declarations[1].text.data() + declarations[1].text.size(), FRAGMENT.data() + FRAGMENT.size());
+	EXPECT_EQ(declarations[0].text.data(), Fragment.data());
+	EXPECT_GE(declarations[1].text.data(), Fragment.data());
+	EXPECT_LE(declarations[1].text.data() + declarations[1].text.size(), Fragment.data() + Fragment.size());
 }

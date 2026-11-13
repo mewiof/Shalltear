@@ -96,8 +96,8 @@ namespace Shalltear {
 			if (description.systems.empty()) {
 				return;
 			}
-			descriptor.NoteAssetRef(PARTICLE_RESET_KERNEL);
-			descriptor.NoteAssetRef(PARTICLE_ARGUMENTS_KERNEL);
+			descriptor.NoteAssetRef(ParticleResetKernel);
+			descriptor.NoteAssetRef(ParticleArgumentsKernel);
 			bool sorts = false;
 			bool strips = false;
 			for (const EffectSystem& system : description.systems) {
@@ -107,11 +107,11 @@ namespace Shalltear {
 				}
 			}
 			if (sorts) {
-				descriptor.NoteAssetRef(PARTICLE_SORT_LOCAL_KERNEL);
-				descriptor.NoteAssetRef(PARTICLE_SORT_MERGE_KERNEL);
+				descriptor.NoteAssetRef(ParticleSortLocalKernel);
+				descriptor.NoteAssetRef(ParticleSortMergeKernel);
 			}
 			if (strips) {
-				descriptor.NoteAssetRef(PARTICLE_STRIPS_KERNEL);
+				descriptor.NoteAssetRef(ParticleStripsKernel);
 			}
 		}
 

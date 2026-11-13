@@ -171,9 +171,9 @@ namespace Shalltear::AudioEditor {
 		}
 
 		str Describe(const AudioClip& clip) {
-			constexpr std::string_view FORMATS[] = {"PCM", "QOA", "Opus"};
+			constexpr std::string_view Formats[] = {"PCM", "QOA", "Opus"};
 			const size_t format = static_cast<size_t>(clip.GetCompressionFormat());
-			const std::string_view formatName = format < std::size(FORMATS) ? FORMATS[format] : std::string_view("?");
+			const std::string_view formatName = format < std::size(Formats) ? Formats[format] : std::string_view("?");
 			const u32 channels = clip.GetChannels();
 			const str layout = channels == 1 ? str("Mono") : channels == 2 ? str("Stereo")
 																		   : std::format("{} channels", channels);
@@ -358,11 +358,11 @@ namespace Shalltear::AudioEditor {
 		SettingsFieldPresentation autoPlay;
 		autoPlay.label = "Preview Auto Play";
 		autoPlay.tooltip = "Play an audio clip as soon as it is selected.";
-		SettingsPresentation::RegisterField(PREFERENCES, "autoPlay", std::move(autoPlay), owner);
+		SettingsPresentation::RegisterField(PreferencesCategory, "autoPlay", std::move(autoPlay), owner);
 		SettingsFieldPresentation loop;
 		loop.label = "Preview Loop";
 		loop.tooltip = "Loop an audio clip's preview.";
-		SettingsPresentation::RegisterField(PREFERENCES, "loop", std::move(loop), owner);
+		SettingsPresentation::RegisterField(PreferencesCategory, "loop", std::move(loop), owner);
 		Preferences();
 
 		const auto hide = [](const Guid& guid) {

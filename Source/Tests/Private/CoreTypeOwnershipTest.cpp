@@ -15,7 +15,7 @@ using namespace Shalltear;
 
 namespace {
 
-	constexpr std::array<const char*, 8> CORE_BASE_TYPES{
+	constexpr std::array<const char*, 8> CoreBaseTypes{
 		"Object",
 		"Asset",
 		"Component",
@@ -41,7 +41,7 @@ SLT_REGISTER_TYPE(DrainOrderProbe)
 TEST(CoreTypeOwnershipTest, ReflectionStartupRegistersCoresOwnBaseTypes) {
 	TypeRegistry::InitializePrimitives();
 
-	for (const char* name : CORE_BASE_TYPES) {
+	for (const char* name : CoreBaseTypes) {
 		EXPECT_NE(TypeRegistry::FindType(StringHash(name)), nullptr);
 	}
 }
@@ -54,7 +54,7 @@ TEST(CoreTypeOwnershipTest, CoresTypesAllReportSameOwningImage) {
 	const void* coreImage = root->ownerModule;
 	ASSERT_NE(coreImage, nullptr);
 
-	for (const char* name : CORE_BASE_TYPES) {
+	for (const char* name : CoreBaseTypes) {
 		const TypeInfo* type = TypeRegistry::FindType(StringHash(name));
 		ASSERT_NE(type, nullptr) << name;
 		EXPECT_EQ(type->ownerModule, coreImage);
@@ -68,10 +68,10 @@ TEST(CoreTypeOwnershipTest, CoresTypesAllReportSameOwningImage) {
 TEST(CoreTypeOwnershipTest, UnloadKeepsCoreTypes) {
 	TypeRegistry::InitializePrimitives();
 
-	std::array<const void*, CORE_BASE_TYPES.size()> ownersBefore{};
-	for (size_t i = 0; i < CORE_BASE_TYPES.size(); ++i) {
-		const TypeInfo* type = TypeRegistry::FindType(StringHash(CORE_BASE_TYPES[i]));
-		ASSERT_NE(type, nullptr) << CORE_BASE_TYPES[i];
+	std::array<const void*, CoreBaseTypes.size()> ownersBefore{};
+	for (size_t i = 0; i < CoreBaseTypes.size(); ++i) {
+		const TypeInfo* type = TypeRegistry::FindType(StringHash(CoreBaseTypes[i]));
+		ASSERT_NE(type, nullptr) << CoreBaseTypes[i];
 		ownersBefore[i] = type->ownerModule;
 	}
 
@@ -88,10 +88,10 @@ TEST(CoreTypeOwnershipTest, UnloadKeepsCoreTypes) {
 	ASSERT_TRUE(ModuleSystem::Unload(handle));
 	EXPECT_EQ(TypeRegistry::FindType(StringHash("SampleReflected")), nullptr);
 
-	for (size_t i = 0; i < CORE_BASE_TYPES.size(); ++i) {
-		const TypeInfo* type = TypeRegistry::FindType(StringHash(CORE_BASE_TYPES[i]));
-		ASSERT_NE(type, nullptr) << CORE_BASE_TYPES[i];
-		EXPECT_EQ(type->ownerModule, ownersBefore[i]) << CORE_BASE_TYPES[i];
+	for (size_t i = 0; i < CoreBaseTypes.size(); ++i) {
+		const TypeInfo* type = TypeRegistry::FindType(StringHash(CoreBaseTypes[i]));
+		ASSERT_NE(type, nullptr) << CoreBaseTypes[i];
+		EXPECT_EQ(type->ownerModule, ownersBefore[i]) << CoreBaseTypes[i];
 	}
 
 	ModuleSystem::Terminate();
@@ -105,8 +105,8 @@ namespace Shalltear::TestHelpers {
 		if (TypeRegistry::FindType(StringHash("i32")) == nullptr) {
 			return ReflectionStartupNoPrimitives;
 		}
-		for (size_t i = 0; i < CORE_BASE_TYPES.size(); ++i) {
-			if (TypeRegistry::FindType(StringHash(CORE_BASE_TYPES[i])) == nullptr) {
+		for (size_t i = 0; i < CoreBaseTypes.size(); ++i) {
+			if (TypeRegistry::FindType(StringHash(CoreBaseTypes[i])) == nullptr) {
 				return ReflectionStartupFirstMissing + static_cast<int>(i);
 			}
 		}
@@ -126,8 +126,8 @@ TEST(CoreTypeOwnershipTest, ReflectionStepRegistersCoreTypes) {
 
 	const size_t index = static_cast<size_t>(result.exitCode - TestHelpers::ReflectionStartupFirstMissing);
 	const char* missing = "<none>";
-	if (result.exitCode >= TestHelpers::ReflectionStartupFirstMissing && index < CORE_BASE_TYPES.size()) {
-		missing = CORE_BASE_TYPES[index];
+	if (result.exitCode >= TestHelpers::ReflectionStartupFirstMissing && index < CoreBaseTypes.size()) {
+		missing = CoreBaseTypes[index];
 	}
 	EXPECT_EQ(result.exitCode, TestHelpers::ReflectionStartupOk) << missing << " unregistered";
 }

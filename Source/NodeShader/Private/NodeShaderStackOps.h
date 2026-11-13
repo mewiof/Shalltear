@@ -24,7 +24,7 @@ namespace Shalltear {
 		SHALLTEAR_NODESHADER_API u32 AddBlock(GraphDocument& document, u32 context, std::string_view def);
 		SHALLTEAR_NODESHADER_API bool RemoveBlock(GraphDocument& document, u32 block);
 
-		inline constexpr std::string_view INTERPOLATOR_NODE = "CustomInterpolators/Instance";
+		inline constexpr std::string_view InterpolatorNode = "CustomInterpolators/Instance";
 
 		SHALLTEAR_NODESHADER_API void Interpolators(const GraphDocument& document, Vector<u32>& out);
 		SHALLTEAR_NODESHADER_API u32 InterpolatorOf(const GraphDocument& document, u32 node);

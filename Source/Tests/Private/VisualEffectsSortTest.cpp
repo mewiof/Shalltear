@@ -70,10 +70,10 @@ namespace {
 						   nodes, capacity, initialize, settings, in);
 	}
 
-	constexpr std::string_view RANDOM_SIZE = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"size","Random":"Uniform"},"in":{"A":{"value":[0]},"B":{"value":[1]}}})";
-	constexpr std::string_view SIZE_NODE = R"({"id":20,"def":"Attribute/GetAttribute","settings":{"Attribute":"size"}})";
-	constexpr std::string_view SIZE_KEY = R"({"Sort Key":{"from":[20,"size"]}})";
-	constexpr std::string_view RANDOM_POSITION =
+	constexpr std::string_view RandomSize = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"size","Random":"Uniform"},"in":{"A":{"value":[0]},"B":{"value":[1]}}})";
+	constexpr std::string_view SizeNode = R"({"id":20,"def":"Attribute/GetAttribute","settings":{"Attribute":"size"}})";
+	constexpr std::string_view SizeKey = R"({"Sort Key":{"from":[20,"size"]}})";
+	constexpr std::string_view RandomPosition =
 		R"({"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position","Random":"PerComponent"},"in":{"A":{"value":[-2,-2,-2]},"B":{"value":[2,2,2]}}})";
 
 	ViewDesc ViewFrom(f32 z) {
@@ -196,7 +196,7 @@ TEST_F(ParticleSortFixture, CustomKeySortsAscending) {
 			SCOPED_TRACE(std::format("capacity {}, revert {}", capacity, revert));
 			SortRun run;
 			const str settings = std::format(R"({{"Sort Mode":"Custom","Revert Sorting":{}}})", revert ? "true" : "false");
-			if (!BeginSorted(run, SortedEffect(capacity, RANDOM_SIZE, settings, SIZE_KEY, SIZE_NODE), "Custom")) {
+			if (!BeginSorted(run, SortedEffect(capacity, RandomSize, settings, SizeKey, SizeNode), "Custom")) {
 				GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 			}
 			Step(run, 0, capacity);
@@ -212,7 +212,7 @@ TEST_F(ParticleSortFixture, CustomKeySortsAscending) {
 
 TEST_F(ParticleSortFixture, YoungestInFrontDrawsTheOldestFirst) {
 	SortRun run;
-	if (!BeginSorted(run, SortedEffect(64, RANDOM_SIZE, R"({"Sort Mode":"YoungestInFront"})"), "Youngest")) {
+	if (!BeginSorted(run, SortedEffect(64, RandomSize, R"({"Sort Mode":"YoungestInFront"})"), "Youngest")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
 	for (u32 frame = 0; frame < 3; ++frame) {
@@ -231,7 +231,7 @@ TEST_F(ParticleSortFixture, CameraKeySortedPerView) {
 	for (const char* mode : {"DistanceToCamera", "CameraDepth"}) {
 		SCOPED_TRACE(mode);
 		SortRun run;
-		if (!BeginSorted(run, SortedEffect(200, RANDOM_POSITION, std::format(R"({{"Sort Mode":"{}"}})", mode)), mode)) {
+		if (!BeginSorted(run, SortedEffect(200, RandomPosition, std::format(R"({{"Sort Mode":"{}"}})", mode)), mode)) {
 			GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 		}
 		Handle<Scene> scene = SceneSystem::CreateScene("Sort");

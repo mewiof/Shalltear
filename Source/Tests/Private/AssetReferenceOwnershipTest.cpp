@@ -184,7 +184,7 @@ namespace Shalltear {
 	}
 
 	TEST_F(AssetReferenceOwnershipFixture, ArtifactRestoreOwnsReferences) {
-		ScopedImportCostThreshold everything(ScopedImportCostThreshold::CacheEverything);
+		ScopedImportCostThreshold everything(ScopedImportCostThreshold::CACHE_EVERYTHING);
 
 		Guid dependency = WriteDependency("Dependency.txt");
 		ASSERT_TRUE(dependency.IsValid());

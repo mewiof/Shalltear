@@ -95,7 +95,7 @@ namespace Shalltear::VisualEffectsEditor {
 	} // anonymous namespace
 
 	void RegisterImporter(const void* owner) {
-		AssetImporterRegistry::Register(GetImporter().GetAssetType(), &GetImporter(), {GRAPH_EFFECT_EXTENSION}, owner);
+		AssetImporterRegistry::Register(GetImporter().GetAssetType(), &GetImporter(), {GraphEffectExtension}, owner);
 		EffectSubgraphImporters::Register(owner);
 		RegisterVectorFieldImporter(owner);
 	}

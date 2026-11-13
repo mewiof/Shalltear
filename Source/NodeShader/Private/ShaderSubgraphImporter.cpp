@@ -28,7 +28,7 @@ namespace Shalltear {
 			SLT_LOG_ERROR("NodeShader", "'{}' isn't a graph document: {}", sourcePath.ToString(), error);
 			return nullptr;
 		}
-		if (document.type != GRAPH_SUBGRAPH_DOCUMENT_TYPE) {
+		if (document.type != GraphSubgraphDocumentType) {
 			SLT_LOG_ERROR("NodeShader", "'{}' is a {} document (not a subgraph)", sourcePath.ToString(), document.type);
 			return nullptr;
 		}
@@ -37,15 +37,15 @@ namespace Shalltear {
 
 	str ShaderSubgraphImporter::TemplateDocument() {
 		GraphDocument document;
-		document.type = str(GRAPH_SUBGRAPH_DOCUMENT_TYPE);
-		document.settings.push_back({str(GRAPH_SUBGRAPH_CATEGORY_SETTING), NodeShaderEditOps::Quote(GRAPH_SUBGRAPH_DEFAULT_CATEGORY)});
+		document.type = str(GraphSubgraphDocumentType);
+		document.settings.push_back({str(GraphSubgraphCategorySetting), NodeShaderEditOps::Quote(GraphSubgraphDefaultCategory)});
 		GraphContext output;
 		output.node.id = document.nextId++;
-		output.node.def = str(GRAPH_SUBGRAPH_OUTPUT_CONTEXT);
+		output.node.def = str(GraphSubgraphOutputContext);
 		output.node.x = 300;
 		output.node.y = 0;
 		document.contexts.push_back(std::move(output));
-		NodeShaderEditOps::AddSubgraphOutput(document, document.contexts.back().node.id, GRAPH_SUBGRAPH_OUTPUT_TYPES[GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE]);
+		NodeShaderEditOps::AddSubgraphOutput(document, document.contexts.back().node.id, GraphSubgraphOutputTypes[GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE]);
 		return GraphDocumentOps::Write(document);
 	}
 

@@ -77,7 +77,7 @@ namespace {
 					 static_cast<i32>((1.0f - clip.y / clip.w) * 0.5f * static_cast<f32>(size.y))};
 	}
 
-	str Rgba(f32 r, f32 g, f32 b, f32 a) {
+	str RGBA(f32 r, f32 g, f32 b, f32 a) {
 		return std::format("[{}, {}, {}, {}]", r, g, b, a);
 	}
 
@@ -87,7 +87,7 @@ namespace {
 
 		MaterialAsset* Surface(f32 r, f32 g, f32 b, f32 a = 1.0f, bool blended = false) {
 			const str name = std::format("Surface{}.mat", _materials++);
-			str body = "\t\"colors\": { \"baseColor\": " + Rgba(r, g, b, a) + " },\n"
+			str body = "\t\"colors\": { \"baseColor\": " + RGBA(r, g, b, a) + " },\n"
 																			  "\t\"floats\": { \"metallic\": 0, \"roughness\": 1, \"reflectance\": 0.5, \"normalScale\": 1, \"occlusionStrength\": 1 }";
 			if (blended) {
 				body += ",\n\t\"blend\": \"alpha\"";
@@ -97,7 +97,7 @@ namespace {
 
 		MaterialAsset* DecalMaterial(f32 r, f32 g, f32 b, f32 a = 1.0f, const Guid& texture = {}) {
 			const str name = std::format("Decal{}.mat", _materials++);
-			str body = "\t\"colors\": { \"baseColor\": " + Rgba(r, g, b, a) + " }";
+			str body = "\t\"colors\": { \"baseColor\": " + RGBA(r, g, b, a) + " }";
 			if (texture.IsValid()) {
 				body += ",\n\t\"textures\": { \"baseColorTexture\": \"" + texture.ToString() + "\" }";
 			}
@@ -112,7 +112,7 @@ namespace {
 					texel[0] = texel[1] = texel[2] = 0;
 				}
 			}
-			TestImages::WriteTga(_root / "Quadrants.tga", QUADRANT_SIZE, QUADRANT_SIZE, rgba.data());
+			TestImages::WriteTGA(_root / "Quadrants.tga", QUADRANT_SIZE, QUADRANT_SIZE, rgba.data());
 			const Path path("project://Quadrants.tga");
 			const Guid guid = AssetDatabase::EnsureAssetIdentity(path);
 			JSONValue settings = JSONValue::MakeObject();

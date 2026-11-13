@@ -713,9 +713,9 @@ TEST_F(UISurfaceFixture, SrgbTexturePaintsBytesFileHolds) {
 		}
 		return texture;
 	};
-	RHI::TextureHandle srgb = upload(RHI::Format::RGBA8SRGB);
+	RHI::TextureHandle sRGB = upload(RHI::Format::RGBA8SRGB);
 	RHI::TextureHandle unorm = upload(RHI::Format::RGBA8Unorm);
-	ASSERT_TRUE(srgb.IsValid());
+	ASSERT_TRUE(sRGB.IsValid());
 	ASSERT_TRUE(unorm.IsValid());
 
 	UISurfaceId surface = UISystem::CreateSurface({32, 16});
@@ -725,7 +725,7 @@ TEST_F(UISurfaceFixture, SrgbTexturePaintsBytesFileHolds) {
 	UI::Style rootStyle;
 	rootStyle.alignItems = UI::Align::Start;
 	context->SetStyle(context->GetRoot(), rootStyle);
-	for (RHI::TextureHandle texture : {srgb, unorm}) {
+	for (RHI::TextureHandle texture : {sRGB, unorm}) {
 		UI::ElementHandle image = context->CreateElement();
 		context->AppendChild(context->GetRoot(), image);
 		UI::Style style;
@@ -747,16 +747,16 @@ TEST_F(UISurfaceFixture, SrgbTexturePaintsBytesFileHolds) {
 	for (u32 texel = 0; texel < 4; ++texel) {
 		const u8* expected = &file[texel * 4];
 		const RGBA fromUnorm = TexelAt(pixels, size, 16 + quadrants[texel].x, quadrants[texel].y);
-		const RGBA fromSrgb = TexelAt(pixels, size, quadrants[texel].x, quadrants[texel].y);
+		const RGBA fromSRGB = TexelAt(pixels, size, quadrants[texel].x, quadrants[texel].y);
 		EXPECT_EQ(fromUnorm, (RGBA{expected[0], expected[1], expected[2], 255})) << "texel " << texel << " as UNORM";
-		EXPECT_NEAR(fromSrgb.r, expected[0], 1) << "texel " << texel;
-		EXPECT_NEAR(fromSrgb.g, expected[1], 1) << "texel " << texel;
-		EXPECT_NEAR(fromSrgb.b, expected[2], 1) << "texel " << texel;
-		EXPECT_EQ(fromSrgb.a, 255) << "texel " << texel;
+		EXPECT_NEAR(fromSRGB.r, expected[0], 1) << "texel " << texel;
+		EXPECT_NEAR(fromSRGB.g, expected[1], 1) << "texel " << texel;
+		EXPECT_NEAR(fromSRGB.b, expected[2], 1) << "texel " << texel;
+		EXPECT_EQ(fromSRGB.a, 255) << "texel " << texel;
 	}
 
 	UISystem::DestroySurface(surface);
-	device->DestroyResource(srgb);
+	device->DestroyResource(sRGB);
 	device->DestroyResource(unorm);
 }
 
@@ -809,8 +809,8 @@ namespace {
 		return texture;
 	}
 
-	constexpr RGBA WHITE{255, 255, 255, 255};
-	constexpr RGBA BLACK{0, 0, 0, 255};
+	constexpr RGBA White{255, 255, 255, 255};
+	constexpr RGBA Black{0, 0, 0, 255};
 
 } // anonymous namespace
 
@@ -843,12 +843,12 @@ TEST_F(UISurfaceFixture, DropShadowMatchesCaster) {
 	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
 	Vec2I size{};
 	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
-	EXPECT_EQ(TexelAt(pixels, size, 12, 30), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 20, 30), WHITE);
-	EXPECT_EQ(TexelAt(pixels, size, 12, 37), WHITE);
-	EXPECT_EQ(TexelAt(pixels, size, 44, 30), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 52, 30), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 32, 30), WHITE);
+	EXPECT_EQ(TexelAt(pixels, size, 12, 30), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 20, 30), White);
+	EXPECT_EQ(TexelAt(pixels, size, 12, 37), White);
+	EXPECT_EQ(TexelAt(pixels, size, 44, 30), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 52, 30), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 32, 30), White);
 	EXPECT_EQ(TexelAt(pixels, size, 12, 22), (RGBA{255, 0, 0, 255}));
 
 	UISystem::DestroySurface(surface);
@@ -892,11 +892,11 @@ TEST_F(UISurfaceFixture, TurnedElementThroughRealRenderer) {
 	EXPECT_EQ(TexelAt(pixels, size, 35, 31), (RGBA{255, 0, 0, 255}));
 	EXPECT_EQ(TexelAt(pixels, size, 28, 32), (RGBA{0, 0, 255, 255}));
 	EXPECT_EQ(TexelAt(pixels, size, 35, 51), (RGBA{0, 0, 255, 255}));
-	EXPECT_EQ(TexelAt(pixels, size, 27, 20), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 36, 44), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 32, 11), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 32, 52), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 16, 32), BLACK);
+	EXPECT_EQ(TexelAt(pixels, size, 27, 20), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 36, 44), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 32, 11), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 32, 52), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 16, 32), Black);
 
 	UISystem::DestroySurface(surface);
 }
@@ -924,11 +924,11 @@ TEST_F(UISurfaceFixture, ShadowFollowsTurnedChild) {
 	Vec2I size{};
 	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
 	EXPECT_EQ(TexelAt(pixels, size, 32, 20), (RGBA{0, 0, 255, 255}));
-	EXPECT_EQ(TexelAt(pixels, size, 40, 12), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 47, 51), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 48, 20), WHITE);
-	EXPECT_EQ(TexelAt(pixels, size, 56, 31), WHITE);
-	EXPECT_EQ(TexelAt(pixels, size, 24, 31), WHITE);
+	EXPECT_EQ(TexelAt(pixels, size, 40, 12), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 47, 51), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 48, 20), White);
+	EXPECT_EQ(TexelAt(pixels, size, 56, 31), White);
+	EXPECT_EQ(TexelAt(pixels, size, 24, 31), White);
 
 	UISystem::DestroySurface(surface);
 }
@@ -998,9 +998,9 @@ TEST_F(UISurfaceFixture, MaskStaysInSlot) {
 	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
 	Vec2I size{};
 	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
-	ASSERT_EQ(TexelAt(pixels, size, 44, 24), BLACK);
-	EXPECT_EQ(TexelAt(pixels, size, 35, 24), WHITE);
-	EXPECT_EQ(TexelAt(pixels, size, 52, 24), WHITE);
+	ASSERT_EQ(TexelAt(pixels, size, 44, 24), Black);
+	EXPECT_EQ(TexelAt(pixels, size, 35, 24), White);
+	EXPECT_EQ(TexelAt(pixels, size, 52, 24), White);
 
 	UISystem::DestroySurface(surface);
 }
@@ -1059,13 +1059,13 @@ TEST_F(UISurfaceFixture, CasterThatDiesTakesShadowWithIt) {
 	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
 	Vec2I size{};
 	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
-	ASSERT_EQ(TexelAt(pixels, size, 8, 20), BLACK);
+	ASSERT_EQ(TexelAt(pixels, size, 8, 20), Black);
 
 	context->DestroyElement(caster);
 	UISystem::Update();
 	RenderSystem::RenderAll();
 	ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
-	EXPECT_EQ(TexelAt(pixels, size, 8, 20), WHITE);
+	EXPECT_EQ(TexelAt(pixels, size, 8, 20), White);
 
 	UISystem::DestroySurface(surface);
 }
@@ -1106,12 +1106,12 @@ TEST_F(UISurfaceFixture, FullGlyphPageReclaimed) {
 	ASSERT_NE(context, nullptr);
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
 
-	constexpr std::string_view STEADY = "Steady 0123";
-	constexpr std::string_view SWEEP = "Sphinx of black quartz judge my vow 456789";
+	constexpr std::string_view Steady = "Steady 0123";
+	constexpr std::string_view Sweep = "Sphinx of black quartz judge my vow 456789";
 	UI::ElementHandle steady = PlacedBox(*context, context->GetRoot(), 4.0f, 4.0f, 300.0f, 24.0f);
-	context->SetText(steady, font, 16.0f, Color::White(), STEADY);
+	context->SetText(steady, font, 16.0f, Color::White(), Steady);
 	UI::ElementHandle sweep = PlacedBox(*context, context->GetRoot(), 4.0f, 40.0f, 4000.0f, 400.0f);
-	context->SetText(sweep, font, 12.0f, Color::White(), SWEEP);
+	context->SetText(sweep, font, 12.0f, Color::White(), Sweep);
 
 	UISystem::Update();
 	RenderSystem::RenderAll();
@@ -1131,12 +1131,12 @@ TEST_F(UISurfaceFixture, FullGlyphPageReclaimed) {
 	u32 fullFrames = 0;
 	u32 steadyChanged = 0;
 	for (i32 px = 13; px <= 90; ++px) {
-		context->SetText(sweep, font, static_cast<f32>(px), Color::White(), SWEEP);
+		context->SetText(sweep, font, static_cast<f32>(px), Color::White(), Sweep);
 		const u32 before = fonts->GetAtlasGeneration();
 		UISystem::Update();
 		reclaims += fonts->GetAtlasGeneration() != before ? 1u : 0u;
 		RenderSystem::RenderAll();
-		if (glyphsOf(sweep) != InkGlyphs(SWEEP)) {
+		if (glyphsOf(sweep) != InkGlyphs(Sweep)) {
 			++shortFrames;
 		}
 		UI::AtlasPage page{};
@@ -1159,8 +1159,8 @@ TEST_F(UISurfaceFixture, FullGlyphPageReclaimed) {
 
 	UISystem::Update();
 	RenderSystem::RenderAll();
-	EXPECT_EQ(glyphsOf(sweep), InkGlyphs(SWEEP));
-	EXPECT_EQ(glyphsOf(steady), InkGlyphs(STEADY));
+	EXPECT_EQ(glyphsOf(sweep), InkGlyphs(Sweep));
+	EXPECT_EQ(glyphsOf(steady), InkGlyphs(Steady));
 
 	UISystem::DestroySurface(surface);
 }
@@ -1212,16 +1212,16 @@ TEST_F(UISurfaceFixture, NewGlyphsDrawSameFrame) {
 	ASSERT_NE(context, nullptr);
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
 
-	constexpr std::string_view TEXT = "Batched glyphs 0123456789";
+	constexpr std::string_view Text = "Batched glyphs 0123456789";
 	UI::ElementHandle label = PlacedBox(*context, context->GetRoot(), 4.0f, 4.0f, 312.0f, 88.0f);
-	context->SetText(label, font, 11.0f, Color::White(), TEXT);
+	context->SetText(label, font, 11.0f, Color::White(), Text);
 	UISystem::Update();
 	RenderSystem::RenderAll();
 
 	Vector<u8> pixels{GetMemoryResource(MemTag::Debug)};
 	Vec2I size{};
 	for (f32 px : {17.0f, 23.0f, 31.0f}) {
-		context->SetText(label, font, px, Color::White(), TEXT);
+		context->SetText(label, font, px, Color::White(), Text);
 		UI::AtlasPage before{};
 		ASSERT_TRUE(fonts->GetAtlasPage(before));
 		{
@@ -1238,7 +1238,7 @@ TEST_F(UISurfaceFixture, NewGlyphsDrawSameFrame) {
 		}
 		UI::AtlasPage after{};
 		ASSERT_TRUE(fonts->GetAtlasPage(after));
-		ASSERT_GE(after.entries, before.entries + InkGlyphs(TEXT) / 2) << px;
+		ASSERT_GE(after.entries, before.entries + InkGlyphs(Text) / 2) << px;
 
 		ASSERT_TRUE(ReadbackSurface(surface, pixels, size));
 		const std::vector<u8> ink = TexelsOf(pixels, size, context->GetLayout(label).borderBox);

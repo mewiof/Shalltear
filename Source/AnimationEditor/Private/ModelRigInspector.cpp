@@ -139,9 +139,9 @@ namespace Shalltear::AnimationEditor {
 
 			{
 				ElementHandle row = AddLabeledRow(context, parent, "Animation Type");
-				static constexpr std::array<std::string_view, 2> ITEMS{"Generic", "None"};
+				static constexpr std::array<std::string_view, 2> Items{"Generic", "None"};
 				Widgets::DropdownDesc desc;
-				desc.items = std::span<const std::string_view>(ITEMS.data(), ITEMS.size());
+				desc.items = std::span<const std::string_view>(Items.data(), Items.size());
 				desc.selected = settings.type == ModelAnimationType::None ? 1u : 0u;
 				desc.font = UISystem::GetDefaultFont();
 				desc.fontSizePx = EditorTheme::GetMetric(MetricToken::FontBody);
@@ -177,9 +177,9 @@ namespace Shalltear::AnimationEditor {
 
 			{
 				ElementHandle row = AddLabeledRow(context, parent, "Rig Pose");
-				static constexpr std::array<std::string_view, 3> ITEMS{"From Model", "Sample Bind-pose", "Copy From Model"};
+				static constexpr std::array<std::string_view, 3> Items{"From Model", "Sample Bind-pose", "Copy From Model"};
 				Widgets::DropdownDesc desc;
-				desc.items = std::span<const std::string_view>(ITEMS.data(), ITEMS.size());
+				desc.items = std::span<const std::string_view>(Items.data(), Items.size());
 				desc.selected = settings.rigPose == ModelRigPose::BindPose	 ? 1u
 								: settings.rigPose == ModelRigPose::CopyFrom ? 2u
 																			 : 0u;

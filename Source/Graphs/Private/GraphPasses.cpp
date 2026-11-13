@@ -294,10 +294,10 @@ namespace Shalltear {
 		}
 
 		str StageNames(GraphStageMask stages) {
-			constexpr std::pair<GraphStageMask, std::string_view> NAMES[] = {
+			constexpr std::pair<GraphStageMask, std::string_view> Names[] = {
 				{GraphStageVertex, "vertex"}, {GraphStageFragment, "fragment"}, {GraphStageLighting, "lighting"}};
 			str out;
-			for (const auto& [stage, name] : NAMES) {
+			for (const auto& [stage, name] : Names) {
 				if ((stages & stage) != 0) {
 					out += (out.empty() ? "" : " and ") + str(name);
 				}

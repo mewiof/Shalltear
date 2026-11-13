@@ -381,14 +381,14 @@ namespace {
 		}
 	};
 
-	char ARGUMENTS_PASS_OWNER = 0;
+	char argumentsPassOwner = 0;
 
 } // anonymous namespace
 
 class ProceduralRendererFixture : public MaterialReadbackFixture {
 protected:
 	void TearDown() override {
-		FramePasses::UnregisterOwnedBy(&ARGUMENTS_PASS_OWNER);
+		FramePasses::UnregisterOwnedBy(&argumentsPassOwner);
 		MaterialReadbackFixture::TearDown();
 	}
 
@@ -1016,7 +1016,7 @@ TEST_F(ProceduralRendererFixture, IndirectItemsDrawKernelCounts) {
 		sprites[i]->halfSize = 0.2f;
 		sprites[i]->arguments = arguments.buffers.back();
 	}
-	ASSERT_TRUE(FramePasses::Register(arguments, &ARGUMENTS_PASS_OWNER));
+	ASSERT_TRUE(FramePasses::Register(arguments, &argumentsPassOwner));
 
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
@@ -1033,7 +1033,7 @@ TEST_F(ProceduralRendererFixture, IndirectItemsDrawKernelCounts) {
 		}
 	}
 
-	FramePasses::UnregisterOwnedBy(&ARGUMENTS_PASS_OWNER);
+	FramePasses::UnregisterOwnedBy(&argumentsPassOwner);
 	TearDownStage(stage);
 	for (RHI::BufferHandle buffer : arguments.buffers) {
 		device.DestroyResource(buffer);
@@ -1466,7 +1466,7 @@ TEST_F(ProceduralRendererFixture, OpaqueItemInPrepassOnly) {
 	keep->kernel = Handle<ShaderAsset>(kernel);
 	keep->camera = camera;
 	keep->values = device.CreateBufferResource(valuesDesc);
-	ASSERT_TRUE(FramePasses::Register(*keep, &ARGUMENTS_PASS_OWNER));
+	ASSERT_TRUE(FramePasses::Register(*keep, &argumentsPassOwner));
 	ViewDesc keeping = QuadView();
 	keeping.camera = camera;
 	for (u32 frame = 0; frame < 2; ++frame) {
@@ -1481,7 +1481,7 @@ TEST_F(ProceduralRendererFixture, OpaqueItemInPrepassOnly) {
 	device.ReadbackBuffer(keep->values, {reinterpret_cast<u8*>(&kept), sizeof(kept)});
 	EXPECT_NEAR(kept, depthAt(0.0f), 1.0e-4f);
 	EXPECT_GT(std::abs(kept - depthAt(2.0f)), 1.0e-3f);
-	FramePasses::UnregisterOwnedBy(&ARGUMENTS_PASS_OWNER);
+	FramePasses::UnregisterOwnedBy(&argumentsPassOwner);
 
 	opaque->GetOwner()->SetActive(false);
 	SceneSystem::EndFrame();

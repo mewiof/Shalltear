@@ -121,7 +121,7 @@ TEST_F(AudioCostFixture, Frames240Of2000SourcesRetainNothing) {
 
 TEST(AudioCostTest, AudioThreadAllocatesNothing) {
 	constexpr u64 BLOCKS = 10000;
-	ClipBlock clip(MakePcm(std::vector<f32>(480, 0.1f), 1, 48000));
+	ClipBlock clip(MakePCM(std::vector<f32>(480, 0.1f), 1, 48000));
 	AudioRenderer renderer;
 	renderer.Initialize(SOURCES + 512, 2 * REAL);
 	ASSERT_TRUE(renderer.Prepare(MakeStandardLayout(2), 48000));

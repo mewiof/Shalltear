@@ -239,7 +239,7 @@ TEST_F(PreviewRegistryTest, CompressedTexturesPictureIsDecodedTopLevel) {
 	};
 
 	TextureAsset color;
-	compressed(color, RHI::Format::BC7SRGB, TexelMeaning::SRGBColor, {200, 120, 40, 255});
+	compressed(color, RHI::Format::BC7SRGB, TexelMeaning::sRGBColor, {200, 120, 40, 255});
 	ASSERT_EQ(color.format, RHI::Format::BC7SRGB);
 	AssetPreviewImage image;
 	ASSERT_TRUE(EditorPreviews::Produce({Guid{}, &color}, image));
@@ -291,7 +291,7 @@ TEST_F(PreviewRegistryTest, CompressedTexturesPictureIsDecodedTopLevel) {
 	EXPECT_NEAR(Math::HalfToFloat(green), 0.5f, 0.01f);
 
 	TextureAsset truncated;
-	compressed(truncated, RHI::Format::BC7SRGB, TexelMeaning::SRGBColor, {1, 2, 3, 255});
+	compressed(truncated, RHI::Format::BC7SRGB, TexelMeaning::sRGBColor, {1, 2, 3, 255});
 	truncated.pixels.resize(8);
 	EXPECT_FALSE(EditorPreviews::Produce({Guid{}, &truncated}, image));
 }

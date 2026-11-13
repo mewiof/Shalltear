@@ -536,10 +536,10 @@ namespace {
 		std::array<u32, PANEL_COUNT> bodyElements{};
 
 		static StringHash PanelId(u32 index) {
-			static constexpr StringHash IDS[PANEL_COUNT] = {
+			static constexpr StringHash Ids[PANEL_COUNT] = {
 				"rebuild.panel0"_hash, "rebuild.panel1"_hash, "rebuild.panel2"_hash,
 				"rebuild.panel3"_hash, "rebuild.panel4"_hash, "rebuild.panel5"_hash};
-			return IDS[index];
+			return Ids[index];
 		}
 
 		explicit DockRebuildFixture(u32 clickedLeafBody = 1, u32 otherBody = 1, Shape shape = Shape::Editor) {

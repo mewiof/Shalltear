@@ -48,7 +48,7 @@ namespace {
 	constexpr UI::WidgetAttribute IconAttributes[] = {
 		{"icon", UI::WidgetAttributeType::Asset, {}, SpriteOnly},
 	};
-	const int IconOwner = 0;
+	const int ICON_OWNER = 0;
 	const Asset* _iconReceived = nullptr;
 
 	UI::WidgetResult MakeIcon(UI::Context& context, UI::ElementHandle parent, const UI::WidgetArgs& args) {
@@ -73,7 +73,7 @@ namespace {
 			AssetDatabase::Initialize();
 
 			std::vector<u8> pixels(32 * 16 * 4, 255);
-			TestImages::WriteTga(_root / "Atlas.tga", 32, 16, pixels.data());
+			TestImages::WriteTGA(_root / "Atlas.tga", 32, 16, pixels.data());
 			ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(Path("project://Atlas.tga")).IsValid());
 			JSONValue list = JSONValue::MakeArray();
 			AddSprite(list, "frame", "Frame", {0.0, 0.0, 16.0, 16.0});
@@ -88,7 +88,7 @@ namespace {
 			for (Asset* asset : _held) {
 				AssetDatabase::UnloadAsset(asset);
 			}
-			UI::WidgetRegistry::UnregisterOwnedBy(&IconOwner);
+			UI::WidgetRegistry::UnregisterOwnedBy(&ICON_OWNER);
 			AssetDatabase::Terminate();
 			FileSystem::Unmount("project");
 			std::error_code ec;
@@ -382,7 +382,7 @@ TEST_F(UIImageDocumentFixture, BuilderEditResolvesNewSource) {
 }
 
 TEST_F(UIImageDocumentFixture, CustomWidgetGetsDeclaredAsset) {
-	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &IconOwner));
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &ICON_OWNER));
 	Write("Hud.slxml", R"(<ui version="1"><panel><image src="project://Atlas.tga#Star"/><item-icon icon="project://Atlas.tga#Star"/></panel></ui>)");
 	UIDocumentAsset* document = Load("Hud.slxml");
 	ASSERT_NE(document, nullptr);
@@ -396,7 +396,7 @@ TEST_F(UIImageDocumentFixture, CustomWidgetGetsDeclaredAsset) {
 }
 
 TEST_F(UIImageDocumentFixture, RepeatedSourceCheckedPerWidget) {
-	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &IconOwner));
+	ASSERT_TRUE(UI::WidgetRegistry::Register(UI::WidgetDesc{"item-icon", &MakeIcon, IconAttributes}, &ICON_OWNER));
 	for (std::string_view body : {R"(<image src="project://Atlas.tga"/><item-icon icon="project://Atlas.tga"/>)",
 								  R"(<item-icon icon="project://Atlas.tga"/><image src="project://Atlas.tga"/>)"}) {
 		UIDocumentAsset document;

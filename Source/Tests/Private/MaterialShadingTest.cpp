@@ -865,7 +865,7 @@ namespace {
 
 	using TestImages::FLIPBOOK_CELLS;
 	using TestImages::WriteFlipbook;
-	using TestImages::WriteTga;
+	using TestImages::WriteTGA;
 
 	str SlotsOfEveryDimension(const char* pragmas, const char* channels) {
 		return str("#pragma shalltear_template unlit\n") + pragmas +
@@ -955,7 +955,7 @@ TEST_F(MaterialReadbackFixture, WrongDimensionTextureFallsBack) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable";
 	}
 	const u8 red[4] = {255, 0, 0, 255};
-	WriteTga(_root / "Red.tga", red);
+	WriteTGA(_root / "Red.tga", red);
 	WriteProjectFile("Kinds.hlsl", SlotsOfEveryDimension("", "float3(face, map, 0.0)"));
 	Asset* texture = AssetDatabase::LoadAsset(Path("project://Red.tga"));
 	Asset* shader = AssetDatabase::LoadAsset(Path("project://Kinds.hlsl"));
@@ -997,8 +997,8 @@ TEST_F(MaterialReadbackFixture, WrongDimensionTextureFallsBack) {
 TEST_F(MaterialReadbackFixture, MaterialHoldsOneRefPerSlot) {
 	const u8 red[4] = {255, 0, 0, 255};
 	const u8 green[4] = {0, 255, 0, 255};
-	WriteTga(_root / "Red.tga", red);
-	WriteTga(_root / "Green.tga", green);
+	WriteTGA(_root / "Red.tga", red);
+	WriteTGA(_root / "Green.tga", green);
 	Asset* redMap = AssetDatabase::LoadAsset(Path("project://Red.tga"));
 	Asset* greenMap = AssetDatabase::LoadAsset(Path("project://Green.tga"));
 	ASSERT_NE(redMap, nullptr);
@@ -1051,8 +1051,8 @@ TEST_F(MaterialReadbackFixture, AssignedTextureDraws) {
 	}
 	const u8 red[4] = {255, 0, 0, 255};
 	const u8 green[4] = {0, 255, 0, 255};
-	WriteTga(_root / "Red.tga", red);
-	WriteTga(_root / "Green.tga", green);
+	WriteTGA(_root / "Red.tga", red);
+	WriteTGA(_root / "Green.tga", green);
 	const Guid redMap = AssetDatabase::EnsureAssetIdentity(Path("project://Red.tga"));
 	const Guid greenMap = AssetDatabase::EnsureAssetIdentity(Path("project://Green.tga"));
 	ASSERT_TRUE(redMap.IsValid() && greenMap.IsValid());

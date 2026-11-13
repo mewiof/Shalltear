@@ -1754,12 +1754,12 @@ TEST_F(HierarchyPanelTest, RowShowsFirstComponentBadge) {
 		GTEST_SKIP() << "icon font not found";
 	}
 
-	static const u8 OWNER = 0;
+	static const u8 owner = 0;
 	struct Sweep {
-		~Sweep() { EditorIcons::ComponentIcons::UnregisterOwnedBy(&OWNER); }
+		~Sweep() { EditorIcons::ComponentIcons::UnregisterOwnedBy(&owner); }
 	} sweep;
-	EditorIcons::ComponentIcons::Register(HierTestComponent::GetReflectType()->name, EditorIcons::Mark::Camera, &OWNER);
-	EditorIcons::ComponentIcons::Register(HierBadgeComponent::GetReflectType()->name, EditorIcons::Mark::Light, &OWNER);
+	EditorIcons::ComponentIcons::Register(HierTestComponent::GetReflectType()->name, EditorIcons::Mark::Camera, &owner);
+	EditorIcons::ComponentIcons::Register(HierBadgeComponent::GetReflectType()->name, EditorIcons::Mark::Light, &owner);
 	Handle<VectorAsset> camera = EditorIcons::GetVector(EditorIcons::Mark::Camera);
 	Handle<VectorAsset> light = EditorIcons::GetVector(EditorIcons::Mark::Light);
 	ASSERT_TRUE(camera.IsValid() && light.IsValid() && camera != light);
@@ -2278,16 +2278,16 @@ namespace {
 
 	class HierarchyRegisteredDropTest : public HierarchyAssetDropTest {
 	protected:
-		static inline char OWNER = 0;
+		static inline char owner = 0;
 
 		void TearDown() override {
-			SceneAssetDrops::UnregisterOwnedBy(&OWNER);
+			SceneAssetDrops::UnregisterOwnedBy(&owner);
 			SceneAssetDrops::Terminate();
 			HierarchyAssetDropTest::TearDown();
 		}
 
 		static bool Register() {
-			return SceneAssetDrops::Register(StringHash("UIDocumentAsset"), StringHash("UIPanelRenderer"), StringHash("_document"), &OWNER);
+			return SceneAssetDrops::Register(StringHash("UIDocumentAsset"), StringHash("UIPanelRenderer"), StringHash("_document"), &owner);
 		}
 
 		AssetDragData WriteDocument() {
@@ -2339,7 +2339,7 @@ TEST_F(HierarchyRegisteredDropTest, RegisteredDropMakesPlayingChild) {
 	ASSERT_EQ(host->GetChildCount(), 1u);
 	EXPECT_EQ(DocumentOf(host->GetChild(0)), data.guid);
 
-	EXPECT_EQ(SceneAssetDrops::UnregisterOwnedBy(&OWNER), 1u);
+	EXPECT_EQ(SceneAssetDrops::UnregisterOwnedBy(&owner), 1u);
 	EXPECT_FALSE(rig.context.DeliverDrop(AssetPayload(data), CenterOf(rig.context, RowNamed(rig.context, rig.root, "Host"))));
 }
 

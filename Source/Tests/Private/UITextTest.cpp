@@ -220,12 +220,12 @@ TEST_F(UIFontFixture, WrappedCaretStopsOrdered) {
 
 TEST_F(UIFontFixture, EllipsisFitsOneLine) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "New Object (Copy) (Copy)";
-	Vec2 full = fonts->MeasureText(Query(TEXT));
+	constexpr std::string_view Text = "New Object (Copy) (Copy)";
+	Vec2 full = fonts->MeasureText(Query(Text));
 
 	const f32 budget = full.x * 0.5f;
 	UI::ShapedRun run;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT, UI::TextOverflow::Ellipsis, budget), run));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text, UI::TextOverflow::Ellipsis, budget), run));
 
 	EXPECT_FALSE(run.multiline);
 	EXPECT_FLOAT_EQ(run.extent.y, full.y);
@@ -247,23 +247,23 @@ TEST_F(UIFontFixture, BudgetTooNarrowForMarkIsMark) {
 
 TEST_F(UIFontFixture, TextThatAlreadyFitsIsNotTruncated) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "New Object";
-	Vec2 full = fonts->MeasureText(Query(TEXT));
+	constexpr std::string_view Text = "New Object";
+	Vec2 full = fonts->MeasureText(Query(Text));
 
 	UI::ShapedRun run;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT, UI::TextOverflow::Ellipsis, full.x), run));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text, UI::TextOverflow::Ellipsis, full.x), run));
 	EXPECT_FLOAT_EQ(run.extent.x, full.x);
 	EXPECT_FALSE(WasTruncated(run));
 }
 
 TEST_F(UIFontFixture, ClipIgnoresTheWidthEntirely) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "several words that would wrap";
+	constexpr std::string_view Text = "several words that would wrap";
 	UI::ShapedRun unbounded;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT), unbounded));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text), unbounded));
 
 	UI::ShapedRun clipped;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT, UI::TextOverflow::Clip, 20.0f), clipped));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text, UI::TextOverflow::Clip, 20.0f), clipped));
 
 	EXPECT_FALSE(clipped.multiline);
 	EXPECT_FLOAT_EQ(clipped.extent.x, unbounded.extent.x);
@@ -284,12 +284,12 @@ TEST_F(UIFontFixture, EllipsizedRunStopsAtFirstNewline) {
 
 TEST_F(UIFontFixture, AnUnboundedEllipsisIsPlainMaxContent) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "New Object (Copy) (Copy)";
+	constexpr std::string_view Text = "New Object (Copy) (Copy)";
 	UI::ShapedRun wrapped;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT), wrapped));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text), wrapped));
 
 	UI::ShapedRun unbounded;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT, UI::TextOverflow::Ellipsis, 0.0f), unbounded));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text, UI::TextOverflow::Ellipsis, 0.0f), unbounded));
 
 	EXPECT_FLOAT_EQ(unbounded.extent.x, wrapped.extent.x);
 	EXPECT_EQ(unbounded.caretStops.size(), wrapped.caretStops.size());
@@ -534,14 +534,14 @@ TEST_F(UIFontFixture, EllipsizedRunFillsBudget) {
 
 TEST_F(UIFontFixture, AlignedLinesShiftWithinWidest) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "short\na much longer second line";
+	constexpr std::string_view Text = "short\na much longer second line";
 	UI::ShapedRun start;
-	ASSERT_TRUE(fonts->ShapeText(Query(TEXT), start));
+	ASSERT_TRUE(fonts->ShapeText(Query(Text), start));
 	const f32 slack = start.extent.x - fonts->MeasureText(Query("short")).x;
 	ASSERT_GT(slack, 20.0f);
 
 	for (UI::Align align : {UI::Align::Center, UI::Align::End}) {
-		UI::TextQuery query = Query(TEXT);
+		UI::TextQuery query = Query(Text);
 		query.align = align;
 		UI::ShapedRun run;
 		ASSERT_TRUE(fonts->ShapeText(query, run));
@@ -558,11 +558,11 @@ TEST_F(UIFontFixture, AlignedLinesShiftWithinWidest) {
 
 TEST_F(UIFontFixture, TrailingSpacesHangPastAlignedEdge) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "several words that will wrap";
-	const f32 width = fonts->MeasureText(Query(TEXT)).x * 0.4f;
+	constexpr std::string_view Text = "several words that will wrap";
+	const f32 width = fonts->MeasureText(Query(Text)).x * 0.4f;
 
 	for (UI::Align align : {UI::Align::Center, UI::Align::End}) {
-		UI::TextQuery query = Query(TEXT, width);
+		UI::TextQuery query = Query(Text, width);
 		query.align = align;
 		UI::ShapedRun run;
 		ASSERT_TRUE(fonts->ShapeText(query, run));
@@ -579,7 +579,7 @@ TEST_F(UIFontFixture, TrailingSpacesHangPastAlignedEdge) {
 				}
 				if (first < 0.0f) {
 					first = stop.x;
-				} else if (TEXT[stop.byteOffset - 1] != ' ') {
+				} else if (Text[stop.byteOffset - 1] != ' ') {
 					inked = stop.x;
 				}
 				last = stop.x;
@@ -598,11 +598,11 @@ TEST_F(UIFontFixture, TrailingSpacesHangPastAlignedEdge) {
 
 TEST_F(UIFontFixture, EditableRunHangsOnlySoftWrapSpaces) {
 	UI::IFontSystem* fonts = UISystem::GetFontSystem();
-	constexpr std::string_view TEXT = "ab \nseveral words that will wrap";
+	constexpr std::string_view Text = "ab \nseveral words that will wrap";
 	const f32 width = fonts->MeasureText(Query("several words that will wrap")).x * 0.4f;
 
 	for (const bool editable : {false, true}) {
-		UI::TextQuery query = Query(TEXT, width);
+		UI::TextQuery query = Query(Text, width);
 		query.align = UI::Align::End;
 		query.editable = editable;
 		UI::ShapedRun run;
@@ -619,7 +619,7 @@ TEST_F(UIFontFixture, EditableRunHangsOnlySoftWrapSpaces) {
 				if (stop.line != line) {
 					continue;
 				}
-				if (!first && TEXT[stop.byteOffset - 1] != ' ') {
+				if (!first && Text[stop.byteOffset - 1] != ' ') {
 					inked = stop.x;
 				}
 				first = false;

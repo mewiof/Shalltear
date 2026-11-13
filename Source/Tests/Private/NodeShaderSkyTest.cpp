@@ -76,8 +76,8 @@ namespace {
 		DocumentBuilder::Constant(b.document.nodes.back(), "False", "[0]");
 	}
 
-	constexpr std::string_view SKY_NAMES[] = {"SkyDirection", "SkySunDirection", "SkySunColor", "SkySunAngularDiameter",
-											  "SkySunEnabled", "SkyCapturing", "SkySunDisc"};
+	constexpr std::string_view SkyNames[] = {"SkyDirection", "SkySunDirection", "SkySunColor", "SkySunAngularDiameter",
+											 "SkySunEnabled", "SkyCapturing", "SkySunDisc"};
 
 	const GraphBinding* FindIn(std::span<const GraphBinding> table, std::string_view name) {
 		for (const GraphBinding& binding : table) {
@@ -116,7 +116,7 @@ TEST(NodeShaderSkyTest, SkyGraphWritesBaseColor) {
 	EXPECT_FALSE(GraphSurface::IsBlockActive(b.document, "Block/Alpha"));
 	EXPECT_FALSE(GraphSurface::IsBlockActive(b.document, "Block/Emission"));
 	EXPECT_FALSE(GraphSurface::IsBlockActive(b.document, "Block/Position"));
-	EXPECT_FALSE(GraphSurface::IsBlockActive(b.document, GraphSurface::RADIANCE_BLOCK_ID));
+	EXPECT_FALSE(GraphSurface::IsBlockActive(b.document, GraphSurface::RadianceBlockId));
 	EXPECT_TRUE(GraphSurface::IsSky(b.document));
 	EXPECT_FALSE(GraphSurface::IsFullscreen(b.document));
 	EXPECT_FALSE(GraphSurface::HasVertexStage(b.document));
@@ -156,13 +156,13 @@ TEST(NodeShaderSkyTest, SkyTargetAnswersEveryNameOthersDo) {
 			ASSERT_NE(found, nullptr);
 			EXPECT_EQ(found->type, binding.type) << binding.name;
 		}
-		for (std::string_view name : SKY_NAMES) {
+		for (std::string_view name : SkyNames) {
 			const GraphBinding* refused = FindIn(other, name);
 			ASSERT_NE(refused, nullptr) << name;
 			EXPECT_NE(refused->unavailable.find("only a Sky graph"), str::npos) << name;
 		}
 	}
-	for (std::string_view name : SKY_NAMES) {
+	for (std::string_view name : SkyNames) {
 		const GraphBinding* supplied = FindIn(sky, name);
 		ASSERT_NE(supplied, nullptr) << name;
 		EXPECT_TRUE(supplied->unavailable.empty()) << name;
@@ -176,7 +176,7 @@ TEST(NodeShaderSkyTest, WhatSkyLacksIsRefusedNamingWhy) {
 		std::string_view key;
 		std::string_view value;
 		std::string_view said;
-	} READERS[] = {
+	} readers[] = {
 		{"Input/Position", "Out", "Space", "\"World\"", "the Sky node's Direction is the ray"},
 		{"Input/Position", "Out", "Space", "\"Object\"", "the Sky node's Direction is the ray"},
 		{"Input/Position", "Out", "Space", "\"Tangent\"", "the Sky node's Direction is the ray"},
@@ -188,7 +188,7 @@ TEST(NodeShaderSkyTest, WhatSkyLacksIsRefusedNamingWhy) {
 		{"Input/VertexID", "Out", "", "", "has no vertex stage"},
 		{"Input/SceneColor", "Out", "", "", "no image of the scene"},
 	};
-	for (const auto& reader : READERS) {
+	for (const auto& reader : readers) {
 		SCOPED_TRACE(str(reader.def) + " " + str(reader.value));
 		SkyBuilder b;
 		GraphNode& read = b.Node(20, reader.def);
@@ -220,13 +220,13 @@ TEST(NodeShaderSkyTest, SkyNodesAreSkyGraphsAlone) {
 	const struct {
 		std::string_view port;
 		std::string_view reads;
-	} OUTPUTS[] = {{"Direction", "input.directionWS"},
+	} outputs[] = {{"Direction", "input.directionWS"},
 				   {"Sun Direction", "input.sunDirectionWS"},
 				   {"Sun Color", "input.sunColor"},
 				   {"Sun Angular Diameter", "input.sunAngularDiameter"},
 				   {"Sun Enabled", "input.sunEnabled"},
 				   {"Capturing", "input.capturing"}};
-	for (const auto& output : OUTPUTS) {
+	for (const auto& output : outputs) {
 		SCOPED_TRACE(output.port);
 		SkyBuilder b;
 		b.Node(20, "Input/Sky");
@@ -308,8 +308,8 @@ namespace {
 		EXPECT_NEAR(actual.z, expected.z, TEXEL_TOLERANCE) << what;
 	}
 
-	constexpr Vec2I PIXEL_A{48, 12};
-	constexpr Vec2I PIXEL_B{9, 55};
+	constexpr Vec2I PixelA{48, 12};
+	constexpr Vec2I PixelB{9, 55};
 
 } // anonymous namespace
 
@@ -349,12 +349,12 @@ TEST_F(NodeShaderSkyFixture, SkyGraphIsFunctionAlongRay) {
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
 	ASSERT_TRUE(Render(stage, desc, pixels, size));
-	for (const Vec2I pixel : {PIXEL_A, PIXEL_B}) {
+	for (const Vec2I pixel : {PixelA, PixelB}) {
 		const Vec3 direction = SkyPixelRay(desc, size, pixel.x, pixel.y);
 		ExpectTexelNear(TexelAt(pixels, size, pixel.x, pixel.y), ExpectedTexel(direction * 0.5f + Vec3(0.5f, 0.5f, 0.5f)),
 						"the sky graph is not its function along the pixel's ray");
 	}
-	EXPECT_GT(std::fabs(TexelAt(pixels, size, PIXEL_A.x, PIXEL_A.y).y - TexelAt(pixels, size, PIXEL_B.x, PIXEL_B.y).y), 20.0f);
+	EXPECT_GT(std::fabs(TexelAt(pixels, size, PixelA.x, PixelA.y).y - TexelAt(pixels, size, PixelB.x, PixelB.y).y), 20.0f);
 
 	SkyBuilder toward;
 	toward.Node(20, "Input/ViewDirection");
@@ -364,7 +364,7 @@ TEST_F(NodeShaderSkyFixture, SkyGraphIsFunctionAlongRay) {
 	environment->SetSkyMaterial(Handle<MaterialAsset>(view));
 	SceneSystem::EndFrame();
 	ASSERT_TRUE(Render(stage, desc, pixels, size));
-	for (const Vec2I pixel : {PIXEL_A, PIXEL_B}) {
+	for (const Vec2I pixel : {PixelA, PixelB}) {
 		const Vec3 direction = SkyPixelRay(desc, size, pixel.x, pixel.y);
 		ExpectTexelNear(TexelAt(pixels, size, pixel.x, pixel.y), ExpectedTexel(direction * -0.5f + Vec3(0.5f, 0.5f, 0.5f)),
 						"View Direction is not the ray turned toward the camera");
@@ -563,7 +563,7 @@ TEST_F(NodeShaderSkyFixture, SkyGraphReadsView) {
 		ViewDesc desc = QuadView();
 		desc.time = &time;
 		ASSERT_TRUE(Render(stage, desc, pixels, size));
-		for (const Vec2I pixel : {PIXEL_A, PIXEL_B}) {
+		for (const Vec2I pixel : {PixelA, PixelB}) {
 			const f32 u = (static_cast<f32>(pixel.x) + 0.5f) / static_cast<f32>(size.x);
 			const f32 v = (static_cast<f32>(pixel.y) + 0.5f) / static_cast<f32>(size.y);
 			const f32 clock = static_cast<f32>(time * 0.1 - std::floor(time * 0.1));

@@ -8,7 +8,7 @@
 
 namespace TestImages {
 
-	inline void WriteTga(const std::filesystem::path& path, Shalltear::u16 width, Shalltear::u16 height, const Shalltear::u8* rgba) {
+	inline void WriteTGA(const std::filesystem::path& path, Shalltear::u16 width, Shalltear::u16 height, const Shalltear::u8* rgba) {
 		using Shalltear::u8;
 		const u8 header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, static_cast<u8>(width & 0xFF), static_cast<u8>(width >> 8),
 							   static_cast<u8>(height & 0xFF), static_cast<u8>(height >> 8), 32, 0x28};
@@ -19,8 +19,8 @@ namespace TestImages {
 			file.write(reinterpret_cast<const char*>(bgra), sizeof(bgra));
 		}
 	}
-	inline void WriteTga(const std::filesystem::path& path, const Shalltear::u8 rgba[4]) {
-		WriteTga(path, 1, 1, rgba);
+	inline void WriteTGA(const std::filesystem::path& path, const Shalltear::u8 rgba[4]) {
+		WriteTGA(path, 1, 1, rgba);
 	}
 
 	inline constexpr Shalltear::u8 FLIPBOOK_CELLS[4][4] = {{250, 10, 10, 255}, {10, 250, 10, 255}, {40, 200, 120, 255}, {10, 10, 250, 255}};
@@ -31,7 +31,7 @@ namespace TestImages {
 				std::memcpy(&image[(y * 4 + x) * 4], FLIPBOOK_CELLS[(y / 2) * 2 + x / 2], 4);
 			}
 		}
-		WriteTga(path, 4, 4, image);
+		WriteTGA(path, 4, 4, image);
 	}
 
 } // namespace TestImages

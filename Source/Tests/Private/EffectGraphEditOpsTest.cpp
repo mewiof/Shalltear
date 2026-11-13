@@ -20,7 +20,7 @@ namespace {
 
 	GraphDocument Empty() {
 		GraphDocument document;
-		document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+		document.type = str(GraphEffectDocumentType);
 		return document;
 	}
 
@@ -61,19 +61,19 @@ namespace {
 
 TEST(EffectGraphEditOpsTest, ContextIsMadeWithDefinitionsFlow) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2(10.4f, 20.6f));
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2(10.4f, 20.6f));
 	ASSERT_NE(spawn, 0u);
 	EXPECT_EQ(Context(document, spawn)->node.x, 10);
 	EXPECT_EQ(Context(document, spawn)->node.y, 21);
 	EXPECT_EQ(Ops::FlowInputs(document, spawn).size(), 2u);
 	EXPECT_TRUE(Ops::FlowOutput(document, spawn));
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2());
+	const u32 output = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2());
 	EXPECT_FALSE(Ops::FlowOutput(document, output));
 	EXPECT_EQ(Ops::AddContext(document, "Math/Add", Vec2()), 0u);
 	EXPECT_EQ(Ops::AddContext(document, "Context/Fragment", Vec2()), 0u);
 	u32 defined = 0;
 	for (const GraphNodeDefinition* definition : GraphNodeLibrary::All()) {
-		if (!GraphEffectRules::IsContext(definition->id) || definition->id == GRAPH_EFFECT_SYSTEM_SUBGRAPH) {
+		if (!GraphEffectRules::IsContext(definition->id) || definition->id == GraphEffectSystemSubgraph) {
 			continue;
 		}
 		++defined;
@@ -82,50 +82,50 @@ TEST(EffectGraphEditOpsTest, ContextIsMadeWithDefinitionsFlow) {
 	}
 	EXPECT_EQ(Ops::Contexts().size(), defined);
 	EXPECT_GE(defined, 12u);
-	for (std::string_view kind : {GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_OUTPUT_POINT, GRAPH_EFFECT_OUTPUT_LINE,
-								  GRAPH_EFFECT_OUTPUT_LIT, GRAPH_EFFECT_OUTPUT_LIT_MESH, GRAPH_EFFECT_OUTPUT_NODE_SHADER,
-								  GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH}) {
+	for (std::string_view kind : {GraphEffectOutputDefinition, GraphEffectOutputMesh, GraphEffectOutputPoint, GraphEffectOutputLine,
+								  GraphEffectOutputLit, GraphEffectOutputLitMesh, GraphEffectOutputNodeShader,
+								  GraphEffectOutputNodeShaderMesh}) {
 		const u32 made = Ops::AddContext(document, kind, Vec2());
 		ASSERT_NE(made, 0u) << kind;
 		EXPECT_EQ(Ops::FlowInputs(document, made).size(), 1u) << kind;
 		EXPECT_FALSE(Ops::FlowOutput(document, made)) << kind;
 		EXPECT_TRUE(GraphEffectRules::IsOutput(kind)) << kind;
 	}
-	EXPECT_FALSE(GraphEffectRules::IsOutput(GRAPH_EFFECT_UPDATE));
+	EXPECT_FALSE(GraphEffectRules::IsOutput(GraphEffectUpdate));
 }
 
 TEST(EffectGraphEditOpsTest, LinksFollowCompilerRules) {
 	GraphDocument document = Empty();
-	const u32 event = Ops::AddContext(document, GRAPH_EFFECT_EVENT, Vec2());
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 other = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	const u32 second = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2());
+	const u32 event = Ops::AddContext(document, GraphEffectEvent, Vec2());
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 other = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	const u32 second = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	const u32 output = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2());
 
-	EXPECT_TRUE(Ops::Link(document, event, spawn, GRAPH_EFFECT_STOP));
-	EXPECT_TRUE(Ops::Link(document, spawn, initialize, GRAPH_EFFECT_IN));
-	EXPECT_TRUE(Ops::Link(document, initialize, update, GRAPH_EFFECT_IN));
-	EXPECT_TRUE(Ops::Link(document, update, output, GRAPH_EFFECT_IN));
+	EXPECT_TRUE(Ops::Link(document, event, spawn, GraphEffectStop));
+	EXPECT_TRUE(Ops::Link(document, spawn, initialize, GraphEffectIn));
+	EXPECT_TRUE(Ops::Link(document, initialize, update, GraphEffectIn));
+	EXPECT_TRUE(Ops::Link(document, update, output, GraphEffectIn));
 
 	str why;
-	EXPECT_FALSE(Ops::CanLink(document, spawn, update, GRAPH_EFFECT_IN, &why));
+	EXPECT_FALSE(Ops::CanLink(document, spawn, update, GraphEffectIn, &why));
 	EXPECT_FALSE(why.empty());
-	EXPECT_TRUE(Ops::CanLink(document, event, initialize, GRAPH_EFFECT_IN));
-	const u32 chained = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	EXPECT_FALSE(Ops::CanLink(document, spawn, chained, GRAPH_EFFECT_START));
-	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GRAPH_EFFECT_START));
-	EXPECT_FALSE(Ops::CanLink(document, output, update, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GRAPH_EFFECT_IN));
-	EXPECT_FALSE(Ops::CanLink(document, initialize, second, GRAPH_EFFECT_IN, &why));
+	EXPECT_TRUE(Ops::CanLink(document, event, initialize, GraphEffectIn));
+	const u32 chained = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	EXPECT_FALSE(Ops::CanLink(document, spawn, chained, GraphEffectStart));
+	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GraphEffectStart));
+	EXPECT_FALSE(Ops::CanLink(document, output, update, GraphEffectIn));
+	EXPECT_FALSE(Ops::CanLink(document, spawn, initialize, GraphEffectIn));
+	EXPECT_FALSE(Ops::CanLink(document, initialize, second, GraphEffectIn, &why));
 	EXPECT_NE(why.find("leads to an Update"), str::npos) << why;
 
-	ASSERT_TRUE(Ops::Link(document, other, update, GRAPH_EFFECT_IN));
+	ASSERT_TRUE(Ops::Link(document, other, update, GraphEffectIn));
 	const GraphContext* updated = Context(document, update);
 	ASSERT_EQ(updated->flows.size(), 1u);
 	EXPECT_EQ(updated->flows[0].from, other);
-	ASSERT_TRUE(Ops::Link(document, Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2()), initialize, GRAPH_EFFECT_IN));
+	ASSERT_TRUE(Ops::Link(document, Ops::AddContext(document, GraphEffectSpawn, Vec2()), initialize, GraphEffectIn));
 	EXPECT_EQ(Context(document, initialize)->flows.size(), 2u);
 
 	GraphEffect effect;
@@ -135,10 +135,10 @@ TEST(EffectGraphEditOpsTest, LinksFollowCompilerRules) {
 
 TEST(EffectGraphEditOpsTest, StackOffersBlocksItHoldsAsVariants) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	const u32 event = Ops::AddContext(document, GRAPH_EFFECT_EVENT, Vec2());
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	const u32 event = Ops::AddContext(document, GraphEffectEvent, Vec2());
 
 	Vector<Ops::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 	Ops::BlockChoices(document, spawn, choices);
@@ -181,9 +181,9 @@ TEST(EffectGraphEditOpsTest, StackOffersBlocksItHoldsAsVariants) {
 
 TEST(EffectGraphEditOpsTest, AttributeFromCurveIsOfferedAsVariants) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2());
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	const u32 output = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2());
 
 	EXPECT_TRUE(Offered(document, update, "Set Size Over Life"));
 	EXPECT_TRUE(Offered(document, output, "Multiply Color Over Life"));
@@ -210,9 +210,9 @@ TEST(EffectGraphEditOpsTest, AttributeFromCurveIsOfferedAsVariants) {
 
 TEST(EffectGraphEditOpsTest, BlockMovesToRunningContext) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
 	const u32 rate = Ops::AddBlock(document, spawn, 0, Choice(document, spawn, "Constant Spawn Rate"));
 	const u32 velocity = Ops::AddBlock(document, initialize, 0, Choice(document, initialize, "Set Velocity"));
 
@@ -232,13 +232,13 @@ TEST(EffectGraphEditOpsTest, DroppedOperatorMatchesKernel) {
 	EXPECT_TRUE(OperatorOffered("Math/Multiply"));
 	EXPECT_TRUE(OperatorOffered("Input/Time"));
 	EXPECT_TRUE(OperatorOffered("Math/Sine"));
-	EXPECT_TRUE(OperatorOffered(GRAPH_EFFECT_SAMPLE_CURVE));
+	EXPECT_TRUE(OperatorOffered(GraphEffectSampleCurve));
 	EXPECT_TRUE(OperatorOffered("Input/SampleGradient"));
 	EXPECT_FALSE(OperatorOffered("Math/DDX"));
 	EXPECT_FALSE(OperatorOffered("Input/Property"));
-	EXPECT_FALSE(OperatorOffered(GraphDocumentOps::REDIRECT_DEF));
-	EXPECT_FALSE(OperatorOffered(GRAPH_EFFECT_SET_ATTRIBUTE));
-	EXPECT_FALSE(OperatorOffered(GRAPH_EFFECT_INITIALIZE));
+	EXPECT_FALSE(OperatorOffered(GraphDocumentOps::RedirectDef));
+	EXPECT_FALSE(OperatorOffered(GraphEffectSetAttribute));
+	EXPECT_FALSE(OperatorOffered(GraphEffectInitialize));
 	EXPECT_FALSE(OperatorOffered("Block/BaseColor"));
 
 	u32 offered = 0;
@@ -260,9 +260,9 @@ TEST(EffectGraphEditOpsTest, TheBlackboardOffersWhatAnEffectHolds) {
 
 TEST(EffectGraphEditOpsTest, ContextIsDeletedAndCopiedWithBlocks) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	Ops::Link(document, spawn, initialize, GRAPH_EFFECT_IN);
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	Ops::Link(document, spawn, initialize, GraphEffectIn);
 	Ops::AddBlock(document, initialize, 0, Choice(document, initialize, "Set Lifetime"));
 	const u32 property = NodeShaderEditOps::AddProperty(document, "Float");
 	const u32 reader = NodeShaderEditOps::AddPropertyNode(document, property, Vec2());
@@ -283,9 +283,9 @@ TEST(EffectGraphEditOpsTest, ContextIsDeletedAndCopiedWithBlocks) {
 
 TEST(EffectGraphEditOpsTest, LoneBlockCopyLandsInStack) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2());
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2());
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2());
 	const u32 rate = Ops::AddBlock(document, spawn, 0, Choice(document, spawn, "Constant Spawn Rate"));
 	const u32 lifetime = Ops::AddBlock(document, initialize, 0, Choice(document, initialize, "Set Lifetime"));
 	const u32 velocity = Ops::AddBlock(document, initialize, 1, Choice(document, initialize, "Set Velocity"));
@@ -322,7 +322,7 @@ TEST(EffectGraphEditOpsTest, LoneBlockCopyLandsInStack) {
 	EXPECT_EQ(updated->blocks[0].id, resident);
 	EXPECT_EQ(updated->blocks[1].id, pasted[0]);
 	EXPECT_EQ(updated->blocks[2].id, pasted[1]);
-	EXPECT_EQ(updated->blocks[1].def, GRAPH_EFFECT_SET_ATTRIBUTE);
+	EXPECT_EQ(updated->blocks[1].def, GraphEffectSetAttribute);
 	EXPECT_TRUE(pasted[0] != velocity && pasted[1] != lifetime);
 	const u32 both[] = {velocity, lifetime};
 	ASSERT_TRUE(Ops::PasteBlocks(document, fragment, both, pasted, error)) << error;
@@ -356,13 +356,13 @@ TEST(EffectGraphEditOpsTest, LoneBlockCopyLandsInStack) {
 
 TEST(EffectGraphEditOpsTest, EmptyGraphBecomesFountainTargetCompiles) {
 	GraphDocument document = Empty();
-	const u32 spawn = Ops::AddContext(document, GRAPH_EFFECT_SPAWN, Vec2(0.0f, 0.0f));
-	const u32 initialize = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2(0.0f, 200.0f));
-	const u32 update = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2(0.0f, 500.0f));
-	const u32 output = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2(0.0f, 700.0f));
-	ASSERT_TRUE(Ops::Link(document, spawn, initialize, GRAPH_EFFECT_IN));
-	ASSERT_TRUE(Ops::Link(document, initialize, update, GRAPH_EFFECT_IN));
-	ASSERT_TRUE(Ops::Link(document, update, output, GRAPH_EFFECT_IN));
+	const u32 spawn = Ops::AddContext(document, GraphEffectSpawn, Vec2(0.0f, 0.0f));
+	const u32 initialize = Ops::AddContext(document, GraphEffectInitialize, Vec2(0.0f, 200.0f));
+	const u32 update = Ops::AddContext(document, GraphEffectUpdate, Vec2(0.0f, 500.0f));
+	const u32 output = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2(0.0f, 700.0f));
+	ASSERT_TRUE(Ops::Link(document, spawn, initialize, GraphEffectIn));
+	ASSERT_TRUE(Ops::Link(document, initialize, update, GraphEffectIn));
+	ASSERT_TRUE(Ops::Link(document, update, output, GraphEffectIn));
 
 	const u32 rate = Ops::AddBlock(document, spawn, 0, Choice(document, spawn, "Constant Spawn Rate"));
 	const u32 velocity = Ops::AddBlock(document, initialize, 0, Choice(document, initialize, "Set Velocity"));
@@ -403,8 +403,8 @@ TEST(EffectGraphEditOpsTest, SearcherOffersPerAttributeEntries) {
 	ASSERT_NE(find("Get Attribute: age"), nullptr);
 	ASSERT_NE(find("Get Attribute: particleId"), nullptr);
 	ASSERT_NE(find("Random Number (Vector3)"), nullptr);
-	EXPECT_TRUE(Ops::IsOfferedAsVariants(GRAPH_EFFECT_GET_ATTRIBUTE));
-	EXPECT_FALSE(Ops::IsOfferedAsVariants(GRAPH_EFFECT_AGE_OVER_LIFETIME));
+	EXPECT_TRUE(Ops::IsOfferedAsVariants(GraphEffectGetAttribute));
+	EXPECT_FALSE(Ops::IsOfferedAsVariants(GraphEffectAgeOverLifetime));
 
 	GraphDocument document = Empty();
 	const u32 age = Ops::AddOperator(document, *find("Get Attribute: age"), Vec2());
@@ -421,7 +421,7 @@ TEST(EffectGraphEditOpsTest, SearcherOffersPerAttributeEntries) {
 	ASSERT_NE(draw, nullptr);
 	EXPECT_EQ(draw->outputs[0].type, GraphPortType::Float3);
 	Ops::BlockChoice block;
-	block.def = str(GRAPH_EFFECT_SET_ATTRIBUTE);
+	block.def = str(GraphEffectSetAttribute);
 	EXPECT_EQ(Ops::AddOperator(document, block, Vec2()), 0u);
 }
 
@@ -439,7 +439,7 @@ TEST(EffectGraphEditOpsTest, TemplatesAreGraphsEffectTargetCompiles) {
 		GraphDocument document;
 		str error;
 		ASSERT_TRUE(GraphDocumentOps::Read(Ops::TemplateDocument(index), document, error)) << error;
-		EXPECT_EQ(document.type, GRAPH_EFFECT_DOCUMENT_TYPE);
+		EXPECT_EQ(document.type, GraphEffectDocumentType);
 		GraphEffect effect;
 		Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 		ASSERT_TRUE(GraphEffectTarget::Compile(document, "New Effect.sleffect", effect, diagnostics)) << Ops::TemplateLabel(index) << ' ' << (diagnostics.empty() ? str() : diagnostics[0].message);
@@ -483,7 +483,7 @@ TEST(EffectGraphEditOpsTest, TemplatesAreGraphsEffectTargetCompiles) {
 		GraphDefinitions definitions;
 		const GraphContext* shown = nullptr;
 		for (const GraphContext& context : document.contexts) {
-			shown = context.node.def == GRAPH_EFFECT_OUTPUT ? &context : shown;
+			shown = context.node.def == GraphEffectOutputDefinition ? &context : shown;
 		}
 		ASSERT_NE(shown, nullptr);
 		ASSERT_EQ(shown->blocks.size(), 3u) << name;
@@ -530,7 +530,7 @@ TEST(EffectGraphEditOpsTest, SimpleTrailIsSpiralStrip) {
 	EXPECT_EQ(names(system.update), "");
 	u32 output = 0;
 	for (const GraphContext& context : document.contexts) {
-		output = context.node.def == GRAPH_EFFECT_OUTPUT_STRIP ? context.node.id : output;
+		output = context.node.def == GraphEffectOutputStrip ? context.node.id : output;
 	}
 	ASSERT_NE(output, 0u);
 	EXPECT_EQ(names(output), "Orient: Face Camera Position, Multiply Size Over Life, Multiply Color Over Life");
@@ -579,7 +579,7 @@ TEST(EffectGraphEditOpsTest, HeadAndTrailDrawsStripsFromEvents) {
 										"Set Lifetime from Source, Set Age from Source");
 	u32 output = 0;
 	for (const GraphContext& context : document.contexts) {
-		output = context.node.def == GRAPH_EFFECT_OUTPUT_STRIP ? context.node.id : output;
+		output = context.node.def == GraphEffectOutputStrip ? context.node.id : output;
 	}
 	ASSERT_NE(output, 0u);
 	EXPECT_EQ(names(output), "Orient: Face Camera Position, Multiply Color Over Life, Multiply Size Custom");
@@ -593,9 +593,9 @@ TEST(EffectGraphEditOpsTest, HeadAndTrailDrawsStripsFromEvents) {
 	};
 	const auto attribute = [&](const GraphNode* node) {
 		str read;
-		if (node && node->def == GRAPH_EFFECT_GET_ATTRIBUTE) {
+		if (node && node->def == GraphEffectGetAttribute) {
 			for (const GraphSetting& setting : node->settings) {
-				read = setting.key == GRAPH_EFFECT_ATTRIBUTE_SETTING ? setting.value : read;
+				read = setting.key == GraphEffectAttributeSetting ? setting.value : read;
 			}
 		}
 		return read;
@@ -639,7 +639,7 @@ namespace {
 
 	u32 InitializeOf(const GraphDocument& document) {
 		for (const GraphContext& context : document.contexts) {
-			if (context.node.def == GRAPH_EFFECT_INITIALIZE) {
+			if (context.node.def == GraphEffectInitialize) {
 				return context.node.id;
 			}
 		}
@@ -656,15 +656,15 @@ TEST(EffectGraphEditOpsTest, RecordingFillsUncomputedBox) {
 	ASSERT_NE(initialize, 0u);
 	EXPECT_EQ(Ops::BoundsExclusionOf(document, initialize), Ops::BoundsExclusion::None);
 	EXPECT_TRUE(Ops::BoundsExclusionLabel(Ops::BoundsExclusion::None).empty());
-	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GRAPH_EFFECT_BOUNDS_SETTING_MODE, "\"Manual\""));
+	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GraphEffectBoundsSettingMode, "\"Manual\""));
 	EXPECT_EQ(Ops::BoundsExclusionOf(document, initialize), Ops::BoundsExclusion::Manual);
 	EXPECT_EQ(Ops::BoundsExclusionLabel(Ops::BoundsExclusion::Manual), "(manual bounds)");
-	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GRAPH_EFFECT_BOUNDS_SETTING_MODE, "\"Automatic\""));
+	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GraphEffectBoundsSettingMode, "\"Automatic\""));
 	EXPECT_EQ(Ops::BoundsExclusionOf(document, initialize), Ops::BoundsExclusion::Automatic);
 	EXPECT_EQ(Ops::BoundsExclusionLabel(Ops::BoundsExclusion::Automatic), "(automatic bounds)");
-	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GRAPH_EFFECT_BOUNDS_SETTING_MODE, "\"Recorded\""));
+	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GraphEffectBoundsSettingMode, "\"Recorded\""));
 	const u32 vector = NodeShaderEditOps::AddNode(document, "Input/Vector3", Vec2(-400.0f, 200.0f));
-	ASSERT_TRUE(GraphDocumentOps::Connect(document, vector, "Out", initialize, GRAPH_EFFECT_BOUNDS_SIZE));
+	ASSERT_TRUE(GraphDocumentOps::Connect(document, vector, "Out", initialize, GraphEffectBoundsSize));
 	EXPECT_EQ(Ops::BoundsExclusionOf(document, initialize), Ops::BoundsExclusion::GraphComputed);
 	EXPECT_EQ(Ops::BoundsExclusionLabel(Ops::BoundsExclusion::GraphComputed), "(bounds from the graph)");
 
@@ -690,11 +690,11 @@ TEST(EffectGraphEditOpsTest, RecordedBoxUsesCenterSpace) {
 		ASSERT_TRUE(GraphEffectTarget::Compile(document, "New Effect.sleffect", effect, diagnostics));
 		const bool world = effect.systems[0].world;
 		if (worldCenter) {
-			ASSERT_TRUE(GraphDocumentOps::SetInputSpace(document, initialize, GRAPH_EFFECT_BOUNDS_CENTER, GRAPH_SPACE_WORLD));
+			ASSERT_TRUE(GraphDocumentOps::SetInputSpace(document, initialize, GraphEffectBoundsCenter, GraphSpaceWorld));
 		}
 		ASSERT_TRUE(Ops::ApplyRecordedBounds(document, initialize, box, world, moved));
-		EXPECT_EQ(Stored(document, initialize, GRAPH_EFFECT_BOUNDS_CENTER), center);
-		EXPECT_EQ(Stored(document, initialize, GRAPH_EFFECT_BOUNDS_SIZE), Vec3(4.0f, 4.0f, 4.0f));
+		EXPECT_EQ(Stored(document, initialize, GraphEffectBoundsCenter), center);
+		EXPECT_EQ(Stored(document, initialize, GraphEffectBoundsSize), Vec3(4.0f, 4.0f, 4.0f));
 	};
 	applied(1, false, Vec3(1.0f, 2.0f, 0.0f));
 	applied(1, true, Vec3(11.0f, 2.0f, 0.0f));
@@ -707,7 +707,7 @@ TEST(EffectGraphEditOpsTest, RecordedBoxUsesCenterSpace) {
 	const u32 initialize = InitializeOf(document);
 	const str before = GraphDocumentOps::Write(document);
 	EXPECT_FALSE(Ops::ApplyRecordedBounds(document, initialize, AABB::Empty(), false, moved));
-	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GRAPH_EFFECT_BOUNDS_SETTING_MODE, "\"Manual\""));
+	ASSERT_TRUE(NodeShaderEditOps::SetNodeSetting(document, initialize, GraphEffectBoundsSettingMode, "\"Manual\""));
 	const str manual = GraphDocumentOps::Write(document);
 	EXPECT_FALSE(Ops::ApplyRecordedBounds(document, initialize, box, false, moved));
 	EXPECT_EQ(GraphDocumentOps::Write(document), manual);

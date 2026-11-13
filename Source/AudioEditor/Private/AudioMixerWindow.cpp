@@ -38,48 +38,48 @@ namespace Shalltear::AudioEditorImpl {
 
 	namespace {
 
-		constexpr StringHash GROUP_PAYLOAD = StringHash("AudioMixerGroup");
+		constexpr StringHash GroupPayload = StringHash("AudioMixerGroup");
 
-		constexpr StringHash STRIP_CLASS = StringHash("ed-mixer-strip");
-		constexpr StringHash FADER_CLASS = StringHash("ed-mixer-fader");
-		constexpr StringHash SOLO_CLASS = StringHash("ed-mixer-solo");
-		constexpr StringHash MUTE_CLASS = StringHash("ed-mixer-mute");
-		constexpr StringHash BYPASS_CLASS = StringHash("ed-mixer-bypass");
-		constexpr StringHash SLOT_CLASS = StringHash("ed-mixer-slot");
-		constexpr StringHash ADD_SLOT_CLASS = StringHash("ed-mixer-add");
-		constexpr StringHash CHAIN_CLASS = StringHash("ed-mixer-chain");
-		constexpr StringHash UNIT_CLASS = StringHash("ed-mixer-unit");
-		constexpr StringHash UNIT_HEADER_CLASS = StringHash("ed-mixer-unit-header");
+		constexpr StringHash StripClass = StringHash("ed-mixer-strip");
+		constexpr StringHash FaderClass = StringHash("ed-mixer-fader");
+		constexpr StringHash SoloClass = StringHash("ed-mixer-solo");
+		constexpr StringHash MuteClass = StringHash("ed-mixer-mute");
+		constexpr StringHash BypassClass = StringHash("ed-mixer-bypass");
+		constexpr StringHash SlotClass = StringHash("ed-mixer-slot");
+		constexpr StringHash AddSlotClass = StringHash("ed-mixer-add");
+		constexpr StringHash ChainClass = StringHash("ed-mixer-chain");
+		constexpr StringHash UnitClass = StringHash("ed-mixer-unit");
+		constexpr StringHash UnitHeaderClass = StringHash("ed-mixer-unit-header");
 
-		constexpr StringHash UNIT_PAYLOAD = StringHash("AudioMixerUnit");
+		constexpr StringHash UnitPayload = StringHash("AudioMixerUnit");
 
-		constexpr StringHash SNAPSHOT_PAYLOAD = StringHash("AudioMixerSnapshot");
+		constexpr StringHash SnapshotPayload = StringHash("AudioMixerSnapshot");
 
-		constexpr StringHash EDIT_IN_PLAY_CLASS = StringHash("ed-mixer-edit-in-play");
-		constexpr StringHash SNAPSHOT_ADD_CLASS = StringHash("ed-mixer-snapshot-add");
-		constexpr StringHash GROUP_ADD_CLASS = StringHash("ed-mixer-group-add");
-		constexpr StringHash EXPOSED_CLASS = StringHash("ed-mixer-exposed");
-		constexpr StringHash EXPOSED_ROW_CLASS = StringHash("ed-mixer-exposed-row");
-		constexpr StringHash VIEW_ADD_CLASS = StringHash("ed-mixer-view-add");
-		constexpr StringHash EYE_CLASS = StringHash("ed-mixer-eye");
-		constexpr StringHash COLOR_TAG_CLASS = StringHash("ed-mixer-color");
+		constexpr StringHash EditInPlayClass = StringHash("ed-mixer-edit-in-play");
+		constexpr StringHash SnapshotAddClass = StringHash("ed-mixer-snapshot-add");
+		constexpr StringHash GroupAddClass = StringHash("ed-mixer-group-add");
+		constexpr StringHash ExposedClass = StringHash("ed-mixer-exposed");
+		constexpr StringHash ExposedRowClass = StringHash("ed-mixer-exposed-row");
+		constexpr StringHash ViewAddClass = StringHash("ed-mixer-view-add");
+		constexpr StringHash EyeClass = StringHash("ed-mixer-eye");
+		constexpr StringHash ColorTagClass = StringHash("ed-mixer-color");
 
-		constexpr StringHash VIEW_PAYLOAD = StringHash("AudioMixerView");
+		constexpr StringHash ViewPayload = StringHash("AudioMixerView");
 
-		constexpr StringHash MIXER_ADD_CLASS = StringHash("ed-mixer-mixer-add");
-		constexpr StringHash MIXER_PAYLOAD = StringHash("AudioMixerAsset");
+		constexpr StringHash MixerAddClass = StringHash("ed-mixer-mixer-add");
+		constexpr StringHash MixerPayload = StringHash("AudioMixerAsset");
 
-		constexpr std::string_view COLOR_LABELS[] = {"No Color", "Yellow", "Orange", "Red", "Magenta", "Violet", "Blue", "Cyan", "Green"};
+		constexpr std::string_view ColorLabels[] = {"No Color", "Yellow", "Orange", "Red", "Magenta", "Violet", "Blue", "Cyan", "Green"};
 		constexpr ColorToken COLOR_TOKENS[] = {ColorToken::AudioGroupYellow, ColorToken::AudioGroupOrange, ColorToken::AudioGroupRed,
 											   ColorToken::AudioGroupMagenta, ColorToken::AudioGroupViolet, ColorToken::AudioGroupBlue,
 											   ColorToken::AudioGroupCyan, ColorToken::AudioGroupGreen};
 
-		constexpr std::string_view EXPOSED_MARK = " \xE2\x86\x92";
+		constexpr std::string_view ExposedMark = " \xE2\x86\x92";
 
-		constexpr std::string_view TRANSITION_LABELS[] = {"Linear Snapshot Transition", "Smoothstep Snapshot Transition",
-														  "Squared Snapshot Transition", "SquareRoot Snapshot Transition",
-														  "BrickwallStart Snapshot Transition", "BrickwallEnd Snapshot Transition",
-														  "Attenuation Snapshot Transition"};
+		constexpr std::string_view TransitionLabels[] = {"Linear Snapshot Transition", "Smoothstep Snapshot Transition",
+														 "Squared Snapshot Transition", "SquareRoot Snapshot Transition",
+														 "BrickwallStart Snapshot Transition", "BrickwallEnd Snapshot Transition",
+														 "Attenuation Snapshot Transition"};
 
 		struct SharedState {
 			struct PerMixer {
@@ -170,7 +170,7 @@ namespace Shalltear::AudioEditorImpl {
 
 		Vector<Guid> SplitMixers(const UI::DragPayload& payload) {
 			Vector<Guid> out{GetMemoryResource(MemTag::Editor)};
-			const str* joined = payload.type == MIXER_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+			const str* joined = payload.type == MixerPayload ? payload.data.TryGet<str>() : nullptr;
 			for (size_t from = 0; joined && from < joined->size();) {
 				const size_t bar = joined->find('|', from);
 				if (bar == str::npos) {
@@ -669,7 +669,7 @@ namespace Shalltear::AudioEditorImpl {
 		toggleStyle.borderRadius = UI::Radii::All(2.0f);
 		toggleStyle.display = UI::Display::None;
 		_editInPlay = AddBox(context, bar, toggleStyle);
-		context.AddClass(_editInPlay, EDIT_IN_PLAY_CLASS);
+		context.AddClass(_editInPlay, EditInPlayClass);
 		context.AddClass(_editInPlay, EditorTheme::Class::Clickable);
 		AddText(context, _editInPlay, "Edit in Play Mode", ColorToken::Text);
 		context.SetTooltip(_editInPlay, "Edit in play mode, keeping the changes. Note when editing is disabled, live values are shown.");
@@ -682,7 +682,7 @@ namespace Shalltear::AudioEditorImpl {
 		exposedStyle.display = UI::Display::Flex;
 		exposedStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(ColorToken::SectionFill));
 		_exposed = AddBox(context, bar, exposedStyle);
-		context.AddClass(_exposed, EXPOSED_CLASS);
+		context.AddClass(_exposed, ExposedClass);
 		context.AddClass(_exposed, EditorTheme::Class::Clickable);
 		AddText(context, _exposed, "Exposed Parameters (0)", ColorToken::Text);
 		context.SetTooltip(_exposed, "Audio Mixer parameters can be exposed to scripting. Select an Audio Mixer Group, right click one of its "
@@ -770,11 +770,11 @@ namespace Shalltear::AudioEditorImpl {
 			_mixerShape = 0;
 		};
 		_mixerAdd = UI::Widgets::Button(context, mixerHead, addMixer);
-		context.AddClass(_mixerAdd, MIXER_ADD_CLASS);
+		context.AddClass(_mixerAdd, MixerAddClass);
 		context.SetTooltip(_mixerAdd, "Add mixer asset. The asset will be saved in the same folder as the current selected mixer (or in the Assets folder, if none "
 									  "selected).");
 		UI::ElementHandle mixerHost = AddBox(context, mixerColumn, listStyle);
-		context.Events(mixerHost).onDragOver = [](const UI::DragPayload& payload) { return payload.type == MIXER_PAYLOAD && !IsPlaying(); };
+		context.Events(mixerHost).onDragOver = [](const UI::DragPayload& payload) { return payload.type == MixerPayload && !IsPlaying(); };
 		context.Events(mixerHost).onDrop = [this](const UI::DragPayload& payload, Vec2) {
 			const Vector<Guid> dragged = SplitMixers(payload);
 			Route(dragged, Guid{}, {});
@@ -816,7 +816,7 @@ namespace Shalltear::AudioEditorImpl {
 		addSnapshot.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
 		addSnapshot.onClick = [this]() { AddSnapshot(); };
 		_snapshotAdd = UI::Widgets::Button(context, snapshotHead, addSnapshot);
-		context.AddClass(_snapshotAdd, SNAPSHOT_ADD_CLASS);
+		context.AddClass(_snapshotAdd, SnapshotAddClass);
 		context.SetTooltip(_snapshotAdd, "Add a snapshot copied from the selected one");
 		UI::ElementHandle snapshotHost = AddBox(context, snapshotColumn, listStyle);
 		ListViewDesc snapshotList;
@@ -878,7 +878,7 @@ namespace Shalltear::AudioEditorImpl {
 			}
 		};
 		_add = UI::Widgets::Button(context, head, add);
-		context.AddClass(_add, GROUP_ADD_CLASS);
+		context.AddClass(_add, GroupAddClass);
 		context.SetTooltip(_add, "Add a child group to the selected group");
 
 		UI::ElementHandle listHost = AddBox(context, column, listStyle);
@@ -904,7 +904,7 @@ namespace Shalltear::AudioEditorImpl {
 		addView.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
 		addView.onClick = [this]() { DuplicateView(CurrentView(), true); };
 		_viewAdd = UI::Widgets::Button(context, viewHead, addView);
-		context.AddClass(_viewAdd, VIEW_ADD_CLASS);
+		context.AddClass(_viewAdd, ViewAddClass);
 		context.SetTooltip(_viewAdd, "Add a view copied from the selected one");
 		UI::ElementHandle viewHost = AddBox(context, viewColumn, listStyle);
 		ListViewDesc viewList;
@@ -955,7 +955,7 @@ namespace Shalltear::AudioEditorImpl {
 		chainStyle.overflow = UI::Overflow::Scroll;
 		chainStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(ColorToken::SectionFill));
 		_chain = AddBox(context, right.second, chainStyle);
-		context.AddClass(_chain, CHAIN_CLASS);
+		context.AddClass(_chain, ChainClass);
 
 		_needsRebuild = true;
 		_chainShape = 0;
@@ -1144,10 +1144,10 @@ namespace Shalltear::AudioEditorImpl {
 
 			EditorInsertStripDesc strip;
 			strip.onDragOver = [this](const UI::DragPayload& payload) {
-				return payload.type == SNAPSHOT_PAYLOAD && payload.data.TryGet<str>() && Mixer() && EditingValues();
+				return payload.type == SnapshotPayload && payload.data.TryGet<str>() && Mixer() && EditingValues();
 			};
 			strip.onDrop = [this, index](const UI::DragPayload& payload, Vec2) {
-				const str* dragged = payload.type == SNAPSHOT_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+				const str* dragged = payload.type == SnapshotPayload ? payload.data.TryGet<str>() : nullptr;
 				AudioMixer* live = Mixer();
 				if (dragged && live && EditingValues() && Ops::MoveSnapshot(*live, Ops::FindSnapshot(*live, *dragged), index)) {
 					Edited(false);
@@ -1210,7 +1210,7 @@ namespace Shalltear::AudioEditorImpl {
 					return;
 				}
 				UI::DragPayload payload;
-				payload.type = SNAPSHOT_PAYLOAD;
+				payload.type = SnapshotPayload;
 				payload.data = Variant(id);
 				const AudioMixer* live = Mixer();
 				const u32 at = live ? Ops::FindSnapshot(*live, id) : 0u;
@@ -1222,11 +1222,11 @@ namespace Shalltear::AudioEditorImpl {
 		}
 		EditorInsertStripDesc end;
 		end.onDragOver = [this](const UI::DragPayload& payload) {
-			return payload.type == SNAPSHOT_PAYLOAD && payload.data.TryGet<str>() && Mixer() && EditingValues();
+			return payload.type == SnapshotPayload && payload.data.TryGet<str>() && Mixer() && EditingValues();
 		};
 		const u32 count = static_cast<u32>(mixer->snapshots.size());
 		end.onDrop = [this, count](const UI::DragPayload& payload, Vec2) {
-			const str* dragged = payload.type == SNAPSHOT_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+			const str* dragged = payload.type == SnapshotPayload ? payload.data.TryGet<str>() : nullptr;
 			AudioMixer* live = Mixer();
 			if (dragged && live && EditingValues() && Ops::MoveSnapshot(*live, Ops::FindSnapshot(*live, *dragged), count)) {
 				Edited(false);
@@ -1362,9 +1362,9 @@ namespace Shalltear::AudioEditorImpl {
 		const u32 count = Ops::CountViews(*mixer);
 		auto gap = [this](u32 place) {
 			EditorInsertStripDesc strip;
-			strip.onDragOver = [this](const UI::DragPayload& payload) { return payload.type == VIEW_PAYLOAD && payload.data.TryGet<u32>() && Mixer(); };
+			strip.onDragOver = [this](const UI::DragPayload& payload) { return payload.type == ViewPayload && payload.data.TryGet<u32>() && Mixer(); };
 			strip.onDrop = [this, place](const UI::DragPayload& payload, Vec2) {
-				const u32* dragged = payload.type == VIEW_PAYLOAD ? payload.data.TryGet<u32>() : nullptr;
+				const u32* dragged = payload.type == ViewPayload ? payload.data.TryGet<u32>() : nullptr;
 				AudioMixer* live = Mixer();
 				if (!dragged || !live || !Ops::MoveView(*live, *dragged, place)) {
 					return;
@@ -1417,7 +1417,7 @@ namespace Shalltear::AudioEditorImpl {
 					return;
 				}
 				UI::DragPayload payload;
-				payload.type = VIEW_PAYLOAD;
+				payload.type = ViewPayload;
 				payload.data = Variant(view);
 				payload.display = name;
 				UISystem::BeginDragPayload(payload);
@@ -1517,9 +1517,9 @@ namespace Shalltear::AudioEditorImpl {
 		const AudioMixer* mixer = Mixer();
 		const Vector<str> groups = Affected(group);
 		const i32 one = mixer && groups.size() == 1 ? AudioImpl::FindGroup(*mixer, groups.front()) : -1;
-		for (u32 color = 0; color < std::size(COLOR_LABELS); ++color) {
+		for (u32 color = 0; color < std::size(ColorLabels); ++color) {
 			UI::Widgets::MenuItem item;
-			item.label = str(COLOR_LABELS[color]);
+			item.label = str(ColorLabels[color]);
 			item.separatorBefore = separate && color == 0;
 			item.checked = one >= 0 && static_cast<u32>(mixer->groups[static_cast<size_t>(one)].color) == color;
 			item.onSelect = [this, groups, color]() {
@@ -1710,7 +1710,7 @@ namespace Shalltear::AudioEditorImpl {
 					moving.push_back(guid);
 				}
 				UI::DragPayload payload;
-				payload.type = MIXER_PAYLOAD;
+				payload.type = MixerPayload;
 				payload.data = Variant(JoinMixers(moving));
 				payload.display = moving.size() > 1 ? std::format("{} AudioMixers", moving.size()) : name;
 				UISystem::BeginDragPayload(payload);
@@ -2027,12 +2027,12 @@ namespace Shalltear::AudioEditorImpl {
 				const str parent = group.parent;
 				EditorInsertStripDesc strip;
 				strip.onDragOver = [this, parent](const UI::DragPayload& payload) {
-					const str* dragged = payload.type == GROUP_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+					const str* dragged = payload.type == GroupPayload ? payload.data.TryGet<str>() : nullptr;
 					const AudioMixer* live = Mixer();
 					return dragged && live && !IsPlaying() && Ops::CanMoveGroup(*live, *dragged, parent);
 				};
 				strip.onDrop = [this, parent, slot](const UI::DragPayload& payload, Vec2) {
-					const str* dragged = payload.type == GROUP_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+					const str* dragged = payload.type == GroupPayload ? payload.data.TryGet<str>() : nullptr;
 					AudioMixer* live = Mixer();
 					if (!dragged || !live || IsPlaying()) {
 						return;
@@ -2120,7 +2120,7 @@ namespace Shalltear::AudioEditorImpl {
 					tagStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(COLOR_TOKENS[color - 1]));
 				}
 				UI::ElementHandle tag = AddBox(c, parts.row, tagStyle);
-				c.AddClass(tag, COLOR_TAG_CLASS);
+				c.AddClass(tag, ColorTagClass);
 				c.SetHoverable(tag, false);
 				UI::ElementHandle eye = c.CreateElement();
 				c.AppendChild(parts.row, eye);
@@ -2130,7 +2130,7 @@ namespace Shalltear::AudioEditorImpl {
 				c.SetStyle(eye, eyeStyle);
 				EditorIcons::SetGlyphOrText(c, eye, visible ? EditorIcons::Glyph::Eye : EditorIcons::Glyph::EyeSlash, visible ? "*" : "-",
 											EditorTheme::GetColor(ColorToken::TextDim), EditorIcons::GutterSizePx(), EditorTheme::GetMetric(MetricToken::FontRow));
-				c.AddClass(eye, EYE_CLASS);
+				c.AddClass(eye, EyeClass);
 				c.AddClass(eye, EditorTheme::Class::Clickable);
 				c.SetTooltip(eye, visible ? "Hide this group in the view. Right-click for its color" : "Show this group in the view. Right-click for its color");
 				c.Events(eye).onClick = [this, id]() { ToggleVisible(id); };
@@ -2156,7 +2156,7 @@ namespace Shalltear::AudioEditorImpl {
 					return;
 				}
 				UI::DragPayload payload;
-				payload.type = GROUP_PAYLOAD;
+				payload.type = GroupPayload;
 				payload.data = Variant(id);
 				const AudioMixer* live = Mixer();
 				const i32 at = live ? AudioImpl::FindGroup(*live, id) : -1;
@@ -2164,12 +2164,12 @@ namespace Shalltear::AudioEditorImpl {
 				UISystem::BeginDragPayload(payload);
 			};
 			row.onDragOver = [this, id](const UI::DragPayload& payload) {
-				const str* dragged = payload.type == GROUP_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+				const str* dragged = payload.type == GroupPayload ? payload.data.TryGet<str>() : nullptr;
 				const AudioMixer* live = Mixer();
 				return dragged && live && !IsPlaying() && Ops::CanMoveGroup(*live, *dragged, id);
 			};
 			row.onDrop = [this, id](const UI::DragPayload& payload, Vec2) {
-				const str* dragged = payload.type == GROUP_PAYLOAD ? payload.data.TryGet<str>() : nullptr;
+				const str* dragged = payload.type == GroupPayload ? payload.data.TryGet<str>() : nullptr;
 				AudioMixer* live = Mixer();
 				if (dragged && live && !IsPlaying() && Ops::MoveGroup(*live, *dragged, id, ~0u)) {
 					Edited(true);
@@ -2337,7 +2337,7 @@ namespace Shalltear::AudioEditorImpl {
 		stripStyle.margin = {0.0f, 0.0f, 4.0f, 0.0f};
 		stripStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(ColorToken::SectionFill));
 		UI::ElementHandle root = AddBox(context, _strips, stripStyle);
-		context.AddClass(root, STRIP_CLASS);
+		context.AddClass(root, StripClass);
 		auto selects = [this, id, &context](UI::ElementHandle element) {
 			context.Events(element).onClick = [this, id]() {
 				UI::Context* c = GetPanelContext();
@@ -2370,7 +2370,7 @@ namespace Shalltear::AudioEditorImpl {
 			tagStyle.height = UI::Length::Pixel(2.0f);
 			tagStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(COLOR_TOKENS[static_cast<u32>(group.color) - 1]));
 			UI::ElementHandle tag = AddBox(context, strip.header, tagStyle);
-			context.AddClass(tag, COLOR_TAG_CLASS);
+			context.AddClass(tag, ColorTagClass);
 			context.SetHoverable(tag, false);
 		}
 
@@ -2411,7 +2411,7 @@ namespace Shalltear::AudioEditorImpl {
 		faderStyle.width = UI::Length::Pixel(FADER_WIDTH);
 		faderStyle.flexShrink = 0.0f;
 		strip.fader = AddBox(context, band, faderStyle);
-		context.AddClass(strip.fader, FADER_CLASS);
+		context.AddClass(strip.fader, FaderClass);
 		context.SetTooltip(strip.fader, "Attenuation of this group, in decibels");
 		context.Events(strip.fader).customDraw = [this, id](UI::Context& c, UI::ElementHandle element, UI::PaintScope& paint) {
 			PaintFader(c, element, paint, id);
@@ -2473,9 +2473,9 @@ namespace Shalltear::AudioEditorImpl {
 		strip.solo = toggle("S", "Adds this group to set of soloed groups");
 		strip.mute = toggle("M", "Mutes this group");
 		strip.bypass = toggle("B", "Bypasses the effects on this group");
-		context.AddClass(strip.solo, SOLO_CLASS);
-		context.AddClass(strip.mute, MUTE_CLASS);
-		context.AddClass(strip.bypass, BYPASS_CLASS);
+		context.AddClass(strip.solo, SoloClass);
+		context.AddClass(strip.mute, MuteClass);
+		context.AddClass(strip.bypass, BypassClass);
 		auto flip = [this, id](bool AudioMixer::Group::* field) {
 			AudioMixer* mixer = Mixer();
 			const i32 at = mixer ? AudioImpl::FindGroup(*mixer, id) : -1;
@@ -2524,7 +2524,7 @@ namespace Shalltear::AudioEditorImpl {
 																						 : ColorToken::HeaderFill));
 			UI::ElementHandle slot = AddBox(context, units, slotStyle);
 			selects(slot);
-			context.AddClass(slot, SLOT_CLASS);
+			context.AddClass(slot, SlotClass);
 			context.Events(slot).onRightClick = [this, id, unit]() {
 				if (UI::Context* c = GetPanelContext()) {
 					OpenUnitMenu(*c, id, unit, true);
@@ -2588,7 +2588,7 @@ namespace Shalltear::AudioEditorImpl {
 		addStyle.borderRadius = UI::Radii::All(2.0f);
 		addStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(ColorToken::HeaderFill));
 		UI::ElementHandle add = AddBox(context, units, addStyle);
-		context.AddClass(add, ADD_SLOT_CLASS);
+		context.AddClass(add, AddSlotClass);
 		context.AddClass(add, EditorTheme::Class::Clickable);
 		AddText(context, add, "Add...", ColorToken::TextDim);
 		const u32 end = static_cast<u32>(group.units.size());
@@ -2937,12 +2937,12 @@ namespace Shalltear::AudioEditorImpl {
 		blockStyle.flexShrink = 0.0f;
 		blockStyle.margin = {0.0f, 1.0f, 0.0f, 1.0f};
 		UI::ElementHandle block = AddBox(context, _chain, blockStyle);
-		context.AddClass(block, UNIT_CLASS);
+		context.AddClass(block, UnitClass);
 		context.Events(block).onDragOver = [this, id](const UI::DragPayload& payload) {
-			return payload.type == UNIT_PAYLOAD && payload.data.TryGet<u32>() && _chainGroup == id && EditingValues();
+			return payload.type == UnitPayload && payload.data.TryGet<u32>() && _chainGroup == id && EditingValues();
 		};
 		context.Events(block).onDrop = [this, id, index, block](const UI::DragPayload& payload, Vec2 point) {
-			const u32* from = payload.type == UNIT_PAYLOAD ? payload.data.TryGet<u32>() : nullptr;
+			const u32* from = payload.type == UnitPayload ? payload.data.TryGet<u32>() : nullptr;
 			UI::Context* c = GetPanelContext();
 			if (!from || !c || !c->IsAlive(block)) {
 				return;
@@ -2959,7 +2959,7 @@ namespace Shalltear::AudioEditorImpl {
 		headerStyle.padding = {8.0f, 2.0f, 4.0f, 2.0f};
 		headerStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(ColorToken::HeaderFill));
 		UI::ElementHandle header = AddBox(context, block, headerStyle);
-		context.AddClass(header, UNIT_HEADER_CLASS);
+		context.AddClass(header, UnitHeaderClass);
 		UI::Style codeStyle;
 		codeStyle.width = UI::Length::Pixel(6.0f);
 		codeStyle.height = UI::Length::Pixel(6.0f);
@@ -2990,7 +2990,7 @@ namespace Shalltear::AudioEditorImpl {
 				return;
 			}
 			UI::DragPayload payload;
-			payload.type = UNIT_PAYLOAD;
+			payload.type = UnitPayload;
 			payload.data = Variant(index);
 			payload.display = label;
 			UISystem::BeginDragPayload(payload);
@@ -3094,7 +3094,7 @@ namespace Shalltear::AudioEditorImpl {
 		rowStyle.padding = {8.0f, 2.0f, 8.0f, 2.0f};
 		UI::ElementHandle row = AddBox(context, parent, rowStyle);
 		const bool exposed = Ops::FindExposed(*mixer, ref) >= 0;
-		UI::ElementHandle name = AddText(context, row, exposed ? str(label) + str(EXPOSED_MARK) : str(label), ColorToken::Text);
+		UI::ElementHandle name = AddText(context, row, exposed ? str(label) + str(ExposedMark) : str(label), ColorToken::Text);
 		UI::Style nameStyle = context.GetStyle(name);
 		nameStyle.width = UI::Length::Pixel(LABEL_WIDTH);
 		nameStyle.flexShrink = 0.0f;
@@ -3442,7 +3442,7 @@ namespace Shalltear::AudioEditorImpl {
 		const AudioMixerTransitionType current = Ops::GetTransition(*mixer, Target(), ref);
 		for (u8 type = 0; type <= static_cast<u8>(AudioMixerTransitionType::Attenuation); ++type) {
 			UI::Widgets::MenuItem item;
-			item.label = str(TRANSITION_LABELS[type]);
+			item.label = str(TransitionLabels[type]);
 			item.checked = static_cast<u8>(current) == type;
 			item.separatorBefore = type == 0;
 			item.onSelect = [this, ref, type]() {
@@ -3517,7 +3517,7 @@ namespace Shalltear::AudioEditorImpl {
 			rowStyle.alignItems = UI::Align::Center;
 			rowStyle.padding = {4.0f, 1.0f, 4.0f, 1.0f};
 			UI::ElementHandle row = AddBox(context, _exposedPopup, rowStyle);
-			context.AddClass(row, EXPOSED_ROW_CLASS);
+			context.AddClass(row, ExposedRowClass);
 			if (_renamingExposed == static_cast<i32>(index)) {
 				UI::Widgets::TextFieldDesc field;
 				field.text = exposed.name;

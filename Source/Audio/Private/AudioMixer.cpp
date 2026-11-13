@@ -21,12 +21,12 @@ namespace Shalltear {
 
 		namespace {
 
-			constexpr std::string_view UPDATE_MODE_NAMES[] = {"Normal", "UnscaledTime"};
-			constexpr std::string_view CLOCK_NAMES[] = {"Wall", "Gameplay"};
-			constexpr std::string_view UNIT_NAMES[] = {"Attenuation", "Send", "Effect", "Receive"};
-			constexpr std::string_view PARAMETER_NAMES[] = {"Volume", "Pitch", "SendLevel", "WetLevel", "EffectParameter"};
-			constexpr std::string_view TRANSITION_NAMES[] = {"Lerp", "Smoothstep", "Squared", "SquareRoot", "BrickwallStart", "BrickwallEnd", "Attenuation"};
-			constexpr std::string_view COLOR_NAMES[] = {"None", "Yellow", "Orange", "Red", "Magenta", "Violet", "Blue", "Cyan", "Green"};
+			constexpr std::string_view UpdateModeNames[] = {"Normal", "UnscaledTime"};
+			constexpr std::string_view ClockNames[] = {"Wall", "Gameplay"};
+			constexpr std::string_view UnitNames[] = {"Attenuation", "Send", "Effect", "Receive"};
+			constexpr std::string_view ParameterNames[] = {"Volume", "Pitch", "SendLevel", "WetLevel", "EffectParameter"};
+			constexpr std::string_view TransitionNames[] = {"Lerp", "Smoothstep", "Squared", "SquareRoot", "BrickwallStart", "BrickwallEnd", "Attenuation"};
+			constexpr std::string_view ColorNames[] = {"None", "Yellow", "Orange", "Red", "Magenta", "Violet", "Blue", "Cyan", "Green"};
 
 			template <typename Enum, size_t N>
 			bool ParseName(std::string_view text, const std::string_view (&names)[N], Enum& out) {
@@ -145,7 +145,7 @@ namespace Shalltear {
 				group = str(row["group"].AsString());
 				target = str(row["target"].AsString());
 				effectParameter = str(row["effectParameter"].AsString());
-				return ParseName(row["parameter"].AsString(), PARAMETER_NAMES, parameter);
+				return ParseName(row["parameter"].AsString(), ParameterNames, parameter);
 			}
 
 			[[gnu::noinline]] void WriteKey(CookWriter& out, std::string_view group, AudioMixerParameter parameter, std::string_view target,
@@ -173,7 +173,7 @@ namespace Shalltear {
 				if (parameter == AudioMixerParameter::EffectParameter) {
 					return std::format("'{}' of effect '{}' of '{}'", effectParameter, target, group);
 				}
-				return std::format("{} of '{}'{}", NameOf(parameter, PARAMETER_NAMES), group, target.empty() ? str() : std::format(" to '{}'", target));
+				return std::format("{} of '{}'{}", NameOf(parameter, ParameterNames), group, target.empty() ? str() : std::format(" to '{}'", target));
 			}
 
 		} // anonymous namespace
@@ -501,7 +501,7 @@ namespace Shalltear {
 		using namespace AudioImpl;
 
 		JSONValue root = JSONValue::MakeObject();
-		root.AddMember("updateMode", JSONValue::MakeString(NameOf(updateMode, UPDATE_MODE_NAMES)));
+		root.AddMember("updateMode", JSONValue::MakeString(NameOf(updateMode, UpdateModeNames)));
 
 		const str outputText = outputMixer.IsValid() ? outputMixer.ToString() : str();
 		JSONValue output = JSONValue::MakeObject();
@@ -516,18 +516,18 @@ namespace Shalltear {
 			row.AddMember("id", JSONValue::MakeString(group.id));
 			row.AddMember("name", JSONValue::MakeString(group.name));
 			row.AddMember("parent", JSONValue::MakeString(group.parent));
-			row.AddMember("clock", JSONValue::MakeString(NameOf(group.clock, CLOCK_NAMES)));
+			row.AddMember("clock", JSONValue::MakeString(NameOf(group.clock, ClockNames)));
 			row.AddMember("followTimeScale", JSONValue::MakeBool(group.followTimeScale));
 			row.AddMember("mute", JSONValue::MakeBool(group.mute));
 			row.AddMember("solo", JSONValue::MakeBool(group.solo));
 			row.AddMember("bypassEffects", JSONValue::MakeBool(group.bypassEffects));
 			if (group.color != AudioMixerGroupColor::None) {
-				row.AddMember("color", JSONValue::MakeString(NameOf(group.color, COLOR_NAMES)));
+				row.AddMember("color", JSONValue::MakeString(NameOf(group.color, ColorNames)));
 			}
 			JSONValue units = JSONValue::MakeArray();
 			for (const Unit& unit : group.units) {
 				JSONValue entry = JSONValue::MakeObject();
-				entry.AddMember("kind", JSONValue::MakeString(NameOf(unit.kind, UNIT_NAMES)));
+				entry.AddMember("kind", JSONValue::MakeString(NameOf(unit.kind, UnitNames)));
 				if (unit.kind == AudioMixerUnitKind::Send) {
 					entry.AddMember("target", JSONValue::MakeString(unit.target));
 					if (!unit.targetUnit.empty()) {
@@ -553,7 +553,7 @@ namespace Shalltear {
 		Vector<const Value*> effectValues{GetMemoryResource(MemTag::Asset)};
 		Vector<const TransitionOverride*> transitionRows{GetMemoryResource(MemTag::Asset)};
 		auto writeKey = [](JSONValue& entry, AudioMixerParameter parameter, std::string_view target, std::string_view effectParameter) {
-			entry.AddMember("parameter", JSONValue::MakeString(NameOf(parameter, PARAMETER_NAMES)));
+			entry.AddMember("parameter", JSONValue::MakeString(NameOf(parameter, ParameterNames)));
 			if (parameter != AudioMixerParameter::Volume && parameter != AudioMixerParameter::Pitch) {
 				entry.AddMember("target", JSONValue::MakeString(target));
 			}
@@ -591,7 +591,7 @@ namespace Shalltear {
 					JSONValue entry = JSONValue::MakeObject();
 					entry.AddMember("group", JSONValue::MakeString(transition->group));
 					writeKey(entry, transition->parameter, transition->target, transition->effectParameter);
-					entry.AddMember("type", JSONValue::MakeString(NameOf(transition->type, TRANSITION_NAMES)));
+					entry.AddMember("type", JSONValue::MakeString(NameOf(transition->type, TransitionNames)));
 					transitions.Push(std::move(entry));
 				}
 				row.AddMember("transitions", std::move(transitions));
@@ -652,7 +652,7 @@ namespace Shalltear {
 			}
 		};
 
-		if (root["updateMode"].IsString() && !ParseName(root["updateMode"].AsString(), UPDATE_MODE_NAMES, readMode)) {
+		if (root["updateMode"].IsString() && !ParseName(root["updateMode"].AsString(), UpdateModeNames, readMode)) {
 			refuse(std::format("updateMode '{}' is neither Normal nor UnscaledTime", root["updateMode"].AsString()));
 		}
 		const Guid readOutputMixer = Guid::FromString(root["output"]["mixer"].AsString());
@@ -669,21 +669,21 @@ namespace Shalltear {
 				group.name = group.id;
 			}
 			group.parent = str(row["parent"].AsString());
-			if (row["clock"].IsString() && !ParseName(row["clock"].AsString(), CLOCK_NAMES, group.clock)) {
+			if (row["clock"].IsString() && !ParseName(row["clock"].AsString(), ClockNames, group.clock)) {
 				refuse(std::format("group '{}' follows clock '{}' (neither Wall nor Gameplay)", group.id, row["clock"].AsString()));
 			}
 			group.followTimeScale = row["followTimeScale"].AsBool(false);
 			group.mute = row["mute"].AsBool(false);
 			group.solo = row["solo"].AsBool(false);
 			group.bypassEffects = row["bypassEffects"].AsBool(false);
-			if (row["color"].IsString() && !ParseName(row["color"].AsString(), COLOR_NAMES, group.color)) {
+			if (row["color"].IsString() && !ParseName(row["color"].AsString(), ColorNames, group.color)) {
 				refuse(std::format("group '{}' is colored '{}' (not one of the 9 colors)", group.id, row["color"].AsString()));
 			}
 			const JSONValue& units = row["units"];
 			for (size_t entry = 0; entry < units.Size(); ++entry) {
 				const JSONValue& unitRow = units.ChildAt(entry);
 				Unit unit;
-				if (!ParseName(unitRow["kind"].AsString(), UNIT_NAMES, unit.kind)) {
+				if (!ParseName(unitRow["kind"].AsString(), UnitNames, unit.kind)) {
 					refuse(std::format("group '{}' holds a unit of kind '{}'", group.id, unitRow["kind"].AsString()));
 				}
 				unit.target = str(unitRow["target"].AsString());
@@ -724,7 +724,7 @@ namespace Shalltear {
 				if (!ReadKey(transitionRow, transition.group, transition.parameter, transition.target, transition.effectParameter)) {
 					refuse(std::format("snapshot '{}' overrides the transition of parameter '{}'", snapshot.name, transitionRow["parameter"].AsString()));
 				}
-				if (!ParseName(transitionRow["type"].AsString(), TRANSITION_NAMES, transition.type)) {
+				if (!ParseName(transitionRow["type"].AsString(), TransitionNames, transition.type)) {
 					refuse(std::format("snapshot '{}' has unknown transition '{}'", snapshot.name, transitionRow["type"].AsString()));
 				}
 				snapshot.transitions.push_back(std::move(transition));

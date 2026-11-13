@@ -9,7 +9,7 @@ namespace Shalltear {
 
 			namespace {
 
-				constexpr AudioParameterDefinition SFX_REVERB[] = {
+				constexpr AudioParameterDefinition SfxReverbParameters[] = {
 					{"Dry Level", "mB", -10000.0f, 0.0f, 0.0f},
 					{"Room", "mB", -10000.0f, 0.0f, -10000.0f},
 					{"Room HF", "mB", -10000.0f, 0.0f, 0.0f},
@@ -27,21 +27,21 @@ namespace Shalltear {
 				};
 
 				enum : u32 {
-					DRY = 0,
-					ROOM,
-					ROOM_HF,
-					DECAY_TIME,
-					DECAY_HF_RATIO,
-					REFLECTIONS,
-					REFLECT_DELAY,
-					REVERB,
-					REVERB_DELAY,
-					DIFFUSION,
-					DENSITY,
-					HF_REFERENCE,
-					ROOM_LF,
-					LF_REFERENCE,
-					PARAMETERS
+					Dry = 0,
+					Room,
+					RoomHF,
+					DecayTime,
+					DecayHFRatio,
+					Reflections,
+					ReflectDelay,
+					Reverb,
+					ReverbDelay,
+					Diffusion,
+					Density,
+					HFReference,
+					RoomLF,
+					LFReference,
+					Parameters
 				};
 
 				constexpr u32 LINES = 16;
@@ -126,18 +126,18 @@ namespace Shalltear {
 					f32 dry = 0.0f;
 					f32 early = 0.0f;
 					f32 late = 0.0f;
-					f32 roomHf = 0.0f;
-					f32 roomLf = 0.0f;
+					f32 roomHF = 0.0f;
+					f32 roomLF = 0.0f;
 				};
 
 				class SfxReverb final : public BuiltinEffect {
 				public:
 					explicit SfxReverb(const AudioEffectContext& context) : BuiltinEffect(context) {
-						for (u32 index = 0; index < PARAMETERS; ++index) {
+						for (u32 index = 0; index < Parameters; ++index) {
 							_parameters[index].Jump(context.parameters[index]);
 						}
-						const f32 reach = SFX_REVERB[REVERB_DELAY].maximum > TAP_SECONDS[TAPS - 1] ? SFX_REVERB[REVERB_DELAY].maximum : TAP_SECONDS[TAPS - 1];
-						_predelay.Allocate(1, static_cast<u32>((SFX_REVERB[REFLECT_DELAY].maximum + reach) * _rate) + 4);
+						const f32 reach = SfxReverbParameters[ReverbDelay].maximum > TAP_SECONDS[TAPS - 1] ? SfxReverbParameters[ReverbDelay].maximum : TAP_SECONDS[TAPS - 1];
+						_predelay.Allocate(1, static_cast<u32>((SfxReverbParameters[ReflectDelay].maximum + reach) * _rate) + 4);
 						_lines.Allocate(LINES, static_cast<u32>(LINE_SECONDS[LINES - 1] * _rate) + 4);
 						_diffusers.Allocate(DIFFUSERS, static_cast<u32>(DIFFUSER_SECONDS[2] * _rate) + 4);
 						_memory = _predelay.GetLength();
@@ -184,21 +184,21 @@ namespace Shalltear {
 								room += block.data[static_cast<size_t>(channel) * block.stride + frame];
 							}
 							room *= inverseChannels;
-							const f32 below = _roomHf.Low(room);
-							room = below + (from.roomHf + (to.roomHf - from.roomHf) * at) * (room - below);
-							const f32 bass = _roomLf.Low(room);
-							room += (from.roomLf + (to.roomLf - from.roomLf) * at - 1.0f) * bass;
+							const f32 below = _roomHF.Low(room);
+							room = below + (from.roomHF + (to.roomHF - from.roomHF) * at) * (room - below);
+							const f32 bass = _roomLF.Low(room);
+							room += (from.roomLF + (to.roomLF - from.roomLF) * at - 1.0f) * bass;
 							_predelay.Write(0, room);
 							loudest = Abs(room) > loudest ? Abs(room) : loudest;
 
-							const f32 reflect = _parameters[REFLECT_DELAY].At(frame) * _rate;
+							const f32 reflect = _parameters[ReflectDelay].At(frame) * _rate;
 							f32 taps[TAPS];
 							for (u32 tap = 0; tap < TAPS; ++tap) {
 								taps[tap] = _tapGains[tap] * _predelay.Read(0, reflect + _tapFrames[tap]);
 							}
 
 							const f32 shortest = _lengthStart[0] + (_lengthEnd[0] - _lengthStart[0]) * at;
-							f32 late = _predelay.Read(0, reflect + _parameters[REVERB_DELAY].At(frame) * _rate - shortest);
+							f32 late = _predelay.Read(0, reflect + _parameters[ReverbDelay].At(frame) * _rate - shortest);
 							for (u32 diffuser = 0; diffuser < DIFFUSERS; ++diffuser) {
 								const f32 delayed = _diffusers.Read(diffuser, _diffuserFrames[diffuser]);
 								const f32 written = late - _diffusion * delayed;
@@ -239,7 +239,7 @@ namespace Shalltear {
 					}
 
 					void SetParameter(u32 index, f32 value) [[clang::nonblocking]] override {
-						if (index < PARAMETERS) {
+						if (index < Parameters) {
 							_parameters[index].Walk(value, _walkFrames);
 						}
 					}
@@ -247,30 +247,30 @@ namespace Shalltear {
 					bool IsQuiet() const [[clang::nonblocking]] override { return _silence.Covers(_memory); }
 				private:
 					void Design() [[clang::nonblocking]] {
-						const f32 density = LEAST_DENSITY + (1.0f - LEAST_DENSITY) * _parameters[DENSITY].end * 0.01f;
-						const f32 decay = _parameters[DECAY_TIME].end;
-						const f32 decayHf = decay * _parameters[DECAY_HF_RATIO].end;
-						const f32 w = TAU * DesignFrequency(_parameters[HF_REFERENCE].end, _rate) / _rate;
+						const f32 density = LEAST_DENSITY + (1.0f - LEAST_DENSITY) * _parameters[Density].end * 0.01f;
+						const f32 decay = _parameters[DecayTime].end;
+						const f32 decayHF = decay * _parameters[DecayHFRatio].end;
+						const f32 w = TAU * DesignFrequency(_parameters[HFReference].end, _rate) / _rate;
 						f32 energy = 0.0f;
 						for (u32 line = 0; line < LINES; ++line) {
 							_lengthEnd[line] = WholeFrames(LINE_SECONDS[line] * density * _rate);
 							const f32 seconds = _lengthEnd[line] / _rate;
 							const f32 low = DecibelsToGain(-60.0f * seconds / decay);
-							_filters[line] = DampingOf(low, DecibelsToGain(-60.0f * seconds / decayHf), w);
+							_filters[line] = DampingOf(low, DecibelsToGain(-60.0f * seconds / decayHF), w);
 							energy += low * low;
 						}
-						_roomHf.Tune(_parameters[HF_REFERENCE].end, _rate);
-						_roomLf.Tune(_parameters[LF_REFERENCE].end, _rate);
-						_diffusion = MOST_DIFFUSION * _parameters[DIFFUSION].end * 0.01f;
-						const f32 room = LevelOf(_parameters[ROOM].end);
-						_levels.dry = LevelOf(_parameters[DRY].end);
-						_levels.early = room * LevelOf(_parameters[REFLECTIONS].end);
-						_levels.late = room * LevelOf(_parameters[REVERB].end) * std::sqrt(1.0f - energy / static_cast<f32>(LINES)) * LINE_SCALE;
-						_levels.roomHf = LevelOf(_parameters[ROOM_HF].end);
-						_levels.roomLf = LevelOf(_parameters[ROOM_LF].end);
+						_roomHF.Tune(_parameters[HFReference].end, _rate);
+						_roomLF.Tune(_parameters[LFReference].end, _rate);
+						_diffusion = MOST_DIFFUSION * _parameters[Diffusion].end * 0.01f;
+						const f32 room = LevelOf(_parameters[Room].end);
+						_levels.dry = LevelOf(_parameters[Dry].end);
+						_levels.early = room * LevelOf(_parameters[Reflections].end);
+						_levels.late = room * LevelOf(_parameters[Reverb].end) * std::sqrt(1.0f - energy / static_cast<f32>(LINES)) * LINE_SCALE;
+						_levels.roomHF = LevelOf(_parameters[RoomHF].end);
+						_levels.roomLF = LevelOf(_parameters[RoomLF].end);
 					}
 
-					AudioRamp _parameters[PARAMETERS];
+					AudioRamp _parameters[Parameters];
 					DelayLines _predelay;
 					DelayLines _lines;
 					DelayLines _diffusers;
@@ -279,8 +279,8 @@ namespace Shalltear {
 					f32 _tapFrames[TAPS]{};
 					f32 _tapGains[TAPS]{};
 					f32 _diffusion = 0.0f;
-					Split _roomHf;
-					Split _roomLf;
+					Split _roomHF;
+					Split _roomLF;
 					LineFilter _filters[LINES];
 					f32 _state[LINES]{};
 					f32 _lengthStart[LINES]{};
@@ -289,7 +289,7 @@ namespace Shalltear {
 					SilenceCount _silence;
 				};
 
-				BuiltinDefinition<SfxReverb> _sfxReverb(SFX_REVERB);
+				BuiltinDefinition<SfxReverb> _sfxReverb(SfxReverbParameters);
 
 			} // anonymous namespace
 

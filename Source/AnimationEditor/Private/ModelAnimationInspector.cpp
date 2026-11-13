@@ -153,9 +153,9 @@ namespace Shalltear::AnimationEditor {
 			}
 			AddLabel(context, properties, "Loop", 34.0f);
 
-			static constexpr std::array<std::string_view, 3> LOOPS{"None", "Loop", "PingPong"};
+			static constexpr std::array<std::string_view, 3> Loops{"None", "Loop", "PingPong"};
 			Widgets::DropdownDesc loop;
-			loop.items = std::span<const std::string_view>(LOOPS.data(), LOOPS.size());
+			loop.items = std::span<const std::string_view>(Loops.data(), Loops.size());
 			loop.selected = static_cast<u32>(range.loop);
 			loop.font = UISystem::GetDefaultFont();
 			loop.fontSizePx = EditorTheme::GetMetric(MetricToken::FontBody);

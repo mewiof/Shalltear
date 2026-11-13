@@ -169,7 +169,7 @@ namespace Shalltear::ProjectOps {
 				f32 lodBias;
 				bool lodCrossFade;
 			};
-			static constexpr Tier TIERS[] = {
+			static constexpr Tier Tiers[] = {
 				{"1 Low.slprofile", 1, 3, 1024, 2, 40.0f, 10.0f, 0.4f, false},
 				{"2 Medium.slprofile", 2, 5, 2048, 3, 60.0f, 6.0f, 0.7f, true},
 				{"3 High.slprofile", 4, 5, 2048, 4, 60.0f, 4.0f, 1.0f, true},
@@ -184,7 +184,7 @@ namespace Shalltear::ProjectOps {
 			}
 
 			u32 written = 0;
-			for (const Tier& tier : TIERS) {
+			for (const Tier& tier : Tiers) {
 				GraphicsProfile* profile = New<GraphicsProfile>(MemTag::Asset);
 				profile->msaa = tier.msaa;
 				profile->shadowPcfTaps = tier.pcfTaps;
@@ -203,7 +203,7 @@ namespace Shalltear::ProjectOps {
 				}
 				++written;
 			}
-			return written == std::size(TIERS);
+			return written == std::size(Tiers);
 		}
 
 	} // anonymous namespace

@@ -131,10 +131,10 @@ TEST_F(RadianceCaptureFixture, FaceViewMatchesStorage) {
 	const Vec3 markAt(0.25f, 0.25f, 0.01f);
 	ASSERT_TRUE(AddMarker(stage, mark, markAt, 0.1f));
 
-	constexpr u32 face = 5;
+	constexpr u32 FACE = 5;
 	const Vec3 eye(0.0f, 0.0f, 1.0f);
 	ViewDesc desc;
-	desc.view = CubeFaceView(face, eye);
+	desc.view = CubeFaceView(FACE, eye);
 	desc.projection = Mat4::PerspectiveReverseZ(90.0f, 1.0f, 0.05f, 100.0f);
 	desc.cameraPosition = eye;
 	desc.radianceCapture = true;
@@ -161,7 +161,7 @@ TEST_F(RadianceCaptureFixture, FaceViewMatchesStorage) {
 	ASSERT_GT(count, 0u);
 	const f32 u = sumX / static_cast<f32>(count) / static_cast<f32>(size.x);
 	const f32 v = sumY / static_cast<f32>(count) / static_cast<f32>(size.y);
-	const Vec3 sampled = GraphicsInternal::CubeTexelDirection(face, u, v);
+	const Vec3 sampled = GraphicsInternal::CubeTexelDirection(FACE, u, v);
 	const Vec3 toMark = (markAt - eye).Normalized();
 	EXPECT_GT(Vec3::Dot(sampled, toMark), 0.999f);
 	const Vec3 mirrored = RadianceTexel(pixels, size, static_cast<i32>((1.0f - u) * size.x), static_cast<i32>(v * size.y));

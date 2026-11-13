@@ -58,7 +58,7 @@ namespace Shalltear::VisualEffectsEditor {
 
 		constexpr f64 QUIET_SECONDS = 0.3;
 
-		constexpr std::string_view DEFAULT_RIBBON_MATERIALS =
+		constexpr std::string_view DefaultRibbonMaterials =
 			R"([{"_handle": true, "pointeeType": "MaterialAsset", "assetId": "a7bb05359f19e1c7-de8c21623bc85d05"}])";
 
 		const char STAGE_TOKEN = 0;
@@ -169,7 +169,7 @@ namespace Shalltear::VisualEffectsEditor {
 				return;
 			}
 			UpdateBinders(Time::GetUnscaledDeltaTime());
-			if (SceneViewEffects::IsShown(EFFECTS_CATEGORY)) {
+			if (SceneViewEffects::IsShown(EffectsCategory)) {
 				AdvanceEffects(TickEffectClock(Time::GetUnscaledDeltaTime(), Time::GetUnscaledDeltaTime()));
 			}
 		}
@@ -525,7 +525,7 @@ namespace Shalltear::VisualEffectsEditor {
 
 	void RegisterEditorExtensions(const void* owner) {
 		const StringHash hidden[] = {VisualEffect::GetReflectType()->name};
-		SceneViewEffects::Register(EFFECTS_CATEGORY, owner, hidden);
+		SceneViewEffects::Register(EffectsCategory, owner, hidden);
 		SceneAssetDrops::Register(VisualEffectAsset::GetReflectType()->name, VisualEffect::GetReflectType()->name, StringHash("asset"), owner);
 		EditorGizmos::RegisterComponentGizmo(VisualEffect::GetReflectType()->name, &DrawBounds, owner);
 		EditorGizmos::RegisterSceneGizmo(StringHash("VisualEffects.RecordedBounds"), &DrawRecordedBounds, owner);
@@ -541,7 +541,7 @@ namespace Shalltear::VisualEffectsEditor {
 			[owner](UI::Context& context, UI::ElementHandle row, FieldRef, EditTarget target) { DrawSheet(context, row, target, owner); }, owner);
 		ComponentMenu::Register(VisualEffectBinder::GetReflectType()->name, "Visual Effects", owner);
 		for (const TypeInfo* ribbon : {LineRenderer::GetReflectType(), TrailRenderer::GetReflectType()}) {
-			AuthoringDefaults::Register(ribbon->name, StringHash("materials"), DEFAULT_RIBBON_MATERIALS, owner);
+			AuthoringDefaults::Register(ribbon->name, StringHash("materials"), DefaultRibbonMaterials, owner);
 		}
 		EditorSceneOps::RegisterCreateEntry("Effects", "Line", LineRenderer::GetReflectType()->name, owner);
 		EditorSceneOps::RegisterCreateEntry("Effects", "Trail", TrailRenderer::GetReflectType()->name, owner);

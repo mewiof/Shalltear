@@ -12,7 +12,7 @@
 #ifndef SHALLTEAR_SHARED
 #include "EffectDescription.h"
 #include "EffectKernelHarness.h"
-#include "ParticleCpuSystem.h"
+#include "ParticleCPUSystem.h"
 
 #include "Shalltear/Core/Jobs/JobSystem.h"
 #include "Shalltear/Core/Time.h"
@@ -61,7 +61,7 @@ namespace {
 
 	constexpr std::string_view CPU = R"(,"Simulation Target":"CPU")";
 
-	str TriggeringGpuEvent(std::string_view settings) {
+	str TriggeringGPUEvent(std::string_view settings) {
 		return std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"nodes":[],"contexts":[
 {{"id":1,"def":"Context/Initialize","settings":{{"Capacity":64{}}},"blocks":[]}},
 {{"id":2,"def":"Context/Update","flow":[[1,"In"]],"blocks":[{{"id":50,"def":"Block/TriggerEvent","settings":{{"Mode":"Always"}},"in":{{"Count":{{"value":[1]}}}}}}]}},
@@ -98,16 +98,16 @@ namespace {
 		return count;
 	}
 
-	constexpr std::string_view PARITY_INITIALIZE =
+	constexpr std::string_view ParityInitialize =
 		R"({"id":10,"def":"Block/PositionShape","settings":{"Shape":"Sphere"},"in":{"Radius":{"value":[1]}}},
 {"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"velocity","Random":"PerComponent"},"in":{"A":{"value":[-1,0,-1]},"B":{"value":[1,2,1]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime","Random":"Uniform"},"in":{"A":{"value":[0.6]},"B":{"value":[1.4]}}},
 {"id":13,"def":"Block/SetAttribute","settings":{"Attribute":"color","Random":"Uniform"},"in":{"A":{"value":[0,0,0]},"B":{"value":[1,1,1]}}})";
-	constexpr std::string_view PARITY_UPDATE =
+	constexpr std::string_view ParityUpdate =
 		R"({"id":20,"def":"Block/Gravity","in":{"Force":{"value":[0,-9.81,0],"space":"World"}}},
 {"id":21,"def":"Block/LinearDrag"},
 {"id":22,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[30,"r"]}}})";
-	constexpr std::string_view PARITY_NODES = R"({"id":30,"def":"Random/RandomNumber","settings":{"Constant":false}})";
+	constexpr std::string_view ParityNodes = R"({"id":30,"def":"Random/RandomNumber","settings":{"Constant":false}})";
 
 } // anonymous namespace
 
@@ -167,7 +167,7 @@ TEST(GraphEffectCpuTest, CpuSystemRefusesKernelOnly) {
 {"id":61,"def":"Math/MatrixConstruction","in":{"M0":{"from":[60,"r"]},"M1":{"from":[63,"r"]},"M2":{"from":[60,"r"]},"M3":{"from":[63,"r"]}}},
 {"id":62,"def":"Math/MatrixDeterminant","in":{"In":{"from":[61,"4x4"]}}})"),
 		 61, "can't hold"},
-		{"a Trigger Event feeding a GPU Event", TriggeringGpuEvent(CPU), 50, "only a system simulated on the GPU triggers"},
+		{"a Trigger Event feeding a GPU Event", TriggeringGPUEvent(CPU), 50, "only a system simulated on the GPU triggers"},
 		{"strips", Effect(R"(,"Data Type":"ParticleStrip","Simulation Target":"CPU")", ""), 1, "makes strips"},
 	};
 	for (const Case& refused : cases) {
@@ -355,7 +355,7 @@ namespace {
 		return slots;
 	}
 
-	constexpr std::string_view PYRAMID_GUID = "00000000000000c6-00000000000000d6";
+	constexpr std::string_view PyramidGuid = "00000000000000c6-00000000000000d6";
 
 	constexpr f32 TURNED[12] = {0.0f, -1.0f, 0.0f, 1.0f, 2.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.5f, 3.0f};
 
@@ -433,7 +433,7 @@ namespace {
 		std::span<const EffectKernelHarness::StagedMesh> meshes;
 	};
 
-	class GraphEffectCpuFixture : public EffectKernelHarness::GraphEffectBlockFixture {
+	class GraphEffectCPUFixture : public EffectKernelHarness::GraphEffectBlockFixture {
 	protected:
 		static Vector<u32> Words(const ParticleSystem& system, u32 attributeCount) {
 			RHI::Device& device = *RenderSystem::GetDevice();
@@ -493,7 +493,7 @@ namespace {
 				return true;
 			}
 			EffectDescription description;
-			ParticleCpuSystem cpu;
+			ParticleCPUSystem cpu;
 			if (!Describe(effect, description) || !cpu.Build(description, 0)) {
 				ADD_FAILURE() << name << ": no CPU system built";
 				return true;
@@ -588,7 +588,7 @@ TEST(GraphEffectCpuVMTest, CpuSystemMatchesKernel) {
 	ASSERT_TRUE(Compile(text, effect, diagnostics)) << Said(diagnostics);
 	EffectDescription description;
 	ASSERT_TRUE(Describe(effect, description));
-	ParticleCpuSystem cpu;
+	ParticleCPUSystem cpu;
 	ASSERT_TRUE(cpu.Build(description, 0));
 	u32 positionY = ~0u;
 	for (const EffectStored& stored : description.systems[0].stored) {
@@ -621,8 +621,8 @@ TEST(GraphEffectCpuVMTest, CpuSystemMatchesKernel) {
 }
 
 TEST(GraphEffectCpuVMTest, ChunkedVMMatches) {
-	str text = Effect(CPU, PARITY_INITIALIZE, str(PARITY_UPDATE) + R"(,{"id":23,"def":"Block/TriggerEvent","settings":{"Mode":"OnDie"},"in":{"Count":{"value":[1]}}})",
-					  PARITY_NODES);
+	str text = Effect(CPU, ParityInitialize, str(ParityUpdate) + R"(,{"id":23,"def":"Block/TriggerEvent","settings":{"Mode":"OnDie"},"in":{"Count":{"value":[1]}}})",
+					  ParityNodes);
 	text.replace(text.find(R"("Capacity":64)"), std::string_view(R"("Capacity":64)").size(), R"("Capacity":32768)");
 	constexpr std::string_view LastOutput = R"("def":"Context/OutputParticlePrimitive","flow":[[2,"In"]],"blocks":[]})";
 	ASSERT_NE(text.find(LastOutput), str::npos);
@@ -637,7 +637,7 @@ TEST(GraphEffectCpuVMTest, ChunkedVMMatches) {
 	constexpr u32 FILLING = 8;
 	constexpr u32 FRAMES = 16;
 	constexpr u32 SPAWNS = 4096;
-	const auto hash = [](const ParticleCpuSystem& cpu) {
+	const auto hash = [](const ParticleCPUSystem& cpu) {
 		u64 h = 1469598103934665603ull;
 		const auto mix = [&h](std::span<const u32> words) {
 			for (const u32 word : words) {
@@ -646,7 +646,7 @@ TEST(GraphEffectCpuVMTest, ChunkedVMMatches) {
 		};
 		mix(cpu.GetAlive());
 		mix(cpu.GetAttributes());
-		for (const ParticleCpuEvent& event : cpu.GetEvents()) {
+		for (const ParticleCPUEvent& event : cpu.GetEvents()) {
 			const u32 words[] = {event.update ? 1u : 0u, event.event, event.count, event.values};
 			mix(words);
 		}
@@ -657,7 +657,7 @@ TEST(GraphEffectCpuVMTest, ChunkedVMMatches) {
 		return h;
 	};
 	struct Run {
-		ParticleCpuSystem cpu;
+		ParticleCPUSystem cpu;
 		u64 hashes[FRAMES] = {};
 		f64 seconds = 0.0;
 		u64 updated = 0;
@@ -737,7 +737,7 @@ TEST(GraphEffectCpuVMTest, CpuParticlesSendHitAndDeath) {
 		const u32 position = offsetOf("position");
 		const u32 contact = offsetOf("collisionEventPosition");
 		const u32 normal = offsetOf("collisionEventNormal");
-		ParticleCpuSystem cpu;
+		ParticleCPUSystem cpu;
 		ASSERT_TRUE(cpu.Build(description, 0));
 
 		const u32 four[] = {4};
@@ -750,7 +750,7 @@ TEST(GraphEffectCpuVMTest, CpuParticlesSendHitAndDeath) {
 			const f32 time = 0.25f * static_cast<f32>(frame);
 			cpu.Advance(description, FrameFor(effect, time, 0.25f, {}, 0, 4, {}), Slots(description, time, 0.25f), 0);
 			const std::span<const f32> values = cpu.GetEventValues();
-			for (const ParticleCpuEvent& event : cpu.GetEvents()) {
+			for (const ParticleCPUEvent& event : cpu.GetEvents()) {
 				ASSERT_TRUE(event.update);
 				const f32* carried = values.data() + event.values;
 				if (system.updateOutputEvents[event.event].name == "Hit") {
@@ -801,7 +801,7 @@ TEST(GraphEffectCpuVMTest, CpuSystemSamplesMeshPortHolds) {
 	const str nodes = std::format(R"({{"id":60,"def":"Attribute/GetAttribute","settings":{{"Attribute":"spawnIndex"}}}},
 {{"id":61,"def":"Sampling/SampleMesh","in":{{"Mesh":{{"value":"{0}"}},"Vertex":{{"from":[60,"spawnIndex"]}}}}}},
 {{"id":62,"def":"Sampling/SampleMeshIndex","in":{{"Mesh":{{"value":"{0}"}},"Index":{{"from":[60,"spawnIndex"]}}}}}})",
-								  PYRAMID_GUID);
+								  PyramidGuid);
 	const str initialize = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}},
 {"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[61,"Position"]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[62,"Index"]}}})";
@@ -820,13 +820,13 @@ TEST(GraphEffectCpuVMTest, CpuSystemSamplesMeshPortHolds) {
 	ASSERT_TRUE(position != ~0u && size != ~0u);
 	MeshAsset pyramid;
 	FillPyramid(pyramid);
-	const EffectKernelHarness::StagedMesh staged[] = {{Guid::FromString(PYRAMID_GUID), &pyramid}};
+	const EffectKernelHarness::StagedMesh staged[] = {{Guid::FromString(PyramidGuid), &pyramid}};
 	constexpr u32 SPAWNS = 24;
 	const u32 batch[] = {SPAWNS};
 	for (const bool loaded : {true, false}) {
 		SCOPED_TRACE(loaded ? "loaded" : "not loaded");
 		const Vector<EffectMeshView> views = Views(description, loaded ? std::span(staged) : std::span<const EffectKernelHarness::StagedMesh>());
-		ParticleCpuSystem cpu;
+		ParticleCPUSystem cpu;
 		ASSERT_TRUE(cpu.Build(description, 0));
 		cpu.Advance(description, FrameFor(effect, 0.0f, 0.1f, batch, 5, 0, {}), Slots(description, 0.0f, 0.1f, views), SPAWNS, views);
 		ASSERT_EQ(cpu.GetAlive().size(), SPAWNS);
@@ -840,11 +840,11 @@ TEST(GraphEffectCpuVMTest, CpuSystemSamplesMeshPortHolds) {
 	}
 }
 
-TEST_F(GraphEffectCpuFixture, TargetsAgreeForOneSeed) {
+TEST_F(GraphEffectCPUFixture, TargetsAgreeForOneSeed) {
 	Parity parity;
 	parity.localToWorld = TURNED;
 	Agreement agreement;
-	if (!BothTargets(PARITY_INITIALIZE, PARITY_UPDATE, PARITY_NODES, "Parity", parity, agreement)) {
+	if (!BothTargets(ParityInitialize, ParityUpdate, ParityNodes, "Parity", parity, agreement)) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
 	EXPECT_EQ(agreement.disagreed, 0u) << "of " << agreement.compared << " floats:\n"
@@ -853,18 +853,18 @@ TEST_F(GraphEffectCpuFixture, TargetsAgreeForOneSeed) {
 	EXPECT_GT(agreement.particles, 8u);
 }
 
-TEST_F(GraphEffectCpuFixture, TurbulenceAgreesOnBothTargets) {
-	constexpr std::string_view TYPES[] = {"Value", "Perlin", "Cellular"};
-	for (const std::string_view type : TYPES) {
+TEST_F(GraphEffectCPUFixture, TurbulenceAgreesOnBothTargets) {
+	constexpr std::string_view Types[] = {"Value", "Perlin", "Cellular"};
+	for (const std::string_view type : Types) {
 		SCOPED_TRACE(type);
 		const str update = std::format(
 			R"({{"id":24,"def":"Block/Turbulence","settings":{{"Noise Type":"{}"}},"in":{{"Angles":{{"value":[20,35,-10]}},"Scale":{{"value":[1.5,0.75,2]}},"Intensity":{{"value":[6]}},"Octaves":{{"value":[3]}},"Frequency":{{"value":[1.7]}}}}}},{})",
-			type, PARITY_UPDATE);
+			type, ParityUpdate);
 		Parity parity;
 		parity.localToWorld = TURNED;
 		parity.tolerance = 1e-3f;
 		Agreement agreement;
-		if (!BothTargets(PARITY_INITIALIZE, update, PARITY_NODES, std::format("Turbulence{}", type), parity, agreement)) {
+		if (!BothTargets(ParityInitialize, update, ParityNodes, std::format("Turbulence{}", type), parity, agreement)) {
 			GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 		}
 		EXPECT_EQ(agreement.disagreed, 0u) << "of " << agreement.compared << ' ' << agreement.worst << ":\n"
@@ -873,27 +873,27 @@ TEST_F(GraphEffectCpuFixture, TurbulenceAgreesOnBothTargets) {
 	}
 }
 
-TEST_F(GraphEffectCpuFixture, EveryNoiseAgreesOnBothTargets) {
+TEST_F(GraphEffectCPUFixture, EveryNoiseAgreesOnBothTargets) {
 	u32 inexact = 0;
 	if (!ModuliDivideAsIEEE(inexact)) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
-	constexpr std::string_view ID_UPDATE = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"pivot"},"in":{"Pivot":{"from":[39,"r"]}}})";
-	constexpr std::string_view ID_NODE = R"({"id":39,"def":"Random/RandomNumber","settings":{"Constant":false}})";
-	constexpr std::string_view TYPES[] = {"Value", "Perlin", "Cellular"};
+	constexpr std::string_view IdUpdate = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"pivot"},"in":{"Pivot":{"from":[39,"r"]}}})";
+	constexpr std::string_view IdNode = R"({"id":39,"def":"Random/RandomNumber","settings":{"Constant":false}})";
+	constexpr std::string_view Types[] = {"Value", "Perlin", "Cellular"};
 	Parity parity;
 	parity.frames = 1;
 	parity.first[0] = 40;
 	parity.first[1] = 24;
 	const auto expect = [&](std::string_view initialize, std::string_view nodes, const str& name, u32 floats) {
 		Agreement agreement;
-		ASSERT_TRUE(BothTargets(initialize, ID_UPDATE, nodes, name, parity, agreement));
+		ASSERT_TRUE(BothTargets(initialize, IdUpdate, nodes, name, parity, agreement));
 		EXPECT_EQ(agreement.disagreed, 0u) << "of " << agreement.compared << ' ' << agreement.worst << ":\n"
 										   << agreement.first;
 		EXPECT_EQ(agreement.particles, 64u);
 		EXPECT_GT(agreement.compared, 64u * floats);
 	};
-	for (const std::string_view type : TYPES) {
+	for (const std::string_view type : Types) {
 		SCOPED_TRACE(type);
 		const str planar = std::format(R"({0},
 {{"id":30,"def":"Random/RandomNumber","settings":{{"Type":"Vector3"}},"in":{{"Min":{{"value":[-10,-10,-10]}},"Max":{{"value":[10,10,10]}}}}}},
@@ -904,7 +904,7 @@ TEST_F(GraphEffectCpuFixture, EveryNoiseAgreesOnBothTargets) {
 {{"id":43,"def":"Noise/CurlNoise","settings":{{"Type":"{1}","Dimensions":"Three"}},"in":{{"Coordinate":{{"from":[30,"r"]}},"Octaves":{{"value":[2]}}}}}},
 {{"id":44,"def":"Noise/CurlNoise","settings":{{"Type":"{1}","Dimensions":"Two"}},"in":{{"Coordinate":{{"from":[31,"r"]}},"Octaves":{{"value":[2]}}}}}},
 {{"id":45,"def":"Input/Vector3","in":{{"X":{{"from":[41,"Noise"]}},"Y":{{"from":[42,"Noise"]}}}}}})",
-									   ID_NODE, type);
+									   IdNode, type);
 		const str planarBlocks = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"velocity"},"in":{"Velocity":{"from":[43,"Noise"]}}},
 {"id":13,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[41,"Derivatives"]}}},
@@ -918,7 +918,7 @@ TEST_F(GraphEffectCpuFixture, EveryNoiseAgreesOnBothTargets) {
 		const str volume = std::format(R"({0},
 {{"id":30,"def":"Random/RandomNumber","settings":{{"Type":"Vector3"}},"in":{{"Min":{{"value":[-10,-10,-10]}},"Max":{{"value":[10,10,10]}}}}}},
 {{"id":40,"def":"Noise/Noise","settings":{{"Type":"{1}","Dimensions":"Three"}},"in":{{"Coordinate":{{"from":[30,"r"]}},"Octaves":{{"value":[2]}}}}}})",
-									   ID_NODE, type);
+									   IdNode, type);
 		const str volumeBlocks = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}},
 {"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[40,"Derivatives"]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[40,"Noise"]}}})";
@@ -936,7 +936,7 @@ TEST_F(GraphEffectCpuFixture, EveryNoiseAgreesOnBothTargets) {
 {{"id":52,"def":"Procedural/GradientNoise","settings":{{"Hash Type":"LegacyMod"}},"in":{{"UV":{{"from":[31,"r"]}},"Scale":{{"value":[1.3]}}}}}},
 {{"id":53,"def":"Procedural/Voronoi","in":{{"UV":{{"from":[31,"r"]}},"AngleOffset":{{"value":[2]}},"CellDensity":{{"value":[0.7]}}}}}},
 {{"id":54,"def":"Input/Vector3","in":{{"X":{{"from":[50,"Out"]}},"Y":{{"from":[51,"Out"]}},"Z":{{"from":[52,"Out"]}}}}}})",
-									  ID_NODE);
+									  IdNode);
 		const str initialize = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[10]}}},
 {"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"scale"},"in":{"Scale":{"from":[54,"Out"]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[53,"Out"]}}},
@@ -945,15 +945,15 @@ TEST_F(GraphEffectCpuFixture, EveryNoiseAgreesOnBothTargets) {
 	}
 }
 
-TEST_F(GraphEffectCpuFixture, AMeshsSamplesAgreeOnBothTargets) {
+TEST_F(GraphEffectCPUFixture, AMeshsSamplesAgreeOnBothTargets) {
 	EffectKernelHarness::LoadableMesh pyramid;
 	FillPyramid(pyramid);
 	pyramid.OnLoad();
-	const EffectKernelHarness::StagedMesh staged[] = {{Guid::FromString(PYRAMID_GUID), &pyramid}};
+	const EffectKernelHarness::StagedMesh staged[] = {{Guid::FromString(PyramidGuid), &pyramid}};
 	const str nodes = std::format(R"({{"id":39,"def":"Random/RandomNumber","settings":{{"Constant":false}}}},
 {{"id":30,"def":"Random/RandomNumber","in":{{"Min":{{"value":[0]}},"Max":{{"value":[12]}}}}}},
 {{"id":61,"def":"Sampling/SampleMesh","settings":{{"Mode":"Wrap","Output Normal":true,"Output Tangent":true,"Output Bitangent":true}},"in":{{"Mesh":{{"value":"{0}"}},"Vertex":{{"from":[30,"r"]}}}}}})",
-								  PYRAMID_GUID);
+								  PyramidGuid);
 	const str initialize = std::format(R"({{"id":10,"def":"Block/SetAttribute","settings":{{"Attribute":"lifetime"}},"in":{{"Lifetime":{{"value":[10]}}}}}},
 {{"id":11,"def":"Block/PositionMesh","settings":{{"Placement Mode":"Surface"}},"in":{{"Mesh":{{"value":"{0}"}}}}}},
 {{"id":12,"def":"Block/SetAttribute","settings":{{"Attribute":"velocity"}},"in":{{"Velocity":{{"from":[61,"Normal"]}}}}}},
@@ -962,7 +962,7 @@ TEST_F(GraphEffectCpuFixture, AMeshsSamplesAgreeOnBothTargets) {
 {{"id":15,"def":"Block/SetAttribute","settings":{{"Attribute":"axisX"}},"in":{{"AxisX":{{"from":[61,"Bitangent"]}}}}}},
 {{"id":16,"def":"Block/SetAttribute","settings":{{"Attribute":"axisY"}},"in":{{"AxisY":{{"from":[61,"Tex Coord 0"]}}}}}},
 {{"id":17,"def":"Block/SetAttribute","settings":{{"Attribute":"axisZ"}},"in":{{"AxisZ":{{"from":[61,"Position"]}}}}}})",
-									   PYRAMID_GUID);
+									   PyramidGuid);
 	const str update = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"alpha"},"in":{"Alpha":{"from":[39,"r"]}}})";
 	Parity parity;
 	parity.frames = 1;
@@ -982,13 +982,13 @@ TEST_F(GraphEffectCpuFixture, AMeshsSamplesAgreeOnBothTargets) {
 	pyramid.OnUnload();
 }
 
-TEST_F(GraphEffectCpuFixture, CpuSystemFeedsBuffersOutputsDraw) {
+TEST_F(GraphEffectCPUFixture, CpuSystemFeedsBuffersOutputsDraw) {
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compile(Effect(CPU, PARITY_INITIALIZE, PARITY_UPDATE, PARITY_NODES), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Effect(CPU, ParityInitialize, ParityUpdate, ParityNodes), effect, diagnostics)) << Said(diagnostics);
 	EffectDescription description;
 	ASSERT_TRUE(Describe(effect, description));
-	ParticleCpuSystem cpu;
+	ParticleCPUSystem cpu;
 	ASSERT_TRUE(cpu.Build(description, 0));
 	ShaderAsset output;
 	if (!Import(output, effect.systems[0].outputs[0].shader, "Fed.Output.hlsl")) {
@@ -1066,19 +1066,19 @@ namespace {
 		return AABB(center - Vec3(radius, radius, radius), center + Vec3(radius, radius, radius));
 	}
 
-	constexpr std::string_view CLOUD_NODES = R"({"id":30,"def":"Random/RandomNumber","settings":{"Type":"Vector3"},"in":{"Min":{"value":[-3,-1,-2]},"Max":{"value":[4,2,1]}}},
+	constexpr std::string_view CloudNodes = R"({"id":30,"def":"Random/RandomNumber","settings":{"Type":"Vector3"},"in":{"Min":{"value":[-3,-1,-2]},"Max":{"value":[4,2,1]}}},
 {"id":31,"def":"Random/RandomNumber","in":{"Min":{"value":[0.1]},"Max":{"value":[0.5]}}})";
-	constexpr std::string_view CLOUD_INITIALIZE = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[1]}}},
+	constexpr std::string_view CloudInitialize = R"({"id":10,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[1]}}},
 {"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"from":[30,"r"]}}},
 {"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[31,"r"]}}},
 {"id":13,"def":"Block/SetAttribute","settings":{"Attribute":"velocity"},"in":{"Velocity":{"value":[4,0,0]}}},
 {"id":14,"def":"Block/SetAttribute","settings":{"Attribute":"pivot"},"in":{"Pivot":{"value":[0.5,0,0]}}},
 {"id":15,"def":"Block/SetAttribute","settings":{"Attribute":"angle"},"in":{"Angle":{"value":[0,0,90]}}},
 {"id":16,"def":"Block/SetAttribute","settings":{"Attribute":"scale"},"in":{"Scale":{"value":[2,1,1]}}})";
-	constexpr std::string_view AUTOMATIC = R"(,"Bounds Setting Mode":"Automatic")";
+	constexpr std::string_view Automatic = R"(,"Bounds Setting Mode":"Automatic")";
 
 	str Cloud(std::string_view settings) {
-		str text = Effect(settings, CLOUD_INITIALIZE, "", CLOUD_NODES);
+		str text = Effect(settings, CloudInitialize, "", CloudNodes);
 		text.replace(text.find(R"("Capacity":64)"), std::string_view(R"("Capacity":64)").size(), R"("Capacity":256)");
 		return text;
 	}
@@ -1103,18 +1103,18 @@ namespace {
 
 } // anonymous namespace
 
-TEST_F(GraphEffectCpuFixture, AutoBoxMatchesOnBothTargets) {
+TEST_F(GraphEffectCPUFixture, AutoBoxMatchesOnBothTargets) {
 	EffectKernelHarness::BlockRun gpu;
-	if (!Begin(gpu, Cloud(AUTOMATIC), "BoundsGpu")) {
+	if (!Begin(gpu, Cloud(Automatic), "BoundsGpu")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
 	ASSERT_TRUE(gpu.effect.systems[0].measuresBounds);
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compile(Cloud(str(CPU) + str(AUTOMATIC)), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Cloud(str(CPU) + str(Automatic)), effect, diagnostics)) << Said(diagnostics);
 	EffectDescription description;
 	ASSERT_TRUE(Describe(effect, description));
-	ParticleCpuSystem cpu;
+	ParticleCPUSystem cpu;
 	ASSERT_TRUE(cpu.Build(description, 0));
 	const EffectSystem& layout = description.systems[0];
 	const auto cpuRead = [&](std::string_view name, u32 component, u32 particle) {
@@ -1180,7 +1180,7 @@ TEST_F(GraphEffectCpuFixture, AutoBoxMatchesOnBothTargets) {
 	EXPECT_FALSE(gpu.system.GetMeasuredBounds().box.IsValid());
 }
 
-TEST_F(GraphEffectCpuFixture, ARecordedBoxHoldsEveryParticle) {
+TEST_F(GraphEffectCPUFixture, ARecordedBoxHoldsEveryParticle) {
 	GraphEffectCompileOptions recording;
 	recording.recordBounds = true;
 	const str text = Cloud("");
@@ -1195,7 +1195,7 @@ TEST_F(GraphEffectCpuFixture, ARecordedBoxHoldsEveryParticle) {
 		<< Said(diagnostics);
 	EffectDescription description;
 	ASSERT_TRUE(Describe(effect, description));
-	ParticleCpuSystem cpu;
+	ParticleCPUSystem cpu;
 	ASSERT_TRUE(cpu.Build(description, 0));
 	const EffectSystem& layout = description.systems[0];
 	const auto cpuRead = [&](std::string_view name, u32 component, u32 particle) {

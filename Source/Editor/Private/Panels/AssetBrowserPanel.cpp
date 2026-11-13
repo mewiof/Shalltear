@@ -345,12 +345,12 @@ namespace Shalltear {
 
 	void AssetBrowserPanel::SyncSelectionFromEditor() {
 		_selectedFiles.clear();
-		constexpr std::string_view PREFIX = "project://";
+		constexpr std::string_view Prefix = "project://";
 		for (const Guid& guid : EditorSelection::GetSelectedAssets()) {
 			Path path = AssetDatabase::LookupPath(guid);
 			const str& virtualPath = path.ToString();
-			if (virtualPath.starts_with(PREFIX)) {
-				_selectedFiles.push_back(AssetBrowserOps::EntryKeyForPath(virtualPath.substr(PREFIX.size())));
+			if (virtualPath.starts_with(Prefix)) {
+				_selectedFiles.push_back(AssetBrowserOps::EntryKeyForPath(virtualPath.substr(Prefix.size())));
 				continue;
 			}
 			for (const auto& [id, row] : _rowById) {
@@ -609,11 +609,11 @@ namespace Shalltear {
 			}
 			Path source = AssetDatabase::LookupPath(payload.data.As<AssetDragData>().guid);
 			const str& sourcePath = source.ToString();
-			constexpr std::string_view PREFIX = "project://";
-			if (!sourcePath.starts_with(PREFIX)) {
+			constexpr std::string_view Prefix = "project://";
+			if (!sourcePath.starts_with(Prefix)) {
 				return false;
 			}
-			return ParentPath(sourcePath.substr(PREFIX.size())) != folderRelPath;
+			return ParentPath(sourcePath.substr(Prefix.size())) != folderRelPath;
 		}
 		Vector<Handle<SceneObject>> dragged{GetMemoryResource(MemTag::Editor)};
 		DraggedSceneObjects(payload, dragged);
@@ -670,13 +670,13 @@ namespace Shalltear {
 		const Guid source = AssetDatabase::GetProductSource(asset);
 		const Guid fileGuid = source.IsValid() ? source : asset;
 
-		constexpr std::string_view PREFIX = "project://";
+		constexpr std::string_view Prefix = "project://";
 		Path path = AssetDatabase::LookupPath(fileGuid);
 		const str& virtualPath = path.ToString();
-		if (!virtualPath.starts_with(PREFIX)) {
+		if (!virtualPath.starts_with(Prefix)) {
 			return;
 		}
-		const str relPath = virtualPath.substr(PREFIX.size());
+		const str relPath = virtualPath.substr(Prefix.size());
 		if (!EntryExists(relPath)) {
 			return;
 		}

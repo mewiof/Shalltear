@@ -14,11 +14,11 @@ namespace Shalltear::SceneRequests {
 		PassRequests request = PassRequests::None;
 	};
 
-	inline constexpr DeclaredName NAMES[] = {
+	inline constexpr DeclaredName Names[] = {
 		{"sltSceneColor", PassRequests::SceneColor}, {"sltSceneDepth", PassRequests::SceneDepth}, {"sltSceneNormals", PassRequests::SceneNormals}};
 
 	inline PassRequests RequestNamed(std::string_view name) {
-		for (const DeclaredName& declared : NAMES) {
+		for (const DeclaredName& declared : Names) {
 			if (declared.name == name) {
 				return declared.request;
 			}
@@ -26,11 +26,11 @@ namespace Shalltear::SceneRequests {
 		return PassRequests::None;
 	}
 
-	inline constexpr std::string_view VIEW_RECORD = "sltViewRecord";
+	inline constexpr std::string_view ViewRecord = "sltViewRecord";
 
 	inline bool IsViewRecord(std::string_view name) {
-		constexpr std::string_view PREFIX = "type.";
-		return name == VIEW_RECORD || (name.starts_with(PREFIX) && name.substr(PREFIX.size()) == VIEW_RECORD);
+		constexpr std::string_view Prefix = "type.";
+		return name == ViewRecord || (name.starts_with(Prefix) && name.substr(Prefix.size()) == ViewRecord);
 	}
 
 	inline bool DeclaresViewSet(const ShaderAsset& shader) {

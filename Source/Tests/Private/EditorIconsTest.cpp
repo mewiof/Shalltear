@@ -45,14 +45,14 @@ namespace {
 	}
 
 	constexpr u32 UNBAKED_PUA = 0xE007;
-	const str UNBAKED_UTF8 = [] {
+	const str UnbakedUTF8 = [] {
 		str out;
 		out.push_back(static_cast<char>(0xE0 | (UNBAKED_PUA >> 12)));
 		out.push_back(static_cast<char>(0x80 | ((UNBAKED_PUA >> 6) & 0x3F)));
 		out.push_back(static_cast<char>(0x80 | (UNBAKED_PUA & 0x3F)));
 		return out;
 	}();
-	const EditorIcons::Icon UNBAKED_ICON{UNBAKED_UTF8, EditorIcons::Face::Solid};
+	const EditorIcons::Icon UnbakedIcon{UnbakedUTF8, EditorIcons::Face::Solid};
 
 	class IconTestBehavior : public Behavior {
 	public:
@@ -225,7 +225,7 @@ TEST_F(EditorIconsFixture, EveryTableEntryIsBaked) {
 	ASSERT_GT(regularSeen, 0u);
 	ASSERT_LT(regularSeen, table.size());
 
-	ASSERT_FALSE(EditorIcons::GetGlyph(UNBAKED_ICON).IsValid());
+	ASSERT_FALSE(EditorIcons::GetGlyph(UnbakedIcon).IsValid());
 
 	HashSet<u64> seen{GetMemoryResource(MemTag::Core)};
 	for (const TableEntry& entry : table) {
@@ -759,13 +759,13 @@ TEST_F(EditorIconsFixture, IconButtonShowsGlyphTakesClick) {
 }
 
 TEST_F(EditorIconsFixture, UnbakedIconButtonFallsBack) {
-	ASSERT_FALSE(EditorIcons::GetGlyph(UNBAKED_ICON).IsValid());
+	ASSERT_FALSE(EditorIcons::GetGlyph(UnbakedIcon).IsValid());
 
 	UI::Context ctx{Desc(), UISystem::GetFontSystem(), UISystem::GetVectorIconSystem()};
 
 	u32 clicks = 0;
 	EditorIcons::IconButtonParts parts = EditorIcons::IconButton(
-		ctx, ctx.GetRoot(), UNBAKED_ICON, "Duplicate",
+		ctx, ctx.GetRoot(), UnbakedIcon, "Duplicate",
 		"Copy the selected profile (including its overrides)", [&clicks]() { ++clicks; }, 13.0f);
 
 	EXPECT_EQ(ctx.GetTextString(parts.face), "Duplicate");
@@ -888,13 +888,13 @@ TEST_F(EditorIconsFixture, AddIconsComponentsOnly) {
 }
 
 TEST_F(EditorIconsFixture, UnbakedIconFallsBackToWord) {
-	ASSERT_FALSE(EditorIcons::GetGlyph(UNBAKED_ICON).IsValid());
+	ASSERT_FALSE(EditorIcons::GetGlyph(UnbakedIcon).IsValid());
 
 	UI::Context ctx{Desc(), UISystem::GetFontSystem(), UISystem::GetVectorIconSystem()};
 
 	UI::ElementHandle face = ctx.CreateElement();
 	ctx.AppendChild(ctx.GetRoot(), face);
-	EXPECT_FALSE(EditorIcons::SetGlyphOrText(ctx, face, UNBAKED_ICON, "Play", Color(1, 1, 1, 1)));
+	EXPECT_FALSE(EditorIcons::SetGlyphOrText(ctx, face, UnbakedIcon, "Play", Color(1, 1, 1, 1)));
 	EXPECT_EQ(ctx.GetTextString(face), "Play");
 	EXPECT_FALSE(ctx.HasIcon(face));
 
@@ -904,7 +904,7 @@ TEST_F(EditorIconsFixture, UnbakedIconFallsBackToWord) {
 	branch.label = "Materials";
 	branch.font = UISystem::GetDefaultFont();
 	UI::Widgets::TreeRowParts row = UI::Widgets::TreeRow(ctx, ctx.GetRoot(), branch);
-	EditorIcons::SetRowGutter(ctx, row, true, false, Color(1, 1, 1, 1), UNBAKED_ICON);
+	EditorIcons::SetRowGutter(ctx, row, true, false, Color(1, 1, 1, 1), UnbakedIcon);
 	EXPECT_TRUE(ctx.HasIcon(row.arrow));
 
 	const UI::Element* pod = ctx.GetElement(row.row);

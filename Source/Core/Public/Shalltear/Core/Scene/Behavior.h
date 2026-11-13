@@ -54,11 +54,11 @@ namespace Shalltear {
 	template <typename T>
 	struct ComponentReflectTraits<T, std::enable_if_t<std::is_base_of_v<Behavior, T>>> {
 		static void Describe(ReflectBuilder& builder) {
-			constexpr BehaviorTick ticks =
+			constexpr BehaviorTick TICKS =
 				(BehaviorDetail::DeclaredBelowBehavior(&T::OnUpdate) ? BehaviorTick::Update : BehaviorTick::None) |
 				(BehaviorDetail::DeclaredBelowBehavior(&T::OnFixedUpdate) ? BehaviorTick::FixedUpdate : BehaviorTick::None) |
 				(BehaviorDetail::DeclaredBelowBehavior(&T::OnLateUpdate) ? BehaviorTick::LateUpdate : BehaviorTick::None);
-			builder.AddAttribute(BehaviorTicksAttribute, Variant(static_cast<i64>(ticks)));
+			builder.AddAttribute(BehaviorTicksAttribute, Variant(static_cast<i64>(TICKS)));
 		}
 	};
 

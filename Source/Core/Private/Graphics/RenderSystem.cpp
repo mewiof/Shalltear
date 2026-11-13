@@ -352,7 +352,7 @@ namespace Shalltear {
 
 		constexpr u32 MAX_MATERIAL_BLOCK_BYTES = 1024;
 
-		constexpr Vec3 DEFAULT_AMBIENT{0.03f, 0.03f, 0.03f};
+		constexpr Vec3 DefaultAmbient{0.03f, 0.03f, 0.03f};
 
 		constexpr u32 PROCEDURAL_SKY_FACE_SIZE = 64;
 
@@ -3350,7 +3350,7 @@ namespace Shalltear {
 			RenderState& state = *_state;
 			RenderState::EnvironmentSetup setup;
 			setup.cube = state.defaultEnvironmentCube;
-			setup.sh[0] = DEFAULT_AMBIENT * (1.0f / 0.282095f);
+			setup.sh[0] = DefaultAmbient * (1.0f / 0.282095f);
 			return setup;
 		}
 
@@ -5376,7 +5376,7 @@ namespace Shalltear {
 			GPUViewUniforms viewUniforms;
 			viewUniforms.viewProjection = viewProjection;
 			viewUniforms.cameraPosition = cameraPosition;
-			viewUniforms.ambientColor = DEFAULT_AMBIENT;
+			viewUniforms.ambientColor = DefaultAmbient;
 			viewUniforms.viewForwardRow = Vec4(view(2, 0), view(2, 1), view(2, 2), view(2, 3));
 			viewUniforms.directionalLightCount = static_cast<f32>(directionalCount);
 			viewUniforms.punctualLightCount = static_cast<f32>(lightCount - directionalCount);
@@ -5882,14 +5882,14 @@ namespace Shalltear {
 		}
 
 		void PassRecordViewCold(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { RESULT = 0 };
+			enum : u32 { Result = 0 };
 			RenderState& state = *_state;
 			auto it = state.viewTargets.find(static_cast<u32>(pass.work.key));
 			if (it == state.viewTargets.end()) {
 				return;
 			}
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[RESULT];
+			attachment.texture = pass.textures[Result];
 			attachment.load = RHI::LoadOp::Clear;
 			attachment.clearColor = Color::Black();
 			RHI::RenderPassDesc desc;
@@ -5926,7 +5926,7 @@ namespace Shalltear {
 		}
 
 		void PassRecordViewShadow(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { ATLAS = 0,
+			enum : u32 { Atlas = 0,
 						 PunctualAtlas = 1 };
 			RenderState& state = *_state;
 			RenderState::PendingView& pending = state.pendingViews[pass.work.index];
@@ -5939,7 +5939,7 @@ namespace Shalltear {
 				}
 			}
 			exec.drawCalls += RecordShadowPass(*exec.cmd, *state.extractionArena, pending.view, pending.projection,
-											   pending.cameraPosition, pass.textures[ATLAS], pass.textures[PunctualAtlas],
+											   pending.cameraPosition, pass.textures[Atlas], pass.textures[PunctualAtlas],
 											   ShadowOwnerToken(pass.work), exec.triangles,
 											   {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
 											   pending.kind, pending.hasShadowFit ? &pending.shadowFit : nullptr, fit,
@@ -6027,14 +6027,14 @@ namespace Shalltear {
 
 		void PassRecordViewScene(GraphExecution& exec, const GraphPass& pass) {
 			// builder's declaration order = this table
-			enum : u32 { COLOR = 0,
-						 DEPTH = 1 };
+			enum : u32 { Color = 0,
+						 Depth = 1 };
 			RenderState& state = *_state;
 			RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const ViewRecordScope viewScope(pending);
 			PassTargets targets;
-			targets.color = pass.textures[COLOR];
-			targets.depth = pass.textures[DEPTH];
+			targets.color = pass.textures[Color];
+			targets.depth = pass.textures[Depth];
 			targets.clear = true;
 			targets.samples = state.msaaSamples;
 			auto targetIt = state.viewTargets.find(pending.targetId);
@@ -6318,9 +6318,9 @@ namespace Shalltear {
 		}
 
 		void PassRecordViewPrepassItems(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { KEPT = 0,
-						 DEPTH = 1,
-						 NORMALS = 2 };
+			enum : u32 { Kept = 0,
+						 Depth = 1,
+						 Normals = 2 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const ViewRecordScope viewScope(pending);
@@ -6329,8 +6329,8 @@ namespace Shalltear {
 				return;
 			}
 			exec.drawCalls += RecordPrepassItemsOverCopy(
-				*exec.cmd, pending.view, pending.projection, pending.cameraPosition, pass.textures[KEPT], pass.textures[DEPTH],
-				pass.work.flag ? pass.textures[NORMALS] : RHI::TextureHandle{}, state.ViewRenderSize(pending, targetIt->second.size),
+				*exec.cmd, pending.view, pending.projection, pending.cameraPosition, pass.textures[Kept], pass.textures[Depth],
+				pass.work.flag ? pass.textures[Normals] : RHI::TextureHandle{}, state.ViewRenderSize(pending, targetIt->second.size),
 				{state.proceduralVisible.data() + pending.firstProcedural, pending.proceduralCount});
 		}
 
@@ -6363,9 +6363,9 @@ namespace Shalltear {
 		}
 
 		void PassRecordWindowPrepassItems(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { KEPT = 0,
-						 DEPTH = 1,
-						 NORMALS = 2 };
+			enum : u32 { Kept = 0,
+						 Depth = 1,
+						 Normals = 2 };
 			RenderState& state = *_state;
 			RenderState::WindowWork& work = state.frameWork[pass.work.index];
 			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
@@ -6379,7 +6379,7 @@ namespace Shalltear {
 			const ViewRecordScope viewScope(cameraWork);
 			exec.drawCalls += RecordPrepassItemsOverCopy(
 				*exec.cmd, cameraOwner->GetWorldMatrix().Inverse(), camera->BuildProjection(aspect), cameraOwner->GetWorldPosition(),
-				pass.textures[KEPT], pass.textures[DEPTH], pass.work.flag ? pass.textures[NORMALS] : RHI::TextureHandle{}, renderSize,
+				pass.textures[Kept], pass.textures[Depth], pass.work.flag ? pass.textures[Normals] : RHI::TextureHandle{}, renderSize,
 				{state.proceduralVisible.data() + cameraWork.firstProcedural, cameraWork.proceduralCount});
 		}
 
@@ -6445,16 +6445,16 @@ namespace Shalltear {
 		}
 
 		void PassRecordViewLines(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { COLOR = 0,
-						 DEPTH = 1 };
+			enum : u32 { Color = 0,
+						 Depth = 1 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const bool overlay = pass.work.flag;
 			const u32 first = overlay ? pending.firstOverlayLine : pending.firstLine;
 			const u32 count = overlay ? pending.overlayLineCount : pending.lineCount;
 			PassTargets targets;
-			targets.color = pass.textures[COLOR];
-			targets.depth = pass.textures[DEPTH];
+			targets.color = pass.textures[Color];
+			targets.depth = pass.textures[Depth];
 			targets.clear = false;
 			targets.samples = state.msaaSamples;
 			exec.drawCalls += RecordDebugLinePass(*exec.cmd, pending.projection * pending.view,
@@ -6462,9 +6462,9 @@ namespace Shalltear {
 		}
 
 		void PassRecordSceneColorCopy(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { SOURCE = 0,
-						 DESTINATION = 1 };
-			exec.drawCalls += RecordSceneColorCopy(*exec.cmd, *exec.device, pass.textures[SOURCE], pass.textures[DESTINATION], pass.work.flag);
+			enum : u32 { Source = 0,
+						 Destination = 1 };
+			exec.drawCalls += RecordSceneColorCopy(*exec.cmd, *exec.device, pass.textures[Source], pass.textures[Destination], pass.work.flag);
 		}
 
 		GraphResourceId DeclareSceneColorCopy(GraphicsInternal::RenderGraph& graph, const char* name, u32 zoneSite, PassWork work,
@@ -6500,8 +6500,8 @@ namespace Shalltear {
 		};
 
 		void PassRecordDebugView(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { SOURCE = 0,
-						 DESTINATION = 1 };
+			enum : u32 { Source = 0,
+						 Destination = 1 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			ShaderAsset* shader = state.debugViewShader.Get();
@@ -6512,14 +6512,14 @@ namespace Shalltear {
 				return;
 			}
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
+			attachment.texture = pass.textures[Destination];
 			attachment.load = RHI::LoadOp::DontCare;
 			RHI::RenderPassDesc desc;
 			desc.colorAttachments = {&attachment, 1};
 			exec.cmd->BeginRenderPass(desc);
 			exec.cmd->SetPipeline(pipeline);
 			RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-										.WriteTexture(0, pass.textures[SOURCE])
+										.WriteTexture(0, pass.textures[Source])
 										.WriteSampler(1, state.clampSampler)
 										.Commit();
 			exec.cmd->BindTransientSet(1, set);
@@ -6548,8 +6548,8 @@ namespace Shalltear {
 		}
 
 		void PassRecordViewOutlineMask(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { MASK = 0,
-						 DEPTH = 1 };
+			enum : u32 { Mask = 0,
+						 Depth = 1 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const ViewRecordScope viewScope(pending);
@@ -6557,13 +6557,13 @@ namespace Shalltear {
 			if (targetIt == state.viewTargets.end()) {
 				return;
 			}
-			exec.drawCalls += RecordOutlineMask(*exec.cmd, *state.extractionArena, pending, pass.textures[MASK], pass.textures[DEPTH],
+			exec.drawCalls += RecordOutlineMask(*exec.cmd, *state.extractionArena, pending, pass.textures[Mask], pass.textures[Depth],
 												state.ViewRenderSize(pending, targetIt->second.size), exec.triangles);
 		}
 
 		void PassRecordViewPick(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { TARGET = 0,
-						 DEPTH = 1 };
+			enum : u32 { Target = 0,
+						 Depth = 1 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			const ViewRecordScope viewScope(pending);
@@ -6578,7 +6578,7 @@ namespace Shalltear {
 			}
 			const Vec2I pixel(Math::Clamp(pending.pick.pixel.x * extent.x / size.x, 0, extent.x - 1),
 							  Math::Clamp(pending.pick.pixel.y * extent.y / size.y, 0, extent.y - 1));
-			exec.drawCalls += RecordPick(*exec.cmd, *state.extractionArena, pending, pass.textures[TARGET], pass.textures[DEPTH], pixel,
+			exec.drawCalls += RecordPick(*exec.cmd, *state.extractionArena, pending, pass.textures[Target], pass.textures[Depth], pixel,
 										 extent, state.pickSlots[pending.pickSlot].objects, exec.triangles);
 		}
 
@@ -6601,10 +6601,10 @@ namespace Shalltear {
 		static_assert(sizeof(GPUOutlinePush) == 32);
 
 		void PassRecordViewOutline(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { MASK = 0,
-						 MASK_DEPTH = 1,
-						 SCENE_DEPTH = 2,
-						 DESTINATION = 3 };
+			enum : u32 { Mask = 0,
+						 MaskDepth = 1,
+						 SceneDepth = 2,
+						 Destination = 3 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			ShaderAsset* shader = state.outlineShader.Get();
@@ -6615,18 +6615,18 @@ namespace Shalltear {
 				return;
 			}
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
+			attachment.texture = pass.textures[Destination];
 			attachment.load = RHI::LoadOp::Load;
 			RHI::RenderPassDesc desc;
 			desc.colorAttachments = {&attachment, 1};
 			exec.cmd->BeginRenderPass(desc);
 			exec.cmd->SetPipeline(pipeline);
 			RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-										.WriteTexture(0, pass.textures[MASK])
+										.WriteTexture(0, pass.textures[Mask])
 										.WriteSampler(1, state.clampSampler)
-										.WriteTexture(2, pass.textures[MASK_DEPTH])
+										.WriteTexture(2, pass.textures[MaskDepth])
 										.WriteSampler(3, state.clampSampler)
-										.WriteTexture(4, pass.textures[SCENE_DEPTH])
+										.WriteTexture(4, pass.textures[SceneDepth])
 										.WriteSampler(5, state.clampSampler)
 										.Commit();
 			exec.cmd->BindTransientSet(1, set);
@@ -6657,8 +6657,8 @@ namespace Shalltear {
 		constexpr f32 DEBUG_OVERLAY_MARGIN = 0.02f;
 
 		void PassRecordDebugOverlay(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { ATLAS = 0,
-						 DESTINATION = 1 };
+			enum : u32 { Atlas = 0,
+						 Destination = 1 };
 			RenderState& state = *_state;
 			const RenderState::PendingView& pending = state.pendingViews[pass.work.index];
 			ShaderAsset* shader = state.debugOverlayShader.Get();
@@ -6669,7 +6669,7 @@ namespace Shalltear {
 				return;
 			}
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
+			attachment.texture = pass.textures[Destination];
 			attachment.load = RHI::LoadOp::Load;
 			RHI::RenderPassDesc desc;
 			desc.colorAttachments = {&attachment, 1};
@@ -6704,24 +6704,24 @@ namespace Shalltear {
 		}
 
 		void PassRecordResolve(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { SOURCE = 0,
-						 DESTINATION = 1 };
-			exec.cmd->ResolveTexture(pass.textures[SOURCE], pass.textures[DESTINATION]);
+			enum : u32 { Source = 0,
+						 Destination = 1 };
+			exec.cmd->ResolveTexture(pass.textures[Source], pass.textures[Destination]);
 		}
 
 		void PassRecordPresent(GraphExecution& exec, const GraphPass& pass, RHI::PipelineHandle pipeline, TonemapCurve curve) {
-			enum : u32 { SOURCE = 0,
-						 DESTINATION = 1 };
+			enum : u32 { Source = 0,
+						 Destination = 1 };
 			RenderState& state = *_state;
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
+			attachment.texture = pass.textures[Destination];
 			attachment.load = RHI::LoadOp::DontCare;
 			RHI::RenderPassDesc desc;
 			desc.colorAttachments = {&attachment, 1};
 			exec.cmd->BeginRenderPass(desc);
 			exec.cmd->SetPipeline(pipeline);
 			RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-										.WriteTexture(0, pass.textures[SOURCE])
+										.WriteTexture(0, pass.textures[Source])
 										.WriteSampler(1, state.clampSampler)
 										.Commit();
 			exec.cmd->BindTransientSet(1, set);
@@ -6756,7 +6756,7 @@ namespace Shalltear {
 		}
 
 		void PassRecordWindowShadow(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { ATLAS = 0,
+			enum : u32 { Atlas = 0,
 						 PunctualAtlas = 1 };
 			RenderState& state = *_state;
 			RenderState::WindowWork& work = state.frameWork[pass.work.index];
@@ -6771,7 +6771,7 @@ namespace Shalltear {
 			const ViewRecordScope viewScope(cameraWork);
 			exec.drawCalls += RecordShadowPass(*exec.cmd, *state.extractionArena, cameraWorld.Inverse(),
 											   camera->BuildProjection(aspect), cameraOwner->GetWorldPosition(),
-											   pass.textures[ATLAS], pass.textures[PunctualAtlas],
+											   pass.textures[Atlas], pass.textures[PunctualAtlas],
 											   ShadowOwnerToken(pass.work), exec.triangles, {}, SceneKind::World, nullptr, nullptr,
 											   {state.proceduralVisible.data() + cameraWork.firstCaster, cameraWork.casterCount},
 											   camera->GetCullingMask());
@@ -6836,8 +6836,8 @@ namespace Shalltear {
 		}
 
 		void PassRecordWindowScene(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { COLOR = 0,
-						 DEPTH = 1 };
+			enum : u32 { Color = 0,
+						 Depth = 1 };
 			RenderState& state = *_state;
 			RenderState::WindowWork& work = state.frameWork[pass.work.index];
 			const RenderState::CameraWork& cameraWork = work.cameras[pass.work.subIndex];
@@ -6850,8 +6850,8 @@ namespace Shalltear {
 			const f32 aspect = CameraAspect(cameraWork);
 
 			PassTargets targets;
-			targets.color = pass.textures[COLOR];
-			targets.depth = pass.textures[DEPTH];
+			targets.color = pass.textures[Color];
+			targets.depth = pass.textures[Depth];
 			targets.clear = pass.work.flag;
 			targets.drawSky = pass.work.flag && camera->GetBackgroundType() == BackgroundType::Sky;
 			targets.samples = state.msaaSamples;
@@ -6868,15 +6868,15 @@ namespace Shalltear {
 		}
 
 		void PassRecordCameraComposite(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { SOURCE = 0,
-						 DESTINATION = 1,
-						 DEPTH = 2 };
+			enum : u32 { Source = 0,
+						 Destination = 1,
+						 Depth = 2 };
 			RenderState& state = *_state;
 			const RenderState::CameraWork& cameraWork = state.frameWork[pass.work.index].cameras[pass.work.subIndex];
 			const bool firstOnChain = pass.work.flag;
 			if (firstOnChain) {
 				RHI::RenderPassDesc::DepthAttachment depth;
-				depth.texture = pass.textures[DEPTH];
+				depth.texture = pass.textures[Depth];
 				depth.load = RHI::LoadOp::Clear;
 				depth.clearDepth = 0.0f;
 				RHI::RenderPassDesc clearDesc;
@@ -6885,7 +6885,7 @@ namespace Shalltear {
 				exec.cmd->EndRenderPass();
 			}
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[DESTINATION];
+			attachment.texture = pass.textures[Destination];
 			attachment.load = firstOnChain ? RHI::LoadOp::Clear : RHI::LoadOp::Load;
 			attachment.clearColor = Color::Black();
 			RHI::RenderPassDesc desc;
@@ -6899,7 +6899,7 @@ namespace Shalltear {
 				exec.cmd->SetViewportScissor(cameraWork.pixels);
 				exec.cmd->SetPipeline(pipeline);
 				RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-											.WriteTexture(0, pass.textures[SOURCE])
+											.WriteTexture(0, pass.textures[Source])
 											.WriteSampler(1, state.clampSampler)
 											.Commit();
 				exec.cmd->BindTransientSet(1, set);
@@ -6939,10 +6939,10 @@ namespace Shalltear {
 		}
 
 		void PassRecordWindowClear(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { BACKBUFFER = 0 };
+			enum : u32 { Backbuffer = 0 };
 			RenderState& state = *_state;
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[BACKBUFFER];
+			attachment.texture = pass.textures[Backbuffer];
 			attachment.load = RHI::LoadOp::Clear;
 			attachment.clearColor = Color::Black();
 			RHI::RenderPassDesc desc;
@@ -6990,7 +6990,7 @@ namespace Shalltear {
 		}
 
 		void PassRecordOverlay(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { BACKBUFFER = 0 };
+			enum : u32 { Backbuffer = 0 };
 			RenderState& state = *_state;
 			if (!state.overlay) {
 				return;
@@ -7001,13 +7001,13 @@ namespace Shalltear {
 				return;
 			}
 			SLT_PROFILE_ZONE("Render.Overlay");
-			exec.drawCalls += state.overlay->RecordOverlay(work.window, *exec.cmd, pass.textures[BACKBUFFER],
+			exec.drawCalls += state.overlay->RecordOverlay(work.window, *exec.cmd, pass.textures[Backbuffer],
 														   contextIt->second.frameSize);
 		}
 
 		void PassRecordWindowLetterbox(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { FRAME = 0,
-						 BACKBUFFER = 1 };
+			enum : u32 { Frame = 0,
+						 Backbuffer = 1 };
 			RenderState& state = *_state;
 			auto contextIt = state.windowContexts.find(pass.work.key);
 			if (contextIt == state.windowContexts.end()) {
@@ -7015,7 +7015,7 @@ namespace Shalltear {
 			}
 			RenderState::WindowContext& context = contextIt->second;
 			RHI::RenderPassDesc::Attachment attachment;
-			attachment.texture = pass.textures[BACKBUFFER];
+			attachment.texture = pass.textures[Backbuffer];
 			attachment.load = RHI::LoadOp::Clear;
 			attachment.clearColor = Color::Black();
 			RHI::RenderPassDesc desc;
@@ -7028,7 +7028,7 @@ namespace Shalltear {
 				exec.cmd->SetViewportScissor(WindowInternal::LetterboxRect(context.swapChain->GetSize(), context.frameSize));
 				exec.cmd->SetPipeline(pipeline);
 				RHI::TransientSet set = exec.device->CreateTransientSet(pipeline, 1)
-											.WriteTexture(0, pass.textures[FRAME])
+											.WriteTexture(0, pass.textures[Frame])
 											.WriteSampler(1, state.clampSampler)
 											.Commit();
 				exec.cmd->BindTransientSet(1, set);
@@ -7799,8 +7799,8 @@ namespace Shalltear {
 		static_assert(sizeof(GPUPrefilterPush) == 24);
 
 		void PassRecordSkyPrefilter(GraphExecution& exec, const GraphPass& pass) {
-			enum : u32 { SOURCE = 0,
-						 CHAIN = 1 };
+			enum : u32 { Source = 0,
+						 Chain = 1 };
 			RenderState& state = *_state;
 			RenderState::SkyCapture& capture = state.skyCaptures[pass.work.index];
 			ShaderAsset* shader = state.skyPrefilterShader.Get();
@@ -7811,14 +7811,14 @@ namespace Shalltear {
 			RHI::CommandList& cmd = *exec.cmd;
 			RHI::Device& device = *exec.device;
 			RHI::TransientSetWriter writer = device.CreateTransientSet(pipeline, 0);
-			writer.WriteTexture(0, pass.textures[SOURCE]);
+			writer.WriteTexture(0, pass.textures[Source]);
 			writer.WriteSampler(1, state.linearClampSampler);
 			const RHI::TransientSet set = writer.Commit();
 			for (u32 level = 0; level < capture.chainMips; ++level) {
 				const u32 side = Math::Max(capture.faceSize >> level, 1u);
 				for (u32 face = 0; face < GraphicsInternal::CUBE_FACE_COUNT; ++face) {
 					RHI::RenderPassDesc::Attachment attachment;
-					attachment.texture = pass.textures[CHAIN];
+					attachment.texture = pass.textures[Chain];
 					attachment.layer = face;
 					attachment.mip = level;
 					attachment.load = RHI::LoadOp::DontCare;
@@ -7882,18 +7882,18 @@ namespace Shalltear {
 				const f32 aspect = CameraAspect(cameraRows);
 
 				RHI::TextureDesc cameraHDRDesc;
-				RHI::TextureDesc cameraHDRMsDesc;
+				RHI::TextureDesc cameraHDRMultisampledDesc;
 				RHI::TextureDesc cameraDepthDesc;
-				SceneChainDescs(extent, state.msaaSamples, cameraHDRDesc, cameraHDRMsDesc, cameraDepthDesc);
+				SceneChainDescs(extent, state.msaaSamples, cameraHDRDesc, cameraHDRMultisampledDesc, cameraDepthDesc);
 				GraphResourceId cameraTarget = sceneTarget;
 				GraphResourceId cameraDepth = sceneDepth;
 				GraphResourceId cameraColor = GraphicsInternal::INVALID_GRAPH_RESOURCE;
 				if (cameraRows.composited) {
 					cameraHDRDesc.debugName = "CameraColorHDR";
-					cameraHDRMsDesc.debugName = "CameraColorHDRMS";
+					cameraHDRMultisampledDesc.debugName = "CameraColorHDRMS";
 					cameraDepthDesc.debugName = "CameraDepth";
 					cameraColor = graph.CreateTransient(cameraHDRDesc);
-					cameraTarget = state.msaaSamples > 1 ? graph.CreateTransient(cameraHDRMsDesc) : cameraColor;
+					cameraTarget = state.msaaSamples > 1 ? graph.CreateTransient(cameraHDRMultisampledDesc) : cameraColor;
 					cameraDepth = graph.CreateTransient(cameraDepthDesc);
 					EnsureBlitShader();
 				}
@@ -8598,13 +8598,13 @@ namespace Shalltear {
 
 				if (!windowWork.cameras.empty()) {
 					RHI::TextureDesc windowHDRDesc;
-					RHI::TextureDesc windowHDRMsDesc;
+					RHI::TextureDesc windowHDRMultisampledDesc;
 					RHI::TextureDesc windowDepthDesc;
-					SceneChainDescs(renderSize, state.msaaSamples, windowHDRDesc, windowHDRMsDesc, windowDepthDesc);
-					windowHDRMsDesc.debugName = "SceneColorHDRMS";
+					SceneChainDescs(renderSize, state.msaaSamples, windowHDRDesc, windowHDRMultisampledDesc, windowDepthDesc);
+					windowHDRMultisampledDesc.debugName = "SceneColorHDRMS";
 					windowDepthDesc.debugName = "SceneDepth";
 					GraphResourceId sceneColor = graph.Import(context.sceneColor);
-					GraphResourceId sceneTarget = state.msaaSamples > 1 ? graph.CreateTransient(windowHDRMsDesc) : sceneColor;
+					GraphResourceId sceneTarget = state.msaaSamples > 1 ? graph.CreateTransient(windowHDRMultisampledDesc) : sceneColor;
 					GraphResourceId sceneDepth = graph.CreateTransient(windowDepthDesc);
 
 					DeclareCameraComposition(state, device, graph, work, sceneTarget, sceneDepth, worldSkin, worldSkinBuffer);
@@ -9345,9 +9345,9 @@ namespace Shalltear {
 
 		void FillDefaultTextures(RenderState& state) {
 			RHI::Device& device = *state.device;
-			const u16 ambient[4] = {Math::FloatToHalf(DEFAULT_AMBIENT.x),
-									Math::FloatToHalf(DEFAULT_AMBIENT.y),
-									Math::FloatToHalf(DEFAULT_AMBIENT.z),
+			const u16 ambient[4] = {Math::FloatToHalf(DefaultAmbient.x),
+									Math::FloatToHalf(DefaultAmbient.y),
+									Math::FloatToHalf(DefaultAmbient.z),
 									Math::FloatToHalf(1.0f)};
 			for (RHI::TextureHandle cube : {state.defaultEnvironmentCube, state.defaultReflectionProbeArray}) {
 				for (u32 face = 0; cube.IsValid() && face < GraphicsInternal::CUBE_FACE_COUNT; ++face) {

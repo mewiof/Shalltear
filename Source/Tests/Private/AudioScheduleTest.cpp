@@ -32,7 +32,7 @@ namespace {
 
 TEST(AudioScheduleTest, PlayScheduledInsideBlockStartsOnFrame) {
 	OfflineMixer mixer(1);
-	ClipBlock click(MakePcm(Click(), 1, 48000));
+	ClipBlock click(MakePCM(Click(), 1, 48000));
 	const u64 blockStart = mixer.Now();
 	const u64 at = blockStart + BLOCK + 137;
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, click.Get(), at)));
@@ -44,7 +44,7 @@ TEST(AudioScheduleTest, PlayScheduledInsideBlockStartsOnFrame) {
 
 TEST(AudioScheduleTest, BarApartVoicesStayApart) {
 	OfflineMixer mixer(1);
-	ClipBlock click(MakePcm(Click(), 1, 48000));
+	ClipBlock click(MakePCM(Click(), 1, 48000));
 	constexpr u64 BAR = 96000;
 	constexpr u32 BARS = 31;
 	const u64 origin = mixer.Now() + 1000;
@@ -72,7 +72,7 @@ TEST(AudioScheduleTest, BarApartVoicesStayApart) {
 
 TEST(AudioScheduleTest, ScheduledEndStopsOnFrameUncut) {
 	OfflineMixer mixer(1);
-	ClipBlock tone(MakePcm(std::vector<f32>(2000, 0.5f), 1, 48000));
+	ClipBlock tone(MakePCM(std::vector<f32>(2000, 0.5f), 1, 48000));
 	const u64 start = mixer.Now();
 	AudioCommand play = mixer.Play(0, tone.Get());
 	play.loop = true;
@@ -93,7 +93,7 @@ TEST(AudioScheduleTest, ScheduledEndStopsOnFrameUncut) {
 TEST(AudioScheduleTest, PassedStartPlaysAtOnce) {
 	OfflineMixer mixer(1);
 	mixer.Render(4 * BLOCK);
-	ClipBlock click(MakePcm(Click(), 1, 48000));
+	ClipBlock click(MakePCM(Click(), 1, 48000));
 	const u64 now = mixer.Now();
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, click.Get(), now - 700)));
 
@@ -105,7 +105,7 @@ TEST(AudioScheduleTest, PassedStartPlaysAtOnce) {
 
 TEST(AudioScheduleTest, WaitingStartMovesBegunDoesNot) {
 	OfflineMixer mixer(1);
-	ClipBlock click(MakePcm(Click(), 1, 48000));
+	ClipBlock click(MakePCM(Click(), 1, 48000));
 	const u64 origin = mixer.Now();
 	const AudioCommand play = mixer.Play(0, click.Get(), origin + 300);
 	ASSERT_TRUE(mixer.Push(play));
@@ -114,7 +114,7 @@ TEST(AudioScheduleTest, WaitingStartMovesBegunDoesNot) {
 	ASSERT_EQ(sounding.size(), 1u);
 	EXPECT_EQ(sounding[0], origin + 800);
 
-	ClipBlock tone(MakePcm(std::vector<f32>(4000, 0.25f), 1, 48000));
+	ClipBlock tone(MakePCM(std::vector<f32>(4000, 0.25f), 1, 48000));
 	const u64 now = mixer.Now();
 	const AudioCommand playing = mixer.Play(1, tone.Get(), now);
 	ASSERT_TRUE(mixer.Push(playing));
@@ -127,7 +127,7 @@ TEST(AudioScheduleTest, WaitingStartMovesBegunDoesNot) {
 
 TEST(AudioScheduleTest, VoiceStoppedBeforeStartEndsUnheard) {
 	OfflineMixer mixer(1);
-	ClipBlock click(MakePcm(Click(), 1, 48000));
+	ClipBlock click(MakePCM(Click(), 1, 48000));
 	const u64 origin = mixer.Now();
 	const AudioCommand play = mixer.Play(0, click.Get(), origin + 5 * BLOCK);
 	ASSERT_TRUE(mixer.Push(play));
@@ -141,7 +141,7 @@ TEST(AudioScheduleTest, VoiceStoppedBeforeStartEndsUnheard) {
 
 TEST(AudioScheduleTest, StartEndInOneBlock) {
 	OfflineMixer mixer(1);
-	ClipBlock tone(MakePcm(std::vector<f32>(1000, 0.5f), 1, 48000));
+	ClipBlock tone(MakePCM(std::vector<f32>(1000, 0.5f), 1, 48000));
 	const u64 origin = mixer.Now();
 	const AudioCommand play = mixer.Play(0, tone.Get(), origin + 40);
 	ASSERT_TRUE(mixer.Push(play));
@@ -154,7 +154,7 @@ TEST(AudioScheduleTest, StartEndInOneBlock) {
 
 TEST(AudioScheduleTest, AResampledVoiceStartsOnItsFrame) {
 	OfflineMixer mixer(1);
-	ClipBlock click(MakePcm(Click(), 1, 44100));
+	ClipBlock click(MakePCM(Click(), 1, 44100));
 	const u64 origin = mixer.Now();
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, click.Get(), origin + 200)));
 	const std::vector<f32> out = mixer.Render(2 * BLOCK);

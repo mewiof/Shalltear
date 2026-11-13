@@ -7,7 +7,7 @@
 #include "AudioChannels.h"
 #include "AudioClipData.h"
 #include "AudioMessages.h"
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 namespace Shalltear {
 
@@ -42,7 +42,7 @@ namespace Shalltear {
 		struct AudioVoiceDecoder {
 			bool gainsValid = false;
 			f32 gains[MAX_AUDIO_CHANNELS * MAX_AUDIO_CHANNELS]{};
-			QoaCursor qoa;
+			QOACursor qoa;
 		};
 
 		struct AudioVoiceState {

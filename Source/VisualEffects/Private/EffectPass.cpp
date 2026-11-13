@@ -73,7 +73,7 @@ namespace Shalltear::VisualEffectsImpl {
 
 		EffectClock _clock;
 		const VisualEffectsSettings* _settings = nullptr;
-		const VisualEffectsSettings _defaultSettings;
+		const VisualEffectsSettings _DefaultSettings;
 		Vector<f32>* _updates = nullptr;
 		EffectFrameCounts _advanced;
 
@@ -187,7 +187,7 @@ namespace Shalltear::VisualEffectsImpl {
 		return _clock.Advance(deltaTime, unscaledDeltaTime, GetEffectSettings());
 	}
 
-	const VisualEffectsSettings& GetEffectSettings() { return _settings ? *_settings : _defaultSettings; }
+	const VisualEffectsSettings& GetEffectSettings() { return _settings ? *_settings : _DefaultSettings; }
 
 	void AdvanceEffects(const EffectFrameTime& time) {
 		SLT_PROFILE_ZONE("Effects.Update");
@@ -336,9 +336,9 @@ namespace Shalltear::VisualEffectsImpl {
 	}
 
 	void RegisterEffectStage(const void* owner) {
-		_settings = Settings::DeclareCategory<VisualEffectsSettings>(EFFECT_SETTINGS_PATH, SettingScope::Project);
+		_settings = Settings::DeclareCategory<VisualEffectsSettings>(EffectSettingsPath, SettingScope::Project);
 		if (!_settings) {
-			SLT_LOG_ERROR("VisualEffects", "couldn't register the {} settings category", EFFECT_SETTINGS_PATH);
+			SLT_LOG_ERROR("VisualEffects", "couldn't register the {} settings category", EffectSettingsPath);
 		}
 		FrameStages::Register(FrameStage::LateUpdate, FrameStagePosition::Late, &LateUpdateStage, nullptr, owner);
 		_deviceWatcher = New<DeviceWatcher>(MemTag::Graphics);

@@ -170,11 +170,11 @@ namespace Shalltear {
 					continue;
 				}
 				line = line.substr(begin);
-				constexpr std::string_view PREFIX = "#pragma shalltear_";
-				if (!line.starts_with(PREFIX)) {
+				constexpr std::string_view Prefix = "#pragma shalltear_";
+				if (!line.starts_with(Prefix)) {
 					continue;
 				}
-				line = line.substr(PREFIX.size());
+				line = line.substr(Prefix.size());
 
 				const size_t keyEnd = line.find_first_of(" \t\r");
 				const std::string_view bareKey = line.substr(0, keyEnd);

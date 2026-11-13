@@ -48,7 +48,7 @@ namespace Shalltear::Linux {
 
 	} // anonymous namespace
 
-	bool X11Api::Load(str& outWhy) {
+	bool X11API::Load(str& outWhy) {
 		x11 = Platform::OpenLibrary("libX11.so.6", &outWhy);
 		if (!x11) {
 			return false;
@@ -93,7 +93,7 @@ namespace Shalltear::Linux {
 		return true;
 	}
 
-	void X11Api::Unload() {
+	void X11API::Unload() {
 		for (void** library : {&xcursor, &xrandr, &xi, &x11}) {
 			if (*library) {
 				Platform::CloseLibrary(*library);
@@ -156,7 +156,7 @@ namespace Shalltear::Linux {
 		atoms.targets = atom("TARGETS");
 		atoms.incr = atom("INCR");
 		atoms.selectionProperty = atom("SHALLTEAR_SELECTION");
-		atoms.textPlainUtf8 = atom("text/plain;charset=utf-8");
+		atoms.textPlainUTF8 = atom("text/plain;charset=utf-8");
 		atoms.xdndAware = atom("XdndAware");
 		atoms.xdndEnter = atom("XdndEnter");
 		atoms.xdndPosition = atom("XdndPosition");
@@ -198,7 +198,7 @@ namespace Shalltear::Linux {
 		static const struct {
 			const char* theme;
 			unsigned int font;
-		} CURSOR_NAMES[static_cast<size_t>(SystemCursor::Count)] = {
+		} cursorNames[static_cast<size_t>(SystemCursor::Count)] = {
 			{"left_ptr", XC_left_ptr},
 			{"xterm", XC_xterm},
 			{"crosshair", XC_crosshair},
@@ -211,9 +211,9 @@ namespace Shalltear::Linux {
 			{"not-allowed", XC_X_cursor},
 		};
 		for (size_t i = 0; i < static_cast<size_t>(SystemCursor::Count); ++i) {
-			cursors[i] = x.xcursor ? x.XcursorLibraryLoadCursor(display, CURSOR_NAMES[i].theme) : 0;
+			cursors[i] = x.xcursor ? x.XcursorLibraryLoadCursor(display, cursorNames[i].theme) : 0;
 			if (!cursors[i]) {
-				cursors[i] = x.XCreateFontCursor(display, CURSOR_NAMES[i].font);
+				cursors[i] = x.XCreateFontCursor(display, cursorNames[i].font);
 			}
 		}
 		const char empty[1] = {0};
@@ -283,10 +283,10 @@ namespace Shalltear::Linux {
 		Vector<u8> text{GetMemoryResource(MemTag::Platform)};
 		if (ReadProperty(root, atoms.resourceManager, XA_STRING, text)) {
 			const std::string_view resources(reinterpret_cast<const char*>(text.data()), text.size());
-			constexpr std::string_view KEY = "Xft.dpi:";
-			const size_t at = resources.find(KEY);
+			constexpr std::string_view Key = "Xft.dpi:";
+			const size_t at = resources.find(Key);
 			if (at != std::string_view::npos) {
-				const f64 dpi = std::strtod(str(resources.substr(at + KEY.size(), 16)).c_str(), nullptr);
+				const f64 dpi = std::strtod(str(resources.substr(at + Key.size(), 16)).c_str(), nullptr);
 				if (dpi >= 48.0 && dpi <= 960.0) {
 					return static_cast<f32>(dpi / 96.0);
 				}
@@ -915,6 +915,6 @@ namespace Shalltear::Linux {
 
 	} // anonymous namespace
 
-	extern const ServerCandidate X11_CANDIDATE = {"x11", &ConnectX11};
+	extern const ServerCandidate X11Candidate = {"x11", &ConnectX11};
 
 } // namespace Shalltear::Linux

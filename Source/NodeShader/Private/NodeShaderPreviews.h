@@ -43,7 +43,7 @@ namespace Shalltear {
 
 	class SHALLTEAR_NODESHADER_API NodeShaderPreviews {
 	public:
-		static constexpr std::string_view MESH_SETTING = "previewMesh";
+		static constexpr std::string_view MeshSetting = "previewMesh";
 
 		NodeShaderPreviews();
 		~NodeShaderPreviews();

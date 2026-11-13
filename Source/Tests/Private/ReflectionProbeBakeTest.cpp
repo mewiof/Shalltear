@@ -354,17 +354,17 @@ TEST_F(ReflectionProbeBakeFixture, ClickingBakeInInspectorQueuesProbe) {
 }
 
 TEST(ReflectionProbeBakeOpsTest, StripRoundTripsWithinPrecision) {
-	constexpr u32 side = 16;
+	constexpr u32 SIDE = 16;
 	Vector<u8> faces{GetMemoryResource(MemTag::Core)};
-	faces.resize(static_cast<size_t>(side) * side * 8 * 6);
+	faces.resize(static_cast<size_t>(SIDE) * SIDE * 8 * 6);
 	u16* halves = reinterpret_cast<u16*>(faces.data());
 	auto value = [](u32 face, u32 x, u32 y, u32 channel) {
-		return std::pow(10.0f, static_cast<f32>(face) - 3.0f) * (1.0f + static_cast<f32>(x * side + y + channel * 7) / 512.0f);
+		return std::pow(10.0f, static_cast<f32>(face) - 3.0f) * (1.0f + static_cast<f32>(x * SIDE + y + channel * 7) / 512.0f);
 	};
 	for (u32 face = 0; face < 6; ++face) {
-		for (u32 y = 0; y < side; ++y) {
-			for (u32 x = 0; x < side; ++x) {
-				u16* texel = halves + ((static_cast<size_t>(face) * side + y) * side + x) * 4;
+		for (u32 y = 0; y < SIDE; ++y) {
+			for (u32 x = 0; x < SIDE; ++x) {
+				u16* texel = halves + ((static_cast<size_t>(face) * SIDE + y) * SIDE + x) * 4;
 				for (u32 channel = 0; channel < 3; ++channel) {
 					texel[channel] = Math::FloatToHalf(value(face, x, y, channel));
 				}
@@ -372,7 +372,7 @@ TEST(ReflectionProbeBakeOpsTest, StripRoundTripsWithinPrecision) {
 			}
 		}
 	}
-	const Vector<u8> file = ReflectionProbeBakeOps::EncodeStrip({faces.data(), faces.size()}, side);
+	const Vector<u8> file = ReflectionProbeBakeOps::EncodeStrip({faces.data(), faces.size()}, SIDE);
 	ASSERT_FALSE(file.empty());
 
 	const std::filesystem::path root = std::filesystem::temp_directory_path() / "shalltear_bake_strip";
@@ -389,12 +389,12 @@ TEST(ReflectionProbeBakeOpsTest, StripRoundTripsWithinPrecision) {
 	TextureAsset* cube = static_cast<TextureAsset*>(importer.ImportWithSettings(Path(strip.generic_string()), Path("project://Strip"), settings));
 	ASSERT_NE(cube, nullptr);
 	ASSERT_TRUE(cube->isCube);
-	ASSERT_EQ(cube->size.x, static_cast<i32>(side));
+	ASSERT_EQ(cube->size.x, static_cast<i32>(SIDE));
 	const u16* read = reinterpret_cast<const u16*>(cube->pixels.data());
 	for (u32 face = 0; face < 6; ++face) {
-		for (u32 y = 0; y < side; ++y) {
-			for (u32 x = 0; x < side; ++x) {
-				const u16* texel = read + ((static_cast<size_t>(face) * side + y) * side + x) * 4;
+		for (u32 y = 0; y < SIDE; ++y) {
+			for (u32 x = 0; x < SIDE; ++x) {
+				const u16* texel = read + ((static_cast<size_t>(face) * SIDE + y) * SIDE + x) * 4;
 				const f32 peak = value(face, x, y, 2);
 				for (u32 channel = 0; channel < 3; ++channel) {
 					ASSERT_NEAR(Math::HalfToFloat(texel[channel]), value(face, x, y, channel), peak * 0.01f)

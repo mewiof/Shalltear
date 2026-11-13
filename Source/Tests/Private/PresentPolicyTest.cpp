@@ -60,8 +60,8 @@ TEST(PresentPolicyTest, WaitRetryBacksOffToCap) {
 
 namespace {
 
-	constexpr f64 REFRESH_144 = 1.0 / 144.0;
-	constexpr f64 REFRESH_60 = 1.0 / 60.0;
+	constexpr f64 REFRESH144 = 1.0 / 144.0;
+	constexpr f64 REFRESH60 = 1.0 / 60.0;
 	constexpr f64 ON_TIME = 0.0;
 
 	RHI::PresentQueue Advance(RHI::PresentQueue queue, u32 frames, f64 work, f64 latency, f64 refresh) {
@@ -78,28 +78,28 @@ TEST(PresentQueueTest, StartsOneFrameDeep) {
 }
 
 TEST(PresentQueueTest, LightFramesStayAtOne) {
-	const RHI::PresentQueue queue = Advance({}, 1000, 0.001, REFRESH_144, REFRESH_144);
+	const RHI::PresentQueue queue = Advance({}, 1000, 0.001, REFRESH144, REFRESH144);
 	EXPECT_EQ(queue.depth, 1u);
 	EXPECT_EQ(queue.late, 0u);
 }
 
 TEST(PresentQueueTest, HeavyFramesQueueTwo) {
-	const f64 heavy = REFRESH_144 - RHI::PRESENT_LATE_SLACK_SECONDS + 0.0005;
-	EXPECT_EQ(Advance({}, 2, heavy, ON_TIME, REFRESH_144).depth, 1u);
-	EXPECT_EQ(Advance({}, 3, heavy, ON_TIME, REFRESH_144).depth, 2u);
+	const f64 heavy = REFRESH144 - RHI::PRESENT_LATE_SLACK_SECONDS + 0.0005;
+	EXPECT_EQ(Advance({}, 2, heavy, ON_TIME, REFRESH144).depth, 1u);
+	EXPECT_EQ(Advance({}, 3, heavy, ON_TIME, REFRESH144).depth, 2u);
 }
 
 TEST(PresentQueueTest, MissedRefreshesQueueTwo) {
-	const f64 missed = REFRESH_144 * 2.0;
-	EXPECT_EQ(Advance({}, 2, 0.001, missed, REFRESH_144).depth, 1u);
-	EXPECT_EQ(Advance({}, 3, 0.001, missed, REFRESH_144).depth, 2u);
+	const f64 missed = REFRESH144 * 2.0;
+	EXPECT_EQ(Advance({}, 2, 0.001, missed, REFRESH144).depth, 1u);
+	EXPECT_EQ(Advance({}, 3, 0.001, missed, REFRESH144).depth, 2u);
 }
 
 TEST(PresentQueueTest, SingleHitchKeepsOne) {
-	RHI::PresentQueue queue = Advance({}, 1, 0.050, 0.060, REFRESH_144);
+	RHI::PresentQueue queue = Advance({}, 1, 0.050, 0.060, REFRESH144);
 	EXPECT_EQ(queue.depth, 1u);
 	EXPECT_GT(queue.late, 0u);
-	queue = Advance(queue, 2, 0.001, REFRESH_144, REFRESH_144);
+	queue = Advance(queue, 2, 0.001, REFRESH144, REFRESH144);
 	EXPECT_EQ(queue.depth, 1u);
 	EXPECT_EQ(queue.late, 0u);
 }
@@ -107,45 +107,45 @@ TEST(PresentQueueTest, SingleHitchKeepsOne) {
 TEST(PresentQueueTest, SpacedHitchesKeepOne) {
 	RHI::PresentQueue queue;
 	for (u32 round = 0; round < 50; ++round) {
-		queue = Advance(queue, 1, 0.050, 0.060, REFRESH_144);
-		queue = Advance(queue, 4, 0.001, REFRESH_144, REFRESH_144);
+		queue = Advance(queue, 1, 0.050, 0.060, REFRESH144);
+		queue = Advance(queue, 4, 0.001, REFRESH144, REFRESH144);
 	}
 	EXPECT_EQ(queue.depth, 1u);
 }
 
 TEST(PresentQueueTest, ReturnsToOneAfterCalmRun) {
 	const RHI::PresentQueue queued{2, 0, 0};
-	EXPECT_EQ(Advance(queued, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH_144).depth, 2u);
-	const RHI::PresentQueue calm = Advance(queued, RHI::PRESENT_EARLY_RUN, 0.001, ON_TIME, REFRESH_144);
+	EXPECT_EQ(Advance(queued, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH144).depth, 2u);
+	const RHI::PresentQueue calm = Advance(queued, RHI::PRESENT_EARLY_RUN, 0.001, ON_TIME, REFRESH144);
 	EXPECT_EQ(calm.depth, 1u);
 	EXPECT_EQ(calm.late, 0u);
 }
 
 TEST(PresentQueueTest, SlowFrameRestartsCalmRun) {
-	RHI::PresentQueue queue = Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH_144);
-	queue = Advance(queue, 1, REFRESH_144, ON_TIME, REFRESH_144);
+	RHI::PresentQueue queue = Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH144);
+	queue = Advance(queue, 1, REFRESH144, ON_TIME, REFRESH144);
 	EXPECT_EQ(queue.early, 0u);
-	EXPECT_EQ(Advance(queue, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH_144).depth, 2u);
-	EXPECT_EQ(Advance(queue, RHI::PRESENT_EARLY_RUN, 0.001, ON_TIME, REFRESH_144).depth, 1u);
+	EXPECT_EQ(Advance(queue, RHI::PRESENT_EARLY_RUN - 1, 0.001, ON_TIME, REFRESH144).depth, 2u);
+	EXPECT_EQ(Advance(queue, RHI::PRESENT_EARLY_RUN, 0.001, ON_TIME, REFRESH144).depth, 1u);
 }
 
 TEST(PresentQueueTest, UnknownWorkNeverReturns) {
-	EXPECT_EQ(Advance({2, 0, 0}, 10000, RHI::PRESENT_WORK_UNKNOWN, ON_TIME, REFRESH_144).depth, 2u);
-	EXPECT_EQ(Advance({}, 10000, RHI::PRESENT_WORK_UNKNOWN, REFRESH_144, REFRESH_144).depth, 1u);
+	EXPECT_EQ(Advance({2, 0, 0}, 10000, RHI::PRESENT_WORK_UNKNOWN, ON_TIME, REFRESH144).depth, 2u);
+	EXPECT_EQ(Advance({}, 10000, RHI::PRESENT_WORK_UNKNOWN, REFRESH144, REFRESH144).depth, 1u);
 }
 
 TEST(PresentQueueTest, WorkBetweenSlacksHoldsDepth) {
-	const f64 between = REFRESH_60 - (RHI::PRESENT_LATE_SLACK_SECONDS + RHI::PRESENT_EARLY_SLACK_SECONDS) * 0.5;
-	EXPECT_EQ(Advance({}, 10000, between, REFRESH_60, REFRESH_60).depth, 1u);
-	EXPECT_EQ(Advance({2, 0, 0}, 10000, between, ON_TIME, REFRESH_60).depth, 2u);
+	const f64 between = REFRESH60 - (RHI::PRESENT_LATE_SLACK_SECONDS + RHI::PRESENT_EARLY_SLACK_SECONDS) * 0.5;
+	EXPECT_EQ(Advance({}, 10000, between, REFRESH60, REFRESH60).depth, 1u);
+	EXPECT_EQ(Advance({2, 0, 0}, 10000, between, ON_TIME, REFRESH60).depth, 2u);
 }
 
 TEST(PresentQueueTest, SlacksScaleWithRefresh) {
 	const f64 work = 0.008;
-	EXPECT_EQ(Advance({}, 100, work, REFRESH_60, REFRESH_60).depth, 1u);
-	EXPECT_EQ(Advance({}, 100, work, REFRESH_144, REFRESH_144).depth, 2u);
-	EXPECT_EQ(Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN, work, ON_TIME, REFRESH_60).depth, 1u);
-	EXPECT_EQ(Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN, work, ON_TIME, REFRESH_144).depth, 2u);
+	EXPECT_EQ(Advance({}, 100, work, REFRESH60, REFRESH60).depth, 1u);
+	EXPECT_EQ(Advance({}, 100, work, REFRESH144, REFRESH144).depth, 2u);
+	EXPECT_EQ(Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN, work, ON_TIME, REFRESH60).depth, 1u);
+	EXPECT_EQ(Advance({2, 0, 0}, RHI::PRESENT_EARLY_RUN, work, ON_TIME, REFRESH144).depth, 2u);
 }
 
 TEST(PresentQueueTest, RefreshShorterThanSlackStaysQueued) {

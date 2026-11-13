@@ -18,7 +18,7 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view PREVIEW_INPUTS = R"(struct ShalltearPreviewInput
+		constexpr std::string_view PreviewInputs = R"(struct ShalltearPreviewInput
 {
 	float2 uv;
 	float3 positionWS;
@@ -94,13 +94,13 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 
 )";
 
-		constexpr std::string_view IDENTITY = "float4x4(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)";
+		constexpr std::string_view Identity = "float4x4(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)";
 
-		constexpr std::string_view PREVIEW_SUN = "normalize(float3(-0.45, 0.8, -0.4))";
+		constexpr std::string_view PreviewSun = "normalize(float3(-0.45, 0.8, -0.4))";
 		// 20 degrees in rads
 		constexpr f32 PREVIEW_SUN_DIAMETER = 0.34906585f;
 
-		const GraphBinding PREVIEW_BINDINGS[] = {
+		const GraphBinding previewBindings[] = {
 			{"UV0", "pv.uv", GraphValueType::Float2, GraphStageFragment},
 			{"VertexColor", "float4(1.0, 1.0, 1.0, 1.0)", GraphValueType::Float4, GraphStageFragment},
 
@@ -115,7 +115,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			{"TangentSpacePositionPredisplacement", "float3(0.0, 0.0, 0.0)", GraphValueType::Float3, GraphStageFragment},
 			{"AbsoluteWorldSpacePositionPredisplacement", "pv.positionWS", GraphValueType::Float3, GraphStageFragment},
 
-			{"LightDirection", str(PREVIEW_SUN), GraphValueType::Float3, GraphStageFragment},
+			{"LightDirection", str(PreviewSun), GraphValueType::Float3, GraphStageFragment},
 			{"LightColor", "float3(1.0, 1.0, 1.0)", GraphValueType::Float3, GraphStageFragment},
 			{"LightAttenuation", "1.0", GraphValueType::Float, GraphStageFragment},
 			{"LightShadow", "1.0", GraphValueType::Float, GraphStageFragment},
@@ -127,7 +127,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			{"SurfaceOcclusion", "1.0", GraphValueType::Float, GraphStageFragment},
 			{"SurfaceEmission", "float3(0.0, 0.0, 0.0)", GraphValueType::Float3, GraphStageFragment},
 			{"SurfaceNormal", "pv.normalWS", GraphValueType::Float3, GraphStageFragment},
-			{"StandardRadiance", "(saturate(dot(pv.normalWS, " + str(PREVIEW_SUN) + ")) * 0.3183098861837907).xxx", GraphValueType::Float3,
+			{"StandardRadiance", "(saturate(dot(pv.normalWS, " + str(PreviewSun) + ")) * 0.3183098861837907).xxx", GraphValueType::Float3,
 			 GraphStageFragment},
 
 			{"WorldSpaceNormal", "pv.normalWS", GraphValueType::Float3, GraphStageFragment},
@@ -157,8 +157,8 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			{"PixelPosition", "(pv.uv * 128.0)", GraphValueType::Float2, GraphStageFragment},
 			{"ClipPosition", "(pv.uv * 128.0)", GraphValueType::Float2, GraphStageFragment},
 
-			{"ObjectToWorld", str(IDENTITY), GraphValueType::Float4x4, GraphStageFragment},
-			{"WorldToObject", str(IDENTITY), GraphValueType::Float4x4, GraphStageFragment},
+			{"ObjectToWorld", str(Identity), GraphValueType::Float4x4, GraphStageFragment},
+			{"WorldToObject", str(Identity), GraphValueType::Float4x4, GraphStageFragment},
 			{"View", "pv.view", GraphValueType::Float4x4, GraphStageFragment},
 			{"InverseView", "pv.inverseView", GraphValueType::Float4x4, GraphStageFragment},
 			{"Projection", "pv.projection", GraphValueType::Float4x4, GraphStageFragment},
@@ -185,13 +185,13 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			{"MotionVectors", "", GraphValueType::Texture2D, GraphStageFragment, "nothing renders motion vectors"},
 
 			{"SkyDirection", "pv.normalWS", GraphValueType::Float3, GraphStageFragment},
-			{"SkySunDirection", str(PREVIEW_SUN), GraphValueType::Float3, GraphStageFragment},
+			{"SkySunDirection", str(PreviewSun), GraphValueType::Float3, GraphStageFragment},
 			{"SkySunColor", "float3(1.0, 1.0, 1.0)", GraphValueType::Float3, GraphStageFragment},
 			{"SkySunAngularDiameter", GraphHLSL::FloatLiteral(PREVIEW_SUN_DIAMETER), GraphValueType::Float, GraphStageFragment},
 			{"SkySunEnabled", "true", GraphValueType::Bool, GraphStageFragment},
 			{"SkyCapturing", "false", GraphValueType::Bool, GraphStageFragment},
 			{"SkySunDisc",
-			 "ShalltearSunDisc(pv.normalWS, " + str(PREVIEW_SUN) + ", float3(1.0, 1.0, 1.0), " + GraphHLSL::FloatLiteral(std::cos(PREVIEW_SUN_DIAMETER * 0.5f)) + ")",
+			 "ShalltearSunDisc(pv.normalWS, " + str(PreviewSun) + ", float3(1.0, 1.0, 1.0), " + GraphHLSL::FloatLiteral(std::cos(PREVIEW_SUN_DIAMETER * 0.5f)) + ")",
 			 GraphValueType::Float3, GraphStageFragment},
 		};
 
@@ -302,7 +302,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 
 	namespace GraphPreview {
 
-		std::span<const GraphBinding> Bindings() { return PREVIEW_BINDINGS; }
+		std::span<const GraphBinding> Bindings() { return previewBindings; }
 
 		void Previewable(const GraphDocument& document, Vector<Tile>& out, GraphDefinitions* definitions) {
 			out.clear();
@@ -329,7 +329,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 			out.tiles.clear();
 			out.diagnostics.clear();
 			out.rows = 0;
-			if (document.type != GraphSurface::DOCUMENT_TYPE && document.type != GRAPH_SUBGRAPH_DOCUMENT_TYPE) {
+			if (document.type != GraphSurface::DocumentType && document.type != GraphSubgraphDocumentType) {
 				out.diagnostics.push_back({0, "the document is a '" + document.type + "' (not a node shader or a subgraph)"});
 				return false;
 			}
@@ -361,7 +361,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 				}
 				GraphCompileRequest request;
 				request.roots = roots;
-				request.bindings = PREVIEW_BINDINGS;
+				request.bindings = previewBindings;
 				request.definitions = &resolver;
 				request.asset = asset;
 				Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -459,7 +459,7 @@ ShalltearPreviewInput ShalltearPreviewBuild(float2 tileUV, bool threeD)
 					"\toutput.tileUV = corner;\n"
 					"\toutput.tile = instance;\n"
 					"\treturn output;\n}\n\n";
-			text += PREVIEW_INPUTS;
+			text += PreviewInputs;
 			const size_t functionsAt = static_cast<size_t>(std::count(text.begin(), text.end(), '\n'));
 			text += emitted.functions;
 			text += "float4 PSMain(ShalltearPreviewVaryings input) : SV_Target\n{\n";

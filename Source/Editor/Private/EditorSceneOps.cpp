@@ -119,12 +119,12 @@ namespace Shalltear {
 		}
 
 		bool IsInsideContentRoot(const Path& virtualPath) {
-			constexpr std::string_view MOUNT = "project://";
+			constexpr std::string_view Mount = "project://";
 			std::string_view text = virtualPath.ToString();
-			if (!text.starts_with(MOUNT)) {
+			if (!text.starts_with(Mount)) {
 				return false;
 			}
-			std::string_view relative = text.substr(MOUNT.size());
+			std::string_view relative = text.substr(Mount.size());
 			for (std::string_view root : ProjectLayout::GetContentRoots()) {
 				if (relative.size() > root.size() + 1 && relative.starts_with(root) &&
 					relative[root.size()] == '/') {

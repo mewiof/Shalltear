@@ -157,7 +157,7 @@ namespace {
 		return count;
 	}
 
-	constexpr std::string_view REFUSAL = "can't be drawn on a mesh";
+	constexpr std::string_view Refusal = "can't be drawn on a mesh";
 
 	class ScopedLogCapture {
 	public:
@@ -331,7 +331,7 @@ TEST_F(MeshDrawContractFixture, OpaqueSceneReaderRefusedByName) {
 	const str captured = capture.Finish();
 
 	ExpectTheErrorMaterial(drawn, reference, "an opaque material reading the scene drew on a mesh");
-	EXPECT_EQ(Occurrences(captured, REFUSAL), 1u) << captured;
+	EXPECT_EQ(Occurrences(captured, Refusal), 1u) << captured;
 	EXPECT_NE(captured.find("reads the scene"), str::npos) << captured;
 	EXPECT_NE(captured.find("SceneReader.mat"), str::npos) << captured;
 }
@@ -425,7 +425,7 @@ TEST_F(MeshDrawContractFixture, RefusalReportedOnce) {
 	}
 	const str captured = capture.Finish();
 
-	EXPECT_EQ(Occurrences(captured, REFUSAL), 1u) << captured;
+	EXPECT_EQ(Occurrences(captured, Refusal), 1u) << captured;
 	EXPECT_NE(captured.find("Pass.mat"), str::npos) << captured;
 	EXPECT_NE(captured.find("Pass.hlsl"), str::npos) << captured;
 }
@@ -450,7 +450,7 @@ TEST_F(MeshDrawContractFixture, StillRefusedEditReported) {
 	const str captured = capture.Finish();
 
 	ASSERT_GT(after, before);
-	EXPECT_EQ(Occurrences(captured, REFUSAL), 2u) << captured;
+	EXPECT_EQ(Occurrences(captured, Refusal), 2u) << captured;
 }
 
 TEST_F(MeshDrawContractFixture, FixedShaderReloadsAndDraws) {

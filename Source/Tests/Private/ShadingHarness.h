@@ -64,23 +64,23 @@ namespace ShadingTest {
 	}
 
 	inline Vec3 TonemapNeutral(Vec3 c) {
-		constexpr f32 startCompression = 0.8f - 0.04f;
-		constexpr f32 desaturation = 0.15f;
+		constexpr f32 START_COMPRESSION = 0.8f - 0.04f;
+		constexpr f32 DESATURATION = 0.15f;
 		const f32 x = Math::Min(c.x, Math::Min(c.y, c.z));
 		const f32 offset = x < 0.08f ? x - 6.25f * x * x : 0.04f;
 		c = Vec3(c.x - offset, c.y - offset, c.z - offset);
 		const f32 peak = Math::Max(c.x, Math::Max(c.y, c.z));
-		if (peak < startCompression) {
+		if (peak < START_COMPRESSION) {
 			return c;
 		}
-		constexpr f32 d = 1.0f - startCompression;
-		const f32 newPeak = 1.0f - d * d / (peak + d - startCompression);
+		constexpr f32 D = 1.0f - START_COMPRESSION;
+		const f32 newPeak = 1.0f - D * D / (peak + D - START_COMPRESSION);
 		c = c * (newPeak / peak);
-		const f32 g = 1.0f - 1.0f / (desaturation * (peak - newPeak) + 1.0f);
+		const f32 g = 1.0f - 1.0f / (DESATURATION * (peak - newPeak) + 1.0f);
 		return c * (1.0f - g) + Vec3(newPeak, newPeak, newPeak) * g;
 	}
 
-	inline Vec3 TonemapAces(Vec3 c) {
+	inline Vec3 TonemapACES(Vec3 c) {
 		auto row = [](f32 a, f32 b, f32 d, Vec3 v) { return a * v.x + b * v.y + d * v.z; };
 		Vec3 v(row(0.59719f, 0.35458f, 0.04823f, c), row(0.07600f, 0.90834f, 0.01566f, c),
 			   row(0.02840f, 0.13383f, 0.83777f, c));
@@ -94,16 +94,16 @@ namespace ShadingTest {
 	}
 
 	inline Vec3 TonemapAgx(Vec3 c) {
-		constexpr f32 minEv = -12.47393f;
-		constexpr f32 maxEv = 4.026069f;
+		constexpr f32 MIN_EV = -12.47393f;
+		constexpr f32 MAX_EV = 4.026069f;
 		auto row = [](f32 a, f32 b, f32 d, Vec3 v) { return a * v.x + b * v.y + d * v.z; };
 		Vec3 v(Math::Max(c.x, 0.0f), Math::Max(c.y, 0.0f), Math::Max(c.z, 0.0f));
 		v = Vec3(row(0.842479062253094f, 0.0784335999999992f, 0.0792237451477643f, v),
 				 row(0.0423282422610123f, 0.878468636469772f, 0.0791661274605434f, v),
 				 row(0.0423756549057051f, 0.0784336f, 0.879142973793104f, v));
 		auto encode = [](f32 t) {
-			const f32 e = Math::Clamp(std::log2(Math::Max(t, 1e-10f)), minEv, maxEv);
-			const f32 n = (e - minEv) / (maxEv - minEv);
+			const f32 e = Math::Clamp(std::log2(Math::Max(t, 1e-10f)), MIN_EV, MAX_EV);
+			const f32 n = (e - MIN_EV) / (MAX_EV - MIN_EV);
 			const f32 n2 = n * n;
 			const f32 n4 = n2 * n2;
 			return 15.5f * n4 * n2 - 40.14f * n4 * n + 31.96f * n4 - 6.868f * n2 * n + 0.4298f * n2 + 0.1191f * n - 0.00232f;
@@ -121,7 +121,7 @@ namespace ShadingTest {
 		case TonemapCurve::Neutral:
 			return TonemapNeutral(linear);
 		case TonemapCurve::ACES:
-			return TonemapAces(linear);
+			return TonemapACES(linear);
 		case TonemapCurve::AgX:
 			return TonemapAgx(linear);
 		default:
@@ -277,11 +277,11 @@ namespace ShadingTest {
 		return desc;
 	}
 
-	inline Vec2 EnvBRDFApprox(f32 perceptualRoughness, f32 NoV) {
+	inline Vec2 EnvBRDFApprox(f32 perceptualRoughness, f32 noV) {
 		const Vec4 c0(-1.0f, -0.0275f, -0.572f, 0.022f);
 		const Vec4 c1(1.0f, 0.0425f, 1.04f, -0.04f);
 		const Vec4 r = c0 * perceptualRoughness + c1;
-		const f32 a004 = Math::Min(r.x * r.x, std::exp2(-9.28f * NoV)) * r.x + r.y;
+		const f32 a004 = Math::Min(r.x * r.x, std::exp2(-9.28f * noV)) * r.x + r.y;
 		return Vec2(-1.04f * a004 + r.z, 1.04f * a004 + r.w);
 	}
 

@@ -9,8 +9,8 @@ using namespace Shalltear;
 
 namespace {
 
-	const int _imageA = 0;
-	const int _imageB = 0;
+	const int _IMAGE_A = 0;
+	const int _IMAGE_B = 0;
 
 	constexpr std::string_view Pair = R"({"_type":"NodeShader","version":1,"nodes":[
 		{"id":1,"def":"Input/Time","x":0,"y":0},
@@ -69,7 +69,7 @@ namespace {
 TEST_F(EditorDocumentsTest, GestureIsOneUndoStep) {
 	Window window;
 	const Guid asset = MakeAsset(1);
-	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_IMAGE_A)));
 	const str before = window.Bytes();
 	const u64 opened = EditorDocuments::GetRevision(asset);
 	EXPECT_NE(opened, 0u);
@@ -100,7 +100,7 @@ TEST_F(EditorDocumentsTest, GestureIsOneUndoStep) {
 TEST_F(EditorDocumentsTest, NestedBracketsAreOneStep) {
 	Window window;
 	const Guid asset = MakeAsset(2);
-	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_IMAGE_A)));
 	const str before = window.Bytes();
 
 	EditorDocuments::BeginEdit(asset, "Move");
@@ -134,7 +134,7 @@ TEST_F(EditorDocumentsTest, NestedBracketsAreOneStep) {
 TEST_F(EditorDocumentsTest, UndoWaitsForSweptImage) {
 	Window window;
 	const Guid asset = MakeAsset(3);
-	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_IMAGE_A)));
 	const str original = window.Bytes();
 
 	EditorDocuments::BeginEdit(asset, "First");
@@ -146,7 +146,7 @@ TEST_F(EditorDocumentsTest, UndoWaitsForSweptImage) {
 	const str edited = window.Bytes();
 	ASSERT_EQ(UndoSystem::GetUndoDepth(), 2u);
 
-	EXPECT_GE(EditorExtensions::Unload(&_imageA), 1u);
+	EXPECT_GE(EditorExtensions::Unload(&_IMAGE_A), 1u);
 	EXPECT_FALSE(EditorDocuments::IsOpen(asset));
 
 	const u32 restoresBefore = window.restores;
@@ -158,7 +158,7 @@ TEST_F(EditorDocumentsTest, UndoWaitsForSweptImage) {
 
 	Window returned;
 	returned.document = window.document;
-	ASSERT_TRUE(EditorDocuments::Open(returned.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(returned.Desc(asset, &_IMAGE_A)));
 	ASSERT_TRUE(UndoSystem::Undo());
 	EXPECT_EQ(window.restores, restoresBefore);
 	EXPECT_EQ(returned.restores, 1u);
@@ -168,10 +168,10 @@ TEST_F(EditorDocumentsTest, UndoWaitsForSweptImage) {
 TEST_F(EditorDocumentsTest, WindowsShareOneHistory) {
 	Window first;
 	const Guid asset = MakeAsset(4);
-	ASSERT_TRUE(EditorDocuments::Open(first.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(first.Desc(asset, &_IMAGE_A)));
 	Window second;
-	ASSERT_TRUE(EditorDocuments::Open(second.Desc(asset, &_imageA)));
-	EXPECT_FALSE(EditorDocuments::Open(first.Desc(asset, &_imageB)));
+	ASSERT_TRUE(EditorDocuments::Open(second.Desc(asset, &_IMAGE_A)));
+	EXPECT_FALSE(EditorDocuments::Open(first.Desc(asset, &_IMAGE_B)));
 
 	const str before = first.Bytes();
 	EditorDocuments::BeginEdit(asset, "Connect");
@@ -193,7 +193,7 @@ TEST_F(EditorDocumentsTest, WindowsShareOneHistory) {
 TEST_F(EditorDocumentsTest, MidGestureCloseRecordsNothing) {
 	Window window;
 	const Guid asset = MakeAsset(5);
-	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_IMAGE_A)));
 	EditorDocuments::BeginEdit(asset, "Move");
 	GraphDocumentOps::MoveNode(window.document, 1, Vec2(70.0f, 0.0f));
 	EditorDocuments::Close(asset);
@@ -202,9 +202,9 @@ TEST_F(EditorDocumentsTest, MidGestureCloseRecordsNothing) {
 	EditorDocuments::EndEdit(asset);
 	EXPECT_FALSE(UndoSystem::IsGroupOpen());
 
-	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_imageA)));
+	ASSERT_TRUE(EditorDocuments::Open(window.Desc(asset, &_IMAGE_A)));
 	EditorDocuments::BeginEdit(asset, "Move");
-	EXPECT_EQ(EditorDocuments::UnregisterOwnedBy(&_imageA), 1u);
+	EXPECT_EQ(EditorDocuments::UnregisterOwnedBy(&_IMAGE_A), 1u);
 	EXPECT_FALSE(UndoSystem::IsGroupOpen());
 	EXPECT_EQ(EditorDocuments::UnregisterOwnedBy(nullptr), 0u);
 }

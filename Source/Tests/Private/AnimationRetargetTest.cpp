@@ -1247,13 +1247,13 @@ TEST_F(RetargetFixture, LateralAxisMirrorsToItself) {
 		Vec3 axis;
 		f32 expectedDegrees;
 	};
-	const Row ROWS[] = {
+	const Row rows[] = {
 		{"a forward swing about the lateral axis", Vec3(1.0f, 0.0f, 0.0f), 35.0f},
 		{"a turn about the vertical", Vec3(0.0f, 1.0f, 0.0f), -35.0f},
 		{"a roll about the forward axis", Vec3(0.0f, 0.0f, 1.0f), -35.0f},
 	};
 
-	for (const Row& row : ROWS) {
+	for (const Row& row : rows) {
 		std::vector<BoneTransform> pose = RestPose(*rig);
 		pose[2].rotation = Quat::AngleAxis(35.0f, row.axis);
 

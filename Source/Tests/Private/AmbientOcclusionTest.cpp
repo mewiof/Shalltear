@@ -207,7 +207,7 @@ namespace {
 			return true;
 		}
 
-		static constexpr Vec3 MARKER_POSITION{0.0f, 0.1f, 1.25f};
+		static constexpr Vec3 MarkerPosition{0.0f, 0.1f, 1.25f};
 
 		bool AddFloatingSlab() {
 			Asset* cubeMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
@@ -216,7 +216,7 @@ namespace {
 				return false;
 			}
 			Handle<SceneObject> slab = SceneSystem::CreateObject("Slab", _scene);
-			slab->SetLocalPosition(SLAB_POSITION);
+			slab->SetLocalPosition(SlabPosition);
 			slab->SetLocalScale(Vec3(0.5f, 2.0f, 0.5f));
 			Handle<MeshRenderer> renderer = slab->AddComponent<MeshRenderer>();
 			renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeMesh)));
@@ -225,7 +225,7 @@ namespace {
 			return true;
 		}
 
-		static constexpr Vec3 SLAB_POSITION{2.2f, 3.0f, 3.0f};
+		static constexpr Vec3 SlabPosition{2.2f, 3.0f, 3.0f};
 
 		bool AddBoard() {
 			Asset* cubeMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
@@ -371,7 +371,7 @@ TEST_F(AmbientOcclusionRenderFixture, HalfResSilhouetteInventsNoOcclusion) {
 	ASSERT_TRUE(Render(offRows, reference, size));
 
 	Vec2I slabPixel{};
-	ASSERT_TRUE(Pixel(SLAB_POSITION, slabPixel));
+	ASSERT_TRUE(Pixel(SlabPosition, slabPixel));
 
 	const i32 half = 22;
 
@@ -469,7 +469,7 @@ TEST_F(AmbientOcclusionRenderFixture, AfterOpaqueDarkensEmissionDefaultDoesNot) 
 	ASSERT_TRUE(AddEmissiveMarker());
 
 	Vec2I markerPixel{};
-	ASSERT_TRUE(Pixel(MARKER_POSITION, markerPixel));
+	ASSERT_TRUE(Pixel(MarkerPosition, markerPixel));
 
 	AmbientOcclusionPass off;
 	off.intensity = 0.0f;
@@ -514,7 +514,7 @@ TEST_F(AmbientOcclusionRenderFixture, AfterOpaqueSurvivesPostRow) {
 	ASSERT_TRUE(AddEmissiveMarker());
 
 	Vec2I markerPixel{};
-	ASSERT_TRUE(Pixel(MARKER_POSITION, markerPixel));
+	ASSERT_TRUE(Pixel(MarkerPosition, markerPixel));
 
 	const Guid profileId = AssetDatabase::CreateAsset(Path("project://Assets/BloomOff.slpp"), StringHash("PostProcessProfile"));
 	ASSERT_TRUE(profileId.IsValid());
@@ -867,6 +867,6 @@ TEST(AmbientOcclusionManifestTest, ShadersCommittedGuidIsOneRowResolves) {
 	EXPECT_EQ(onDisk, expected);
 
 #ifndef SHALLTEAR_SHARED
-	EXPECT_EQ(AmbientOcclusionImpl::AMBIENT_OCCLUSION_SHADER, onDisk);
+	EXPECT_EQ(AmbientOcclusionImpl::AmbientOcclusionShader, onDisk);
 #endif
 }

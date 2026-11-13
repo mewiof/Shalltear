@@ -11,7 +11,7 @@
 namespace Shalltear {
 
 	enum class TexelMeaning : u8 {
-		SRGBColor = 0,
+		sRGBColor = 0,
 		Linear,
 		Normal
 	};
@@ -24,7 +24,7 @@ namespace Shalltear {
 		u32 slices = 1;
 		u32 mipLevels = 1;
 		u32 suppliedLevels = 1;
-		TexelMeaning meaning = TexelMeaning::SRGBColor;
+		TexelMeaning meaning = TexelMeaning::sRGBColor;
 	};
 
 	struct TextureCodec {

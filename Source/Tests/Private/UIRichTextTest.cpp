@@ -121,8 +121,8 @@ namespace {
 		}
 	};
 
-	constexpr Color RED = Color(1.0f, 0.0f, 0.0f, 1.0f);
-	constexpr Color GREEN = Color(0.0f, 1.0f, 0.0f, 1.0f);
+	constexpr Color Red = Color(1.0f, 0.0f, 0.0f, 1.0f);
+	constexpr Color Green = Color(0.0f, 1.0f, 0.0f, 1.0f);
 
 } // anonymous namespace
 
@@ -178,9 +178,9 @@ TEST(UIRichTextTest, ClosingOrderFree) {
 	EXPECT_EQ(rig.fonts.utf8, "abcd");
 	const std::vector<Color> colors = rig.GlyphColors();
 	ASSERT_EQ(colors.size(), 4u);
-	EXPECT_EQ(colors[0], RED);
-	EXPECT_EQ(colors[1], GREEN);
-	EXPECT_EQ(colors[2], RED);
+	EXPECT_EQ(colors[0], Red);
+	EXPECT_EQ(colors[1], Green);
+	EXPECT_EQ(colors[2], Red);
 	EXPECT_EQ(colors[3], Color::White());
 }
 

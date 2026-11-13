@@ -47,11 +47,11 @@ namespace Shalltear::Linux {
 				}
 				std::string_view line = text.substr(start, end - start);
 				start = end + 1;
-				constexpr std::string_view SCHEME = "file://";
-				if (line.empty() || line[0] == '#' || line.substr(0, SCHEME.size()) != SCHEME) {
+				constexpr std::string_view Scheme = "file://";
+				if (line.empty() || line[0] == '#' || line.substr(0, Scheme.size()) != Scheme) {
 					continue;
 				}
-				line.remove_prefix(SCHEME.size());
+				line.remove_prefix(Scheme.size());
 				const size_t slash = line.find('/');
 				if (slash == std::string_view::npos) {
 					continue;
@@ -231,11 +231,11 @@ namespace Shalltear::Linux {
 		const Atom property = request.property ? request.property : request.target;
 		if (request.selection == atoms.clipboard && ownsClipboard) {
 			if (request.target == atoms.targets) {
-				const Atom offered[] = {atoms.targets, atoms.utf8String, atoms.textPlainUtf8, XA_STRING};
+				const Atom offered[] = {atoms.targets, atoms.utf8String, atoms.textPlainUTF8, XA_STRING};
 				x.XChangeProperty(display, request.requestor, property, XA_ATOM, 32, PropModeReplace,
 								  reinterpret_cast<const unsigned char*>(offered), 4);
 				reply.xselection.property = property;
-			} else if (request.target == atoms.utf8String || request.target == atoms.textPlainUtf8 || request.target == XA_STRING) {
+			} else if (request.target == atoms.utf8String || request.target == atoms.textPlainUTF8 || request.target == XA_STRING) {
 				x.XChangeProperty(display, request.requestor, property, request.target, 8, PropModeReplace,
 								  reinterpret_cast<const unsigned char*>(clipboardText.data()), static_cast<int>(clipboardText.size()));
 				reply.xselection.property = property;

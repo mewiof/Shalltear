@@ -72,9 +72,9 @@ namespace {
 		return event;
 	}
 
-	constexpr Color RED = Color(1.0f, 0.0f, 0.0f, 1.0f);
-	constexpr Color GREEN = Color(0.0f, 1.0f, 0.0f, 1.0f);
-	constexpr Color BLUE = Color(0.0f, 0.0f, 1.0f, 1.0f);
+	constexpr Color Red = Color(1.0f, 0.0f, 0.0f, 1.0f);
+	constexpr Color Green = Color(0.0f, 1.0f, 0.0f, 1.0f);
+	constexpr Color Blue = Color(0.0f, 0.0f, 1.0f, 1.0f);
 
 } // anonymous namespace
 
@@ -87,14 +87,14 @@ TEST(UITextStyleTest, TextPropertiesInherit) {
 	UI::ElementHandle grandchild = Child(ctx, child);
 	for (UI::ElementHandle element : {child, grandchild}) {
 		const UI::Style& style = ctx.GetComputedStyle(element);
-		EXPECT_EQ(style.color, RED);
+		EXPECT_EQ(style.color, Red);
 		EXPECT_EQ(style.fontSize, UI::Length::Pixel(20.0f));
 		EXPECT_EQ(style.fontWeight, 700);
 		EXPECT_EQ(style.fontStyle, UI::FontStyle::Italic);
 		EXPECT_EQ(style.letterSpacing, 2.0f);
 		EXPECT_EQ(style.lineHeight, UI::Length::Percent(1.5f));
 		EXPECT_EQ(style.textOutlineWidth, 1.0f);
-		EXPECT_EQ(style.textOutlineColor, GREEN);
+		EXPECT_EQ(style.textOutlineColor, Green);
 	}
 
 	const UI::Style& outside = ctx.GetComputedStyle(Child(ctx, ctx.GetRoot()));
@@ -165,15 +165,15 @@ TEST(UITextStyleTest, KeywordsPickParentOrInitial) {
 	UI::ElementHandle initial = Classed(ctx, parent, "i"_hash);
 	EXPECT_EQ(ctx.GetComputedStyle(initial).color, Color::White());
 	EXPECT_EQ(ctx.GetComputedStyle(initial).fontSize, UI::Length::Pixel(16.0f));
-	EXPECT_EQ(ctx.GetComputedStyle(Classed(ctx, parent, "h"_hash)).color, RED);
-	EXPECT_EQ(ctx.GetComputedStyle(Classed(ctx, parent, "u"_hash)).color, RED);
+	EXPECT_EQ(ctx.GetComputedStyle(Classed(ctx, parent, "h"_hash)).color, Red);
+	EXPECT_EQ(ctx.GetComputedStyle(Classed(ctx, parent, "u"_hash)).color, Red);
 
 	UI::ElementHandle blue = Classed(ctx, parent, "h"_hash);
 	ctx.AddClass(blue, "blue"_hash);
-	EXPECT_EQ(ctx.GetComputedStyle(blue).color, BLUE);
+	EXPECT_EQ(ctx.GetComputedStyle(blue).color, Blue);
 
 	UI::Style inlineStyle;
-	inlineStyle.color = BLUE;
+	inlineStyle.color = Blue;
 	EXPECT_TRUE(UI::ApplyStyleDeclaration(inlineStyle, "color"_hash, "inherit", nullptr));
 	EXPECT_FALSE(inlineStyle.color.has_value());
 }
@@ -183,7 +183,7 @@ TEST(UITextStyleTest, NamedColorsParse) {
 	ctx.LoadStyleSheet(".n { color: Teal; background-color: red; border-color: grey; }");
 	const UI::Style& style = ctx.GetComputedStyle(Classed(ctx, ctx.GetRoot(), "n"_hash));
 	EXPECT_EQ(style.color, Color(0.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f));
-	EXPECT_EQ(style.background.solid, RED);
+	EXPECT_EQ(style.background.solid, Red);
 	EXPECT_EQ(style.borderColor, Color(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f));
 }
 
@@ -195,23 +195,23 @@ TEST(UITextStyleTest, SetTextBelowDeclaredAboveInherited) {
 	ctx.LoadStyleSheet(".parent { color: #ff0000; font-size: 20px; font-family: b; } .big { font-size: 30px; color: #00ff00; }");
 	UI::ElementHandle parent = Classed(ctx, ctx.GetRoot(), "parent"_hash);
 	UI::ElementHandle label = Child(ctx, parent);
-	ctx.SetText(label, Handle<FontAsset>(&fontA), 12.0f, BLUE, "x");
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, BLUE);
+	ctx.SetText(label, Handle<FontAsset>(&fontA), 12.0f, Blue, "x");
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Blue);
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(12.0f));
 	EXPECT_EQ(ctx.GetComputedStyle(label).font, Handle<FontAsset>(&fontA));
 
 	ctx.AddClass(label, "big"_hash);
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, GREEN);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Green);
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(30.0f));
 	EXPECT_EQ(ctx.GetComputedStyle(label).font, Handle<FontAsset>(&fontA));
 
-	ctx.SetText(label, Handle<FontAsset>(&fontA), 12.0f, RED, "x");
+	ctx.SetText(label, Handle<FontAsset>(&fontA), 12.0f, Red, "x");
 	ctx.RemoveClass(label, "big"_hash);
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, RED);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Red);
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(12.0f));
 
 	ctx.ClearText(label);
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, RED);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Red);
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(20.0f));
 	EXPECT_EQ(ctx.GetComputedStyle(label).font, Handle<FontAsset>(&fontB));
 }
@@ -221,19 +221,19 @@ TEST(UITextStyleTest, SetTextValuesReachChildren) {
 	SizedFont fonts;
 	UI::Context ctx(Desc(), &fonts);
 	UI::ElementHandle button = Child(ctx, ctx.GetRoot());
-	ctx.SetText(button, Handle<FontAsset>(&font), 18.0f, GREEN, "");
+	ctx.SetText(button, Handle<FontAsset>(&font), 18.0f, Green, "");
 	UI::ElementHandle label = Child(ctx, button);
 	ctx.SetTextString(label, "abcd");
 	ctx.Update();
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, GREEN);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Green);
 	EXPECT_EQ(ctx.GetComputedStyle(label).font, Handle<FontAsset>(&font));
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(18.0f));
 	EXPECT_EQ(ctx.GetTextString(label), "abcd");
 
-	ctx.SetText(button, Handle<FontAsset>(&font), 10.0f, BLUE, "");
+	ctx.SetText(button, Handle<FontAsset>(&font), 10.0f, Blue, "");
 	ctx.Update();
 	EXPECT_EQ(ctx.GetComputedStyle(label).fontSize, UI::Length::Pixel(10.0f));
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, BLUE);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Blue);
 }
 
 TEST(UITextStyleTest, InheritedSizeRemeasuresText) {
@@ -275,7 +275,7 @@ TEST(UITextStyleTest, ReparentedTextTakesNewParent) {
 	ctx.AppendChild(b, wrapper);
 	ctx.Update();
 	EXPECT_EQ(ctx.GetLayout(label).content.w, 30.0f);
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, BLUE);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Blue);
 }
 
 TEST(UITextStyleTest, ColorChangeKeepsShapes) {
@@ -294,7 +294,7 @@ TEST(UITextStyleTest, ColorChangeKeepsShapes) {
 	ctx.Update();
 	ctx.BuildRenderList(list);
 	EXPECT_EQ(fonts.walks, walks);
-	EXPECT_EQ(ctx.GetComputedStyle(label).color, RED);
+	EXPECT_EQ(ctx.GetComputedStyle(label).color, Red);
 }
 
 TEST(UITextStyleTest, HoverRecolorsWithoutRecomposingChildren) {
@@ -309,7 +309,7 @@ TEST(UITextStyleTest, HoverRecolorsWithoutRecomposingChildren) {
 	ctx.Update();
 	EXPECT_EQ(ctx.GetStyleStats().recalcs, 1u);
 	for (UI::ElementHandle label : labels) {
-		EXPECT_EQ(ctx.GetComputedStyle(label).color, RED);
+		EXPECT_EQ(ctx.GetComputedStyle(label).color, Red);
 	}
 	EXPECT_EQ(ctx.GetStyleStats().recalcs, 1u);
 
@@ -355,18 +355,18 @@ TEST(UITextStyleTest, DocumentTextInheritsContainers) {
 	UIInstantiateDesc desc;
 	desc.font = Handle<FontAsset>(&font);
 	desc.fontSizePx = 14.0f;
-	desc.textColor = GREEN;
+	desc.textColor = Green;
 	Vector<UIInstantiateMapping> mapping{GetMemoryResource(MemTag::Debug)};
 	document.Instantiate(ctx, ctx.GetRoot(), desc, mapping);
 	ASSERT_EQ(mapping.size(), 4u);
 	ctx.Update();
 	const UI::Style& inner = ctx.GetComputedStyle(mapping[2].element);
 	EXPECT_EQ(inner.fontSize, UI::Length::Pixel(30.0f));
-	EXPECT_EQ(inner.color, RED);
+	EXPECT_EQ(inner.color, Red);
 	EXPECT_EQ(inner.font, Handle<FontAsset>(&font));
 	const UI::Style& plain = ctx.GetComputedStyle(mapping[3].element);
 	EXPECT_EQ(plain.fontSize, UI::Length::Pixel(14.0f));
-	EXPECT_EQ(plain.color, GREEN);
+	EXPECT_EQ(plain.color, Green);
 	EXPECT_EQ(ctx.GetLayout(mapping[3].element).content.w, 14.0f);
 }
 
@@ -378,10 +378,10 @@ TEST(UITextStyleTest, DocumentRootKeepsDeclaredText) {
 	ASSERT_TRUE(document.Parse(R"(<ui version="1"><panel style="font-size: 22px">Hi</panel></ui>)", error)) << error;
 	UIInstantiateDesc desc;
 	desc.fontSizePx = 14.0f;
-	desc.textColor = BLUE;
+	desc.textColor = Blue;
 	UI::ElementHandle root = document.Instantiate(ctx, ctx.GetRoot(), desc);
 	EXPECT_EQ(ctx.GetComputedStyle(root).fontSize, UI::Length::Pixel(22.0f));
-	EXPECT_EQ(ctx.GetComputedStyle(root).color, BLUE);
+	EXPECT_EQ(ctx.GetComputedStyle(root).color, Blue);
 }
 
 TEST(UITextStyleTest, DocumentButtonLabelInheritsButton) {

@@ -17,7 +17,7 @@
 #include <utility>
 #include <string_view>
 
-extern "C" void* SltAudioQoaAllocate(size_t size) {
+extern "C" void* SltAudioQOAAllocate(size_t size) {
 	try {
 		return ::Shalltear::Allocate(size, ::Shalltear::MemTag::Audio);
 	} catch (...) {
@@ -25,7 +25,7 @@ extern "C" void* SltAudioQoaAllocate(size_t size) {
 	}
 }
 
-extern "C" void SltAudioQoaFree(void* block) {
+extern "C" void SltAudioQOAFree(void* block) {
 	if (block) {
 		::Shalltear::Free(block);
 	}
@@ -39,9 +39,9 @@ namespace Shalltear {
 
 			using P = SpeakerPosition;
 
-			constexpr std::string_view LOAD_TYPE_NAMES[] = {"DecompressOnLoad", "CompressedInMemory", "Streaming"};
-			constexpr std::string_view FORMAT_NAMES[] = {"PCM", "QOA", "Opus"};
-			constexpr std::string_view RATE_SETTING_NAMES[] = {"PreserveSampleRate", "OptimizeSampleRate", "OverrideSampleRate"};
+			constexpr std::string_view LoadTypeNames[] = {"DecompressOnLoad", "CompressedInMemory", "Streaming"};
+			constexpr std::string_view FormatNames[] = {"PCM", "QOA", "Opus"};
+			constexpr std::string_view RateSettingNames[] = {"PreserveSampleRate", "OptimizeSampleRate", "OverrideSampleRate"};
 
 			constexpr u32 MIN_OVERRIDE_RATE = 8000;
 			constexpr u32 MAX_OVERRIDE_RATE = 192000;
@@ -242,9 +242,9 @@ namespace Shalltear {
 			}
 			out.forceToMono = settings["forceToMono"].AsBool(out.forceToMono);
 			out.normalize = settings["normalize"].AsBool(out.normalize);
-			ReadEnum(settings, "loadType", LOAD_TYPE_NAMES, out.loadType);
-			ReadEnum(settings, "compressionFormat", FORMAT_NAMES, out.compressionFormat);
-			ReadEnum(settings, "sampleRateSetting", RATE_SETTING_NAMES, out.sampleRateSetting);
+			ReadEnum(settings, "loadType", LoadTypeNames, out.loadType);
+			ReadEnum(settings, "compressionFormat", FormatNames, out.compressionFormat);
+			ReadEnum(settings, "sampleRateSetting", RateSettingNames, out.sampleRateSetting);
 			const JSONValue& quality = settings["quality"];
 			if (quality.IsNumber()) {
 				const f64 asked = quality.AsNumber();
@@ -269,9 +269,9 @@ namespace Shalltear {
 		void WriteImportSettings(const AudioImportSettings& settings, JSONValue& out) {
 			out.AddMember("forceToMono", JSONValue::MakeBool(settings.forceToMono));
 			out.AddMember("normalize", JSONValue::MakeBool(settings.normalize));
-			out.AddMember("loadType", JSONValue::MakeString(LOAD_TYPE_NAMES[static_cast<size_t>(settings.loadType)]));
-			out.AddMember("compressionFormat", JSONValue::MakeString(FORMAT_NAMES[static_cast<size_t>(settings.compressionFormat)]));
-			out.AddMember("sampleRateSetting", JSONValue::MakeString(RATE_SETTING_NAMES[static_cast<size_t>(settings.sampleRateSetting)]));
+			out.AddMember("loadType", JSONValue::MakeString(LoadTypeNames[static_cast<size_t>(settings.loadType)]));
+			out.AddMember("compressionFormat", JSONValue::MakeString(FormatNames[static_cast<size_t>(settings.compressionFormat)]));
+			out.AddMember("sampleRateSetting", JSONValue::MakeString(RateSettingNames[static_cast<size_t>(settings.sampleRateSetting)]));
 			out.AddMember("sampleRateOverride", JSONValue::MakeNumber(static_cast<f64>(settings.sampleRateOverride)));
 			out.AddMember("quality", JSONValue::MakeNumber(static_cast<f64>(settings.quality)));
 		}
@@ -399,7 +399,7 @@ namespace Shalltear {
 				return nullptr;
 			}
 			if (format == AudioCompressionFormat::PCM) {
-				AudioClipData* data = CreatePcmClipData(audio.samples.data(), frames, audio.layout, audio.sampleRate);
+				AudioClipData* data = CreatePCMClipData(audio.samples.data(), frames, audio.layout, audio.sampleRate);
 				if (!data) {
 					error = "the samples aren't a shape a clip can hold";
 				}
@@ -438,8 +438,8 @@ namespace Shalltear {
 				error = "the QOA encoder failed on the samples";
 				return nullptr;
 			}
-			AudioClipData* data = CreateQoaClipData(static_cast<const u8*>(bytes), size, audio.layout);
-			SltAudioQoaFree(bytes);
+			AudioClipData* data = CreateQOAClipData(static_cast<const u8*>(bytes), size, audio.layout);
+			SltAudioQOAFree(bytes);
 			if (!data) {
 				error = "the QOA encoder produced a stream its decoder wouldn't index";
 			}

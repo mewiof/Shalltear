@@ -483,7 +483,7 @@ TEST_F(NodeShaderWindowFixture, ThePreviewMeshIsAGraphSetting) {
 	NodeShaderWindow* window = Open(graph);
 	ASSERT_NE(window, nullptr);
 	EXPECT_EQ(window->GetPreviews().GetMesh(), NodeShaderPreviewMesh::Sphere);
-	window->Edit("Change Preview Mesh", [](GraphDocument& document) { return Ops::SetGraphSetting(document, NodeShaderPreviews::MESH_SETTING, "\"cube\""); });
+	window->Edit("Change Preview Mesh", [](GraphDocument& document) { return Ops::SetGraphSetting(document, NodeShaderPreviews::MeshSetting, "\"cube\""); });
 	EXPECT_EQ(window->GetPreviews().GetMesh(), NodeShaderPreviewMesh::Cube);
 	ASSERT_TRUE(UndoSystem::Undo());
 	Frame();
@@ -690,14 +690,14 @@ TEST_F(NodeShaderWindowFixture, SearcherListsProjectSubgraphs) {
 	window->GetModel().GetSearchEntries(nullptr, entries);
 	const auto listed = std::find_if(entries.begin(), entries.end(), [](const GraphSearchEntry& entry) { return entry.name == "Ripple"; });
 	ASSERT_NE(listed, entries.end());
-	EXPECT_EQ(listed->category, GRAPH_SUBGRAPH_DEFAULT_CATEGORY);
+	EXPECT_EQ(listed->category, GraphSubgraphDefaultCategory);
 
 	const u32 node = Pick(*window, "Ripple", {-300.0f, 0.0f});
 	ASSERT_NE(node, 0u);
 	Frame();
 	const GraphNode* made = GraphDocumentOps::FindNode(*window->GetDocument(), node);
 	ASSERT_NE(made, nullptr);
-	EXPECT_EQ(made->def, GRAPH_SUBGRAPH_NODE);
+	EXPECT_EQ(made->def, GraphSubgraphNode);
 	EXPECT_EQ(GraphSubgraphs::AssetOf(*made), ripple);
 	Vector<GraphNodeDesc> drawn{GetMemoryResource(MemTag::Editor)};
 	window->GetModel().GetNodes(drawn);
@@ -869,7 +869,7 @@ TEST_F(NodeShaderWindowFixture, CustomFunctionIsEditedInInspector) {
 	ASSERT_NE(node, 0u);
 	Frame();
 	Frame();
-	ASSERT_EQ(GraphDocumentOps::FindNode(*window->GetDocument(), node)->def, GRAPH_CUSTOM_FUNCTION_NODE);
+	ASSERT_EQ(GraphDocumentOps::FindNode(*window->GetDocument(), node)->def, GraphCustomFunctionNode);
 	UI::Context* context = ContextShowing("Inputs");
 	ASSERT_NE(context, nullptr);
 
@@ -884,12 +884,12 @@ TEST_F(NodeShaderWindowFixture, CustomFunctionIsEditedInInspector) {
 	auto inputs = [&]() {
 		Vector<GraphCustomFunctionPort> out{GetMemoryResource(MemTag::Editor)};
 		str error;
-		GraphCustomFunctions::ReadPorts(*GraphDocumentOps::FindNode(*window->GetDocument(), node), GRAPH_CUSTOM_FUNCTION_INPUTS, out, error);
+		GraphCustomFunctions::ReadPorts(*GraphDocumentOps::FindNode(*window->GetDocument(), node), GraphCustomFunctionInputs, out, error);
 		return out;
 	};
 	ASSERT_EQ(inputs().size(), 1u);
 	EXPECT_EQ(inputs()[0].name, "New");
-	EXPECT_EQ(GRAPH_CUSTOM_FUNCTION_PORT_TYPES[inputs()[0].type], "Vector3");
+	EXPECT_EQ(GraphCustomFunctionPortTypes[inputs()[0].type], "Vector3");
 
 	TypeInto(*context, "Tint");
 	PressIn(*context, Key::Enter);
@@ -924,7 +924,7 @@ TEST_F(NodeShaderWindowFixture, CustomFunctionIsEditedInInspector) {
 	const GraphNode* held = GraphDocumentOps::FindNode(*window->GetDocument(), node);
 	str body;
 	for (const GraphSetting& setting : held->settings) {
-		if (setting.key == GRAPH_CUSTOM_FUNCTION_BODY) {
+		if (setting.key == GraphCustomFunctionBody) {
 			LinearAllocator arena(setting.value.size() + 64, MemTag::Editor);
 			const JSONValue value = JSONParse(setting.value, arena);
 			body = str(value.AsString());
@@ -947,13 +947,13 @@ TEST_F(NodeShaderWindowFixture, FailedFunctionShownOnNode) {
 	ASSERT_TRUE(window->Edit("Functions", [&](GraphDocument& document) {
 		typo = Ops::AddCustomFunctionNode(document, {-600.0f, 0.0f});
 		const u32 typoOut = Ops::AddCustomFunctionPort(document, typo, true, "Vector4");
-		Ops::SetNodeSetting(document, typo, GRAPH_CUSTOM_FUNCTION_TYPE, Ops::Quote("String"));
-		Ops::SetNodeSetting(document, typo, GRAPH_CUSTOM_FUNCTION_NAME, Ops::Quote("Typo"));
-		Ops::SetNodeSetting(document, typo, GRAPH_CUSTOM_FUNCTION_BODY, Ops::Quote("Out = Ou;"));
+		Ops::SetNodeSetting(document, typo, GraphCustomFunctionType, Ops::Quote("String"));
+		Ops::SetNodeSetting(document, typo, GraphCustomFunctionName, Ops::Quote("Typo"));
+		Ops::SetNodeSetting(document, typo, GraphCustomFunctionBody, Ops::Quote("Out = Ou;"));
 		broken = Ops::AddCustomFunctionNode(document, {-600.0f, 200.0f});
 		const u32 brokenOut = Ops::AddCustomFunctionPort(document, broken, true, "Vector4");
-		Ops::SetNodeSetting(document, broken, GRAPH_CUSTOM_FUNCTION_NAME, Ops::Quote("Broken"));
-		Ops::SetNodeSetting(document, broken, GRAPH_CUSTOM_FUNCTION_SOURCE, Ops::Quote(file.ToString()));
+		Ops::SetNodeSetting(document, broken, GraphCustomFunctionName, Ops::Quote("Broken"));
+		Ops::SetNodeSetting(document, broken, GraphCustomFunctionSource, Ops::Quote(file.ToString()));
 		const u32 add = Ops::AddNode(document, "Math/Add", {-300.0f, 0.0f});
 		GraphDocumentOps::Connect(document, typo, std::to_string(typoOut), add, "A");
 		GraphDocumentOps::Connect(document, broken, std::to_string(brokenOut), add, "B");

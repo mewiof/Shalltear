@@ -463,22 +463,22 @@ namespace Shalltear {
 			std::string_view name;
 		};
 
-		constexpr SettingName<TextureFilter> FILTER_NAMES[] = {{TextureFilter::Point, "point"},
-															   {TextureFilter::Bilinear, "bilinear"},
-															   {TextureFilter::Trilinear, "trilinear"},
-															   {TextureFilter::Point, "nearest"},
-															   {TextureFilter::Trilinear, "linear"}};
-		constexpr SettingName<RHI::AddressMode> ADDRESS_NAMES[] = {{RHI::AddressMode::Repeat, "repeat"},
-																   {RHI::AddressMode::ClampToEdge, "clamp"},
-																   {RHI::AddressMode::MirroredRepeat, "mirror"}};
-		constexpr SettingName<TextureShape> SHAPE_NAMES[] = {{TextureShape::Auto, "auto"},
-															 {TextureShape::Texture2D, "2d"},
-															 {TextureShape::Cube, "cube"},
-															 {TextureShape::Texture2DArray, "2darray"},
-															 {TextureShape::Texture3D, "3d"}};
-		constexpr SettingName<TextureType> TYPE_NAMES[] = {{TextureType::Default, "default"}, {TextureType::NormalMap, "normalMap"}};
-		constexpr SettingName<TextureCompression> COMPRESSION_NAMES[] = {{TextureCompression::None, "none"},
-																		 {TextureCompression::HighQuality, "highQuality"}};
+		constexpr SettingName<TextureFilter> FilterNames[] = {{TextureFilter::Point, "point"},
+															  {TextureFilter::Bilinear, "bilinear"},
+															  {TextureFilter::Trilinear, "trilinear"},
+															  {TextureFilter::Point, "nearest"},
+															  {TextureFilter::Trilinear, "linear"}};
+		constexpr SettingName<RHI::AddressMode> AddressNames[] = {{RHI::AddressMode::Repeat, "repeat"},
+																  {RHI::AddressMode::ClampToEdge, "clamp"},
+																  {RHI::AddressMode::MirroredRepeat, "mirror"}};
+		constexpr SettingName<TextureShape> ShapeNames[] = {{TextureShape::Auto, "auto"},
+															{TextureShape::Texture2D, "2d"},
+															{TextureShape::Cube, "cube"},
+															{TextureShape::Texture2DArray, "2darray"},
+															{TextureShape::Texture3D, "3d"}};
+		constexpr SettingName<TextureType> TypeNames[] = {{TextureType::Default, "default"}, {TextureType::NormalMap, "normalMap"}};
+		constexpr SettingName<TextureCompression> CompressionNames[] = {{TextureCompression::None, "none"},
+																		{TextureCompression::HighQuality, "highQuality"}};
 
 		template <typename E, size_t N>
 		void ReadName(const JSONValue& value, const SettingName<E> (&names)[N], E& out) {
@@ -508,16 +508,16 @@ namespace Shalltear {
 		}
 		out.sRGB = settings["sRGB"].AsBool(out.sRGB);
 		out.generateMips = settings["generateMips"].AsBool(out.generateMips);
-		ReadName(settings["filter"], FILTER_NAMES, out.filter);
-		ReadName(settings["addressMode"], ADDRESS_NAMES, out.addressMode);
+		ReadName(settings["filter"], FilterNames, out.filter);
+		ReadName(settings["addressMode"], AddressNames, out.addressMode);
 		out.anisoLevel = static_cast<u8>(Math::Clamp(settings["anisoLevel"].AsNumber(out.anisoLevel), 0.0, 16.0));
-		ReadName(settings["shape"], SHAPE_NAMES, out.shape);
+		ReadName(settings["shape"], ShapeNames, out.shape);
 		out.columns = static_cast<u32>(Math::Max(settings["columns"].AsNumber(out.columns), 0.0));
 		out.rows = static_cast<u32>(Math::Max(settings["rows"].AsNumber(out.rows), 0.0));
 		out.cubeFaceSize = static_cast<i32>(settings["cubeFaceSize"].AsNumber(out.cubeFaceSize));
 		out.convolveIBL = settings["convolveIBL"].AsBool(out.convolveIBL);
-		ReadName(settings["textureType"], TYPE_NAMES, out.type);
-		ReadName(settings["compression"], COMPRESSION_NAMES, out.compression);
+		ReadName(settings["textureType"], TypeNames, out.type);
+		ReadName(settings["compression"], CompressionNames, out.compression);
 		const f64 pixelsPerUnit = settings["pixelsPerUnit"].AsNumber(out.pixelsPerUnit);
 		if (std::isfinite(pixelsPerUnit) && pixelsPerUnit > 0.0) {
 			out.pixelsPerUnit = static_cast<f32>(Math::Max(pixelsPerUnit, 0.01));
@@ -527,16 +527,16 @@ namespace Shalltear {
 	void TextureAssetImporter::WriteSettings(const TextureAsset::Settings& settings, JSONValue& out) {
 		out.AddMember("sRGB", JSONValue::MakeBool(settings.sRGB));
 		out.AddMember("generateMips", JSONValue::MakeBool(settings.generateMips));
-		out.AddMember("filter", WriteName(FILTER_NAMES, settings.filter));
-		out.AddMember("addressMode", WriteName(ADDRESS_NAMES, settings.addressMode));
+		out.AddMember("filter", WriteName(FilterNames, settings.filter));
+		out.AddMember("addressMode", WriteName(AddressNames, settings.addressMode));
 		out.AddMember("anisoLevel", JSONValue::MakeNumber(settings.anisoLevel));
-		out.AddMember("shape", WriteName(SHAPE_NAMES, settings.shape));
+		out.AddMember("shape", WriteName(ShapeNames, settings.shape));
 		out.AddMember("cubeFaceSize", JSONValue::MakeNumber(settings.cubeFaceSize));
 		out.AddMember("convolveIBL", JSONValue::MakeBool(settings.convolveIBL));
 		out.AddMember("columns", JSONValue::MakeNumber(settings.columns));
 		out.AddMember("rows", JSONValue::MakeNumber(settings.rows));
-		out.AddMember("textureType", WriteName(TYPE_NAMES, settings.type));
-		out.AddMember("compression", WriteName(COMPRESSION_NAMES, settings.compression));
+		out.AddMember("textureType", WriteName(TypeNames, settings.type));
+		out.AddMember("compression", WriteName(CompressionNames, settings.compression));
 		out.AddMember("pixelsPerUnit", JSONValue::MakeNumber(settings.pixelsPerUnit));
 	}
 

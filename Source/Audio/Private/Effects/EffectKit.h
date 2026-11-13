@@ -62,7 +62,7 @@ namespace Shalltear {
 
 				void Release() override { Delete(this); }
 
-				static constexpr bool READS_SIDECHAIN = false;
+				static constexpr bool ReadsSidechain = false;
 			protected:
 				u32 _channels;
 				f32 _rate;
@@ -76,7 +76,7 @@ namespace Shalltear {
 
 				std::span<const AudioParameterDefinition> GetParameters() const override { return _parameters; }
 
-				bool IsSidechainTarget() const override { return Instance::READS_SIDECHAIN; }
+				bool IsSidechainTarget() const override { return Instance::ReadsSidechain; }
 
 				IAudioEffect* CreateEffect(const AudioEffectContext& context) override {
 					if (context.channels == 0 || context.channels > AUDIO_MAX_CHANNELS || context.sampleRate == 0 || context.blockFrames == 0 ||

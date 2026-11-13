@@ -28,26 +28,26 @@ namespace {
 		GraphCustomFunctionPort port;
 		port.id = id;
 		port.name.assign(name);
-		for (u32 i = 0; i < std::size(GRAPH_CUSTOM_FUNCTION_PORT_TYPES); ++i) {
-			port.type = GRAPH_CUSTOM_FUNCTION_PORT_TYPES[i] == type ? i : port.type;
+		for (u32 i = 0; i < std::size(GraphCustomFunctionPortTypes); ++i) {
+			port.type = GraphCustomFunctionPortTypes[i] == type ? i : port.type;
 		}
 		return port;
 	}
 
 	GraphNode& CustomFunction(DocumentBuilder& b, u32 id, std::string_view name, std::initializer_list<GraphCustomFunctionPort> inputs,
 							  std::initializer_list<GraphCustomFunctionPort> outputs) {
-		GraphNode& node = b.Node(id, GRAPH_CUSTOM_FUNCTION_NODE);
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_NAME, Ops::Quote(name));
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_INPUTS,
+		GraphNode& node = b.Node(id, GraphCustomFunctionNode);
+		DocumentBuilder::Setting(node, GraphCustomFunctionName, Ops::Quote(name));
+		DocumentBuilder::Setting(node, GraphCustomFunctionInputs,
 								 GraphCustomFunctions::WritePorts({inputs.begin(), inputs.size()}));
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_OUTPUTS,
+		DocumentBuilder::Setting(node, GraphCustomFunctionOutputs,
 								 GraphCustomFunctions::WritePorts({outputs.begin(), outputs.size()}));
 		return node;
 	}
 
 	void StringBody(GraphNode& node, std::string_view body) {
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_TYPE, Ops::Quote("String"));
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_BODY, Ops::Quote(body));
+		DocumentBuilder::Setting(node, GraphCustomFunctionType, Ops::Quote("String"));
+		DocumentBuilder::Setting(node, GraphCustomFunctionBody, Ops::Quote(body));
 	}
 
 	void Replace(GraphNode& node, std::string_view key, std::string_view json) {
@@ -61,13 +61,13 @@ namespace {
 	}
 
 	void FileSource(GraphNode& node, const Guid& source) {
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_TYPE, Ops::Quote("File"));
-		DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_SOURCE, Ops::Quote(source.ToString()));
+		DocumentBuilder::Setting(node, GraphCustomFunctionType, Ops::Quote("File"));
+		DocumentBuilder::Setting(node, GraphCustomFunctionSource, Ops::Quote(source.ToString()));
 	}
 
-	constexpr std::string_view HALVE_BODY = "Out = In * 0.5;";
-	constexpr std::string_view HALVE_FILE = "#ifndef HALVE_INCLUDED\n#define HALVE_INCLUDED\n"
-											"void Halve_float(float4 In, out float4 Out)\n{\n\tOut = In * 0.5;\n}\n#endif\n";
+	constexpr std::string_view HalveBody = "Out = In * 0.5;";
+	constexpr std::string_view HalveFile = "#ifndef HALVE_INCLUDED\n#define HALVE_INCLUDED\n"
+										   "void Halve_float(float4 In, out float4 Out)\n{\n\tOut = In * 0.5;\n}\n#endif\n";
 
 	class NodeShaderCustomFunctionFixture : public MaterialReadbackFixture {
 	protected:
@@ -194,8 +194,8 @@ TEST_F(NodeShaderCustomFunctionFixture, RenamingAPortKeepsItsWire) {
 	GraphNode& function = CustomFunction(b, 20, "Pass", {Port(1, "In", "Vector3")}, {Port(2, "Out", "Vector3")});
 	StringBody(function, "Out = In;");
 	b.Connect(10, "Out", 20, "1");
-	Replace(function, GRAPH_CUSTOM_FUNCTION_INPUTS, GraphCustomFunctions::WritePorts(std::array{Port(1, "Source", "Vector3")}));
-	Replace(function, GRAPH_CUSTOM_FUNCTION_BODY, Ops::Quote("Out = Source;"));
+	Replace(function, GraphCustomFunctionInputs, GraphCustomFunctions::WritePorts(std::array{Port(1, "Source", "Vector3")}));
+	Replace(function, GraphCustomFunctionBody, Ops::Quote("Out = Source;"));
 	Compiled c = CompileNode(b.document, 20);
 	ASSERT_TRUE(c.ok) << c.Report();
 	EXPECT_NE(c.text.functions.find("void Pass_float(float3 Source, out float3 Out)"), str::npos) << c.text.functions;
@@ -251,8 +251,8 @@ TEST_F(NodeShaderCustomFunctionFixture, NonFunctionRefused) {
 															 << c.Report();
 	}
 	DocumentBuilder b;
-	GraphNode& node = b.Node(20, GRAPH_CUSTOM_FUNCTION_NODE);
-	DocumentBuilder::Setting(node, GRAPH_CUSTOM_FUNCTION_INPUTS, R"([{"id":1,"name":"Map","type":"Texture2D"}])");
+	GraphNode& node = b.Node(20, GraphCustomFunctionNode);
+	DocumentBuilder::Setting(node, GraphCustomFunctionInputs, R"([{"id":1,"name":"Map","type":"Texture2D"}])");
 	str error;
 	EXPECT_EQ(_definitions.Find(b.document, node, &error), nullptr);
 	EXPECT_EQ(error, "has a port 'Map' of type 'Texture2D' (a custom function doesn't take it)");
@@ -282,18 +282,18 @@ TEST_F(NodeShaderCustomFunctionFixture, PortEditsKeepOtherIds) {
 		}
 		return joined;
 	};
-	EXPECT_EQ(names(GRAPH_CUSTOM_FUNCTION_INPUTS), "New,New_1");
-	EXPECT_EQ(names(GRAPH_CUSTOM_FUNCTION_OUTPUTS), "New_2");
+	EXPECT_EQ(names(GraphCustomFunctionInputs), "New,New_1");
+	EXPECT_EQ(names(GraphCustomFunctionOutputs), "New_2");
 
 	EXPECT_TRUE(Ops::RenameCustomFunctionPort(document, node, first, "my input!"));
 	EXPECT_TRUE(Ops::RenameCustomFunctionPort(document, node, second, "my_input"));
-	EXPECT_EQ(names(GRAPH_CUSTOM_FUNCTION_INPUTS), "my_input,my_input_1");
+	EXPECT_EQ(names(GraphCustomFunctionInputs), "my_input,my_input_1");
 	EXPECT_FALSE(Ops::RenameCustomFunctionPort(document, node, second, "my_input_1"));
 	EXPECT_TRUE(Ops::SetCustomFunctionPortType(document, node, second, "Matrix3"));
-	EXPECT_EQ(GRAPH_CUSTOM_FUNCTION_PORT_TYPES[ports(GRAPH_CUSTOM_FUNCTION_INPUTS)[1].type], "Matrix3");
+	EXPECT_EQ(GraphCustomFunctionPortTypes[ports(GraphCustomFunctionInputs)[1].type], "Matrix3");
 	EXPECT_TRUE(Ops::MoveCustomFunctionPort(document, node, second, 0));
-	EXPECT_EQ(names(GRAPH_CUSTOM_FUNCTION_INPUTS), "my_input_1,my_input");
-	EXPECT_EQ(ports(GRAPH_CUSTOM_FUNCTION_INPUTS)[0].id, second);
+	EXPECT_EQ(names(GraphCustomFunctionInputs), "my_input_1,my_input");
+	EXPECT_EQ(ports(GraphCustomFunctionInputs)[0].id, second);
 
 	b.Node(30, "Input/Vector4");
 	b.Connect(30, "Out", node, std::to_string(first));
@@ -302,8 +302,8 @@ TEST_F(NodeShaderCustomFunctionFixture, PortEditsKeepOtherIds) {
 	b.Connect(node, std::to_string(output), 31, "In");
 	const u32 removed[] = {first, output};
 	EXPECT_EQ(Ops::RemoveCustomFunctionPorts(document, node, removed), 2u);
-	EXPECT_EQ(names(GRAPH_CUSTOM_FUNCTION_INPUTS), "my_input_1");
-	EXPECT_TRUE(ports(GRAPH_CUSTOM_FUNCTION_OUTPUTS).empty());
+	EXPECT_EQ(names(GraphCustomFunctionInputs), "my_input_1");
+	EXPECT_TRUE(ports(GraphCustomFunctionOutputs).empty());
 	const GraphNode* held = GraphDocumentOps::FindNode(document, node);
 	EXPECT_TRUE(std::none_of(held->inputs.begin(), held->inputs.end(), [&](const GraphInput& input) { return input.port == std::to_string(first); }));
 	EXPECT_TRUE(std::any_of(held->inputs.begin(), held->inputs.end(),
@@ -351,7 +351,7 @@ TEST_F(NodeShaderCustomFunctionFixture, ATypedNameBecomesAnIdentifier) {
 }
 
 TEST_F(NodeShaderCustomFunctionFixture, FileFunctionIncludedRelative) {
-	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HALVE_FILE);
+	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HalveFile);
 	ASSERT_TRUE(source.IsValid());
 	UnlitBuilder b;
 	FileSource(CustomFunction(b, 20, "Halve", {Port(1, "In", "Vector4")}, {Port(2, "Out", "Vector4")}), source);
@@ -383,7 +383,7 @@ TEST_F(NodeShaderCustomFunctionFixture, AStringFunctionReadsBack) {
 	UnlitBuilder b;
 	b.Node(10, "Input/Color");
 	DocumentBuilder::Setting(b.document.nodes.back(), "Color", "[0.8,0.4,0.2,1]");
-	StringBody(CustomFunction(b, 20, "Halve", {Port(1, "In", "Vector4")}, {Port(2, "Out", "Vector4")}), HALVE_BODY);
+	StringBody(CustomFunction(b, 20, "Halve", {Port(1, "In", "Vector4")}, {Port(2, "Out", "Vector4")}), HalveBody);
 	b.Connect(10, "Out", 20, "1");
 	b.Connect(20, "2", 2, "Value");
 	Vec3 texel;
@@ -395,7 +395,7 @@ TEST_F(NodeShaderCustomFunctionFixture, AFileFunctionReadsBack) {
 	if (!Available()) {
 		GTEST_SKIP() << _why;
 	}
-	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HALVE_FILE);
+	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HalveFile);
 	ASSERT_TRUE(source.IsValid());
 	UnlitBuilder b;
 	b.Node(10, "Input/Color");
@@ -412,7 +412,7 @@ TEST_F(NodeShaderCustomFunctionFixture, EditingAFileFunctionRecompilesItsGraph) 
 	if (!Available()) {
 		GTEST_SKIP() << _why;
 	}
-	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HALVE_FILE);
+	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HalveFile);
 	ASSERT_TRUE(source.IsValid());
 	UnlitBuilder b;
 	b.Node(10, "Input/Color");
@@ -431,7 +431,7 @@ TEST_F(NodeShaderCustomFunctionFixture, EditingAFileFunctionRecompilesItsGraph) 
 	ExpectTexel(CenterTexel(pixels, size), Vec3(0.4f, 0.2f, 0.1f));
 	const u32 version = graph->version;
 
-	str quartered(HALVE_FILE);
+	str quartered(HalveFile);
 	quartered.replace(quartered.find("0.5"), 3, "0.25");
 	WriteProjectFile("Assets/Functions/Halve.hlsl", quartered);
 	RenderSystem::NotifyShaderFileChanged((_root / "Assets" / "Functions" / "Halve.hlsl").generic_string().c_str());
@@ -446,7 +446,7 @@ TEST_F(NodeShaderCustomFunctionFixture, WarmArtifactMissesAfterFunctionFileChang
 	if (!Available()) {
 		GTEST_SKIP() << _why;
 	}
-	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HALVE_FILE);
+	const Guid source = AddFunctionFile("Assets/Functions/Halve.hlsl", HalveFile);
 	ASSERT_TRUE(source.IsValid());
 	UnlitBuilder b;
 	b.Node(10, "Input/Color");
@@ -474,7 +474,7 @@ TEST_F(NodeShaderCustomFunctionFixture, WarmArtifactMissesAfterFunctionFileChang
 
 	AssetDatabase::UnloadAsset(graph);
 	AssetDatabase::CollectGarbage();
-	str quartered(HALVE_FILE);
+	str quartered(HalveFile);
 	quartered.replace(quartered.find("0.5"), 3, "0.25");
 	WriteProjectFile("Assets/Functions/Halve.hlsl", quartered);
 	ShaderAsset* reloaded = static_cast<ShaderAsset*>(AssetDatabase::LoadAsset(Path("project://Cached.slshader")));

@@ -14,7 +14,7 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::array<std::string_view, 66> RESERVED = {
+		constexpr std::array<std::string_view, 66> Reserved = {
 			"bool", "int", "uint", "dword", "half", "float", "double", "min16float", "min10float", "min16int", "min12int",
 			"min16uint", "vector", "matrix", "void", "struct", "typedef", "cbuffer", "tbuffer", "register", "packoffset",
 			"Texture2D", "Texture2DArray", "Texture3D", "TextureCube", "TextureCubeArray", "SamplerState", "sampler", "texture", "string", "true", "false",
@@ -35,7 +35,7 @@ namespace Shalltear {
 			if (!identifier) {
 				return "has reference '" + str(reference) + "' (not a name a shader can declare: letters/digits/_, not starting with a digit)";
 			}
-			for (std::string_view reserved : RESERVED) {
+			for (std::string_view reserved : Reserved) {
 				if (reference == reserved) {
 					return "has reference '" + str(reference) + "' (the shading language already uses it)";
 				}
@@ -62,7 +62,7 @@ namespace Shalltear {
 			u32 components;
 		};
 
-		constexpr KindName KINDS[] = {
+		constexpr KindName Kinds[] = {
 			{"Float", GraphPropertyKind::Float, 1},
 			{"Boolean", GraphPropertyKind::Boolean, 1},
 			{"Vector2", GraphPropertyKind::Vector2, 2},
@@ -157,7 +157,7 @@ namespace Shalltear {
 			out.reference = property.reference;
 
 			const KindName* kind = nullptr;
-			for (const KindName& candidate : KINDS) {
+			for (const KindName& candidate : Kinds) {
 				if (candidate.name == property.type) {
 					kind = &candidate;
 				}

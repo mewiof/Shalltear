@@ -54,7 +54,7 @@ namespace Shalltear::UI {
 			u32 rgb;
 		};
 
-		constexpr NamedColor NAMED_COLORS[] = {
+		constexpr NamedColor NamedColors[] = {
 			{"black", 0x000000},
 			{"silver", 0xc0c0c0},
 			{"gray", 0x808080},
@@ -255,11 +255,11 @@ namespace Shalltear::UI {
 		}
 
 		bool ParseLinearGradient(std::string_view value, Brush& out) {
-			constexpr std::string_view PREFIX = "linear-gradient(";
-			if (!value.starts_with(PREFIX) || value.back() != ')') {
+			constexpr std::string_view Prefix = "linear-gradient(";
+			if (!value.starts_with(Prefix) || value.back() != ')') {
 				return false;
 			}
-			std::string_view inner = value.substr(PREFIX.size(), value.size() - PREFIX.size() - 1);
+			std::string_view inner = value.substr(Prefix.size(), value.size() - Prefix.size() - 1);
 			std::string_view parts[3];
 			u32 count = SplitInto(inner, ',', parts, 3);
 			if (count < 2) {
@@ -277,13 +277,13 @@ namespace Shalltear::UI {
 			if (value == "none") {
 				return;
 			}
-			constexpr std::string_view PREFIX = "drop-shadow(";
-			if (!value.starts_with(PREFIX) || value.back() != ')') {
+			constexpr std::string_view Prefix = "drop-shadow(";
+			if (!value.starts_with(Prefix) || value.back() != ')') {
 				SLT_LOG_WARN("UI", "stylesheet: filter '{}' isn't drawn (only drop-shadow() is)", str(value));
 				return;
 			}
 			std::string_view tokens[5];
-			u32 count = SplitInto(value.substr(PREFIX.size(), value.size() - PREFIX.size() - 1), ' ', tokens, 5);
+			u32 count = SplitInto(value.substr(Prefix.size(), value.size() - Prefix.size() - 1), ' ', tokens, 5);
 			DropShadow parsed;
 			parsed.color = Color::Black();
 			f32* slots[3] = {&parsed.x, &parsed.y, &parsed.blur};
@@ -317,10 +317,10 @@ namespace Shalltear::UI {
 				std::string_view suffix;
 				f32 degrees;
 			};
-			constexpr AngleUnit UNITS[] = {{"deg", 1.0f}, {"grad", 0.9f}, {"rad", 57.29577951f}, {"turn", 360.0f}};
+			constexpr AngleUnit Units[] = {{"deg", 1.0f}, {"grad", 0.9f}, {"rad", 57.29577951f}, {"turn", 360.0f}};
 			std::string_view number = value;
 			f32 scale = 1.0f;
-			for (const AngleUnit& unit : UNITS) {
+			for (const AngleUnit& unit : Units) {
 				if (value.ends_with(unit.suffix)) {
 					number = value.substr(0, value.size() - unit.suffix.size());
 					scale = unit.degrees;
@@ -349,8 +349,8 @@ namespace Shalltear::UI {
 				f32 fraction;
 				OriginAxis axis;
 			};
-			constexpr Keyword KEYWORDS[] = {{"center", 0.5f, OriginAxis::Either}, {"left", 0.0f, OriginAxis::Horizontal}, {"right", 1.0f, OriginAxis::Horizontal}, {"top", 0.0f, OriginAxis::Vertical}, {"bottom", 1.0f, OriginAxis::Vertical}};
-			for (const Keyword& keyword : KEYWORDS) {
+			constexpr Keyword Keywords[] = {{"center", 0.5f, OriginAxis::Either}, {"left", 0.0f, OriginAxis::Horizontal}, {"right", 1.0f, OriginAxis::Horizontal}, {"top", 0.0f, OriginAxis::Vertical}, {"bottom", 1.0f, OriginAxis::Vertical}};
+			for (const Keyword& keyword : Keywords) {
 				if (token == keyword.name) {
 					out = Length::Percent(keyword.fraction);
 					axis = keyword.axis;
@@ -769,10 +769,10 @@ namespace Shalltear::UI {
 					 }
 				 }},
 				{"text-outline-color", [](Style& s, std::string_view v) {
-					 if (!ApplyKeyword(s.textOutlineColor, v, INITIAL_OUTLINE_COLOR)) {
+					 if (!ApplyKeyword(s.textOutlineColor, v, InitialOutlineColor)) {
 						 s.textOutlineColor = ParseColor(v);
 					 } },
-				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor.value_or(INITIAL_OUTLINE_COLOR)); }},
+				 [](const Style& s, Sink& o) { o.Put(s.textOutlineColor.value_or(InitialOutlineColor)); }},
 				{"font-weight", [](Style& s, std::string_view v) {
 					 if (ApplyKeyword(s.fontWeight, v, INITIAL_FONT_WEIGHT)) {
 						 return;
@@ -799,10 +799,10 @@ namespace Shalltear::UI {
 					 } },
 				 [](const Style& s, Sink& o) { o.Put(s.fontStyle.value_or(FontStyle::Normal) == FontStyle::Italic ? "italic" : "normal"); }},
 				{"color", [](Style& s, std::string_view v) {
-					 if (!ApplyKeyword(s.color, v, INITIAL_TEXT_COLOR)) {
+					 if (!ApplyKeyword(s.color, v, InitialTextColor)) {
 						 s.color = ParseColor(v);
 					 } },
-				 [](const Style& s, Sink& o) { o.Put(s.color.value_or(INITIAL_TEXT_COLOR)); }},
+				 [](const Style& s, Sink& o) { o.Put(s.color.value_or(InitialTextColor)); }},
 				{"font-size", [](Style& s, std::string_view v) {
 					 Length size;
 					 if (ApplyKeyword(s.fontSize, v, Length::Pixel(INITIAL_FONT_SIZE))) {
@@ -1023,7 +1023,7 @@ namespace Shalltear::UI {
 	} // anonymous namespace
 
 	bool ParseStyleColor(std::string_view value, Color& out) {
-		for (const NamedColor& named : NAMED_COLORS) {
+		for (const NamedColor& named : NamedColors) {
 			if (EqualsIgnoreCase(value, named.name)) {
 				out = Color(static_cast<f32>((named.rgb >> 16) & 0xFF) / 255.0f, static_cast<f32>((named.rgb >> 8) & 0xFF) / 255.0f,
 							static_cast<f32>(named.rgb & 0xFF) / 255.0f, 1.0f);
@@ -1248,9 +1248,9 @@ namespace Shalltear::UI {
 	}
 
 	bool IsInheritedStyleProperty(StringHash name) {
-		static constexpr StringHash INHERITED[] = {"font-family", "font-size", "color", "font-style", "text-outline-width",
+		static constexpr StringHash Inherited[] = {"font-family", "font-size", "color", "font-style", "text-outline-width",
 												   "text-outline-color", "letter-spacing", "line-height", "font-weight"};
-		return std::find(std::begin(INHERITED), std::end(INHERITED), name) != std::end(INHERITED);
+		return std::find(std::begin(Inherited), std::end(Inherited), name) != std::end(Inherited);
 	}
 
 	std::string_view ReadStyleProperty(const Style& style, StringHash name, char* buffer, size_t capacity) {

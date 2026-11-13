@@ -402,8 +402,8 @@ TEST_F(NodeShaderPreviewFixture, SkyTileShowsSkyOnBall) {
 
 	const Vec3 sun = Vec3(-0.45f, 0.8f, -0.4f).Normalized();
 	const Vec3 seen = sun * 0.5f - Vec3(0.0f, 0.0f, -5.0f);
-	const f32 tanHalfFov = std::tan(Math::DegToRad(7.5f));
-	const Vec2 sunUV((seen.x / seen.z / tanHalfFov + 1.0f) * 0.5f, (1.0f - seen.y / seen.z / tanHalfFov) * 0.5f);
+	const f32 tanHalfFOV = std::tan(Math::DegToRad(7.5f));
+	const Vec2 sunUV((seen.x / seen.z / tanHalfFOV + 1.0f) * 0.5f, (1.0f - seen.y / seen.z / tanHalfFOV) * 0.5f);
 	EXPECT_TRUE(Near(TileTexel(pixels, size, atlas, 1, sunUV), 1.0f, 1.0f, 1.0f));
 	EXPECT_TRUE(Near(TileTexel(pixels, size, atlas, 1, {0.5f, 0.5f}), 0.0f, 0.0f, 0.0f));
 }

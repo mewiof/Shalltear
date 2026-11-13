@@ -19,7 +19,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 	inline constexpr f32 MAX_PITCH = 10.0f;
 	inline constexpr f32 MAX_SEND_DECIBELS = 0.0f;
 
-	inline constexpr std::string_view NEW_GROUP_NAME = "New Group";
+	inline constexpr std::string_view NewGroupName = "New Group";
 
 	struct GroupEntry {
 		u32 index = 0;
@@ -33,7 +33,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 
 	bool IsUnder(const AudioMixer& mixer, std::string_view group, std::string_view ancestor);
 
-	str AddGroup(AudioMixer& mixer, std::string_view parent, std::string_view name = NEW_GROUP_NAME);
+	str AddGroup(AudioMixer& mixer, std::string_view parent, std::string_view name = NewGroupName);
 
 	void DuplicateGroups(AudioMixer& mixer, std::span<const str> groups, u32 view, Vector<str>& copies);
 
@@ -103,7 +103,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 
 	void CopyGroupToAllSnapshots(AudioMixer& mixer, u32 snapshot, std::string_view group);
 
-	inline constexpr std::string_view COPY_SUFFIX = " - Copy";
+	inline constexpr std::string_view CopySuffix = " - Copy";
 
 	u32 FindSnapshot(const AudioMixer& mixer, std::string_view id);
 
@@ -117,7 +117,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 
 	bool SetStartSnapshot(AudioMixer& mixer, u32 index);
 
-	inline constexpr std::string_view DEFAULT_VIEW_NAME = "View";
+	inline constexpr std::string_view DefaultViewName = "View";
 
 	inline constexpr u32 MAX_VIEWS = 64;
 
@@ -156,7 +156,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 
 	bool CanRouteInto(std::span<const MixerListing> mixers, const Guid& dragged, const Guid& onto);
 
-	inline constexpr std::string_view NEW_EXPOSED_NAME = "MyExposedParam";
+	inline constexpr std::string_view NewExposedName = "MyExposedParam";
 	inline constexpr size_t MAX_EXPOSED_NAME = 64;
 
 	str DescribeParameter(const AudioMixer& mixer, const ParameterRef& ref, bool baseOnly = false);

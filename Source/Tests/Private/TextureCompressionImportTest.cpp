@@ -48,7 +48,7 @@ namespace {
 					texel(x, y, rgba.data() + (static_cast<size_t>(y) * size.x + x) * 4);
 				}
 			}
-			TestImages::WriteTga(_root / name, static_cast<u16>(size.x), static_cast<u16>(size.y), rgba.data());
+			TestImages::WriteTGA(_root / name, static_cast<u16>(size.x), static_cast<u16>(size.y), rgba.data());
 			const Path path(str("project://") + name);
 			ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(path).IsValid());
 			if (settings.size() == 0) {
@@ -398,7 +398,7 @@ namespace {
 					Bumps(x, y, rgba.data() + (y * 8 + x) * 4);
 				}
 			}
-			TestImages::WriteTga(_root / name, 8, 8, rgba.data());
+			TestImages::WriteTGA(_root / name, 8, 8, rgba.data());
 			const Path path(str("project://") + name);
 			const Guid guid = AssetDatabase::EnsureAssetIdentity(path);
 			JSONValue block = JSONValue::MakeObject();

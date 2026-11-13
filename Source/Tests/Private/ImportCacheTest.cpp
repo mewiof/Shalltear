@@ -1309,7 +1309,7 @@ TEST_F(ImportCacheInvalidationFixture, EditingAModelInvalidatesItsCachedProducts
 }
 
 TEST_F(ImportCacheInvalidationFixture, ExtractedMaterialKeepsOthersCached) {
-	ScopedImportCostThreshold everything(ScopedImportCostThreshold::CacheEverything);
+	ScopedImportCostThreshold everything(ScopedImportCostThreshold::CACHE_EVERYTHING);
 	ASSERT_TRUE(_mountedEngine);
 	ASSERT_TRUE(StageFixture("Fox.glb"));
 
@@ -1668,7 +1668,7 @@ namespace {
 } // namespace
 
 TEST_F(ImportCachePolicyFixture, ImportCheaperThanArtifactIsNotCached) {
-	ScopedImportCostThreshold threshold(ScopedImportCostThreshold::CacheNothing);
+	ScopedImportCostThreshold threshold(ScopedImportCostThreshold::CACHE_NOTHING);
 	WriteSource("project://Assets/trivial.cheap", "two words");
 
 	Asset* asset = AssetDatabase::LoadAsset(Path("project://Assets/trivial.cheap"));
@@ -1679,7 +1679,7 @@ TEST_F(ImportCachePolicyFixture, ImportCheaperThanArtifactIsNotCached) {
 }
 
 TEST_F(ImportCachePolicyFixture, AnImportWorthItsArtifactIsCached) {
-	ScopedImportCostThreshold threshold(ScopedImportCostThreshold::CacheEverything);
+	ScopedImportCostThreshold threshold(ScopedImportCostThreshold::CACHE_EVERYTHING);
 	WriteSource("project://Assets/trivial.cheap", "two words");
 
 	Asset* asset = AssetDatabase::LoadAsset(Path("project://Assets/trivial.cheap"));
@@ -2032,7 +2032,7 @@ namespace {
 	protected:
 		std::filesystem::path _root;
 		bool _mountedEngine = false;
-		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CACHE_EVERYTHING};
 
 		void SetUp() override {
 			static std::atomic<u64> counter{0};

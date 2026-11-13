@@ -228,7 +228,7 @@ namespace Shalltear::ScriptProjectOps {
 			return tokens;
 		}
 
-		constexpr std::string_view HOSTILE_CHILD_VARIABLES[] = {
+		constexpr std::string_view HostileChildVariables[] = {
 			"ELECTRON_RUN_AS_NODE",
 		};
 
@@ -706,7 +706,7 @@ namespace Shalltear::ScriptProjectOps {
 
 		EditorPlatform::SpawnOptions options;
 		options.workingDirectory = projectPath;
-		options.hiddenVariables = HOSTILE_CHILD_VARIABLES;
+		options.hiddenVariables = HostileChildVariables;
 		EditorPlatform::SpawnedProcess spawned;
 		str error;
 		if (!EditorPlatform::SpawnProcess(command, options, spawned, error)) {

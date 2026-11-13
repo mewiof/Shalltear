@@ -19,7 +19,7 @@ namespace {
 										 "[[vk::binding(0, 1)]] cbuffer ShalltearMaterial { float4 offset; };\n"
 										 "void ShalltearSurfaceFunction(ShalltearSurfaceInput input, inout ShalltearSurface surface) {}\n";
 
-	constexpr Color32 OUTLINE{0, 255, 0, 255};
+	constexpr Color32 Outline{0, 255, 0, 255};
 
 	bool IsOutline(const Vector<u8>& pixels, size_t texel) {
 		const size_t at = texel * 4;
@@ -65,7 +65,7 @@ namespace {
 				renderer->SetMesh(cube);
 				renderer->SetMaterial(0, Handle<MaterialAsset>(placed.material));
 				if (placed.outlined) {
-					outlines.push_back({object, OUTLINE});
+					outlines.push_back({object, Outline});
 				}
 			}
 			Handle<SceneObject> sun = SceneSystem::CreateObject("Sun", scene);
@@ -204,25 +204,25 @@ TEST_F(SelectionOutlineFixture, OutlinesCoverSubtrees) {
 	Handle<MeshRenderer> otherRenderer = other->AddComponent<MeshRenderer>();
 	SceneSystem::EndFrame();
 
-	constexpr Color32 SELECTED{255, 102, 0, 255};
-	constexpr Color32 CHILDREN{94, 119, 155, 255};
+	constexpr Color32 Selected{255, 102, 0, 255};
+	constexpr Color32 Children{94, 119, 155, 255};
 	const Handle<Object> selection[] = {Handle<Object>(root.Get()), Handle<Object>(otherRenderer.Get()), Handle<Object>(grandchild.Get())};
 	Vector<ViewOutline> outlines{GetMemoryResource(MemTag::Editor)};
-	EditorViewportOps::BuildSelectionOutlines(selection, SELECTED, CHILDREN, outlines);
+	EditorViewportOps::BuildSelectionOutlines(selection, Selected, Children, outlines);
 
 	ASSERT_EQ(outlines.size(), 5u);
 	EXPECT_EQ(outlines[0].object, root);
 	EXPECT_EQ(outlines[1].object, other);
 	EXPECT_EQ(outlines[2].object, grandchild);
 	for (u32 index = 0; index < 3; ++index) {
-		EXPECT_EQ(outlines[index].color, SELECTED) << "selected entry " << index;
+		EXPECT_EQ(outlines[index].color, Selected) << "selected entry " << index;
 	}
 	EXPECT_EQ(outlines[3].object, child);
 	EXPECT_EQ(outlines[4].object, grandchild);
-	EXPECT_EQ(outlines[3].color, CHILDREN);
-	EXPECT_EQ(outlines[4].color, CHILDREN);
+	EXPECT_EQ(outlines[3].color, Children);
+	EXPECT_EQ(outlines[4].color, Children);
 
 	outlines.push_back({});
-	EditorViewportOps::BuildSelectionOutlines({}, SELECTED, CHILDREN, outlines);
+	EditorViewportOps::BuildSelectionOutlines({}, Selected, Children, outlines);
 	EXPECT_TRUE(outlines.empty());
 }

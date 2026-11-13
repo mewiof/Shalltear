@@ -39,28 +39,28 @@ namespace Shalltear {
 	}
 
 	bool ReadBootManifest(BootManifest& out, str& outError) {
-		constexpr std::string_view WHAT = "the package's boot manifest";
+		constexpr std::string_view What = "the package's boot manifest";
 
 		str text;
 		if (!AssetDatabase::ReadPackageDocument(PakDocumentKind::BootManifest, text)) {
-			outError = std::format("{} is missing (build was cooked incompletely)", WHAT);
+			outError = std::format("{} is missing (build was cooked incompletely)", What);
 			return false;
 		}
 
 		LinearAllocator arena(text.size() + 64, MemTag::Core);
 		JSONValue root = JSONParse(text, arena);
 		if (!root.IsObject()) {
-			outError = std::format("{} isn't valid JSON", WHAT);
+			outError = std::format("{} isn't valid JSON", What);
 			return false;
 		}
 
 		const JSONValue& version = root["formatVersion"];
 		if (!version.IsNumber()) {
-			outError = std::format("{} has no formatVersion (not a Shalltear boot manifest)", WHAT);
+			outError = std::format("{} has no formatVersion (not a Shalltear boot manifest)", What);
 			return false;
 		}
 		if (version.AsInt() != BOOT_MANIFEST_FORMAT_VERSION) {
-			outError = std::format("{} is format {} (this player reads format {})", WHAT, version.AsInt(),
+			outError = std::format("{} is format {} (this player reads format {})", What, version.AsInt(),
 								   BOOT_MANIFEST_FORMAT_VERSION);
 			return false;
 		}
@@ -70,7 +70,7 @@ namespace Shalltear {
 
 		const JSONValue& scenes = root["scenes"];
 		if (!scenes.IsNull() && !scenes.IsArray()) {
-			outError = std::format("{}: \"scenes\" is present but isn't an array", WHAT);
+			outError = std::format("{}: \"scenes\" is present but isn't an array", What);
 			return false;
 		}
 		for (size_t i = 0; i < scenes.Size(); ++i) {
@@ -79,14 +79,14 @@ namespace Shalltear {
 			BootScene scene;
 			if (!entry.IsObject()) {
 				outError = std::format("{}: scene {} isn't an object (expected {{ \"path\", \"guid\" }})",
-									   WHAT, i);
+									   What, i);
 				return false;
 			}
 			scene.path = str(entry["path"].AsString());
 			scene.guid = Guid::FromString(entry["guid"].AsString());
 			if (!scene.guid.IsValid()) {
 				outError = std::format("{}: scene {} ('{}') has no guid",
-									   WHAT, i, scene.path);
+									   What, i, scene.path);
 				return false;
 			}
 			parsed.scenes.push_back(std::move(scene));

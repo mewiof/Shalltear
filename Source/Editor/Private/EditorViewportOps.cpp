@@ -588,13 +588,13 @@ namespace Shalltear::EditorViewportOps {
 
 	void LayOutOrientationKnobs(const Quat& rotation, const Vec2& centerPx, f32 radiusPx,
 								std::span<OrientationKnob, ORIENTATION_KNOB_COUNT> out) {
-		static constexpr Vec3 AXES[ORIENTATION_KNOB_COUNT] = {
+		static constexpr Vec3 Axes[ORIENTATION_KNOB_COUNT] = {
 			Vec3(1.0f, 0.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f),
 			Vec3(0.0f, -1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 0.0f, -1.0f)};
 		const Quat toView = rotation.Inverse();
 		for (u32 i = 0; i < ORIENTATION_KNOB_COUNT; ++i) {
-			const Vec3 view = toView * AXES[i];
-			out[i].axis = AXES[i];
+			const Vec3 view = toView * Axes[i];
+			out[i].axis = Axes[i];
 			out[i].centerPx = Vec2(centerPx.x + view.x * radiusPx, centerPx.y - view.y * radiusPx);
 			out[i].depth = view.z;
 		}
@@ -646,7 +646,7 @@ namespace Shalltear::EditorViewportOps {
 	namespace {
 
 		// saved layout stores the idx
-		constexpr ShadingModeInfo SHADING_MODES[] = {
+		constexpr ShadingModeInfo ShadingModes[] = {
 			{"Shaded", ViewFill::Solid, DebugView::None},
 			{"Wireframe", ViewFill::Wireframe, DebugView::None},
 			{"Shaded Wireframe", ViewFill::SolidAndWireframe, DebugView::None},
@@ -657,13 +657,13 @@ namespace Shalltear::EditorViewportOps {
 
 	} // namespace
 
-	u32 GetShadingModeCount() { return static_cast<u32>(std::size(SHADING_MODES)); }
+	u32 GetShadingModeCount() { return static_cast<u32>(std::size(ShadingModes)); }
 
 	ShadingModeInfo GetShadingMode(i32 index) {
-		if (index < 0 || index >= static_cast<i32>(std::size(SHADING_MODES))) {
-			return SHADING_MODES[0];
+		if (index < 0 || index >= static_cast<i32>(std::size(ShadingModes))) {
+			return ShadingModes[0];
 		}
-		return SHADING_MODES[index];
+		return ShadingModes[index];
 	}
 
 	void CollectCameraPassRows(const Handle<Camera>& camera, Vector<Handle<RenderPass>>& out) {

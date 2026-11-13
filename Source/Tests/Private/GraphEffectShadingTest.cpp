@@ -221,7 +221,7 @@ TEST(GraphEffectShadingTest, HostDeclaresPropertiesAsValues) {
 }
 
 TEST(GraphEffectShadingTest, NewOutputShadesWithDefaultGraph) {
-	for (std::string_view def : {GRAPH_EFFECT_OUTPUT_NODE_SHADER, GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH}) {
+	for (std::string_view def : {GraphEffectOutputNodeShader, GraphEffectOutputNodeShaderMesh}) {
 		SCOPED_TRACE(def);
 		const GraphDocument document = ReadGraph(OneOutput(def, "{}", "{}"));
 		GraphDefinitions definitions;
@@ -237,7 +237,7 @@ TEST(GraphEffectShadingTest, NewOutputShadesWithDefaultGraph) {
 		EXPECT_EQ(color->defaultValue[3], 1.0f);
 		EXPECT_EQ(map->type, GraphPortType::Texture2D);
 		EXPECT_FALSE(map->binding.empty());
-		const GraphSettingDefinition* graph = Setting(*definition, GRAPH_EFFECT_NODE_SHADER_SETTING);
+		const GraphSettingDefinition* graph = Setting(*definition, GraphEffectNodeShaderSetting);
 		ASSERT_NE(graph, nullptr);
 		EXPECT_EQ(graph->kind, GraphSettingKind::Asset);
 		EXPECT_TRUE(graph->inGraph);
@@ -251,7 +251,7 @@ TEST(GraphEffectShadingTest, NewOutputShadesWithDefaultGraph) {
 
 TEST(GraphEffectShadingTest, FedPortIsParticleValue) {
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	const GraphEffect fresh = Compile(OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, "{}", "{}"), diagnostics);
+	const GraphEffect fresh = Compile(OneOutput(GraphEffectOutputNodeShader, "{}", "{}"), diagnostics);
 	ASSERT_TRUE(diagnostics.empty()) << Said(diagnostics);
 	ASSERT_EQ(fresh.systems.size(), 1u);
 	ASSERT_EQ(fresh.systems[0].outputs.size(), 1u);
@@ -267,7 +267,7 @@ TEST(GraphEffectShadingTest, FedPortIsParticleValue) {
 	EXPECT_EQ(output.textures[0].slot, "_BaseMap");
 	EXPECT_FALSE(output.textures[0].texture.IsValid());
 
-	const GraphEffect fed = Compile(OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, "{}", R"({"_Color":{"from":[20,"color"]}})",
+	const GraphEffect fed = Compile(OneOutput(GraphEffectOutputNodeShader, "{}", R"({"_Color":{"from":[20,"color"]}})",
 											  R"({"id":20,"def":"Attribute/GetAttribute","settings":{"Attribute":"color"}})"),
 									diagnostics);
 	ASSERT_TRUE(diagnostics.empty()) << Said(diagnostics);
@@ -280,10 +280,10 @@ TEST(GraphEffectShadingTest, FedPortIsParticleValue) {
 
 TEST(GraphEffectShadingTest, ClearedOrMissingNodeShaderIsRefused) {
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	Compile(OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, R"({"Node Shader":null})", "{}"), diagnostics);
+	Compile(OneOutput(GraphEffectOutputNodeShader, R"({"Node Shader":null})", "{}"), diagnostics);
 	EXPECT_NE(Said(diagnostics).find("has no Node Shader"), str::npos) << Said(diagnostics);
 	diagnostics.clear();
-	Compile(OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, R"({"Node Shader":"0123456789abcdef-0123456789abcdef"})", "{}"), diagnostics);
+	Compile(OneOutput(GraphEffectOutputNodeShader, R"({"Node Shader":"0123456789abcdef-0123456789abcdef"})", "{}"), diagnostics);
 	EXPECT_NE(Said(diagnostics).find("doesn't have"), str::npos) << Said(diagnostics);
 }
 
@@ -298,7 +298,7 @@ namespace {
 
 		str Shaded(const Guid& graph, std::string_view settings = "") {
 			const str stored = std::format(R"({{"Node Shader":"{}"{}}})", graph.ToString(), settings);
-			return OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, stored, "{}");
+			return OneOutput(GraphEffectOutputNodeShader, stored, "{}");
 		}
 	};
 
@@ -408,7 +408,7 @@ TEST_F(GraphEffectShadingFixture, CompileListsGraphItReadAsDependency) {
 	EXPECT_NE(read[0]->contentHash, 0u);
 
 	GraphDefinitions defaults;
-	Compile(OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, "{}", "{}"), diagnostics, &defaults);
+	Compile(OneOutput(GraphEffectOutputNodeShader, "{}", "{}"), diagnostics, &defaults);
 	ASSERT_TRUE(diagnostics.empty()) << Said(diagnostics);
 	defaults.Read(read);
 	EXPECT_TRUE(read.empty());
@@ -442,7 +442,7 @@ TEST(GraphEffectShadingTest, RegistryKeepsFirstOwner) {
 	const GraphShadingTarget* a = GraphShadingTargets::Find("TestShadingA");
 	ASSERT_NE(a, nullptr);
 	EXPECT_EQ(a->canShadeEffects, &Shades);
-	EXPECT_NE(GraphShadingTargets::Find(GRAPH_SHADER_DOCUMENT_TYPE), nullptr);
+	EXPECT_NE(GraphShadingTargets::Find(GraphShaderDocumentType), nullptr);
 
 	const u64 withA = GraphShadingTargets::Fingerprint();
 	EXPECT_FALSE(GraphShadingTargets::Register("TestShadingA", refuses, &second));
@@ -453,7 +453,7 @@ TEST(GraphEffectShadingTest, RegistryKeepsFirstOwner) {
 	EXPECT_NE(GraphShadingTargets::Fingerprint(), withA);
 	EXPECT_EQ(GraphShadingTargets::Find("TestShadingA"), nullptr);
 	EXPECT_NE(GraphShadingTargets::Find("TestShadingB"), nullptr);
-	EXPECT_NE(GraphShadingTargets::Find(GRAPH_SHADER_DOCUMENT_TYPE), nullptr);
+	EXPECT_NE(GraphShadingTargets::Find(GraphShaderDocumentType), nullptr);
 	EXPECT_EQ(GraphShadingTargets::UnregisterOwnedBy(&second), 1u);
 	EXPECT_EQ(GraphShadingTargets::Find("TestShadingB"), nullptr);
 }
@@ -461,8 +461,8 @@ TEST(GraphEffectShadingTest, RegistryKeepsFirstOwner) {
 TEST_F(GraphEffectShadingFixture, NodeShaderOffRefusesGraph) {
 	const Guid graph = AddGraph("Blackboard.slshader", Blackboard);
 	ASSERT_TRUE(graph.IsValid());
-	const str shaded = OneOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER, "{}", "{}");
-	const str plain = OneOutput(GRAPH_EFFECT_OUTPUT, "{}", "{}");
+	const str shaded = OneOutput(GraphEffectOutputNodeShader, "{}", "{}");
+	const str plain = OneOutput(GraphEffectOutputDefinition, "{}", "{}");
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	Compile(shaded, diagnostics);
 	Compile(Shaded(graph), diagnostics);
@@ -471,7 +471,7 @@ TEST_F(GraphEffectShadingFixture, NodeShaderOffRefusesGraph) {
 	{
 		const NodeShaderTesting::NodeShaderSwitchedOff off;
 		ASSERT_TRUE(off.HadTarget());
-		ASSERT_EQ(GraphShadingTargets::Find(GRAPH_SHADER_DOCUMENT_TYPE), nullptr);
+		ASSERT_EQ(GraphShadingTargets::Find(GraphShaderDocumentType), nullptr);
 
 		const GraphEffect refused = Compile(shaded, diagnostics);
 		EXPECT_TRUE(refused.systems.empty());
@@ -488,7 +488,7 @@ TEST_F(GraphEffectShadingFixture, NodeShaderOffRefusesGraph) {
 		EXPECT_EQ(other.systems[0].outputs.size(), 1u);
 	}
 
-	ASSERT_NE(GraphShadingTargets::Find(GRAPH_SHADER_DOCUMENT_TYPE), nullptr);
+	ASSERT_NE(GraphShadingTargets::Find(GraphShaderDocumentType), nullptr);
 	const GraphEffect again = Compile(Shaded(graph), diagnostics);
 	EXPECT_TRUE(diagnostics.empty()) << Said(diagnostics);
 	EXPECT_EQ(again.systems.size(), 1u);

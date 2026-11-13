@@ -36,7 +36,7 @@ namespace {
 			AssetDatabase::Initialize();
 
 			std::vector<u8> pixels(16 * 8 * 4, 255);
-			TestImages::WriteTga(_root / "Atlas.tga", 16, 8, pixels.data());
+			TestImages::WriteTGA(_root / "Atlas.tga", 16, 8, pixels.data());
 			ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(AtlasPath()).IsValid());
 		}
 

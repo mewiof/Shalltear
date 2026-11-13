@@ -67,11 +67,11 @@ namespace {
 						   contexts);
 	}
 
-	constexpr std::string_view OWN = R"({"id":3,"def":"Context/Spawn","blocks":[{"id":51,"def":"Block/ConstantSpawnRate","in":{"Rate":{"value":[3]}}}]},
+	constexpr std::string_view Own = R"({"id":3,"def":"Context/Spawn","blocks":[{"id":51,"def":"Block/ConstantSpawnRate","in":{"Rate":{"value":[3]}}}]},
 {"id":4,"def":"Context/Initialize","flow":[[3,"In"]],"settings":{"Capacity":8},"blocks":[]},
 {"id":5,"def":"Context/OutputParticlePrimitive","flow":[[4,"In"]],"blocks":[]})";
 
-	constexpr std::string_view FAMILY = R"({"_type":"EffectGraph","version":4,"nextId":200,"properties":[],"nodes":[],"contexts":[
+	constexpr std::string_view Family = R"({"_type":"EffectGraph","version":4,"nextId":200,"properties":[],"nodes":[],"contexts":[
 {"id":1,"def":"Context/Initialize","settings":{"Capacity":64},"blocks":[]},
 {"id":2,"def":"Context/Update","flow":[[1,"In"]],"blocks":[{"id":20,"def":"Block/TriggerEvent","settings":{"Clamp To One":true,"Mode":"Always"},"in":{"Count":{"value":[1]}}}]},
 {"id":5,"def":"Context/OutputParticlePrimitive","flow":[[2,"In"]],"blocks":[]},
@@ -114,7 +114,7 @@ namespace {
 			_root = std::filesystem::temp_directory_path() / ("shalltear_effect_system_" + std::to_string(stamp) + "_" + std::to_string(counter.fetch_add(1)));
 			std::filesystem::create_directories(_root / "Assets");
 			FileSystem::Mount("project", Path(_root.generic_string()));
-			AssetImporterRegistry::Register(_standIn.GetAssetType(), &_standIn, {GRAPH_EFFECT_EXTENSION}, &_owner);
+			AssetImporterRegistry::Register(_standIn.GetAssetType(), &_standIn, {GraphEffectExtension}, &_owner);
 			EffectSubgraphImporters::Register(&_owner);
 			AssetDatabase::Initialize();
 		}
@@ -164,7 +164,7 @@ TEST_F(GraphEffectSystemSubgraphFixture, ContextHasPortsAndSlots) {
 	str error;
 	const GraphNodeDefinition* definition = definitions.Find(user, user.contexts[0].node, &error);
 	ASSERT_NE(definition, nullptr) << error;
-	EXPECT_EQ(definition->id, GRAPH_EFFECT_SYSTEM_SUBGRAPH);
+	EXPECT_EQ(definition->id, GraphEffectSystemSubgraph);
 	EXPECT_EQ(definition->name, "Burst");
 	ASSERT_EQ(definition->inputs.size(), 2u);
 	EXPECT_EQ(definition->inputs[0].name, "1");
@@ -219,7 +219,7 @@ TEST_F(GraphEffectSystemSubgraphFixture, UserCompilesSubgraphsSystemsAfterCopyUs
 	ASSERT_TRUE(burst.IsValid());
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compile(Effect(str(OWN) + "," + Uses(1, burst) + "," + Uses(2, burst)), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Effect(str(Own) + "," + Uses(1, burst) + "," + Uses(2, burst)), effect, diagnostics)) << Said(diagnostics);
 	ASSERT_EQ(effect.systems.size(), 3u);
 	EXPECT_EQ(effect.systems[0].capacity, 8u);
 	for (const u32 s : {1u, 2u}) {
@@ -238,11 +238,11 @@ TEST_F(GraphEffectSystemSubgraphFixture, UserCompilesSubgraphsSystemsAfterCopyUs
 }
 
 TEST_F(GraphEffectSystemSubgraphFixture, SubgraphGpuEventJoinsSystems) {
-	const Guid family = Add("Family.sleffect", FAMILY);
+	const Guid family = Add("Family.sleffect", Family);
 	ASSERT_TRUE(family.IsValid());
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compile(Effect(str(OWN) + "," + Uses(60, family)), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Effect(str(Own) + "," + Uses(60, family)), effect, diagnostics)) << Said(diagnostics);
 	ASSERT_EQ(effect.systems.size(), 3u);
 	EXPECT_EQ(effect.systems[1].capacity, 64u);
 	EXPECT_EQ(effect.systems[2].capacity, 512u);
@@ -343,8 +343,8 @@ TEST_F(GraphEffectSystemSubgraphFixture, SpawnIntoSpawnRefused) {
 
 	EXPECT_FALSE(Compile(Effect(R"({"id":9,"def":"Context/GPUEvent","blocks":[]},)" + Uses(1, burst, R"(,"flow":[[9,"OnPlay"]])")), effect, diagnostics));
 	EXPECT_TRUE(Says(diagnostics, 1, "cannot feed")) << Said(diagnostics);
-	EXPECT_FALSE(GraphEffectRules::MayFeed(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_SYSTEM_SUBGRAPH, "OnPlay"));
-	EXPECT_TRUE(GraphEffectRules::MayFeed(GRAPH_EFFECT_EVENT, GRAPH_EFFECT_SYSTEM_SUBGRAPH, "Anything"));
+	EXPECT_FALSE(GraphEffectRules::MayFeed(GraphEffectInitialize, GraphEffectSystemSubgraph, "OnPlay"));
+	EXPECT_TRUE(GraphEffectRules::MayFeed(GraphEffectEvent, GraphEffectSystemSubgraph, "Anything"));
 }
 
 TEST_F(GraphEffectSystemSubgraphFixture, StaleSlotLinkDropped) {
@@ -473,7 +473,7 @@ namespace {
 
 		void SetUp() override {
 			EffectKernelHarness::GraphEffectSystemsFixture::SetUp();
-			AssetImporterRegistry::Register(_standIn.GetAssetType(), &_standIn, {GRAPH_EFFECT_EXTENSION}, &_owner);
+			AssetImporterRegistry::Register(_standIn.GetAssetType(), &_standIn, {GraphEffectExtension}, &_owner);
 		}
 		void TearDown() override {
 			AssetImporterRegistry::UnregisterOwnedBy(&_owner);

@@ -64,7 +64,7 @@ namespace Shalltear {
 		}
 		GraphValueId components[3];
 		for (u32 row = 0; row < 3; ++row) {
-			const GraphValueId rowValue = Binding(GRAPH_FOREIGN_SPACE_ROWS[row]);
+			const GraphValueId rowValue = Binding(GraphForeignSpaceRows[row]);
 			if (rowValue == GRAPH_NO_VALUE) {
 				return GRAPH_NO_VALUE;
 			}

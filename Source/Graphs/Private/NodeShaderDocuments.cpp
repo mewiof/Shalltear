@@ -61,9 +61,9 @@ namespace Shalltear {
 			if (!GraphDocumentOps::Read(text, read, error)) {
 				return false;
 			}
-			const bool subgraph = read.type == GRAPH_SUBGRAPH_DOCUMENT_TYPE;
+			const bool subgraph = read.type == GraphSubgraphDocumentType;
 			const bool effect = IsEffectDocumentType(read.type);
-			if (read.type != GRAPH_SHADER_DOCUMENT_TYPE && !subgraph && !effect) {
+			if (read.type != GraphShaderDocumentType && !subgraph && !effect) {
 				error = "'" + path.ToString() + "' is a " + read.type + " document (not a node shader, a subgraph, an effect graph or an effect subgraph)";
 				return false;
 			}

@@ -1,4 +1,4 @@
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 namespace Shalltear {
 
@@ -37,15 +37,15 @@ namespace Shalltear {
 				return 8 + 16 * static_cast<u64>(channels) + 8 * static_cast<u64>(slices) * channels;
 			}
 
-			u64 FrameOffset(const QoaStream& stream, u32 frame) [[clang::nonblocking]] {
+			u64 FrameOffset(const QOAStream& stream, u32 frame) [[clang::nonblocking]] {
 				return 8 + static_cast<u64>(frame) * FrameBytes(stream.channels, QOA_SLICES_PER_FRAME);
 			}
 
-			u32 FrameCount(const QoaStream& stream) [[clang::nonblocking]] {
+			u32 FrameCount(const QOAStream& stream) [[clang::nonblocking]] {
 				return static_cast<u32>((stream.frames + QOA_FRAME_FRAMES - 1) / QOA_FRAME_FRAMES);
 			}
 
-			u32 SamplesInFrame(const QoaStream& stream, u32 frame) [[clang::nonblocking]] {
+			u32 SamplesInFrame(const QOAStream& stream, u32 frame) [[clang::nonblocking]] {
 				const u64 start = static_cast<u64>(frame) * QOA_FRAME_FRAMES;
 				const u64 left = stream.frames - start;
 				return left < QOA_FRAME_FRAMES ? static_cast<u32>(left) : QOA_FRAME_FRAMES;
@@ -69,7 +69,7 @@ namespace Shalltear {
 				}
 			}
 
-			void LoadFrameState(const QoaStream& stream, QoaCursor& cursor, u32 frame) [[clang::nonblocking]] {
+			void LoadFrameState(const QOAStream& stream, QOACursor& cursor, u32 frame) [[clang::nonblocking]] {
 				ReadFrameState(stream.bytes + FrameOffset(stream, frame) + 8, stream.channels, cursor.history, cursor.weights);
 				cursor.frame = frame;
 				cursor.slice = 0;
@@ -101,7 +101,7 @@ namespace Shalltear {
 				}
 			}
 
-			void DecodeSlice(const QoaStream& stream, QoaCursor& cursor, f32* out) [[clang::nonblocking]] {
+			void DecodeSlice(const QOAStream& stream, QOACursor& cursor, f32* out) [[clang::nonblocking]] {
 				const u32 channels = stream.channels;
 				const u32 frameSamples = SamplesInFrame(stream, cursor.frame);
 				const u32 first = cursor.slice * QOA_SLICE_FRAMES;
@@ -115,7 +115,7 @@ namespace Shalltear {
 				}
 			}
 
-			u64 NextSlice(const QoaCursor& cursor) [[clang::nonblocking]] {
+			u64 NextSlice(const QOACursor& cursor) [[clang::nonblocking]] {
 				return static_cast<u64>(cursor.frame) * QOA_SLICES_PER_FRAME + cursor.slice;
 			}
 
@@ -123,7 +123,7 @@ namespace Shalltear {
 
 		} // anonymous namespace
 
-		bool QoaOpen(const u8* bytes, u64 size, QoaStream& out) {
+		bool QOAOpen(const u8* bytes, u64 size, QOAStream& out) {
 			out = {};
 			if (!bytes || size < 8 + 8) {
 				return false;
@@ -132,7 +132,7 @@ namespace Shalltear {
 			if (static_cast<u32>(fileHeader >> 32) != QOA_MAGIC) {
 				return false;
 			}
-			QoaStream stream;
+			QOAStream stream;
 			stream.bytes = bytes;
 			stream.size = size;
 			stream.frames = static_cast<u32>(fileHeader & 0xffffffffu);
@@ -171,7 +171,7 @@ namespace Shalltear {
 			return true;
 		}
 
-		bool QoaRead(const QoaStream& stream, QoaCursor& cursor, u64 index, f32* out) {
+		bool QOARead(const QOAStream& stream, QOACursor& cursor, u64 index, f32* out) {
 			const u32 channels = stream.channels;
 			if (index >= stream.frames) {
 				for (u32 channel = 0; channel < channels; ++channel) {
@@ -215,8 +215,8 @@ namespace Shalltear {
 			return true;
 		}
 
-		void QoaDecodeAll(const QoaStream& stream, f32* out) {
-			QoaCursor cursor;
+		void QOADecodeAll(const QOAStream& stream, f32* out) {
+			QOACursor cursor;
 			LoadFrameState(stream, cursor, 0);
 			const u64 slices = (stream.frames + QOA_SLICE_FRAMES - 1) / QOA_SLICE_FRAMES;
 			for (u64 slice = 0; slice < slices; ++slice) {
@@ -224,21 +224,21 @@ namespace Shalltear {
 			}
 		}
 
-		u64 QoaFrameOffset(u32 channels, u64 frame) {
+		u64 QOAFrameOffset(u32 channels, u64 frame) {
 			return 8 + frame * FrameBytes(channels, QOA_SLICES_PER_FRAME);
 		}
 
-		u64 QoaFrameSize(u32 channels, u32 samples) {
+		u64 QOAFrameSize(u32 channels, u32 samples) {
 			return FrameBytes(channels, (samples + QOA_SLICE_FRAMES - 1) / QOA_SLICE_FRAMES);
 		}
 
-		u64 QoaFileSize(u32 channels, u64 frames) {
+		u64 QOAFileSize(u32 channels, u64 frames) {
 			const u64 full = frames / QOA_FRAME_FRAMES;
 			const u32 rest = static_cast<u32>(frames % QOA_FRAME_FRAMES);
-			return 8 + full * FrameBytes(channels, QOA_SLICES_PER_FRAME) + (rest > 0 ? QoaFrameSize(channels, rest) : 0);
+			return 8 + full * FrameBytes(channels, QOA_SLICES_PER_FRAME) + (rest > 0 ? QOAFrameSize(channels, rest) : 0);
 		}
 
-		bool QoaDecodeFrame(const u8* bytes, u64 size, u32 channels, u32 sampleRate, u32 samples, f32* out) {
+		bool QOADecodeFrame(const u8* bytes, u64 size, u32 channels, u32 sampleRate, u32 samples, f32* out) {
 			if (!bytes || channels == 0 || channels > MAX_AUDIO_CHANNELS || samples == 0 || samples > QOA_FRAME_FRAMES) {
 				return false;
 			}

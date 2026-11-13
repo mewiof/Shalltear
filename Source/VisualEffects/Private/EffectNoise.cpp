@@ -412,7 +412,7 @@ namespace Shalltear::VisualEffectsImpl::EffectNoises {
 			return x;
 		}
 
-		constexpr f32 UNIT_24 = 1.0f / static_cast<f32>(0x00ffffff);
+		constexpr f32 UNIT24 = 1.0f / static_cast<f32>(0x00ffffff);
 
 		u32 Lattice(f32 x) { return static_cast<u32>(ToInt(std::nearbyint(x))); }
 
@@ -427,7 +427,7 @@ namespace Shalltear::VisualEffectsImpl::EffectNoises {
 				x = std::fmod((34.0f * x + 1.0f) * x, 289.0f);
 				return Frac(x / 41.0f) * 2.0f - 1.0f;
 			}
-			return static_cast<f32>(Tchou21(Lattice(i.x), Lattice(i.y)) >> 8) * UNIT_24;
+			return static_cast<f32>(Tchou21(Lattice(i.x), Lattice(i.y)) >> 8) * UNIT24;
 		}
 
 		F2 Hash22(u32 hash, F2 i) {
@@ -442,7 +442,7 @@ namespace Shalltear::VisualEffectsImpl::EffectNoises {
 			x ^= x >> 5u;
 			x *= 0x27d4eb2du;
 			y ^= x << 3u;
-			return {static_cast<f32>(x >> 8) * UNIT_24, static_cast<f32>(y >> 8) * UNIT_24};
+			return {static_cast<f32>(x >> 8) * UNIT24, static_cast<f32>(y >> 8) * UNIT24};
 		}
 
 		F2 GradientDirection(u32 hash, F2 p) {

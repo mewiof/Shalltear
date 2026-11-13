@@ -21,7 +21,7 @@ namespace Shalltear::VisualEffectsEditor {
 
 	namespace {
 
-		constexpr std::string_view GENERATED_DIRECTORY = "project://Library/VisualEffects";
+		constexpr std::string_view GeneratedRoot = "project://Library/VisualEffects";
 
 		void Report(const GraphDocument& document, GraphDefinitions& definitions, std::string_view graph, const GraphDiagnostic& diagnostic) {
 			if (diagnostic.node == 0) {
@@ -91,7 +91,7 @@ namespace Shalltear::VisualEffectsEditor {
 	} // anonymous namespace
 
 	str GeneratedDirectory(const Path& sourcePath, const Path& virtualPath, std::string_view leaf) {
-		const Path library = FileSystem::Resolve(Path(str(GENERATED_DIRECTORY)));
+		const Path library = FileSystem::Resolve(Path(str(GeneratedRoot)));
 		if (library.ToString().find("://") != str::npos) {
 			return {};
 		}

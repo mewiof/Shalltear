@@ -4,7 +4,7 @@
 
 #include "Shalltear/Core/Memory.h"
 
-#include "Platform/Linux/Window/X11/X11Api.h"
+#include "Platform/Linux/Window/X11/X11API.h"
 
 namespace Shalltear::Linux {
 
@@ -51,14 +51,14 @@ namespace Shalltear::Linux {
 		Atom netActiveWindow, netFrameExtents, netWmMoveResize, netWorkArea, netClientListStacking;
 		Atom netSupportingWmCheck;
 		Atom motifWmHints, gtkShowWindowMenu, resourceManager, utf8String;
-		Atom clipboard, targets, incr, selectionProperty, textPlainUtf8;
+		Atom clipboard, targets, incr, selectionProperty, textPlainUTF8;
 		Atom xdndAware, xdndEnter, xdndPosition, xdndStatus, xdndLeave, xdndDrop, xdndFinished;
 		Atom xdndSelection, xdndActionCopy, xdndTypeList, textUriList;
 	};
 
 	class X11Server final : public DisplayServer {
 	public:
-		X11Api x;
+		X11API x;
 		Display* display = nullptr;
 		int screen = 0;
 		::Window root = 0;

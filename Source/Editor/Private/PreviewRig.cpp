@@ -59,7 +59,7 @@ namespace Shalltear {
 			}
 		}
 
-		constexpr std::string_view ENVIRONMENT_OBJECT = "Environment";
+		constexpr std::string_view EnvironmentObject = "Environment";
 
 		void ApplySky(Environment& environment, Handle<MaterialAsset> sky) {
 			environment.SetSkyMode(sky.IsValid() ? SkyMode::Material : SkyMode::None);
@@ -67,7 +67,7 @@ namespace Shalltear {
 		}
 
 		void AddEnvironment(Handle<Scene> stage, Handle<MaterialAsset> sky) {
-			Handle<SceneObject> object = SceneSystem::CreateObject(ENVIRONMENT_OBJECT, stage);
+			Handle<SceneObject> object = SceneSystem::CreateObject(EnvironmentObject, stage);
 			if (!object.IsValid()) {
 				return;
 			}
@@ -157,7 +157,7 @@ namespace Shalltear {
 		void AddLights(Handle<Scene> stage) { EditorPreviewsInternal::AddPreviewLights(stage); }
 
 		void SetSky(Handle<Scene> stage, Handle<MaterialAsset> sky) {
-			Handle<SceneObject> object = stage.IsValid() ? stage->FindObjectByName(ENVIRONMENT_OBJECT) : Handle<SceneObject>{};
+			Handle<SceneObject> object = stage.IsValid() ? stage->FindObjectByName(EnvironmentObject) : Handle<SceneObject>{};
 			Handle<Environment> environment = object.IsValid() ? object->GetComponent<Environment>() : Handle<Environment>{};
 			if (environment.IsValid()) {
 				ApplySky(*environment, sky);

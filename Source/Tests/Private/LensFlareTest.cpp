@@ -489,7 +489,7 @@ TEST(LensFlareRowTest, CookNotesShader) {
 	CookWriter payload(payloadBytes, strings);
 	ASSERT_TRUE(pass.Cook(descriptor, payload));
 	ASSERT_EQ(descriptor.GetReferences().size(), 1u);
-	EXPECT_EQ(descriptor.GetReferences()[0], LensFlareImpl::LENS_FLARE_SHADER);
+	EXPECT_EQ(descriptor.GetReferences()[0], LensFlareImpl::LensFlareShader);
 }
 
 TEST(LensFlareRowTest, CommittedSidecarCarriesShaderGuid) {
@@ -502,7 +502,7 @@ TEST(LensFlareRowTest, CommittedSidecarCarriesShaderGuid) {
 	ASSERT_FALSE(text.empty());
 	LinearAllocator arena(text.size() + 64, MemTag::Asset);
 	JSONValue root = JSONParse(text, arena);
-	EXPECT_EQ(Guid::FromString(root["assetId"].AsString()), LensFlareImpl::LENS_FLARE_SHADER);
+	EXPECT_EQ(Guid::FromString(root["assetId"].AsString()), LensFlareImpl::LensFlareShader);
 }
 
 TEST(LensFlareRowTest, AssetRoundTripsThroughItsDocument) {
@@ -640,7 +640,7 @@ namespace {
 		return encoded * 255.0f;
 	}
 
-	void WriteSolidTga(const std::filesystem::path& path, u8 r, u8 g, u8 b) {
+	void WriteSolidTGA(const std::filesystem::path& path, u8 r, u8 g, u8 b) {
 		constexpr u16 SIDE = 8;
 		std::ofstream file(path, std::ios::binary);
 		const u8 header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, SIDE, 0, SIDE, 0, 24, 0};
@@ -891,7 +891,7 @@ TEST_F(LensFlareRenderFixture, ImageElementSamplesTexture) {
 	if (!CompilerAvailable()) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable";
 	}
-	WriteSolidTga(_root / "Ghost.tga", 255, 0, 0);
+	WriteSolidTGA(_root / "Ghost.tga", 255, 0, 0);
 	auto* texture = static_cast<TextureAsset*>(AssetDatabase::LoadAsset(Path("project://Ghost.tga")));
 	ASSERT_NE(texture, nullptr);
 

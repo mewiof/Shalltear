@@ -298,19 +298,19 @@ namespace Shalltear {
 	}
 
 	bool BuildPipeline::IsEditorOnlyEngineAsset(std::string_view engineRelativePath) {
-		static constexpr std::string_view PREFIXES[] = {
+		static constexpr std::string_view Prefixes[] = {
 			"Templates/",
 			"Schemas/"};
-		static constexpr std::string_view FILES[] = {
+		static constexpr std::string_view Files[] = {
 			"Shaders/EditorGrid.hlsl",
 			"Shaders/EditorGrid.hlsl.meta"};
 
-		for (std::string_view prefix : PREFIXES) {
+		for (std::string_view prefix : Prefixes) {
 			if (StartsWithIgnoringCase(engineRelativePath, prefix)) {
 				return true;
 			}
 		}
-		for (std::string_view file : FILES) {
+		for (std::string_view file : Files) {
 			if (PathsEqualIgnoringCase(engineRelativePath, file)) {
 				return true;
 			}

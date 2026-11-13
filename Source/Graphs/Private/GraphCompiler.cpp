@@ -216,7 +216,7 @@ namespace Shalltear {
 					}
 					GraphCompileRoot root;
 					root.node = subgraph.outputBlocks[i];
-					root.port = str(GRAPH_SUBGRAPH_OUTPUT_PORT);
+					root.port = str(GraphSubgraphOutputPort);
 					root.input = true;
 					out.push_back(BuildRoot(root));
 				}
@@ -441,7 +441,7 @@ namespace Shalltear {
 				_builder.SetNode(Attribution(id));
 				_builder.SetIdentity(GraphCompiler::Identity(id, _path));
 				_builder.ClearError();
-				if (definition.subgraphOnly && _document.type != GRAPH_SUBGRAPH_DOCUMENT_TYPE) {
+				if (definition.subgraphOnly && _document.type != GraphSubgraphDocumentType) {
 					Report(id, "belongs in a subgraph (it tests an input of the graph using the subgraph)");
 					return false;
 				}
@@ -517,7 +517,7 @@ namespace Shalltear {
 							continue;
 						}
 						const GraphInput* stored = FindDocumentInput(*entry.node, ports[i].name);
-						const GraphSpace space = stored && stored->space == GRAPH_SPACE_WORLD ? GraphSpace::World : GraphSpace::Local;
+						const GraphSpace space = stored && stored->space == GraphSpaceWorld ? GraphSpace::World : GraphSpace::Local;
 						if (space == _request.space) {
 							continue;
 						}
@@ -794,7 +794,7 @@ namespace Shalltear {
 					std::array<f32, GRAPH_GRADIENT_COMPONENTS> gradient{};
 					GraphGradients::Default(gradient);
 					const GraphInput* input = FindDocumentInput(node, port.name);
-					const std::string_view stored = input != nullptr && !input->value.empty() ? std::string_view(input->value) : port.defaultJson;
+					const std::string_view stored = input != nullptr && !input->value.empty() ? std::string_view(input->value) : port.defaultJSON;
 					str error;
 					if (!stored.empty() && !GraphGradients::Read(stored, gradient, error)) {
 						Report(id, "input '" + str(GraphPortLabel(port)) + "' " + error);
@@ -804,8 +804,8 @@ namespace Shalltear {
 				}
 				if (resolved.target == GraphValueType::Curve) {
 					const GraphInput* input = FindDocumentInput(node, port.name);
-					std::string_view stored = input != nullptr && !input->value.empty() ? std::string_view(input->value) : port.defaultJson;
-					stored = stored.empty() ? GraphCurves::DEFAULT_JSON : stored;
+					std::string_view stored = input != nullptr && !input->value.empty() ? std::string_view(input->value) : port.defaultJSON;
+					stored = stored.empty() ? GraphCurves::DefaultJSON : stored;
 					AnimationCurve curve(GetMemoryResource(MemTag::Editor));
 					std::array<f32, GRAPH_CURVE_COMPONENTS> packed{};
 					str error;
@@ -848,17 +848,17 @@ namespace Shalltear {
 				u32 from = input != nullptr ? input->fromNode : 0;
 				for (u32 hops = 0; from != 0 && hops < 64; ++hops) {
 					auto source = _nodes.find(from);
-					if (source == _nodes.end() || source->second.node->def != GraphDocumentOps::REDIRECT_DEF) {
+					if (source == _nodes.end() || source->second.node->def != GraphDocumentOps::RedirectDef) {
 						break;
 					}
-					const GraphInput* through = FindDocumentInput(*source->second.node, GraphDocumentOps::REDIRECT_IN);
+					const GraphInput* through = FindDocumentInput(*source->second.node, GraphDocumentOps::RedirectIn);
 					from = through != nullptr ? through->fromNode : 0;
 				}
 				f32 state = 0.0f;
 				if (from != 0) {
 					auto source = _nodes.find(from);
-					const GraphSetting* stored = source != _nodes.end() && source->second.node->def == GRAPH_PROPERTY_NODE
-													 ? FindDocumentSetting(*source->second.node, GRAPH_PROPERTY_SETTING)
+					const GraphSetting* stored = source != _nodes.end() && source->second.node->def == GraphPropertyNode
+													 ? FindDocumentSetting(*source->second.node, GraphPropertySetting)
 													 : nullptr;
 					if (stored == nullptr) {
 						Report(id, "input '" + str(GraphPortLabel(port)) + "' reads node " + std::to_string(from) + " (not a property)");

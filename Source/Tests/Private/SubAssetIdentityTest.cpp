@@ -202,7 +202,7 @@ namespace {
 		std::filesystem::path _root;
 		ProbeImporter _importer;
 
-		ScopedImportCostThreshold _noCache{ScopedImportCostThreshold::CacheNothing};
+		ScopedImportCostThreshold _noCache{ScopedImportCostThreshold::CACHE_NOTHING};
 
 		void SetUp() override {
 			static std::atomic<u64> counter{0};
@@ -806,7 +806,7 @@ namespace {
 
 	class SubAssetArtifactFixture : public SubAssetIdentityFixture {
 	protected:
-		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CACHE_EVERYTHING};
 
 		Guid SourceGuid(const str& virtualPath) { return AssetDatabase::LookupGuid(Path(virtualPath)); }
 

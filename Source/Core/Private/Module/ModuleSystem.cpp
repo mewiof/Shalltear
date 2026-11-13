@@ -77,7 +77,7 @@ namespace Shalltear {
 			return (entry.active && entry.generation == handle.generation) ? &entry : nullptr;
 		}
 
-		str ToUtf8(const std::filesystem::path& path) {
+		str ToUTF8(const std::filesystem::path& path) {
 			const std::u8string utf8 = path.u8string();
 			return str(utf8.begin(), utf8.end());
 		}
@@ -102,13 +102,13 @@ namespace Shalltear {
 				u32 counter = ++state.cacheCounter;
 				cache = cacheDir / std::format("{}-{}{}", src.stem().string(), counter, Platform::GetSharedLibrarySuffix());
 				ec = std::make_error_code(std::errc::device_or_resource_busy);
-				if (Platform::ClaimLibraryFile(ToUtf8(cache))) {
+				if (Platform::ClaimLibraryFile(ToUTF8(cache))) {
 					ec.clear();
 					std::filesystem::copy_file(src, cache, std::filesystem::copy_options::overwrite_existing, ec);
 					if (!ec) {
 						break;
 					}
-					Platform::ReleaseLibraryFile(ToUtf8(cache));
+					Platform::ReleaseLibraryFile(ToUTF8(cache));
 				}
 				if (attempt + 1 == MAX_CACHE_SLOTS) {
 					SLT_LOG_ERROR("Module", "failed to copy module into cache: {} -> {} ({}), {} slot(s) tried",
@@ -150,7 +150,7 @@ namespace Shalltear {
 				return;
 			std::error_code ec;
 			std::filesystem::remove(cache, ec);
-			Platform::ReleaseLibraryFile(ToUtf8(cache));
+			Platform::ReleaseLibraryFile(ToUTF8(cache));
 			const std::string_view symbols = Platform::GetDebugSymbolsSuffix();
 			if (!symbols.empty()) {
 				std::filesystem::path pdb = cache;

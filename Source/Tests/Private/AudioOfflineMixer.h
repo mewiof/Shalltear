@@ -49,8 +49,8 @@ namespace AudioTesting {
 		AudioClipData* _data = nullptr;
 	};
 
-	inline AudioClipData* MakePcm(const std::vector<f32>& interleaved, u32 channels, u32 rate) {
-		return CreatePcmClipData(interleaved.data(), interleaved.size() / channels, MakeStandardLayout(channels), rate);
+	inline AudioClipData* MakePCM(const std::vector<f32>& interleaved, u32 channels, u32 rate) {
+		return CreatePCMClipData(interleaved.data(), interleaved.size() / channels, MakeStandardLayout(channels), rate);
 	}
 
 	struct OfflineBus {

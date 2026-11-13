@@ -2,7 +2,7 @@
 
 #include "AudioClipAccess.h"
 #include "AudioOpus.h"
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 #include "Shalltear/Audio/AudioClip.h"
 
@@ -69,12 +69,12 @@ namespace Shalltear::AudioImpl {
 		case AudioClipEncoding::Opus:
 			_source = &cooked->source;
 			break;
-		case AudioClipEncoding::Qoa:
+		case AudioClipEncoding::QOA:
 			_resident.memory = cooked->qoa.bytes;
 			_resident.size = cooked->qoa.size;
 			_source = &_resident;
 			break;
-		case AudioClipEncoding::Pcm:
+		case AudioClipEncoding::PCM:
 			_resident.memory = reinterpret_cast<const u8*>(cooked->pcm);
 			_resident.size = cooked->frames * cooked->channels * sizeof(f32);
 			_source = &_resident;
@@ -97,8 +97,8 @@ namespace Shalltear::AudioImpl {
 				return false;
 			}
 			_next = 1;
-		} else if (codec == AudioClipEncoding::Qoa) {
-			_bytes.resize(static_cast<size_t>(QoaFrameSize(cooked->channels, QOA_FRAME_FRAMES)));
+		} else if (codec == AudioClipEncoding::QOA) {
+			_bytes.resize(static_cast<size_t>(QOAFrameSize(cooked->channels, QOA_FRAME_FRAMES)));
 			_decoded.resize(static_cast<size_t>(QOA_FRAME_FRAMES) * cooked->channels);
 		} else {
 			_decoded.resize(static_cast<size_t>(PCM_READ_FRAMES) * cooked->channels);
@@ -132,12 +132,12 @@ namespace Shalltear::AudioImpl {
 														   _bytes.data(), _bytes.size());
 				count = (to - _next) * OPUS_PACKET_FRAMES;
 				_next = to;
-			} else if (_codec == AudioClipEncoding::Qoa) {
+			} else if (_codec == AudioClipEncoding::QOA) {
 				const u64 left = total - first;
 				const u32 samples = static_cast<u32>(left < QOA_FRAME_FRAMES ? left : QOA_FRAME_FRAMES);
-				const u64 size = QoaFrameSize(channels, samples);
-				failed = !ReadStreamSource(*_source, QoaFrameOffset(channels, _next), _bytes.data(), size) ||
-						 !QoaDecodeFrame(_bytes.data(), size, channels, _data->sampleRate, samples, _decoded.data());
+				const u64 size = QOAFrameSize(channels, samples);
+				failed = !ReadStreamSource(*_source, QOAFrameOffset(channels, _next), _bytes.data(), size) ||
+						 !QOADecodeFrame(_bytes.data(), size, channels, _data->sampleRate, samples, _decoded.data());
 				count = samples;
 				++_next;
 			} else {

@@ -25,10 +25,10 @@ namespace {
 
 	using namespace ShadingTest;
 
-	constexpr std::string_view MODE_ENTRIES = R"([{"id":1,"name":"Alpha","reference":"ALPHA"},{"id":2,"name":"Beta","reference":"BETA"},)"
-											  R"({"id":3,"name":"Gamma","reference":"GAMMA"}])";
+	constexpr std::string_view ModeEntries = R"([{"id":1,"name":"Alpha","reference":"ALPHA"},{"id":2,"name":"Beta","reference":"BETA"},)"
+											 R"({"id":3,"name":"Gamma","reference":"GAMMA"}])";
 
-	UnlitBuilder ModeGraph(std::string_view entries = MODE_ENTRIES) {
+	UnlitBuilder ModeGraph(std::string_view entries = ModeEntries) {
 		UnlitBuilder b;
 		GraphProperty& mode = b.Blackboard(40, "Mode", "_MODE", "EnumKeyword", "1");
 		mode.settings.push_back({"entries", str(entries)});
@@ -68,13 +68,13 @@ namespace {
 		return out;
 	}
 
-	str Refusal(std::string_view entries, std::string_view defaultJson = "0") {
+	str Refusal(std::string_view entries, std::string_view defaultJSON = "0") {
 		GraphProperty property;
 		property.id = 40;
 		property.name = "Mode";
 		property.reference = "_MODE";
 		property.type = "EnumKeyword";
-		property.defaultValue = str(defaultJson);
+		property.defaultValue = str(defaultJSON);
 		if (!entries.empty()) {
 			property.settings.push_back({"entries", str(entries)});
 		}
@@ -179,7 +179,7 @@ TEST(NodeShaderEnumKeywordTest, RenameAndReorderKeepEveryWire) {
 }
 
 TEST(NodeShaderEnumKeywordTest, EntriesAShaderCannotHoldAreRefused) {
-	EXPECT_EQ(Refusal(MODE_ENTRIES), "(accepted)");
+	EXPECT_EQ(Refusal(ModeEntries), "(accepted)");
 	EXPECT_EQ(Refusal({}), "has no entries");
 	EXPECT_EQ(Refusal(R"([{"id":1,"name":"A","reference":"A"}])"), "has 1 entry (an enum keyword has 2-8)");
 	str nine = "[";
@@ -195,8 +195,8 @@ TEST(NodeShaderEnumKeywordTest, EntriesAShaderCannotHoldAreRefused) {
 			  "has entry 'A' (its keyword '_MODE_A-1' isn't a name a shader can define)");
 	EXPECT_EQ(Refusal(R"([{"id":1,"name":"Say \"A\"","reference":"A"},{"id":2,"name":"B","reference":"B"}])"),
 			  "has an entry with an empty name, or a quote/line break in it (an Inspector label can't show it)");
-	EXPECT_EQ(Refusal(MODE_ENTRIES, "3"), "has a default that is not one of its entries");
-	EXPECT_EQ(Refusal(MODE_ENTRIES, "0.5"), "has a default that is not one of its entries");
+	EXPECT_EQ(Refusal(ModeEntries, "3"), "has a default that is not one of its entries");
+	EXPECT_EQ(Refusal(ModeEntries, "0.5"), "has a default that is not one of its entries");
 }
 
 TEST(NodeShaderEnumKeywordTest, CollidingKeywordRefused) {

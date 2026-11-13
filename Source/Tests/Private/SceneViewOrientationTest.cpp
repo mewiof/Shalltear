@@ -59,10 +59,10 @@ namespace {
 	}
 
 	bool LettersSitOnKnobs(UI::Context& context, UI::ElementHandle canvas, const Quat& rotation) {
-		static constexpr std::string_view LETTERS[3] = {"X", "Y", "Z"};
+		static constexpr std::string_view Letters[3] = {"X", "Y", "Z"};
 		static constexpr u32 POSITIVE[3] = {0, 2, 4};
 		for (u32 i = 0; i < 3; ++i) {
-			UI::ElementHandle label = FindByText(context, canvas, LETTERS[i]);
+			UI::ElementHandle label = FindByText(context, canvas, Letters[i]);
 			if (!label.IsValid()) {
 				return false;
 			}
@@ -300,10 +300,10 @@ TEST_F(SceneViewOrientationTest, LettersFindKnobsAgainAfterTabSwitch) {
 	ASSERT_TRUE(rig.Canvas().IsValid());
 	ASSERT_TRUE(LettersSitOnKnobs(rig.context, rig.Canvas(), rig.CameraRotation()));
 
-	rig.ShowTab(DockedOrientationRig::OTHER_TAB);
+	rig.ShowTab(DockedOrientationRig::OtherTab);
 	EXPECT_FALSE(rig.Canvas().IsValid());
 
-	rig.ShowTab(DockedOrientationRig::PANEL_TAB);
+	rig.ShowTab(DockedOrientationRig::PanelTab);
 	rig.Frame();
 	ASSERT_TRUE(rig.Canvas().IsValid());
 	EXPECT_TRUE(LettersSitOnKnobs(rig.context, rig.Canvas(), rig.CameraRotation()));

@@ -10,14 +10,14 @@ namespace NodeShaderTesting {
 	class NodeShaderSwitchedOff {
 	public:
 		NodeShaderSwitchedOff() {
-			if (const Shalltear::GraphShadingTarget* target = Shalltear::GraphShadingTargets::Find(Shalltear::GRAPH_SHADER_DOCUMENT_TYPE)) {
+			if (const Shalltear::GraphShadingTarget* target = Shalltear::GraphShadingTargets::Find(Shalltear::GraphShaderDocumentType)) {
 				_saved = *target;
 			}
 			Shalltear::ShutdownNodeShader();
 			Shalltear::GraphShadingTargets::UnregisterOwnedBy(&NODE_SHADER_RESTORED_TOKEN);
 		}
 		~NodeShaderSwitchedOff() {
-			Shalltear::GraphShadingTargets::Register(Shalltear::GRAPH_SHADER_DOCUMENT_TYPE, _saved, &NODE_SHADER_RESTORED_TOKEN);
+			Shalltear::GraphShadingTargets::Register(Shalltear::GraphShaderDocumentType, _saved, &NODE_SHADER_RESTORED_TOKEN);
 		}
 		NodeShaderSwitchedOff(const NodeShaderSwitchedOff&) = delete;
 		NodeShaderSwitchedOff& operator=(const NodeShaderSwitchedOff&) = delete;

@@ -15,14 +15,14 @@ namespace Shalltear {
 
 	namespace VisualEffectsImpl {
 
-		struct ParticleCpuEvent {
+		struct ParticleCPUEvent {
 			bool update = false;
 			u32 event = 0;
 			u32 count = 0;
 			u32 values = 0;
 		};
 
-		class ParticleCpuSystem {
+		class ParticleCPUSystem {
 		public:
 			bool Build(const EffectDescription& description, u32 system);
 
@@ -35,7 +35,7 @@ namespace Shalltear {
 			u32 GetDropped() const { return _dropped; }
 			u32 GetFrame() const { return _frame; }
 			u32 GetLanesUsed() const { return _lanesUsed; }
-			std::span<const ParticleCpuEvent> GetEvents() const { return {_events.data(), _events.size()}; }
+			std::span<const ParticleCPUEvent> GetEvents() const { return {_events.data(), _events.size()}; }
 			std::span<const f32> GetEventValues() const { return {_eventValues.data(), _eventValues.size()}; }
 			const ParticleBounds& GetMeasuredBounds() const { return _measured; }
 
@@ -59,12 +59,12 @@ namespace Shalltear {
 			struct Lane {
 				Vector<EffectValue> slots{GetMemoryResource(MemTag::Graphics)};
 				EffectMachine machine;
-				Vector<ParticleCpuEvent> events{GetMemoryResource(MemTag::Graphics)};
+				Vector<ParticleCPUEvent> events{GetMemoryResource(MemTag::Graphics)};
 				Vector<f32> values{GetMemoryResource(MemTag::Graphics)};
 				AABB box = AABB::Empty();
 			};
 			struct Chunk {
-				ParticleCpuSystem* self = nullptr;
+				ParticleCPUSystem* self = nullptr;
 				const EffectDescription* description = nullptr;
 				std::span<const u8> frame;
 				std::span<const EffectMeshView> meshes;
@@ -98,7 +98,7 @@ namespace Shalltear {
 			Vector<EffectValue> _slots{GetMemoryResource(MemTag::Graphics)};
 			Vector<Lane> _lanes{GetMemoryResource(MemTag::Graphics)};
 			Vector<Chunk> _chunks{GetMemoryResource(MemTag::Graphics)};
-			Vector<ParticleCpuEvent> _events{GetMemoryResource(MemTag::Graphics)};
+			Vector<ParticleCPUEvent> _events{GetMemoryResource(MemTag::Graphics)};
 			Vector<f32> _eventValues{GetMemoryResource(MemTag::Graphics)};
 			u32 _frameHash = 0;
 			u32 _seedHash = 0;

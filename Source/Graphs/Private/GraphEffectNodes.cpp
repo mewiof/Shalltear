@@ -21,7 +21,7 @@ namespace Shalltear {
 		using S = GraphSettingKind;
 		using T = GraphValueType;
 
-		constexpr GraphEffectAttributeInfo ATTRIBUTES[] = {
+		constexpr GraphEffectAttributeInfo Attributes[] = {
 			{"position", T::Float3, {0.0f, 0.0f, 0.0f, 0.0f}, false, GraphPortSpace::Position},
 			{"velocity", T::Float3, {0.0f, 0.0f, 0.0f, 0.0f}, false, GraphPortSpace::Vector},
 			{"age", T::Float, {0.0f, 0.0f, 0.0f, 0.0f}},
@@ -60,20 +60,20 @@ namespace Shalltear {
 
 		constexpr size_t WRITABLE_COUNT = [] {
 			size_t count = 0;
-			while (count < std::size(ATTRIBUTES) && !ATTRIBUTES[count].readOnly) {
+			while (count < std::size(Attributes) && !Attributes[count].readOnly) {
 				++count;
 			}
 			return count;
 		}();
 
-		constexpr std::array<std::string_view, std::size(ATTRIBUTES)> ATTRIBUTE_NAMES = [] {
-			std::array<std::string_view, std::size(ATTRIBUTES)> names{};
-			for (size_t i = 0; i < std::size(ATTRIBUTES); ++i) {
-				names[i] = ATTRIBUTES[i].name;
+		constexpr std::array<std::string_view, std::size(Attributes)> AttributeNames = [] {
+			std::array<std::string_view, std::size(Attributes)> names{};
+			for (size_t i = 0; i < std::size(Attributes); ++i) {
+				names[i] = Attributes[i].name;
 			}
 			return names;
 		}();
-		constexpr std::span<const std::string_view> WRITABLE_NAMES{ATTRIBUTE_NAMES.data(), WRITABLE_COUNT};
+		constexpr std::span<const std::string_view> WritableNames{AttributeNames.data(), WRITABLE_COUNT};
 
 		P PortTypeOf(T type) {
 			switch (type) {
@@ -110,11 +110,11 @@ namespace Shalltear {
 
 		u32 NodeSalt(const GraphBodyContext& c) { return c.builder.Identity() * 8u; }
 
-		constexpr GraphSettingDefinition SET_ATTRIBUTE_SETTINGS[] = {
-			{GRAPH_EFFECT_ATTRIBUTE_SETTING, S::Choice, WRITABLE_NAMES},
-			{"Composition", S::Choice, GRAPH_EFFECT_COMPOSITIONS},
-			{"Source", S::Choice, GRAPH_EFFECT_SOURCES},
-			{"Random", S::Choice, GRAPH_EFFECT_RANDOMS},
+		constexpr GraphSettingDefinition SetAttributeSettings[] = {
+			{GraphEffectAttributeSetting, S::Choice, WritableNames},
+			{"Composition", S::Choice, GraphEffectCompositions},
+			{"Source", S::Choice, GraphEffectSources},
+			{"Random", S::Choice, GraphEffectRandoms},
 		};
 		constexpr u32 COMPOSITION_SETTING = 1;
 		constexpr u32 SOURCE_SETTING = 2;
@@ -130,7 +130,7 @@ namespace Shalltear {
 			if (fromSource) {
 				value = c.Binding(GraphEffectAttributes::SourceBinding(attribute));
 			} else if (random != 0) {
-				value = RandomBetween(c, c.In(0), c.In(1), random == 1, GRAPH_EFFECT_RANDOM_PARTICLE, b.Scalar(0.0f), NodeSalt(c));
+				value = RandomBetween(c, c.In(0), c.In(1), random == 1, GraphEffectRandomParticle, b.Scalar(0.0f), NodeSalt(c));
 			} else {
 				value = c.In(0);
 			}
@@ -152,25 +152,25 @@ namespace Shalltear {
 			}
 		}
 
-		constexpr GraphPortDefinition SET_ATTRIBUTE_INPUTS[] = {{"Position", P::Float3}};
-		constexpr GraphPortDefinition SET_ATTRIBUTE_OUTPUTS[] = {{"position", P::Float3}};
+		constexpr GraphPortDefinition SetAttributeInputs[] = {{"Position", P::Float3}};
+		constexpr GraphPortDefinition SetAttributeOutputs[] = {{"position", P::Float3}};
 
-		constexpr GraphSettingDefinition SET_SPAWN_EVENT_SETTINGS[] = {
-			{GRAPH_EFFECT_ATTRIBUTE_SETTING, S::Choice, WRITABLE_NAMES},
-			{"Random Mode", S::Choice, GRAPH_EFFECT_RANDOMS},
+		constexpr GraphSettingDefinition SetSpawnEventSettings[] = {
+			{GraphEffectAttributeSetting, S::Choice, WritableNames},
+			{"Random Mode", S::Choice, GraphEffectRandoms},
 		};
 
 		void SetSpawnEventBody(GraphBodyContext& c) {
 			const u32 random = c.Setting(1);
-			c.outputs[0] = random == 0 ? c.In(0) : RandomBetween(c, c.In(0), c.In(1), random == 1, GRAPH_EFFECT_RANDOM_EFFECT, c.builder.Scalar(0.0f), NodeSalt(c));
+			c.outputs[0] = random == 0 ? c.In(0) : RandomBetween(c, c.In(0), c.In(1), random == 1, GraphEffectRandomEffect, c.builder.Scalar(0.0f), NodeSalt(c));
 		}
 
-		constexpr GraphPortDefinition SET_SPAWN_EVENT_INPUTS[] = {{"Position", P::Float3}};
+		constexpr GraphPortDefinition SetSpawnEventInputs[] = {{"Position", P::Float3}};
 
 		constexpr u32 AttributeOptions(bool (*keep)(const GraphEffectAttributeInfo&)) {
 			u32 mask = 0;
 			for (size_t i = 0; i < WRITABLE_COUNT; ++i) {
-				mask |= keep(ATTRIBUTES[i]) ? 1u << i : 0u;
+				mask |= keep(Attributes[i]) ? 1u << i : 0u;
 			}
 			return mask;
 		}
@@ -178,21 +178,21 @@ namespace Shalltear {
 		constexpr u32 VECTOR_OPTIONS = AttributeOptions([](const GraphEffectAttributeInfo& a) { return a.type == T::Float3; });
 		static_assert(WRITABLE_COUNT <= 32, "a setting's whenOptions holds a bit per Attribute option");
 
-		constexpr std::string_view COMPUTE_MODES[] = {"Uniform", "PerComponent"};
-		constexpr std::string_view COLOR_MODES[] = {"Color", "Alpha", "ColorAndAlpha"};
-		constexpr GraphSettingDefinition ATTRIBUTE_FROM_CURVE_SETTINGS[] = {
-			{GRAPH_EFFECT_ATTRIBUTE_SETTING, S::Choice, WRITABLE_NAMES},
-			{"Composition", S::Choice, GRAPH_EFFECT_COMPOSITIONS},
-			{.key = "Alpha Composition", .kind = S::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .whenSetting = 0, .whenOptions = COLOR_OPTION},
-			{.key = "Sample Mode", .kind = S::Choice, .options = GRAPH_EFFECT_SAMPLE_MODES, .inGraph = true},
-			{.key = "Mode", .kind = S::Choice, .options = COMPUTE_MODES, .defaultIndex = 1, .whenSetting = 0, .whenOptions = VECTOR_OPTIONS},
-			{.key = "Color Mode", .kind = S::Choice, .options = COLOR_MODES, .defaultIndex = 2, .inGraph = true, .whenSetting = 0, .whenOptions = COLOR_OPTION},
+		constexpr std::string_view ComputeModes[] = {"Uniform", "PerComponent"};
+		constexpr std::string_view ColorModes[] = {"Color", "Alpha", "ColorAndAlpha"};
+		constexpr GraphSettingDefinition AttributeFromCurveSettings[] = {
+			{GraphEffectAttributeSetting, S::Choice, WritableNames},
+			{"Composition", S::Choice, GraphEffectCompositions},
+			{.key = "Alpha Composition", .kind = S::Choice, .options = GraphEffectCompositions, .whenSetting = 0, .whenOptions = COLOR_OPTION},
+			{.key = "Sample Mode", .kind = S::Choice, .options = GraphEffectSampleModes, .inGraph = true},
+			{.key = "Mode", .kind = S::Choice, .options = ComputeModes, .defaultIndex = 1, .whenSetting = 0, .whenOptions = VECTOR_OPTIONS},
+			{.key = "Color Mode", .kind = S::Choice, .options = ColorModes, .defaultIndex = 2, .inGraph = true, .whenSetting = 0, .whenOptions = COLOR_OPTION},
 		};
 		constexpr u32 ALPHA_COMPOSITION_SETTING = 2;
 		constexpr u32 SAMPLE_MODE_SETTING = 3;
 		constexpr u32 MODE_SETTING = 4;
 
-		constexpr std::string_view BLOCK_GRADIENT = R"({"alphas":[[0,0],[1,0.1],[0.8,0.8],[0,1]],"colors":[[1,1,1,0],[1,1,1,1]],"mode":"Blend"})";
+		constexpr std::string_view BlockGradient = R"({"alphas":[[0,0],[1,0.1],[0.8,0.8],[0,1]],"colors":[[1,1,1,0],[1,1,1,1]],"mode":"Blend"})";
 
 		GraphValueId Compose(GraphProgramBuilder& b, GraphValueId current, GraphValueId value, u32 composition, GraphValueId blend) {
 			switch (composition) {
@@ -209,7 +209,7 @@ namespace Shalltear {
 
 		void AttributeFromCurveBody(GraphBodyContext& c) {
 			GraphProgramBuilder& b = c.builder;
-			const GraphEffectAttributeInfo& written = ATTRIBUTES[c.Setting(0)];
+			const GraphEffectAttributeInfo& written = Attributes[c.Setting(0)];
 			const auto input = [&](std::string_view name) {
 				const i32 at = GraphNodeLibrary::FindInput(*c.definition, name);
 				return at < 0 ? GRAPH_NO_VALUE : c.In(static_cast<u32>(at));
@@ -228,10 +228,10 @@ namespace Shalltear {
 				break;
 			}
 			case 2:
-				t = b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE), b.Scalar(0.0f), NodeSalt(c));
+				t = b.Random(c.Binding(GraphEffectRandomParticle), b.Scalar(0.0f), NodeSalt(c));
 				break;
 			case 3:
-				t = b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE_CONSTANT), input("Seed"), 0);
+				t = b.Random(c.Binding(GraphEffectRandomParticleConstant), input("Seed"), 0);
 				break;
 			default:
 				t = input("Sample Time");
@@ -267,9 +267,9 @@ namespace Shalltear {
 			c.outputs[0] = Compose(b, current(written.name), value, c.Setting(1), blend);
 		}
 
-		constexpr GraphSettingDefinition GET_ATTRIBUTE_SETTINGS[] = {
-			{GRAPH_EFFECT_ATTRIBUTE_SETTING, S::Choice, ATTRIBUTE_NAMES},
-			{"Location", S::Choice, GRAPH_EFFECT_LOCATIONS, 0, {}, {}, true},
+		constexpr GraphSettingDefinition GetAttributeSettings[] = {
+			{GraphEffectAttributeSetting, S::Choice, AttributeNames},
+			{"Location", S::Choice, GraphEffectLocations, 0, {}, {}, true},
 		};
 
 		void GetAttributeBody(GraphBodyContext& c) {
@@ -281,7 +281,7 @@ namespace Shalltear {
 			c.outputs[0] = c.builder.Divide(c.Binding(GraphEffectAttributes::CurrentBinding("age")),
 											c.Binding(GraphEffectAttributes::CurrentBinding("lifetime")));
 		}
-		constexpr GraphPortDefinition AGE_OVER_LIFETIME_OUTPUTS[] = {{"t", P::Float}};
+		constexpr GraphPortDefinition AgeOverLifetimeOutputs[] = {{"t", P::Float}};
 
 		void RatioOverStripBody(GraphBodyContext& c) {
 			GraphProgramBuilder& b = c.builder;
@@ -289,18 +289,18 @@ namespace Shalltear {
 									b.Subtract(c.Binding(GraphEffectAttributes::CurrentBinding("particleCountInStrip")), b.Scalar(1.0f)));
 		}
 
-		constexpr GraphPortDefinition INCREMENT_STRIP_INDEX_INPUTS[] = {{"Strip Max Count", P::Float, {8.0f, 0.0f, 0.0f, 0.0f}}};
+		constexpr GraphPortDefinition IncrementStripIndexInputs[] = {{"Strip Max Count", P::Float, {8.0f, 0.0f, 0.0f, 0.0f}}};
 
 		void TotalTimeBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Swizzle(c.Binding("TimeParameters"), "x"); }
 		void DeltaTimeBody(GraphBodyContext& c) { c.outputs[0] = c.builder.Swizzle(c.Binding("TimeParameters"), "w"); }
-		constexpr GraphPortDefinition TOTAL_TIME_OUTPUTS[] = {{"totalTime", P::Float}};
-		constexpr GraphPortDefinition DELTA_TIME_OUTPUTS[] = {{"deltaTime", P::Float}};
+		constexpr GraphPortDefinition TotalTimeOutputs[] = {{"totalTime", P::Float}};
+		constexpr GraphPortDefinition DeltaTimeOutputs[] = {{"deltaTime", P::Float}};
 
-		constexpr std::string_view RANDOM_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4"};
-		constexpr std::string_view SEED_MODES[] = {"PerParticle", "PerEffectComponent"};
-		constexpr GraphSettingDefinition RANDOM_NUMBER_SETTINGS[] = {
-			{"Type", S::Choice, RANDOM_TYPES},
-			{"Seed", S::Choice, SEED_MODES, 0, {}, {}, true},
+		constexpr std::string_view RandomTypes[] = {"Float", "Vector2", "Vector3", "Vector4"};
+		constexpr std::string_view SeedModes[] = {"PerParticle", "PerEffectComponent"};
+		constexpr GraphSettingDefinition RandomNumberSettings[] = {
+			{"Type", S::Choice, RandomTypes},
+			{"Seed", S::Choice, SeedModes, 0, {}, {}, true},
 			{"Constant", S::Toggle, {}, 1, {}, {}, true},
 		};
 		constexpr u32 SEED_SETTING = 1;
@@ -311,27 +311,27 @@ namespace Shalltear {
 			const bool constant = c.Setting(CONSTANT_SETTING) != 0;
 			std::string_view stream;
 			if (constant) {
-				stream = perParticle ? GRAPH_EFFECT_RANDOM_PARTICLE_CONSTANT : GRAPH_EFFECT_RANDOM_EFFECT_CONSTANT;
+				stream = perParticle ? GraphEffectRandomParticleConstant : GraphEffectRandomEffectConstant;
 			} else {
-				stream = perParticle ? GRAPH_EFFECT_RANDOM_PARTICLE : GRAPH_EFFECT_RANDOM_EFFECT;
+				stream = perParticle ? GraphEffectRandomParticle : GraphEffectRandomEffect;
 			}
 			const GraphValueId seed = constant ? c.In(2) : c.builder.Scalar(0.0f);
 			c.outputs[0] = RandomBetween(c, c.In(0), c.In(1), true, stream, seed, constant ? 0u : NodeSalt(c));
 		}
 
-		constexpr GraphPortDefinition RANDOM_NUMBER_INPUTS[] = {
+		constexpr GraphPortDefinition RandomNumberInputs[] = {
 			{"Min", P::Float, {0.0f, 0.0f, 0.0f, 0.0f}},
 			{"Max", P::Float, {1.0f, 0.0f, 0.0f, 0.0f}},
 			{.name = "Seed", .type = P::Float, .whenSetting = CONSTANT_SETTING, .whenOptions = 1u << 1},
 		};
-		constexpr GraphPortDefinition RANDOM_NUMBER_OUTPUTS[] = {{"r", P::Float}};
+		constexpr GraphPortDefinition RandomNumberOutputs[] = {{"r", P::Float}};
 
 		void SampleCurveBody(GraphBodyContext& c) {
 			c.outputs[0] = GraphCurves::Sample(c.builder, c.builder.ConstantOf(c.In(0)), c.In(1));
 		}
 
-		constexpr GraphPortDefinition SAMPLE_CURVE_INPUTS[] = {{"Curve", P::Curve}, {"Time", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_CURVE_OUTPUTS[] = {{"s", P::Float}};
+		constexpr GraphPortDefinition SampleCurveInputs[] = {{"Curve", P::Curve}, {"Time", P::Float}};
+		constexpr GraphPortDefinition SampleCurveOutputs[] = {{"s", P::Float}};
 
 		GraphValueId FlippedUV(GraphProgramBuilder& b, GraphValueId uv) {
 			const GraphValueId parts[] = {b.Swizzle(uv, "x"), b.Subtract(b.Scalar(1.0f), b.Swizzle(uv, "y"))};
@@ -355,31 +355,31 @@ namespace Shalltear {
 			c.outputs[0] = c.builder.TextureOp(GraphOp::SampleTextureLevel, operands);
 		}
 
-		constexpr GraphPortDefinition SAMPLE_TEXTURE_2D_INPUTS[] = {{"Texture", P::Texture2D}, {"UV", P::Float2}, {"Mip Level", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_TEXTURE_2D_ARRAY_INPUTS[] = {
+		constexpr GraphPortDefinition SampleTexture2DInputs[] = {{"Texture", P::Texture2D}, {"UV", P::Float2}, {"Mip Level", P::Float}};
+		constexpr GraphPortDefinition SampleTexture2DArrayInputs[] = {
 			{"Texture", P::Texture2DArray}, {"UV", P::Float2}, {"Slice", P::Float}, {"Mip Level", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_TEXTURE_3D_INPUTS[] = {{"Texture", P::Texture3D}, {"UVW", P::Float3}, {"Mip Level", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_TEXTURE_CUBE_INPUTS[] = {{"Texture", P::Cubemap}, {"UVW", P::Float3}, {"Mip Level", P::Float}};
-		constexpr GraphPortDefinition SAMPLE_TEXTURE_OUTPUTS[] = {{"s", P::Float4}};
+		constexpr GraphPortDefinition SampleTexture3DInputs[] = {{"Texture", P::Texture3D}, {"UVW", P::Float3}, {"Mip Level", P::Float}};
+		constexpr GraphPortDefinition SampleTextureCubeInputs[] = {{"Texture", P::Cubemap}, {"UVW", P::Float3}, {"Mip Level", P::Float}};
+		constexpr GraphPortDefinition SampleTextureOutputs[] = {{"s", P::Float4}};
 
-		constexpr GraphSettingDefinition NOISE_SETTINGS[] = {
-			{"Type", S::Choice, GRAPH_EFFECT_NOISE_TYPES, 1, {}, {}, true},
-			{"Dimensions", S::Choice, GRAPH_EFFECT_NOISE_DIMENSIONS, 1, {}, {}, true},
+		constexpr GraphSettingDefinition NoiseSettings[] = {
+			{"Type", S::Choice, GraphEffectNoiseTypes, 1, {}, {}, true},
+			{"Dimensions", S::Choice, GraphEffectNoiseDimensions, 1, {}, {}, true},
 		};
-		constexpr GraphSettingDefinition CURL_NOISE_SETTINGS[] = {
-			{"Type", S::Choice, GRAPH_EFFECT_NOISE_TYPES, 1, {}, {}, true},
-			{"Dimensions", S::Choice, GRAPH_EFFECT_CURL_DIMENSIONS, 0, {}, {}, true},
+		constexpr GraphSettingDefinition CurlNoiseSettings[] = {
+			{"Type", S::Choice, GraphEffectNoiseTypes, 1, {}, {}, true},
+			{"Dimensions", S::Choice, GraphEffectCurlDimensions, 0, {}, {}, true},
 		};
 
-		constexpr GraphPortDefinition NOISE_COMMON_INPUTS[] = {
+		constexpr GraphPortDefinition NoiseCommonInputs[] = {
 			{"Frequency", P::Float, {1.0f, 0.0f, 0.0f, 0.0f}},
 			{"Octaves", P::Float, {1.0f, 0.0f, 0.0f, 0.0f}},
 			{"Roughness", P::Float, {0.5f, 0.0f, 0.0f, 0.0f}},
 			{"Lacunarity", P::Float, {2.0f, 0.0f, 0.0f, 0.0f}},
 		};
-		constexpr GraphPortDefinition NOISE_INPUTS[] = {{"Coordinate", P::Float2}};
-		constexpr GraphPortDefinition NOISE_OUTPUTS[] = {{"Noise", P::Float}, {"Derivatives", P::Float2}};
-		constexpr GraphPortDefinition CURL_NOISE_OUTPUTS[] = {{"Noise", P::Float2}};
+		constexpr GraphPortDefinition NoiseInputs[] = {{"Coordinate", P::Float2}};
+		constexpr GraphPortDefinition NoiseOutputs[] = {{"Noise", P::Float}, {"Derivatives", P::Float2}};
+		constexpr GraphPortDefinition CurlNoiseOutputs[] = {{"Noise", P::Float2}};
 
 		GraphValueId NoiseParameters(GraphBodyContext& c) {
 			const GraphValueId parts[] = {c.In(1), c.In(3), c.In(4)};
@@ -396,9 +396,9 @@ namespace Shalltear {
 			const f32 floor = type == GraphEffectNoise::Perlin ? -1.0f : 0.0f;
 			const GraphValueId t = b.Divide(b.Subtract(b.Swizzle(result, "x"), b.Scalar(floor)), b.Scalar(1.0f - floor));
 			c.outputs[0] = b.Add(low, b.Multiply(t, width));
-			constexpr std::string_view DERIVATIVES[] = {"y", "yz", "yzw"};
+			constexpr std::string_view Derivatives[] = {"y", "yz", "yzw"};
 			const u32 dimension = GraphTypes::VectorWidth(b.TypeOf(result)) - 1;
-			c.outputs[1] = b.Multiply(b.Swizzle(result, DERIVATIVES[dimension - 1]), width);
+			c.outputs[1] = b.Multiply(b.Swizzle(result, Derivatives[dimension - 1]), width);
 		}
 
 		void CurlNoiseBody(GraphBodyContext& c) {
@@ -407,22 +407,22 @@ namespace Shalltear {
 			c.outputs[0] = b.Multiply(b.EffectNoise(GraphOp::CurlNoise, type, c.In(0), NoiseParameters(c), c.In(2)), c.In(5));
 		}
 
-		constexpr std::string_view SPAWN_FLOW[] = {GRAPH_EFFECT_START, GRAPH_EFFECT_STOP};
-		constexpr std::string_view IN_FLOW[] = {GRAPH_EFFECT_IN};
+		constexpr std::string_view SpawnFlow[] = {GraphEffectStart, GraphEffectStop};
+		constexpr std::string_view InFlow[] = {GraphEffectIn};
 
-		constexpr GraphSettingDefinition EVENT_SETTINGS[] = {{"Event Name", S::Text, {}, 0, GRAPH_EFFECT_ON_PLAY, {}, true}};
+		constexpr GraphSettingDefinition EventSettings[] = {{"Event Name", S::Text, {}, 0, GraphEffectOnPlay, {}, true}};
 
-		constexpr std::string_view LOOP_MODES[] = {"Infinite", "Constant", "Random"};
-		constexpr std::string_view DELAY_MODES[] = {"None", "Constant", "Random"};
-		constexpr GraphSettingDefinition SPAWN_SETTINGS[] = {
-			{"Loop Duration", S::Choice, LOOP_MODES},
-			{"Loop Count", S::Choice, LOOP_MODES},
-			{"Delay Before Loop", S::Choice, DELAY_MODES},
-			{"Delay After Loop", S::Choice, DELAY_MODES},
+		constexpr std::string_view LoopModes[] = {"Infinite", "Constant", "Random"};
+		constexpr std::string_view DelayModes[] = {"None", "Constant", "Random"};
+		constexpr GraphSettingDefinition SpawnSettings[] = {
+			{"Loop Duration", S::Choice, LoopModes},
+			{"Loop Count", S::Choice, LoopModes},
+			{"Delay Before Loop", S::Choice, DelayModes},
+			{"Delay After Loop", S::Choice, DelayModes},
 		};
 		constexpr u32 CONSTANT_OPTION = 1u << 1;
 		constexpr u32 RANDOM_OPTION = 1u << 2;
-		constexpr GraphPortDefinition SPAWN_INPUTS[] = {
+		constexpr GraphPortDefinition SpawnInputs[] = {
 			{.name = "Loop Duration", .type = P::Float, .defaultValue = {0.1f}, .whenSetting = 0, .whenOptions = CONSTANT_OPTION},
 			{.name = "Loop Duration Range", .type = P::Float2, .defaultValue = {1.0f, 3.0f}, .whenSetting = 0, .whenOptions = RANDOM_OPTION, .label = "Loop Duration"},
 			{.name = "Loop Count", .type = P::Float, .defaultValue = {1.0f}, .whenSetting = 1, .whenOptions = CONSTANT_OPTION},
@@ -433,40 +433,40 @@ namespace Shalltear {
 			{.name = "Delay After Loop Range", .type = P::Float2, .defaultValue = {0.1f, 0.3f}, .whenSetting = 3, .whenOptions = RANDOM_OPTION, .label = "Delay After Loop"},
 		};
 
-		constexpr std::string_view SPACES[] = {"Local", "World"};
+		constexpr std::string_view Spaces[] = {"Local", "World"};
 		constexpr u32 PARTICLE_DATA = 1u << 0;
 		constexpr u32 STRIP_DATA = 1u << 1;
-		constexpr GraphSettingDefinition INITIALIZE_SETTINGS[] = {
+		constexpr GraphSettingDefinition InitializeSettings[] = {
 			{.key = "Capacity", .kind = S::Number, .defaultValue = {128.0f, 0.0f, 0.0f, 0.0f}, .inGraph = true, .whenSetting = 2, .whenOptions = PARTICLE_DATA},
-			{"Space", S::Choice, SPACES, 0, {}, {}, true},
-			{.key = "Data Type", .kind = S::Choice, .options = GRAPH_EFFECT_DATA_TYPES},
+			{"Space", S::Choice, Spaces, 0, {}, {}, true},
+			{.key = "Data Type", .kind = S::Choice, .options = GraphEffectDataTypes},
 			{.key = "Strip Capacity", .kind = S::Number, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .inGraph = true, .whenSetting = 2, .whenOptions = STRIP_DATA},
 			{.key = "Particle Per Strip Count", .kind = S::Number, .defaultValue = {128.0f, 0.0f, 0.0f, 0.0f}, .inGraph = true, .whenSetting = 2, .whenOptions = STRIP_DATA},
-			{.key = GRAPH_EFFECT_SIMULATION_TARGET, .kind = S::Choice, .options = GRAPH_EFFECT_SIMULATION_TARGETS},
-			{.key = GRAPH_EFFECT_SYSTEM_NAME, .kind = S::Text, .defaultText = GRAPH_EFFECT_DEFAULT_SYSTEM_NAME, .inGraph = true},
-			{.key = GRAPH_EFFECT_BOUNDS_SETTING_MODE, .kind = S::Choice, .options = GRAPH_EFFECT_BOUNDS_MODES, .inGraph = true},
+			{.key = GraphEffectSimulationTarget, .kind = S::Choice, .options = GraphEffectSimulationTargets},
+			{.key = GraphEffectSystemName, .kind = S::Text, .defaultText = GraphEffectDefaultSystemName, .inGraph = true},
+			{.key = GraphEffectBoundsSettingMode, .kind = S::Choice, .options = GraphEffectBoundsModes, .inGraph = true},
 		};
 		constexpr u32 AUTHORED_BOUNDS = (1u << GRAPH_EFFECT_BOUNDS_RECORDED) | (1u << GRAPH_EFFECT_BOUNDS_MANUAL);
 		constexpr u32 PADDED_BOUNDS = (1u << GRAPH_EFFECT_BOUNDS_RECORDED) | (1u << GRAPH_EFFECT_BOUNDS_AUTOMATIC);
-		constexpr GraphPortDefinition INITIALIZE_INPUTS[] = {
-			{.name = GRAPH_EFFECT_BOUNDS_CENTER, .type = P::Float3, .whenSetting = 7, .whenOptions = AUTHORED_BOUNDS, .space = GraphPortSpace::Position},
-			{.name = GRAPH_EFFECT_BOUNDS_SIZE, .type = P::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}, .whenSetting = 7, .whenOptions = AUTHORED_BOUNDS},
-			{.name = GRAPH_EFFECT_BOUNDS_PADDING, .type = P::Float3, .whenSetting = 7, .whenOptions = PADDED_BOUNDS},
+		constexpr GraphPortDefinition InitializeInputs[] = {
+			{.name = GraphEffectBoundsCenter, .type = P::Float3, .whenSetting = 7, .whenOptions = AUTHORED_BOUNDS, .space = GraphPortSpace::Position},
+			{.name = GraphEffectBoundsSize, .type = P::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}, .whenSetting = 7, .whenOptions = AUTHORED_BOUNDS},
+			{.name = GraphEffectBoundsPadding, .type = P::Float3, .whenSetting = 7, .whenOptions = PADDED_BOUNDS},
 			{.name = "Strip Index", .type = P::Float, .whenSetting = 2, .whenOptions = STRIP_DATA}};
 
-		constexpr GraphSettingDefinition UPDATE_SETTINGS[] = {
+		constexpr GraphSettingDefinition UpdateSettings[] = {
 			{"Update Position", S::Toggle, {}, 1}, {"Age Particles", S::Toggle, {}, 1}, {"Reap Particles", S::Toggle, {}, 1}};
 
-		constexpr GraphSettingDefinition BLOCK_SUBGRAPH_SETTINGS[] = {
-			{GRAPH_EFFECT_SUITABLE_CONTEXTS_SETTING, S::Choice, GRAPH_EFFECT_SUITABLE_CONTEXTS, GRAPH_EFFECT_DEFAULT_SUITABLE_CONTEXTS, {}, {}, true}};
+		constexpr GraphSettingDefinition BlockSubgraphSettings[] = {
+			{GraphEffectSuitableContextsSetting, S::Choice, GraphEffectSuitableContexts, GRAPH_EFFECT_DEFAULT_SUITABLE_CONTEXTS, {}, {}, true}};
 
-		constexpr GraphPortDefinition GPU_EVENT_INPUTS[] = {{.name = GRAPH_EFFECT_EVT, .type = P::GPUEvent}};
-		constexpr GraphSettingDefinition OUTPUT_EVENT_SETTINGS[] = {
-			{.key = "Event Name", .kind = S::Text, .defaultText = GRAPH_EFFECT_DEFAULT_OUTPUT_EVENT_NAME, .inGraph = true}};
+		constexpr GraphPortDefinition GPUEventInputs[] = {{.name = GraphEffectEvt, .type = P::GPUEvent}};
+		constexpr GraphSettingDefinition OutputEventSettings[] = {
+			{.key = "Event Name", .kind = S::Text, .defaultText = GraphEffectDefaultOutputEventName, .inGraph = true}};
 
-		constexpr std::string_view BLEND_MODES[] = {"Additive", "Alpha", "AlphaPremultiplied", "Opaque"};
-		constexpr std::string_view BASE_COLOR_MAPS[] = {"None", "Color", "Alpha", "ColorAndAlpha"};
-		constexpr std::string_view UV_MODES[] = {"Default", "Flipbook", "ScaleAndBias"};
+		constexpr std::string_view BlendModes[] = {"Additive", "Alpha", "AlphaPremultiplied", "Opaque"};
+		constexpr std::string_view BaseColorMaps[] = {"None", "Color", "Alpha", "ColorAndAlpha"};
+		constexpr std::string_view UVModes[] = {"Default", "Flipbook", "ScaleAndBias"};
 		constexpr u32 ANY_MAP = (1u << 1) | (1u << 2) | (1u << 3);
 		constexpr u32 BLENDED = (1u << 0) | (1u << 1) | (1u << 2);
 		constexpr u32 SORT_ON = 1u << 2;
@@ -476,19 +476,19 @@ namespace Shalltear {
 		constexpr GraphSettingDefinition SoftSetting(u8 blend) {
 			return {.key = "Use Soft Particle", .kind = S::Toggle, .inGraph = true, .whenSetting = blend, .whenOptions = BLENDED};
 		}
-		constexpr GraphSettingDefinition SortSetting() { return {.key = "Sort", .kind = S::Choice, .options = GRAPH_EFFECT_SORTS}; }
+		constexpr GraphSettingDefinition SortSetting() { return {.key = "Sort", .kind = S::Choice, .options = GraphEffectSorts}; }
 		constexpr GraphSettingDefinition SortModeSetting(u8 sort, u8 blend) {
-			return {.key = "Sort Mode", .kind = S::Choice, .options = GRAPH_EFFECT_SORT_MODES, .whenSetting = sort, .whenOptions = SORT_ON, .orSetting = sort, .orOptions = SORT_AUTO, .orAlsoSetting = blend, .orAlsoOptions = NOT_COMMUTATIVE};
+			return {.key = "Sort Mode", .kind = S::Choice, .options = GraphEffectSortModes, .whenSetting = sort, .whenOptions = SORT_ON, .orSetting = sort, .orOptions = SORT_AUTO, .orAlsoSetting = blend, .orAlsoOptions = NOT_COMMUTATIVE};
 		}
 		constexpr GraphSettingDefinition RevertSortingSetting(u8 sort, u8 blend) {
 			return {.key = "Revert Sorting", .kind = S::Toggle, .whenSetting = sort, .whenOptions = SORT_ON, .orSetting = sort, .orOptions = SORT_AUTO, .orAlsoSetting = blend, .orAlsoOptions = NOT_COMMUTATIVE};
 		}
 		constexpr GraphSettingDefinition CastShadowsSetting() { return {.key = "Cast Shadows", .kind = S::Toggle}; }
-		constexpr GraphSettingDefinition CullModeSetting() { return {.key = GRAPH_EFFECT_CULL_MODE, .kind = S::Choice, .options = GRAPH_EFFECT_CULL_MODES}; }
+		constexpr GraphSettingDefinition CullModeSetting() { return {.key = GraphEffectCullMode, .kind = S::Choice, .options = GraphEffectCullModes}; }
 		constexpr GraphSettingDefinition ZWriteModeSetting() {
-			return {.key = GRAPH_EFFECT_Z_WRITE_MODE, .kind = S::Choice, .options = GRAPH_EFFECT_Z_WRITE_MODES};
+			return {.key = GraphEffectZWriteMode, .kind = S::Choice, .options = GraphEffectZWriteModes};
 		}
-		constexpr GraphSettingDefinition ZTestModeSetting() { return {.key = GRAPH_EFFECT_Z_TEST_MODE, .kind = S::Choice, .options = GRAPH_EFFECT_Z_TEST_MODES}; }
+		constexpr GraphSettingDefinition ZTestModeSetting() { return {.key = GraphEffectZTestMode, .kind = S::Choice, .options = GraphEffectZTestModes}; }
 		constexpr GraphPortDefinition AlphaThresholdPort(u8 clipping, u8 casts, u8 blend) {
 			return {.name = "Alpha Threshold", .type = P::Float, .defaultValue = {0.5f, 0.0f, 0.0f, 0.0f}, .whenSetting = clipping, .whenOptions = 1u << 1, .orSetting = casts, .orOptions = 1u << 1, .orAlsoSetting = blend, .orAlsoOptions = BLENDED};
 		}
@@ -497,11 +497,11 @@ namespace Shalltear {
 		}
 		constexpr GraphPortDefinition SortKeyPort(u8 mode) { return {.name = "Sort Key", .type = P::Float, .whenSetting = mode, .whenOptions = 1u << 3}; }
 
-		constexpr GraphSettingDefinition OUTPUT_SETTINGS[] = {
-			{"Primitive Type", S::Choice, GRAPH_EFFECT_PRIMITIVES, 1},
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
-			{.key = "Use Base Color Map", .kind = S::Choice, .options = BASE_COLOR_MAPS, .defaultIndex = 3},
-			{.key = "UV Mode", .kind = S::Choice, .options = UV_MODES, .inGraph = true, .whenSetting = 2, .whenOptions = ANY_MAP},
+		constexpr GraphSettingDefinition OutputSettings[] = {
+			{"Primitive Type", S::Choice, GraphEffectPrimitives, 1},
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
+			{.key = "Use Base Color Map", .kind = S::Choice, .options = BaseColorMaps, .defaultIndex = 3},
+			{.key = "UV Mode", .kind = S::Choice, .options = UVModes, .inGraph = true, .whenSetting = 2, .whenOptions = ANY_MAP},
 			{.key = "Flipbook Blend Frames", .kind = S::Toggle, .inGraph = true, .whenSetting = 3, .whenOptions = 1u << 1},
 			ClippingSetting(),
 			SoftSetting(1),
@@ -513,8 +513,8 @@ namespace Shalltear {
 			ZWriteModeSetting(),
 			ZTestModeSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_INPUTS[] = {
-			{.name = "Main Texture", .type = P::Texture2D, .binding = GRAPH_EFFECT_MAIN_TEXTURE_BINDING, .whenSetting = 2, .whenOptions = ANY_MAP},
+		constexpr GraphPortDefinition OutputInputs[] = {
+			{.name = "Main Texture", .type = P::Texture2D, .binding = GraphEffectMainTextureBinding, .whenSetting = 2, .whenOptions = ANY_MAP},
 			{.name = "Flip Book Size", .type = P::Float2, .defaultValue = {4.0f, 4.0f, 0.0f, 0.0f}, .whenSetting = 3, .whenOptions = 1u << 1},
 			{.name = "UV Scale", .type = P::Float2, .defaultValue = {1.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 3, .whenOptions = 1u << 2},
 			{.name = "UV Bias", .type = P::Float2, .whenSetting = 3, .whenOptions = 1u << 2},
@@ -523,10 +523,10 @@ namespace Shalltear {
 			SoftFadePort(6),
 			SortKeyPort(8),
 		};
-		constexpr GraphSettingDefinition OUTPUT_MESH_SETTINGS[] = {
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
-			{.key = "Use Base Color Map", .kind = S::Choice, .options = BASE_COLOR_MAPS, .defaultIndex = 3},
-			{.key = "UV Mode", .kind = S::Choice, .options = UV_MODES, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphSettingDefinition OutputMeshSettings[] = {
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
+			{.key = "Use Base Color Map", .kind = S::Choice, .options = BaseColorMaps, .defaultIndex = 3},
+			{.key = "UV Mode", .kind = S::Choice, .options = UVModes, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.key = "Flipbook Blend Frames", .kind = S::Toggle, .inGraph = true, .whenSetting = 2, .whenOptions = 1u << 1},
 			ClippingSetting(),
 			SoftSetting(0),
@@ -538,9 +538,9 @@ namespace Shalltear {
 			ZWriteModeSetting(),
 			ZTestModeSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_MESH_INPUTS[] = {
-			GraphEffectBlocks::MESH_INPUT[0],
-			{.name = "Main Texture", .type = P::Texture2D, .binding = GRAPH_EFFECT_MAIN_TEXTURE_BINDING, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphPortDefinition OutputMeshInputs[] = {
+			GraphEffectBlocks::MeshInput[0],
+			{.name = "Main Texture", .type = P::Texture2D, .binding = GraphEffectMainTextureBinding, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.name = "Flip Book Size", .type = P::Float2, .defaultValue = {4.0f, 4.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 1},
 			{.name = "UV Scale", .type = P::Float2, .defaultValue = {1.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 2},
 			{.name = "UV Bias", .type = P::Float2, .whenSetting = 2, .whenOptions = 1u << 2},
@@ -548,8 +548,8 @@ namespace Shalltear {
 			SoftFadePort(5),
 			SortKeyPort(7),
 		};
-		constexpr GraphSettingDefinition OUTPUT_POINT_SETTINGS[] = {
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
+		constexpr GraphSettingDefinition OutputPointSettings[] = {
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
 			ClippingSetting(),
 			SoftSetting(0),
 			SortSetting(),
@@ -560,9 +560,9 @@ namespace Shalltear {
 			ZWriteModeSetting(),
 			ZTestModeSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_POINT_INPUTS[] = {AlphaThresholdPort(1, 6, 0), SoftFadePort(2), SortKeyPort(4)};
-		constexpr GraphSettingDefinition OUTPUT_LINE_SETTINGS[] = {
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
+		constexpr GraphPortDefinition OutputPointInputs[] = {AlphaThresholdPort(1, 6, 0), SoftFadePort(2), SortKeyPort(4)};
+		constexpr GraphSettingDefinition OutputLineSettings[] = {
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
 			{.key = "Use Target Offset", .kind = S::Toggle, .defaultIndex = 1, .inGraph = true},
 			{.key = "Use Native Lines", .kind = S::Toggle},
 			ClippingSetting(),
@@ -575,7 +575,7 @@ namespace Shalltear {
 			ZWriteModeSetting(),
 			ZTestModeSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_LINE_INPUTS[] = {
+		constexpr GraphPortDefinition OutputLineInputs[] = {
 			{.name = "Target Offset", .type = P::Float3, .defaultValue = {0.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 1, .whenOptions = 1u << 1},
 			AlphaThresholdPort(3, 8, 0),
 			SoftFadePort(4),
@@ -584,11 +584,11 @@ namespace Shalltear {
 
 		constexpr u32 COLOR_NOT_BASE = (1u << 0) | (1u << 2);
 		constexpr u32 COLOR_NOT_EMISSIVE = (1u << 0) | (1u << 1);
-		constexpr GraphSettingDefinition OUTPUT_LIT_SETTINGS[] = {
-			{"Primitive Type", S::Choice, GRAPH_EFFECT_PRIMITIVES, 1},
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
-			{.key = "Use Base Color Map", .kind = S::Choice, .options = BASE_COLOR_MAPS, .defaultIndex = 3},
-			{.key = "UV Mode", .kind = S::Choice, .options = UV_MODES, .inGraph = true, .whenSetting = 2, .whenOptions = ANY_MAP},
+		constexpr GraphSettingDefinition OutputLitSettings[] = {
+			{"Primitive Type", S::Choice, GraphEffectPrimitives, 1},
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
+			{.key = "Use Base Color Map", .kind = S::Choice, .options = BaseColorMaps, .defaultIndex = 3},
+			{.key = "UV Mode", .kind = S::Choice, .options = UVModes, .inGraph = true, .whenSetting = 2, .whenOptions = ANY_MAP},
 			{.key = "Flipbook Blend Frames", .kind = S::Toggle, .inGraph = true, .whenSetting = 3, .whenOptions = 1u << 1},
 			ClippingSetting(),
 			SoftSetting(1),
@@ -596,12 +596,12 @@ namespace Shalltear {
 			SortModeSetting(7, 1),
 			RevertSortingSetting(7, 1),
 			CastShadowsSetting(),
-			{.key = "Smoothness Source", .kind = S::Choice, .options = GRAPH_EFFECT_SMOOTHNESS_SOURCES},
+			{.key = "Smoothness Source", .kind = S::Choice, .options = GraphEffectSmoothnessSources},
 			{.key = "Use Occlusion Map", .kind = S::Toggle},
 			{.key = "Use Metallic Map", .kind = S::Toggle},
 			{.key = "Use Normal Map", .kind = S::Toggle},
 			{.key = "Use Emissive Map", .kind = S::Toggle},
-			{.key = "Color Mode", .kind = S::Choice, .options = GRAPH_EFFECT_COLOR_MODES, .defaultIndex = 1},
+			{.key = "Color Mode", .kind = S::Choice, .options = GraphEffectColorModes, .defaultIndex = 1},
 			{.key = "Use Emissive", .kind = S::Toggle, .whenSetting = 16, .whenOptions = COLOR_NOT_EMISSIVE},
 			{.key = "Double Sided", .kind = S::Toggle},
 			{.key = "Receive Shadows", .kind = S::Toggle, .defaultIndex = 1},
@@ -611,10 +611,10 @@ namespace Shalltear {
 			ZTestModeSetting(),
 		};
 		constexpr GraphPortDefinition LitMapPort(u32 map, u8 when) {
-			return {.name = GRAPH_EFFECT_LIT_MAP_PORTS[map], .type = P::Texture2D, .binding = GRAPH_EFFECT_LIT_MAP_BINDINGS[map], .whenSetting = when, .whenOptions = 1u << 1};
+			return {.name = GraphEffectLitMapPorts[map], .type = P::Texture2D, .binding = GraphEffectLitMapBindings[map], .whenSetting = when, .whenOptions = 1u << 1};
 		}
-		constexpr GraphPortDefinition OUTPUT_LIT_INPUTS[] = {
-			{.name = "Base Color Map", .type = P::Texture2D, .binding = GRAPH_EFFECT_MAIN_TEXTURE_BINDING, .whenSetting = 2, .whenOptions = ANY_MAP},
+		constexpr GraphPortDefinition OutputLitInputs[] = {
+			{.name = "Base Color Map", .type = P::Texture2D, .binding = GraphEffectMainTextureBinding, .whenSetting = 2, .whenOptions = ANY_MAP},
 			{.name = "Flip Book Size", .type = P::Float2, .defaultValue = {4.0f, 4.0f, 0.0f, 0.0f}, .whenSetting = 3, .whenOptions = 1u << 1},
 			{.name = "UV Scale", .type = P::Float2, .defaultValue = {1.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 3, .whenOptions = 1u << 2},
 			{.name = "UV Bias", .type = P::Float2, .whenSetting = 3, .whenOptions = 1u << 2},
@@ -634,10 +634,10 @@ namespace Shalltear {
 			SoftFadePort(6),
 			SortKeyPort(8),
 		};
-		constexpr GraphSettingDefinition OUTPUT_LIT_MESH_SETTINGS[] = {
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
-			{.key = "Use Base Color Map", .kind = S::Choice, .options = BASE_COLOR_MAPS, .defaultIndex = 3},
-			{.key = "UV Mode", .kind = S::Choice, .options = UV_MODES, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphSettingDefinition OutputLitMeshSettings[] = {
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
+			{.key = "Use Base Color Map", .kind = S::Choice, .options = BaseColorMaps, .defaultIndex = 3},
+			{.key = "UV Mode", .kind = S::Choice, .options = UVModes, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.key = "Flipbook Blend Frames", .kind = S::Toggle, .inGraph = true, .whenSetting = 2, .whenOptions = 1u << 1},
 			ClippingSetting(),
 			SoftSetting(0),
@@ -645,12 +645,12 @@ namespace Shalltear {
 			SortModeSetting(6, 0),
 			RevertSortingSetting(6, 0),
 			CastShadowsSetting(),
-			{.key = "Smoothness Source", .kind = S::Choice, .options = GRAPH_EFFECT_SMOOTHNESS_SOURCES},
+			{.key = "Smoothness Source", .kind = S::Choice, .options = GraphEffectSmoothnessSources},
 			{.key = "Use Occlusion Map", .kind = S::Toggle},
 			{.key = "Use Metallic Map", .kind = S::Toggle},
 			{.key = "Use Normal Map", .kind = S::Toggle},
 			{.key = "Use Emissive Map", .kind = S::Toggle},
-			{.key = "Color Mode", .kind = S::Choice, .options = GRAPH_EFFECT_COLOR_MODES, .defaultIndex = 1},
+			{.key = "Color Mode", .kind = S::Choice, .options = GraphEffectColorModes, .defaultIndex = 1},
 			{.key = "Use Emissive", .kind = S::Toggle, .whenSetting = 15, .whenOptions = COLOR_NOT_EMISSIVE},
 			{.key = "Double Sided", .kind = S::Toggle},
 			{.key = "Receive Shadows", .kind = S::Toggle, .defaultIndex = 1},
@@ -658,9 +658,9 @@ namespace Shalltear {
 			ZWriteModeSetting(),
 			ZTestModeSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_LIT_MESH_INPUTS[] = {
-			GraphEffectBlocks::MESH_INPUT[0],
-			{.name = "Base Color Map", .type = P::Texture2D, .binding = GRAPH_EFFECT_MAIN_TEXTURE_BINDING, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphPortDefinition OutputLitMeshInputs[] = {
+			GraphEffectBlocks::MeshInput[0],
+			{.name = "Base Color Map", .type = P::Texture2D, .binding = GraphEffectMainTextureBinding, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.name = "Flip Book Size", .type = P::Float2, .defaultValue = {4.0f, 4.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 1},
 			{.name = "UV Scale", .type = P::Float2, .defaultValue = {1.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 2},
 			{.name = "UV Bias", .type = P::Float2, .whenSetting = 2, .whenOptions = 1u << 2},
@@ -679,12 +679,12 @@ namespace Shalltear {
 			SortKeyPort(7),
 		};
 
-		constexpr std::string_view NODE_SHADER_EXTENSIONS[] = {".slshader"};
+		constexpr std::string_view NodeShaderExtensions[] = {".slshader"};
 		constexpr GraphSettingDefinition NodeShaderSetting() {
-			return {.key = GRAPH_EFFECT_NODE_SHADER_SETTING, .kind = S::Asset, .options = NODE_SHADER_EXTENSIONS, .defaultText = "EffectDefault", .inGraph = true};
+			return {.key = GraphEffectNodeShaderSetting, .kind = S::Asset, .options = NodeShaderExtensions, .defaultText = "EffectDefault", .inGraph = true};
 		}
 		constexpr GraphSettingDefinition GraphSortModeSetting(u8 sort) {
-			return {.key = "Sort Mode", .kind = S::Choice, .options = GRAPH_EFFECT_SORT_MODES, .whenSetting = sort, .whenOptions = SORT_ON | SORT_AUTO};
+			return {.key = "Sort Mode", .kind = S::Choice, .options = GraphEffectSortModes, .whenSetting = sort, .whenOptions = SORT_ON | SORT_AUTO};
 		}
 		constexpr GraphSettingDefinition GraphRevertSortingSetting(u8 sort) {
 			return {.key = "Revert Sorting", .kind = S::Toggle, .whenSetting = sort, .whenOptions = SORT_ON | SORT_AUTO};
@@ -692,21 +692,21 @@ namespace Shalltear {
 		constexpr GraphPortDefinition GraphAlphaThresholdPort(u8 clipping, u8 casts) {
 			return {.name = "Alpha Threshold", .type = P::Float, .defaultValue = {0.5f, 0.0f, 0.0f, 0.0f}, .whenSetting = clipping, .whenOptions = 1u << 1, .orSetting = casts, .orOptions = 1u << 1};
 		}
-		constexpr GraphSettingDefinition OUTPUT_NODE_SHADER_SETTINGS[] = {
+		constexpr GraphSettingDefinition OutputNodeShaderSettings[] = {
 			NodeShaderSetting(),
-			{"Primitive Type", S::Choice, GRAPH_EFFECT_PRIMITIVES, 1},
+			{"Primitive Type", S::Choice, GraphEffectPrimitives, 1},
 			ClippingSetting(),
 			SortSetting(),
 			GraphSortModeSetting(3),
 			GraphRevertSortingSetting(3),
 			CastShadowsSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_NODE_SHADER_INPUTS[] = {
+		constexpr GraphPortDefinition OutputNodeShaderInputs[] = {
 			{.name = "Crop Factor", .type = P::Float, .defaultValue = {0.293f, 0.0f, 0.0f, 0.0f}, .whenSetting = 1, .whenOptions = 1u << 2},
 			GraphAlphaThresholdPort(2, 6),
 			SortKeyPort(4),
 		};
-		constexpr GraphSettingDefinition OUTPUT_NODE_SHADER_MESH_SETTINGS[] = {
+		constexpr GraphSettingDefinition OutputNodeShaderMeshSettings[] = {
 			NodeShaderSetting(),
 			ClippingSetting(),
 			SortSetting(),
@@ -714,19 +714,19 @@ namespace Shalltear {
 			GraphRevertSortingSetting(2),
 			CastShadowsSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_NODE_SHADER_MESH_INPUTS[] = {
-			GraphEffectBlocks::MESH_INPUT[0],
+		constexpr GraphPortDefinition OutputNodeShaderMeshInputs[] = {
+			GraphEffectBlocks::MeshInput[0],
 			GraphAlphaThresholdPort(1, 5),
 			SortKeyPort(3),
 		};
 
 		constexpr u32 CUSTOM_TILING = 1u << 2;
-		constexpr GraphSettingDefinition OUTPUT_STRIP_SETTINGS[] = {
-			{"Blend Mode", S::Choice, BLEND_MODES, 1, {}, {}, true},
-			{.key = "Use Base Color Map", .kind = S::Choice, .options = BASE_COLOR_MAPS, .defaultIndex = 3},
-			{.key = "UV Mode", .kind = S::Choice, .options = UV_MODES, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphSettingDefinition OutputStripSettings[] = {
+			{"Blend Mode", S::Choice, BlendModes, 1, {}, {}, true},
+			{.key = "Use Base Color Map", .kind = S::Choice, .options = BaseColorMaps, .defaultIndex = 3},
+			{.key = "UV Mode", .kind = S::Choice, .options = UVModes, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.key = "Flipbook Blend Frames", .kind = S::Toggle, .inGraph = true, .whenSetting = 2, .whenOptions = 1u << 1},
-			{.key = "Tiling Mode", .kind = S::Choice, .options = GRAPH_EFFECT_STRIP_TILING_MODES, .inGraph = true},
+			{.key = "Tiling Mode", .kind = S::Choice, .options = GraphEffectStripTilingModes, .inGraph = true},
 			{.key = "Swap UV", .kind = S::Toggle, .inGraph = true, .whenSetting = 1, .whenOptions = ANY_MAP},
 			ClippingSetting(),
 			SoftSetting(0),
@@ -741,8 +741,8 @@ namespace Shalltear {
 		constexpr GraphPortDefinition TexCoordPort(u8 tiling) {
 			return {.name = "Tex Coord", .type = P::Float, .whenSetting = tiling, .whenOptions = CUSTOM_TILING};
 		}
-		constexpr GraphPortDefinition OUTPUT_STRIP_INPUTS[] = {
-			{.name = "Main Texture", .type = P::Texture2D, .binding = GRAPH_EFFECT_MAIN_TEXTURE_BINDING, .whenSetting = 1, .whenOptions = ANY_MAP},
+		constexpr GraphPortDefinition OutputStripInputs[] = {
+			{.name = "Main Texture", .type = P::Texture2D, .binding = GraphEffectMainTextureBinding, .whenSetting = 1, .whenOptions = ANY_MAP},
 			{.name = "Flip Book Size", .type = P::Float2, .defaultValue = {4.0f, 4.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 1},
 			{.name = "UV Scale", .type = P::Float2, .defaultValue = {1.0f, 1.0f, 0.0f, 0.0f}, .whenSetting = 2, .whenOptions = 1u << 2},
 			{.name = "UV Bias", .type = P::Float2, .whenSetting = 2, .whenOptions = 1u << 2},
@@ -751,9 +751,9 @@ namespace Shalltear {
 			SoftFadePort(7),
 			SortKeyPort(9),
 		};
-		constexpr GraphSettingDefinition OUTPUT_NODE_SHADER_STRIP_SETTINGS[] = {
+		constexpr GraphSettingDefinition OutputNodeShaderStripSettings[] = {
 			NodeShaderSetting(),
-			{.key = "Tiling Mode", .kind = S::Choice, .options = GRAPH_EFFECT_STRIP_TILING_MODES, .inGraph = true},
+			{.key = "Tiling Mode", .kind = S::Choice, .options = GraphEffectStripTilingModes, .inGraph = true},
 			{.key = "Swap UV", .kind = S::Toggle, .inGraph = true},
 			ClippingSetting(),
 			SortSetting(),
@@ -761,66 +761,66 @@ namespace Shalltear {
 			GraphRevertSortingSetting(4),
 			CastShadowsSetting(),
 		};
-		constexpr GraphPortDefinition OUTPUT_NODE_SHADER_STRIP_INPUTS[] = {
+		constexpr GraphPortDefinition OutputNodeShaderStripInputs[] = {
 			TexCoordPort(1),
 			GraphAlphaThresholdPort(3, 7),
 			SortKeyPort(5),
 		};
 
-		constexpr GraphPortDefinition CONSTANT_RATE_INPUTS[] = {{"Rate", P::Float, {10.0f, 0.0f, 0.0f, 0.0f}}};
-		constexpr std::string_view REPEATS[] = {"Single", "Periodic"};
-		constexpr std::string_view RANGE_MODES[] = {"Constant", "Random"};
-		constexpr GraphSettingDefinition BURST_SETTINGS[] = {
-			{"Repeat", S::Choice, REPEATS},
-			{"Spawn Mode", S::Choice, RANGE_MODES, 0, {}, {}, true},
-			{"Delay Mode", S::Choice, RANGE_MODES, 0, {}, {}, true},
+		constexpr GraphPortDefinition ConstantRateInputs[] = {{"Rate", P::Float, {10.0f, 0.0f, 0.0f, 0.0f}}};
+		constexpr std::string_view Repeats[] = {"Single", "Periodic"};
+		constexpr std::string_view RangeModes[] = {"Constant", "Random"};
+		constexpr GraphSettingDefinition BurstSettings[] = {
+			{"Repeat", S::Choice, Repeats},
+			{"Spawn Mode", S::Choice, RangeModes, 0, {}, {}, true},
+			{"Delay Mode", S::Choice, RangeModes, 0, {}, {}, true},
 		};
-		constexpr GraphPortDefinition BURST_INPUTS[] = {
+		constexpr GraphPortDefinition BurstInputs[] = {
 			{.name = "Count", .type = P::Float, .whenSetting = 1, .whenOptions = 1u << 0},
 			{.name = "Count Range", .type = P::Float2, .defaultValue = {0.0f, 10.0f}, .whenSetting = 1, .whenOptions = 1u << 1, .label = "Count"},
 			{.name = "Delay", .type = P::Float, .whenSetting = 2, .whenOptions = 1u << 0},
 			{.name = "Delay Range", .type = P::Float2, .defaultValue = {0.0f, 1.0f}, .whenSetting = 2, .whenOptions = 1u << 1, .label = "Delay"},
 		};
 
-		constexpr GraphPortDefinition POSITION_SHAPE_INPUTS[] = {
+		constexpr GraphPortDefinition PositionShapeInputs[] = {
 			{.name = "Position", .type = P::Float3, .space = GraphPortSpace::Matrix},
 			{.name = "Angles", .type = P::Float3},
 			{.name = "Scale", .type = P::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}},
 			{.name = "Radius", .type = P::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}},
 			{.name = "Arc", .type = P::Float, .defaultValue = {360.0f, 0.0f, 0.0f, 0.0f}},
 		};
-		constexpr GraphPortDefinition COLLISION_SHAPE_INPUTS[] = {
+		constexpr GraphPortDefinition CollisionShapeInputs[] = {
 			{.name = "Position", .type = P::Float3, .space = GraphPortSpace::Position},
 			{.name = "Normal", .type = P::Float3, .defaultValue = {0.0f, 1.0f, 0.0f, 0.0f}, .space = GraphPortSpace::Direction},
 			{.name = "Bounce", .type = P::Float, .defaultValue = {0.1f, 0.0f, 0.0f, 0.0f}},
 			{.name = "Friction", .type = P::Float},
 			{.name = "Lifetime Loss", .type = P::Float},
 		};
-		constexpr GraphPortDefinition COLLISION_SHAPE_OUTPUTS[] = {{"position", P::Float3}, {"velocity", P::Float3}, {"age", P::Float}};
-		constexpr GraphPortDefinition COLLISION_DEPTH_INPUTS[] = {
-			COLLISION_SHAPE_INPUTS[2],
-			COLLISION_SHAPE_INPUTS[3],
-			COLLISION_SHAPE_INPUTS[4],
+		constexpr GraphPortDefinition CollisionShapeOutputs[] = {{"position", P::Float3}, {"velocity", P::Float3}, {"age", P::Float}};
+		constexpr GraphPortDefinition CollisionDepthInputs[] = {
+			CollisionShapeInputs[2],
+			CollisionShapeInputs[3],
+			CollisionShapeInputs[4],
 		};
-		constexpr GraphPortDefinition POSITION_DEPTH_INPUTS[] = {{.name = "Z Multiplier", .type = P::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}}};
-		constexpr GraphPortDefinition POSITION_DEPTH_OUTPUTS[] = {{"position", P::Float3}};
+		constexpr GraphPortDefinition PositionDepthInputs[] = {{.name = "Z Multiplier", .type = P::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}}};
+		constexpr GraphPortDefinition PositionDepthOutputs[] = {{"position", P::Float3}};
 
-		constexpr GraphPortDefinition SAMPLE_MESH_INPUTS[] = {
-			GraphEffectBlocks::MESH_INPUT[0],
+		constexpr GraphPortDefinition SampleMeshInputs[] = {
+			GraphEffectBlocks::MeshInput[0],
 			{.name = "Vertex", .type = P::Float},
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[0],
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[1],
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[2],
+			GraphEffectBlocks::MeshTransformInputs[0],
+			GraphEffectBlocks::MeshTransformInputs[1],
+			GraphEffectBlocks::MeshTransformInputs[2],
 		};
-		constexpr GraphPortDefinition SAMPLE_MESH_OUTPUTS[] = {{"Position", P::Float3}, {"Color", P::Float4}, {"Tex Coord 0", P::Float4}};
-		constexpr GraphPortDefinition POSITION_MESH_INPUTS[] = {
-			GraphEffectBlocks::MESH_INPUT[0],
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[0],
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[1],
-			GraphEffectBlocks::MESH_TRANSFORM_INPUTS[2],
+		constexpr GraphPortDefinition SampleMeshOutputs[] = {{"Position", P::Float3}, {"Color", P::Float4}, {"Tex Coord 0", P::Float4}};
+		constexpr GraphPortDefinition PositionMeshInputs[] = {
+			GraphEffectBlocks::MeshInput[0],
+			GraphEffectBlocks::MeshTransformInputs[0],
+			GraphEffectBlocks::MeshTransformInputs[1],
+			GraphEffectBlocks::MeshTransformInputs[2],
 		};
-		constexpr GraphPortDefinition POSITION_MESH_OUTPUTS[] = {{"position", P::Float3}, {"direction", P::Float3}};
-		constexpr GraphPortDefinition POSITION_SEQUENTIAL_INPUTS[] = {
+		constexpr GraphPortDefinition PositionMeshOutputs[] = {{"position", P::Float3}, {"direction", P::Float3}};
+		constexpr GraphPortDefinition PositionSequentialInputs[] = {
 			{.name = "Offset Index", .type = P::Float},
 			{.name = "Count", .type = P::Float, .defaultValue = {64.0f, 0.0f, 0.0f, 0.0f}},
 			{.name = "Start", .type = P::Float3, .space = GraphPortSpace::Position},
@@ -829,96 +829,96 @@ namespace Shalltear {
 
 		constexpr GraphPreviewMode NONE = GraphPreviewMode::None;
 
-		constexpr GraphNodeDefinition EFFECT_DEFINITIONS[] = {
-			{GRAPH_EFFECT_EVENT, "Event", "Context", "trigger", {}, {}, EVENT_SETTINGS, nullptr, NONE, false, nullptr, {}, true},
-			{GRAPH_EFFECT_SPAWN, "Spawn", "Context", "emit loop", SPAWN_INPUTS, {}, SPAWN_SETTINGS, nullptr, NONE, false, nullptr, SPAWN_FLOW, true},
-			{GRAPH_EFFECT_GPU_EVENT, "GPU Event", "Context", "gpu event child spawn trigger sub emitter", GPU_EVENT_INPUTS, {}, {}, nullptr, NONE, false, nullptr, {}, true},
-			{GRAPH_EFFECT_OUTPUT_EVENT, "Output Event", "Context", "script callback handler message death collision burst spawn", GPU_EVENT_INPUTS, {}, OUTPUT_EVENT_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_INITIALIZE, "Initialize Particle", "Context", "", INITIALIZE_INPUTS, {}, INITIALIZE_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, true},
-			{GRAPH_EFFECT_UPDATE, "Update Particle", "Context", "", {}, {}, UPDATE_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, true},
-			{GRAPH_EFFECT_OUTPUT, "Output Particle Primitive", "Context", "quad triangle octagon billboard", OUTPUT_INPUTS, {}, OUTPUT_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_MESH, "Output Particle Mesh", "Context", "instanced model", OUTPUT_MESH_INPUTS, {}, OUTPUT_MESH_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_POINT, "Output Particle Point", "Context", "pixel debug", OUTPUT_POINT_INPUTS, {}, OUTPUT_POINT_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_LINE, "Output Particle Line", "Context", "debug", OUTPUT_LINE_INPUTS, {}, OUTPUT_LINE_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_LIT, "Output Particle Lit Primitive", "Context", "lit quad triangle octagon billboard shaded", OUTPUT_LIT_INPUTS, {}, OUTPUT_LIT_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_LIT_MESH, "Output Particle Lit Mesh", "Context", "lit instanced model shaded", OUTPUT_LIT_MESH_INPUTS, {}, OUTPUT_LIT_MESH_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_NODE_SHADER, "Output Particle NodeShader Primitive", "Context", "node shader quad triangle octagon billboard custom", OUTPUT_NODE_SHADER_INPUTS, {}, OUTPUT_NODE_SHADER_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH, "Output Particle NodeShader Mesh", "Context", "node shader instanced model custom", OUTPUT_NODE_SHADER_MESH_INPUTS, {}, OUTPUT_NODE_SHADER_MESH_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_STRIP, "Output ParticleStrip Quad", "Context", "trail ribbon strip", OUTPUT_STRIP_INPUTS, {}, OUTPUT_STRIP_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP, "Output ParticleStrip NodeShader Quad", "Context", "node shader trail ribbon strip custom", OUTPUT_NODE_SHADER_STRIP_INPUTS, {}, OUTPUT_NODE_SHADER_STRIP_SETTINGS, nullptr, NONE, false, nullptr, IN_FLOW, false},
-			{GRAPH_EFFECT_BLOCK_SUBGRAPH_CONTEXT, "Block Subgraph", "Context", "", {}, {}, BLOCK_SUBGRAPH_SETTINGS, nullptr, NONE, false, nullptr, {}, false},
-			{GRAPH_EFFECT_SUBGRAPH_BLOCK, "Subgraph Block", "Block", "subgraph", {}, {}, {}, nullptr, NONE},
-			{GRAPH_EFFECT_SYSTEM_SUBGRAPH, "Subgraph", "Context", "system subgraph", {}, {}, {}, nullptr, NONE, false, nullptr, {}, false},
+		constexpr GraphNodeDefinition EffectDefinitions[] = {
+			{GraphEffectEvent, "Event", "Context", "trigger", {}, {}, EventSettings, nullptr, NONE, false, nullptr, {}, true},
+			{GraphEffectSpawn, "Spawn", "Context", "emit loop", SpawnInputs, {}, SpawnSettings, nullptr, NONE, false, nullptr, SpawnFlow, true},
+			{GraphEffectGPUEvent, "GPU Event", "Context", "gpu event child spawn trigger sub emitter", GPUEventInputs, {}, {}, nullptr, NONE, false, nullptr, {}, true},
+			{GraphEffectOutputEventDefinition, "Output Event", "Context", "script callback handler message death collision burst spawn", GPUEventInputs, {}, OutputEventSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectInitialize, "Initialize Particle", "Context", "", InitializeInputs, {}, InitializeSettings, nullptr, NONE, false, nullptr, InFlow, true},
+			{GraphEffectUpdate, "Update Particle", "Context", "", {}, {}, UpdateSettings, nullptr, NONE, false, nullptr, InFlow, true},
+			{GraphEffectOutputDefinition, "Output Particle Primitive", "Context", "quad triangle octagon billboard", OutputInputs, {}, OutputSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputMesh, "Output Particle Mesh", "Context", "instanced model", OutputMeshInputs, {}, OutputMeshSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputPoint, "Output Particle Point", "Context", "pixel debug", OutputPointInputs, {}, OutputPointSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputLine, "Output Particle Line", "Context", "debug", OutputLineInputs, {}, OutputLineSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputLit, "Output Particle Lit Primitive", "Context", "lit quad triangle octagon billboard shaded", OutputLitInputs, {}, OutputLitSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputLitMesh, "Output Particle Lit Mesh", "Context", "lit instanced model shaded", OutputLitMeshInputs, {}, OutputLitMeshSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputNodeShader, "Output Particle NodeShader Primitive", "Context", "node shader quad triangle octagon billboard custom", OutputNodeShaderInputs, {}, OutputNodeShaderSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputNodeShaderMesh, "Output Particle NodeShader Mesh", "Context", "node shader instanced model custom", OutputNodeShaderMeshInputs, {}, OutputNodeShaderMeshSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputStrip, "Output ParticleStrip Quad", "Context", "trail ribbon strip", OutputStripInputs, {}, OutputStripSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectOutputNodeShaderStrip, "Output ParticleStrip NodeShader Quad", "Context", "node shader trail ribbon strip custom", OutputNodeShaderStripInputs, {}, OutputNodeShaderStripSettings, nullptr, NONE, false, nullptr, InFlow, false},
+			{GraphEffectBlockSubgraphContext, "Block Subgraph", "Context", "", {}, {}, BlockSubgraphSettings, nullptr, NONE, false, nullptr, {}, false},
+			{GraphEffectSubgraphBlock, "Subgraph Block", "Block", "subgraph", {}, {}, {}, nullptr, NONE},
+			{GraphEffectSystemSubgraph, "Subgraph", "Context", "system subgraph", {}, {}, {}, nullptr, NONE, false, nullptr, {}, false},
 
-			{GRAPH_EFFECT_CONSTANT_RATE, "Constant Spawn Rate", "Block", "emission", CONSTANT_RATE_INPUTS, {}, {}, nullptr, NONE},
-			{GRAPH_EFFECT_BURST, "Burst", "Block", "single periodic", BURST_INPUTS, {}, BURST_SETTINGS, nullptr, NONE},
-			{GRAPH_EFFECT_INCREMENT_STRIP_INDEX, "Increment Strip Index On Start", "Block", "strip trail ribbon index play start", INCREMENT_STRIP_INDEX_INPUTS, {}, {}, nullptr, NONE},
-			{GRAPH_EFFECT_TRIGGER_EVENT, "Trigger Event", "Block", "gpu event child spawn sub emitter die collide rate distance",
-			 GraphEffectBlocks::TRIGGER_EVENT_INPUTS, GraphEffectBlocks::TRIGGER_EVENT_OUTPUTS, GraphEffectBlocks::TRIGGER_EVENT_SETTINGS,
+			{GraphEffectConstantRate, "Constant Spawn Rate", "Block", "emission", ConstantRateInputs, {}, {}, nullptr, NONE},
+			{GraphEffectBurst, "Burst", "Block", "single periodic", BurstInputs, {}, BurstSettings, nullptr, NONE},
+			{GraphEffectIncrementStripIndex, "Increment Strip Index On Start", "Block", "strip trail ribbon index play start", IncrementStripIndexInputs, {}, {}, nullptr, NONE},
+			{GraphEffectTriggerEvent, "Trigger Event", "Block", "gpu event child spawn sub emitter die collide rate distance",
+			 GraphEffectBlocks::TriggerEventInputs, GraphEffectBlocks::TriggerEventOutputs, GraphEffectBlocks::TriggerEventSettings,
 			 GraphEffectBlocks::TriggerEventBody, NONE},
-			{GRAPH_EFFECT_SET_ATTRIBUTE, "Set Attribute", "Block", "write", SET_ATTRIBUTE_INPUTS, SET_ATTRIBUTE_OUTPUTS,
-			 SET_ATTRIBUTE_SETTINGS, SetAttributeBody, NONE},
-			{GRAPH_EFFECT_SET_SPAWN_EVENT, "Set SpawnEvent", "Block", "spawn event attribute", SET_SPAWN_EVENT_INPUTS, SET_ATTRIBUTE_OUTPUTS,
-			 SET_SPAWN_EVENT_SETTINGS, SetSpawnEventBody, NONE},
-			{GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE, "Attribute from Curve", "Block", "curve gradient over life", SET_ATTRIBUTE_INPUTS, SET_ATTRIBUTE_OUTPUTS,
-			 ATTRIBUTE_FROM_CURVE_SETTINGS, AttributeFromCurveBody, NONE},
-			{GRAPH_EFFECT_POSITION_SHAPE, "Set Position Shape Sphere", "Block", "spawn emit sphere box cone cylinder torus circle line arc",
-			 POSITION_SHAPE_INPUTS, SET_ATTRIBUTE_OUTPUTS, GraphEffectBlocks::POSITION_SHAPE_SETTINGS, GraphEffectBlocks::PositionShapeBody, NONE},
-			{GRAPH_EFFECT_FORCE, "Force", "Block", "push wind", GraphEffectBlocks::FORCE_INPUTS, GraphEffectBlocks::VELOCITY_OUTPUT,
-			 GraphEffectBlocks::FORCE_SETTINGS, GraphEffectBlocks::ForceBody, NONE},
-			{GRAPH_EFFECT_GRAVITY, "Gravity", "Block", "fall weight", GraphEffectBlocks::GRAVITY_INPUTS, GraphEffectBlocks::VELOCITY_OUTPUT, {}, GraphEffectBlocks::GravityBody, NONE},
-			{GRAPH_EFFECT_LINEAR_DRAG, "Linear Drag", "Block", "friction slow air resistance", GraphEffectBlocks::LINEAR_DRAG_INPUTS,
-			 GraphEffectBlocks::VELOCITY_OUTPUT, GraphEffectBlocks::LINEAR_DRAG_SETTINGS, GraphEffectBlocks::LinearDragBody, NONE},
-			{GRAPH_EFFECT_TURBULENCE, "Turbulence", "Block", "noise curl wind swirl", GraphEffectBlocks::TURBULENCE_INPUTS, GraphEffectBlocks::VELOCITY_OUTPUT,
-			 GraphEffectBlocks::TURBULENCE_SETTINGS, GraphEffectBlocks::TurbulenceBody, NONE},
-			{GRAPH_EFFECT_CONFORM_TO_SPHERE, "Attractor Shape Sphere", "Block", "conform attract magnet sphere", GraphEffectBlocks::CONFORM_TO_SPHERE_INPUTS, GraphEffectBlocks::VELOCITY_OUTPUT, {}, GraphEffectBlocks::ConformToSphereBody, NONE},
-			{GRAPH_EFFECT_COLLISION_SHAPE, "Collision Shape Plane", "Block", "collide bounce collision kill trigger", COLLISION_SHAPE_INPUTS,
-			 COLLISION_SHAPE_OUTPUTS, GraphEffectBlocks::COLLISION_SHAPE_SETTINGS, GraphEffectBlocks::CollisionShapeBody, NONE},
-			{GRAPH_EFFECT_COLLISION_DEPTH, "Collision Depth Buffer", "Block", "collide bounce collision kill trigger depth buffer camera screen",
-			 COLLISION_DEPTH_INPUTS, COLLISION_SHAPE_OUTPUTS, GraphEffectBlocks::COLLISION_DEPTH_SETTINGS, GraphEffectBlocks::CollisionDepthBody, NONE},
-			{GRAPH_EFFECT_POSITION_DEPTH, "Set Position (Depth)", "Block", "spawn emit depth buffer camera screen surface", POSITION_DEPTH_INPUTS,
-			 POSITION_DEPTH_OUTPUTS, GraphEffectBlocks::POSITION_DEPTH_SETTINGS, GraphEffectBlocks::PositionDepthBody, NONE},
-			{GRAPH_EFFECT_ORIENT, "Orient: Face Camera Plane", "Block", "orientation billboard facing rotate look at", {}, GraphEffectBlocks::AXES_OUTPUTS, GraphEffectBlocks::ORIENT_SETTINGS, GraphEffectBlocks::OrientBody, NONE},
-			{GRAPH_EFFECT_CAMERA_FADE, "Camera Fade", "Block", "fade near camera plane distance cull overdraw", GraphEffectBlocks::CAMERA_FADE_INPUTS,
-			 GraphEffectBlocks::CAMERA_FADE_OUTPUTS, GraphEffectBlocks::CAMERA_FADE_SETTINGS, GraphEffectBlocks::CameraFadeBody, NONE},
-			{GRAPH_EFFECT_FLIPBOOK_PLAYER, "Flipbook Player", "Block", "animation atlas frame rate sheet sprite subuv texture",
-			 GraphEffectBlocks::FLIPBOOK_PLAYER_INPUTS, GraphEffectBlocks::TEX_INDEX_OUTPUT, GraphEffectBlocks::FLIPBOOK_PLAYER_SETTINGS,
+			{GraphEffectSetAttribute, "Set Attribute", "Block", "write", SetAttributeInputs, SetAttributeOutputs,
+			 SetAttributeSettings, SetAttributeBody, NONE},
+			{GraphEffectSetSpawnEvent, "Set SpawnEvent", "Block", "spawn event attribute", SetSpawnEventInputs, SetAttributeOutputs,
+			 SetSpawnEventSettings, SetSpawnEventBody, NONE},
+			{GraphEffectAttributeFromCurve, "Attribute from Curve", "Block", "curve gradient over life", SetAttributeInputs, SetAttributeOutputs,
+			 AttributeFromCurveSettings, AttributeFromCurveBody, NONE},
+			{GraphEffectPositionShape, "Set Position Shape Sphere", "Block", "spawn emit sphere box cone cylinder torus circle line arc",
+			 PositionShapeInputs, SetAttributeOutputs, GraphEffectBlocks::PositionShapeSettings, GraphEffectBlocks::PositionShapeBody, NONE},
+			{GraphEffectForce, "Force", "Block", "push wind", GraphEffectBlocks::ForceInputs, GraphEffectBlocks::VelocityOutput,
+			 GraphEffectBlocks::ForceSettings, GraphEffectBlocks::ForceBody, NONE},
+			{GraphEffectGravity, "Gravity", "Block", "fall weight", GraphEffectBlocks::GravityInputs, GraphEffectBlocks::VelocityOutput, {}, GraphEffectBlocks::GravityBody, NONE},
+			{GraphEffectLinearDrag, "Linear Drag", "Block", "friction slow air resistance", GraphEffectBlocks::LinearDragInputs,
+			 GraphEffectBlocks::VelocityOutput, GraphEffectBlocks::LinearDragSettings, GraphEffectBlocks::LinearDragBody, NONE},
+			{GraphEffectTurbulence, "Turbulence", "Block", "noise curl wind swirl", GraphEffectBlocks::TurbulenceInputs, GraphEffectBlocks::VelocityOutput,
+			 GraphEffectBlocks::TurbulenceSettings, GraphEffectBlocks::TurbulenceBody, NONE},
+			{GraphEffectConformToSphere, "Attractor Shape Sphere", "Block", "conform attract magnet sphere", GraphEffectBlocks::ConformToSphereInputs, GraphEffectBlocks::VelocityOutput, {}, GraphEffectBlocks::ConformToSphereBody, NONE},
+			{GraphEffectCollisionShape, "Collision Shape Plane", "Block", "collide bounce collision kill trigger", CollisionShapeInputs,
+			 CollisionShapeOutputs, GraphEffectBlocks::CollisionShapeSettings, GraphEffectBlocks::CollisionShapeBody, NONE},
+			{GraphEffectCollisionDepth, "Collision Depth Buffer", "Block", "collide bounce collision kill trigger depth buffer camera screen",
+			 CollisionDepthInputs, CollisionShapeOutputs, GraphEffectBlocks::CollisionDepthSettings, GraphEffectBlocks::CollisionDepthBody, NONE},
+			{GraphEffectPositionDepth, "Set Position (Depth)", "Block", "spawn emit depth buffer camera screen surface", PositionDepthInputs,
+			 PositionDepthOutputs, GraphEffectBlocks::PositionDepthSettings, GraphEffectBlocks::PositionDepthBody, NONE},
+			{GraphEffectOrient, "Orient: Face Camera Plane", "Block", "orientation billboard facing rotate look at", {}, GraphEffectBlocks::AxesOutputs, GraphEffectBlocks::OrientSettings, GraphEffectBlocks::OrientBody, NONE},
+			{GraphEffectCameraFade, "Camera Fade", "Block", "fade near camera plane distance cull overdraw", GraphEffectBlocks::CameraFadeInputs,
+			 GraphEffectBlocks::CameraFadeOutputs, GraphEffectBlocks::CameraFadeSettings, GraphEffectBlocks::CameraFadeBody, NONE},
+			{GraphEffectFlipbookPlayer, "Flipbook Player", "Block", "animation atlas frame rate sheet sprite subuv texture",
+			 GraphEffectBlocks::FlipbookPlayerInputs, GraphEffectBlocks::TexIndexOutput, GraphEffectBlocks::FlipbookPlayerSettings,
 			 GraphEffectBlocks::FlipbookPlayerBody, NONE},
-			{GRAPH_EFFECT_VECTOR_FIELD_FORCE, "Vector Field Force", "Block", "vector field force volume wind vf texture3d", GraphEffectBlocks::VECTOR_FIELD_INPUTS,
-			 GraphEffectBlocks::VELOCITY_OUTPUT, GraphEffectBlocks::VECTOR_FIELD_SETTINGS, GraphEffectBlocks::VectorFieldForceBody, NONE},
-			{GRAPH_EFFECT_CONFORM_TO_SDF, "Attractor Shape Signed Distance Field", "Block", "conform attract magnet signed distance field sdf", GraphEffectBlocks::CONFORM_TO_SDF_INPUTS, GraphEffectBlocks::VELOCITY_OUTPUT, {}, GraphEffectBlocks::ConformToSDFBody, NONE},
-			{GRAPH_EFFECT_POSITION_MESH, "Set Position (Mesh)", "Block", "spawn emit mesh model vertex edge surface triangle", POSITION_MESH_INPUTS,
-			 POSITION_MESH_OUTPUTS, GraphEffectBlocks::POSITION_MESH_SETTINGS, GraphEffectBlocks::PositionMeshBody, NONE},
-			{GRAPH_EFFECT_POSITION_SEQUENTIAL, "Add Position Sequential Line", "Block", "spawn emit sequence sequential order line circle grid ring",
-			 POSITION_SEQUENTIAL_INPUTS, POSITION_MESH_OUTPUTS, GraphEffectBlocks::POSITION_SEQUENTIAL_SETTINGS, GraphEffectBlocks::PositionSequentialBody, NONE},
-			{GRAPH_EFFECT_CUSTOM_HLSL_BLOCK, "Custom HLSL", "Block", "hlsl code shader custom function script", GraphCustomHLSL::BLOCK_INPUTS,
-			 GraphCustomHLSL::BLOCK_OUTPUTS, GraphCustomHLSL::BLOCK_SETTINGS, GraphCustomHLSL::BlockBody, NONE},
-			{GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR, "Custom HLSL", "HLSL", "hlsl code shader custom function script", GraphCustomHLSL::OPERATOR_INPUTS,
-			 GraphCustomHLSL::OPERATOR_OUTPUTS, GraphCustomHLSL::OPERATOR_SETTINGS, GraphCustomHLSL::OperatorBody, NONE},
+			{GraphEffectVectorFieldForce, "Vector Field Force", "Block", "vector field force volume wind vf texture3d", GraphEffectBlocks::VectorFieldInputs,
+			 GraphEffectBlocks::VelocityOutput, GraphEffectBlocks::VectorFieldSettings, GraphEffectBlocks::VectorFieldForceBody, NONE},
+			{GraphEffectConformToSDF, "Attractor Shape Signed Distance Field", "Block", "conform attract magnet signed distance field sdf", GraphEffectBlocks::ConformToSDFInputs, GraphEffectBlocks::VelocityOutput, {}, GraphEffectBlocks::ConformToSDFBody, NONE},
+			{GraphEffectPositionMesh, "Set Position (Mesh)", "Block", "spawn emit mesh model vertex edge surface triangle", PositionMeshInputs,
+			 PositionMeshOutputs, GraphEffectBlocks::PositionMeshSettings, GraphEffectBlocks::PositionMeshBody, NONE},
+			{GraphEffectPositionSequential, "Add Position Sequential Line", "Block", "spawn emit sequence sequential order line circle grid ring",
+			 PositionSequentialInputs, PositionMeshOutputs, GraphEffectBlocks::PositionSequentialSettings, GraphEffectBlocks::PositionSequentialBody, NONE},
+			{GraphEffectCustomHLSLBlock, "Custom HLSL", "Block", "hlsl code shader custom function script", GraphCustomHLSL::BlockInputs,
+			 GraphCustomHLSL::BlockOutputs, GraphCustomHLSL::BlockSettings, GraphCustomHLSL::BlockBody, NONE},
+			{GraphEffectCustomHLSLOperator, "Custom HLSL", "HLSL", "hlsl code shader custom function script", GraphCustomHLSL::OperatorInputs,
+			 GraphCustomHLSL::OperatorOutputs, GraphCustomHLSL::OperatorSettings, GraphCustomHLSL::OperatorBody, NONE},
 
-			{GRAPH_EFFECT_GET_ATTRIBUTE, "Get Attribute: position", "Attribute", "read attribute", {}, SET_ATTRIBUTE_OUTPUTS, GET_ATTRIBUTE_SETTINGS, GetAttributeBody, NONE},
-			{GRAPH_EFFECT_AGE_OVER_LIFETIME, "Age Over Lifetime", "Attribute", "normalized age life ratio", {}, AGE_OVER_LIFETIME_OUTPUTS, {}, AgeOverLifetimeBody, NONE},
-			{GRAPH_EFFECT_RATIO_OVER_STRIP, "Get Ratio Over Strip [0..1]", "Attribute", "strip trail ribbon ratio place progress", {}, AGE_OVER_LIFETIME_OUTPUTS, {}, RatioOverStripBody, NONE},
-			{GRAPH_EFFECT_RANDOM_NUMBER, "Random Number", "Random", "probability aleatory range", RANDOM_NUMBER_INPUTS, RANDOM_NUMBER_OUTPUTS,
-			 RANDOM_NUMBER_SETTINGS, RandomNumberBody, NONE},
-			{GRAPH_EFFECT_TOTAL_TIME, "Total Time", "BuiltIn", "clock elapsed", {}, TOTAL_TIME_OUTPUTS, {}, TotalTimeBody, NONE},
-			{GRAPH_EFFECT_DELTA_TIME, "Delta Time", "BuiltIn", "frame step", {}, DELTA_TIME_OUTPUTS, {}, DeltaTimeBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_CURVE, "Sample Curve", "Sampling", "animation curve evaluate", SAMPLE_CURVE_INPUTS, SAMPLE_CURVE_OUTPUTS, {}, SampleCurveBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_TEXTURE_2D, "Sample Texture2D", "Sampling", "texture image read tex2d", SAMPLE_TEXTURE_2D_INPUTS, SAMPLE_TEXTURE_OUTPUTS, {}, SampleTexture2DBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_TEXTURE_2D_ARRAY, "Sample Texture2DArray", "Sampling", "texture array slice read", SAMPLE_TEXTURE_2D_ARRAY_INPUTS, SAMPLE_TEXTURE_OUTPUTS, {}, SampleTexture2DArrayBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_TEXTURE_3D, "Sample Texture3D", "Sampling", "texture volume read tex3d", SAMPLE_TEXTURE_3D_INPUTS, SAMPLE_TEXTURE_OUTPUTS, {}, SampleVolumeBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_TEXTURE_CUBE, "Sample TextureCube", "Sampling", "texture cubemap read", SAMPLE_TEXTURE_CUBE_INPUTS, SAMPLE_TEXTURE_OUTPUTS, {}, SampleVolumeBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_SDF, "Sample Signed Distance Field", "Sampling", "sdf distance field surface", GraphEffectBlocks::SAMPLE_SDF_INPUTS, GraphEffectBlocks::SAMPLE_SDF_OUTPUTS, {}, GraphEffectBlocks::SampleSDFBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_MESH, "Sample Mesh", "Sampling", "mesh model vertex edge surface triangle position normal tangent color uv", SAMPLE_MESH_INPUTS,
-			 SAMPLE_MESH_OUTPUTS, GraphEffectBlocks::SAMPLE_MESH_SETTINGS, GraphEffectBlocks::SampleMeshBody, NONE},
-			{GRAPH_EFFECT_SAMPLE_MESH_INDEX, "Sample Mesh Index", "Sampling", "mesh model index buffer triangle", GraphEffectBlocks::SAMPLE_MESH_INDEX_INPUTS, GraphEffectBlocks::SAMPLE_MESH_INDEX_OUTPUTS, {}, GraphEffectBlocks::SampleMeshIndexBody, NONE},
-			{GRAPH_EFFECT_MESH_VERTEX_COUNT, "Get Mesh Vertex Count", "Sampling", "mesh model vertices count number", GraphEffectBlocks::MESH_INPUT, GraphEffectBlocks::MESH_COUNT_OUTPUTS, {}, GraphEffectBlocks::MeshVertexCountBody, NONE},
-			{GRAPH_EFFECT_MESH_INDEX_COUNT, "Get Mesh Index Count", "Sampling", "mesh model indices count number", GraphEffectBlocks::MESH_INPUT, GraphEffectBlocks::MESH_COUNT_OUTPUTS, {}, GraphEffectBlocks::MeshIndexCountBody, NONE},
-			{GRAPH_EFFECT_MESH_TRIANGLE_COUNT, "Get Mesh Triangle Count", "Sampling", "mesh model triangles faces count number", GraphEffectBlocks::MESH_INPUT, GraphEffectBlocks::MESH_COUNT_OUTPUTS, {}, GraphEffectBlocks::MeshTriangleCountBody, NONE},
-			{GRAPH_EFFECT_NOISE, "Perlin Noise 2D", "Noise", "value perlin cellular fractal octave", NOISE_INPUTS, NOISE_OUTPUTS, NOISE_SETTINGS,
+			{GraphEffectGetAttribute, "Get Attribute: position", "Attribute", "read attribute", {}, SetAttributeOutputs, GetAttributeSettings, GetAttributeBody, NONE},
+			{GraphEffectAgeOverLifetime, "Age Over Lifetime", "Attribute", "normalized age life ratio", {}, AgeOverLifetimeOutputs, {}, AgeOverLifetimeBody, NONE},
+			{GraphEffectRatioOverStrip, "Get Ratio Over Strip [0..1]", "Attribute", "strip trail ribbon ratio place progress", {}, AgeOverLifetimeOutputs, {}, RatioOverStripBody, NONE},
+			{GraphEffectRandomNumber, "Random Number", "Random", "probability aleatory range", RandomNumberInputs, RandomNumberOutputs,
+			 RandomNumberSettings, RandomNumberBody, NONE},
+			{GraphEffectTotalTime, "Total Time", "BuiltIn", "clock elapsed", {}, TotalTimeOutputs, {}, TotalTimeBody, NONE},
+			{GraphEffectDeltaTime, "Delta Time", "BuiltIn", "frame step", {}, DeltaTimeOutputs, {}, DeltaTimeBody, NONE},
+			{GraphEffectSampleCurve, "Sample Curve", "Sampling", "animation curve evaluate", SampleCurveInputs, SampleCurveOutputs, {}, SampleCurveBody, NONE},
+			{GraphEffectSampleTexture2D, "Sample Texture2D", "Sampling", "texture image read tex2d", SampleTexture2DInputs, SampleTextureOutputs, {}, SampleTexture2DBody, NONE},
+			{GraphEffectSampleTexture2DArray, "Sample Texture2DArray", "Sampling", "texture array slice read", SampleTexture2DArrayInputs, SampleTextureOutputs, {}, SampleTexture2DArrayBody, NONE},
+			{GraphEffectSampleTexture3D, "Sample Texture3D", "Sampling", "texture volume read tex3d", SampleTexture3DInputs, SampleTextureOutputs, {}, SampleVolumeBody, NONE},
+			{GraphEffectSampleTextureCube, "Sample TextureCube", "Sampling", "texture cubemap read", SampleTextureCubeInputs, SampleTextureOutputs, {}, SampleVolumeBody, NONE},
+			{GraphEffectSampleSDF, "Sample Signed Distance Field", "Sampling", "sdf distance field surface", GraphEffectBlocks::SampleSDFInputs, GraphEffectBlocks::SampleSDFOutputs, {}, GraphEffectBlocks::SampleSDFBody, NONE},
+			{GraphEffectSampleMesh, "Sample Mesh", "Sampling", "mesh model vertex edge surface triangle position normal tangent color uv", SampleMeshInputs,
+			 SampleMeshOutputs, GraphEffectBlocks::SampleMeshSettings, GraphEffectBlocks::SampleMeshBody, NONE},
+			{GraphEffectSampleMeshIndex, "Sample Mesh Index", "Sampling", "mesh model index buffer triangle", GraphEffectBlocks::SampleMeshIndexInputs, GraphEffectBlocks::SampleMeshIndexOutputs, {}, GraphEffectBlocks::SampleMeshIndexBody, NONE},
+			{GraphEffectMeshVertexCount, "Get Mesh Vertex Count", "Sampling", "mesh model vertices count number", GraphEffectBlocks::MeshInput, GraphEffectBlocks::MeshCountOutputs, {}, GraphEffectBlocks::MeshVertexCountBody, NONE},
+			{GraphEffectMeshIndexCount, "Get Mesh Index Count", "Sampling", "mesh model indices count number", GraphEffectBlocks::MeshInput, GraphEffectBlocks::MeshCountOutputs, {}, GraphEffectBlocks::MeshIndexCountBody, NONE},
+			{GraphEffectMeshTriangleCount, "Get Mesh Triangle Count", "Sampling", "mesh model triangles faces count number", GraphEffectBlocks::MeshInput, GraphEffectBlocks::MeshCountOutputs, {}, GraphEffectBlocks::MeshTriangleCountBody, NONE},
+			{GraphEffectNoiseDefinition, "Perlin Noise 2D", "Noise", "value perlin cellular fractal octave", NoiseInputs, NoiseOutputs, NoiseSettings,
 			 NoiseBody, NONE},
-			{GRAPH_EFFECT_CURL_NOISE, "Perlin Curl Noise 2D", "Noise", "value perlin cellular turbulence swirl", NOISE_INPUTS, CURL_NOISE_OUTPUTS,
-			 CURL_NOISE_SETTINGS, CurlNoiseBody, NONE},
+			{GraphEffectCurlNoise, "Perlin Curl Noise 2D", "Noise", "value perlin cellular turbulence swirl", NoiseInputs, CurlNoiseOutputs,
+			 CurlNoiseSettings, CurlNoiseBody, NONE},
 		};
 
 		u32 ChoiceOf(const GraphNode& node, std::string_view key, std::span<const std::string_view> options, u32 fallback) {
@@ -985,18 +985,18 @@ namespace Shalltear {
 		str RandomLabel(u32 random) { return random == 0 ? str() : (random == 1 ? str(" Random (Per Component)") : str(" Random (Uniform)")); }
 
 		void BuildSetAttribute(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 attribute = ChoiceOf(node, GRAPH_EFFECT_ATTRIBUTE_SETTING, WRITABLE_NAMES, 0);
-			const u32 composition = ChoiceOf(node, "Composition", GRAPH_EFFECT_COMPOSITIONS, 0);
-			const u32 source = ChoiceOf(node, "Source", GRAPH_EFFECT_SOURCES, 0);
-			u32 random = ChoiceOf(node, "Random", GRAPH_EFFECT_RANDOMS, 0);
-			if (attribute >= WRITABLE_COUNT || composition >= std::size(GRAPH_EFFECT_COMPOSITIONS) || source >= std::size(GRAPH_EFFECT_SOURCES) ||
-				random >= std::size(GRAPH_EFFECT_RANDOMS)) {
+			const u32 attribute = ChoiceOf(node, GraphEffectAttributeSetting, WritableNames, 0);
+			const u32 composition = ChoiceOf(node, "Composition", GraphEffectCompositions, 0);
+			const u32 source = ChoiceOf(node, "Source", GraphEffectSources, 0);
+			u32 random = ChoiceOf(node, "Random", GraphEffectRandoms, 0);
+			if (attribute >= WRITABLE_COUNT || composition >= std::size(GraphEffectCompositions) || source >= std::size(GraphEffectSources) ||
+				random >= std::size(GraphEffectRandoms)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
-			const GraphEffectAttributeInfo& written = ATTRIBUTES[attribute];
+			const GraphEffectAttributeInfo& written = Attributes[attribute];
 			if (written.type == T::Bool && composition != 0) {
-				out.error = "composes Boolean attribute '" + str(written.name) + "' by " + str(GRAPH_EFFECT_COMPOSITIONS[composition]) +
+				out.error = "composes Boolean attribute '" + str(written.name) + "' by " + str(GraphEffectCompositions[composition]) +
 							" (a Boolean can only be Set)";
 				return;
 			}
@@ -1024,19 +1024,19 @@ namespace Shalltear {
 				out.inputs.push_back(blend);
 			}
 			AttributeOutput(written, out);
-			str title = str(GRAPH_EFFECT_COMPOSITIONS[composition]) + " " + Capitalized(written.name);
+			str title = str(GraphEffectCompositions[composition]) + " " + Capitalized(written.name);
 			title += source == 1 ? str(" from Source") : RandomLabel(random);
-			Finish(GRAPH_EFFECT_SET_ATTRIBUTE, std::move(title), out);
+			Finish(GraphEffectSetAttribute, std::move(title), out);
 		}
 
 		void BuildSetSpawnEvent(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 attribute = ChoiceOf(node, GRAPH_EFFECT_ATTRIBUTE_SETTING, WRITABLE_NAMES, 0);
-			u32 random = ChoiceOf(node, "Random Mode", GRAPH_EFFECT_RANDOMS, 0);
-			if (attribute >= WRITABLE_COUNT || random >= std::size(GRAPH_EFFECT_RANDOMS)) {
+			const u32 attribute = ChoiceOf(node, GraphEffectAttributeSetting, WritableNames, 0);
+			u32 random = ChoiceOf(node, "Random Mode", GraphEffectRandoms, 0);
+			if (attribute >= WRITABLE_COUNT || random >= std::size(GraphEffectRandoms)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
-			const GraphEffectAttributeInfo& written = ATTRIBUTES[attribute];
+			const GraphEffectAttributeInfo& written = Attributes[attribute];
 			if (written.type == T::Bool && random != 0) {
 				out.error = "draws Boolean attribute '" + str(written.name) + "' at random (a Boolean has no range)";
 				return;
@@ -1054,23 +1054,23 @@ namespace Shalltear {
 				input.space = GraphPortSpace::None;
 			}
 			AttributeOutput(written, out);
-			Finish(GRAPH_EFFECT_SET_SPAWN_EVENT, "Set SpawnEvent " + Capitalized(written.name) + RandomLabel(random), out);
+			Finish(GraphEffectSetSpawnEvent, "Set SpawnEvent " + Capitalized(written.name) + RandomLabel(random), out);
 		}
 
 		void BuildAttributeFromCurve(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 attribute = ChoiceOf(node, GRAPH_EFFECT_ATTRIBUTE_SETTING, WRITABLE_NAMES, 0);
-			const u32 composition = ChoiceOf(node, "Composition", GRAPH_EFFECT_COMPOSITIONS, 0);
-			const u32 alphaComposition = ChoiceOf(node, "Alpha Composition", GRAPH_EFFECT_COMPOSITIONS, 0);
-			const u32 sampleMode = ChoiceOf(node, "Sample Mode", GRAPH_EFFECT_SAMPLE_MODES, 0);
-			const u32 mode = ChoiceOf(node, "Mode", COMPUTE_MODES, 1);
-			const u32 colorMode = ChoiceOf(node, "Color Mode", COLOR_MODES, 2);
-			if (attribute >= WRITABLE_COUNT || composition >= std::size(GRAPH_EFFECT_COMPOSITIONS) ||
-				alphaComposition >= std::size(GRAPH_EFFECT_COMPOSITIONS) || sampleMode >= std::size(GRAPH_EFFECT_SAMPLE_MODES) ||
-				mode >= std::size(COMPUTE_MODES) || colorMode >= std::size(COLOR_MODES)) {
+			const u32 attribute = ChoiceOf(node, GraphEffectAttributeSetting, WritableNames, 0);
+			const u32 composition = ChoiceOf(node, "Composition", GraphEffectCompositions, 0);
+			const u32 alphaComposition = ChoiceOf(node, "Alpha Composition", GraphEffectCompositions, 0);
+			const u32 sampleMode = ChoiceOf(node, "Sample Mode", GraphEffectSampleModes, 0);
+			const u32 mode = ChoiceOf(node, "Mode", ComputeModes, 1);
+			const u32 colorMode = ChoiceOf(node, "Color Mode", ColorModes, 2);
+			if (attribute >= WRITABLE_COUNT || composition >= std::size(GraphEffectCompositions) ||
+				alphaComposition >= std::size(GraphEffectCompositions) || sampleMode >= std::size(GraphEffectSampleModes) ||
+				mode >= std::size(ComputeModes) || colorMode >= std::size(ColorModes)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
-			const GraphEffectAttributeInfo& written = ATTRIBUTES[attribute];
+			const GraphEffectAttributeInfo& written = Attributes[attribute];
 			if (written.type == T::Bool) {
 				out.error = "reads Boolean attribute '" + str(written.name) + "' from a curve (a Boolean has none)";
 				return;
@@ -1080,7 +1080,7 @@ namespace Shalltear {
 			const str& label = out.strings.emplace_back(Capitalized(written.name));
 			GraphPortDefinition sampled;
 			sampled.type = color && perComponent ? P::Gradient : P::Curve;
-			sampled.defaultJson = color && perComponent ? BLOCK_GRADIENT : std::string_view();
+			sampled.defaultJSON = color && perComponent ? BlockGradient : std::string_view();
 			if (color || written.type == T::Float || !perComponent) {
 				sampled.name = label;
 				out.inputs.push_back(sampled);
@@ -1110,33 +1110,33 @@ namespace Shalltear {
 			} else {
 				AttributeOutput(written, out);
 			}
-			Finish(GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE, str(GRAPH_EFFECT_COMPOSITIONS[composition]) + " " + label + " " + str(GRAPH_EFFECT_SAMPLE_MODE_NAMES[sampleMode]),
+			Finish(GraphEffectAttributeFromCurve, str(GraphEffectCompositions[composition]) + " " + label + " " + str(GraphEffectSampleModeNames[sampleMode]),
 				   out);
 		}
 
 		void BuildGetAttribute(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 attribute = ChoiceOf(node, GRAPH_EFFECT_ATTRIBUTE_SETTING, ATTRIBUTE_NAMES, 0);
-			const u32 location = ChoiceOf(node, "Location", GRAPH_EFFECT_LOCATIONS, 0);
-			if (attribute >= std::size(ATTRIBUTES) || location >= std::size(GRAPH_EFFECT_LOCATIONS)) {
+			const u32 attribute = ChoiceOf(node, GraphEffectAttributeSetting, AttributeNames, 0);
+			const u32 location = ChoiceOf(node, "Location", GraphEffectLocations, 0);
+			if (attribute >= std::size(Attributes) || location >= std::size(GraphEffectLocations)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
-			AttributeOutput(ATTRIBUTES[attribute], out);
-			str title = "Get Attribute: " + str(ATTRIBUTES[attribute].name);
+			AttributeOutput(Attributes[attribute], out);
+			str title = "Get Attribute: " + str(Attributes[attribute].name);
 			if (location == 1) {
 				title += " (Source)";
 			}
-			Finish(GRAPH_EFFECT_GET_ATTRIBUTE, std::move(title), out);
+			Finish(GraphEffectGetAttribute, std::move(title), out);
 		}
 
 		void BuildRandomNumber(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 type = ChoiceOf(node, "Type", RANDOM_TYPES, 0);
-			if (type >= std::size(RANDOM_TYPES)) {
+			const u32 type = ChoiceOf(node, "Type", RandomTypes, 0);
+			if (type >= std::size(RandomTypes)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
 			constexpr P TYPES[] = {P::Float, P::Float2, P::Float3, P::Float4};
-			for (const GraphPortDefinition& input : RANDOM_NUMBER_INPUTS) {
+			for (const GraphPortDefinition& input : RandomNumberInputs) {
 				GraphPortDefinition port = input;
 				if (input.name != "Seed") {
 					port.type = TYPES[type];
@@ -1146,25 +1146,25 @@ namespace Shalltear {
 				}
 				out.inputs.push_back(port);
 			}
-			GraphPortDefinition r = RANDOM_NUMBER_OUTPUTS[0];
+			GraphPortDefinition r = RandomNumberOutputs[0];
 			r.type = TYPES[type];
 			out.outputs.push_back(r);
-			Finish(GRAPH_EFFECT_RANDOM_NUMBER, type == 0 ? str("Random Number") : "Random Number (" + str(RANDOM_TYPES[type]) + ")", out);
+			Finish(GraphEffectRandomNumber, type == 0 ? str("Random Number") : "Random Number (" + str(RandomTypes[type]) + ")", out);
 		}
 
 		// arc stored in degrees
 		void BuildPositionShape(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 shape = ChoiceOf(node, "Shape", B::POSITION_SHAPES, 0);
-			const u32 mode = ChoiceOf(node, "Position Mode", B::POSITION_MODES, 0);
-			const u32 spawn = ChoiceOf(node, "Spawn Mode", B::SPAWN_MODES, 0);
-			const u32 orientation = ChoiceOf(node, "Apply Orientation", B::ORIENTATIONS, 1);
-			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GRAPH_EFFECT_COMPOSITIONS, 0),
-										ChoiceOf(node, "Composition Direction", GRAPH_EFFECT_COMPOSITIONS, 0),
-										ChoiceOf(node, "Composition Axes", GRAPH_EFFECT_COMPOSITIONS, 0)};
-			if (shape >= std::size(B::POSITION_SHAPES) || mode >= std::size(B::POSITION_MODES) || spawn >= std::size(B::SPAWN_MODES) ||
-				ChoiceOf(node, "Height Mode", B::HEIGHT_MODES, 1) >= std::size(B::HEIGHT_MODES) || orientation >= std::size(B::ORIENTATIONS) ||
-				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GRAPH_EFFECT_COMPOSITIONS); })) {
+			const u32 shape = ChoiceOf(node, "Shape", B::PositionShapes, 0);
+			const u32 mode = ChoiceOf(node, "Position Mode", B::PositionModes, 0);
+			const u32 spawn = ChoiceOf(node, "Spawn Mode", B::SpawnModes, 0);
+			const u32 orientation = ChoiceOf(node, "Apply Orientation", B::Orientations, 1);
+			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GraphEffectCompositions, 0),
+										ChoiceOf(node, "Composition Direction", GraphEffectCompositions, 0),
+										ChoiceOf(node, "Composition Axes", GraphEffectCompositions, 0)};
+			if (shape >= std::size(B::PositionShapes) || mode >= std::size(B::PositionModes) || spawn >= std::size(B::SpawnModes) ||
+				ChoiceOf(node, "Height Mode", B::HeightModes, 1) >= std::size(B::HeightModes) || orientation >= std::size(B::Orientations) ||
+				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GraphEffectCompositions); })) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1207,7 +1207,7 @@ namespace Shalltear {
 				break;
 			case B::PositionSDF: {
 				add("SDF", P::Texture3D, {});
-				for (const GraphPortDefinition& port : B::FIELD_TRANSFORM_INPUTS) {
+				for (const GraphPortDefinition& port : B::FieldTransformInputs) {
 					out.inputs.push_back(port);
 				}
 				const f32 steps = NumberOf(node, "Projection Steps", 2.0f);
@@ -1254,7 +1254,7 @@ namespace Shalltear {
 			if (shape == B::PositionSDF && ToggleOf(node, "Kill Outliers", false)) {
 				AttributeOutput(*GraphEffectAttributes::Find("alive"), out);
 			}
-			Finish(GRAPH_EFFECT_POSITION_SHAPE, str(GRAPH_EFFECT_COMPOSITIONS[compositions[0]]) + " Position Shape " + str(B::POSITION_SHAPE_NAMES[shape]), out);
+			Finish(GraphEffectPositionShape, str(GraphEffectCompositions[compositions[0]]) + " Position Shape " + str(B::PositionShapeNames[shape]), out);
 		}
 
 		void AddPort(GraphBuiltDefinition& out, std::string_view name, std::initializer_list<f32> value, GraphPortSpace space = GraphPortSpace::None,
@@ -1303,13 +1303,13 @@ namespace Shalltear {
 
 		void BuildCollisionShape(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 shape = ChoiceOf(node, "Shape", B::COLLISION_SHAPES, B::CollidePlane);
-			const u32 radius = ChoiceOf(node, "Radius Mode", B::RADIUS_MODES, 0);
-			const u32 behavior = ChoiceOf(node, "Behavior", B::BEHAVIORS, B::BehaviorCollision);
-			const u32 attributes = ChoiceOf(node, "Collision Attributes", B::COLLISION_ATTRIBUTES, 0);
-			if (shape >= std::size(B::COLLISION_SHAPES) || radius >= std::size(B::RADIUS_MODES) ||
-				ChoiceOf(node, "Mode", B::COLLISION_MODES, 0) >= std::size(B::COLLISION_MODES) || behavior >= std::size(B::BEHAVIORS) ||
-				attributes >= std::size(B::COLLISION_ATTRIBUTES)) {
+			const u32 shape = ChoiceOf(node, "Shape", B::CollisionShapes, B::CollidePlane);
+			const u32 radius = ChoiceOf(node, "Radius Mode", B::RadiusModes, 0);
+			const u32 behavior = ChoiceOf(node, "Behavior", B::Behaviors, B::BehaviorCollision);
+			const u32 attributes = ChoiceOf(node, "Collision Attributes", B::CollisionAttributes, 0);
+			if (shape >= std::size(B::CollisionShapes) || radius >= std::size(B::RadiusModes) ||
+				ChoiceOf(node, "Mode", B::CollisionModes, 0) >= std::size(B::CollisionModes) || behavior >= std::size(B::Behaviors) ||
+				attributes >= std::size(B::CollisionAttributes)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1338,7 +1338,7 @@ namespace Shalltear {
 				break;
 			case B::CollideSDF:
 				add("Distance Field", {}, GraphPortSpace::None, P::Texture3D);
-				for (const GraphPortDefinition& port : B::FIELD_TRANSFORM_INPUTS) {
+				for (const GraphPortDefinition& port : B::FieldTransformInputs) {
 					out.inputs.push_back(port);
 				}
 				break;
@@ -1348,17 +1348,17 @@ namespace Shalltear {
 				break;
 			}
 			CollisionPorts(node, out, behavior, radius, attributes, shape == B::CollideSphere);
-			Finish(GRAPH_EFFECT_COLLISION_SHAPE, str(B::BEHAVIOR_NAMES[behavior]) + " Shape " + str(B::COLLISION_SHAPE_NAMES[shape]), out);
+			Finish(GraphEffectCollisionShape, str(B::BehaviorNames[behavior]) + " Shape " + str(B::CollisionShapeNames[shape]), out);
 		}
 
 		void BuildCollisionDepth(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 thickness = ChoiceOf(node, "Surface Thickness", B::SURFACE_THICKNESSES, 0);
-			const u32 radius = ChoiceOf(node, "Radius Mode", B::RADIUS_MODES, 0);
-			const u32 behavior = ChoiceOf(node, "Behavior", B::BEHAVIORS, B::BehaviorCollision);
-			const u32 attributes = ChoiceOf(node, "Collision Attributes", B::COLLISION_ATTRIBUTES, 0);
-			if (thickness >= std::size(B::SURFACE_THICKNESSES) || radius >= std::size(B::RADIUS_MODES) || behavior >= std::size(B::BEHAVIORS) ||
-				attributes >= std::size(B::COLLISION_ATTRIBUTES)) {
+			const u32 thickness = ChoiceOf(node, "Surface Thickness", B::SurfaceThicknesses, 0);
+			const u32 radius = ChoiceOf(node, "Radius Mode", B::RadiusModes, 0);
+			const u32 behavior = ChoiceOf(node, "Behavior", B::Behaviors, B::BehaviorCollision);
+			const u32 attributes = ChoiceOf(node, "Collision Attributes", B::CollisionAttributes, 0);
+			if (thickness >= std::size(B::SurfaceThicknesses) || radius >= std::size(B::RadiusModes) || behavior >= std::size(B::Behaviors) ||
+				attributes >= std::size(B::CollisionAttributes)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1366,15 +1366,15 @@ namespace Shalltear {
 			if (thickness == 1) {
 				AddPort(out, "Surface Thickness", {1.0f}, GraphPortSpace::None, P::Float);
 			}
-			Finish(GRAPH_EFFECT_COLLISION_DEPTH, str(B::BEHAVIOR_NAMES[behavior]) + " Depth Buffer", out);
+			Finish(GraphEffectCollisionDepth, str(B::BehaviorNames[behavior]) + " Depth Buffer", out);
 		}
 
 		void BuildPositionDepth(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 mode = ChoiceOf(node, "Mode", B::DEPTH_POSITION_MODES, 0);
-			const u32 cull = ChoiceOf(node, "Cull Mode", B::DEPTH_CULL_MODES, 0);
-			const u32 composition = ChoiceOf(node, "Composition Position", GRAPH_EFFECT_COMPOSITIONS, 0);
-			if (mode >= std::size(B::DEPTH_POSITION_MODES) || cull >= std::size(B::DEPTH_CULL_MODES) || composition >= std::size(GRAPH_EFFECT_COMPOSITIONS)) {
+			const u32 mode = ChoiceOf(node, "Mode", B::DepthPositionModes, 0);
+			const u32 cull = ChoiceOf(node, "Cull Mode", B::DepthCullModes, 0);
+			const u32 composition = ChoiceOf(node, "Composition Position", GraphEffectCompositions, 0);
+			if (mode >= std::size(B::DepthPositionModes) || cull >= std::size(B::DepthCullModes) || composition >= std::size(GraphEffectCompositions)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1394,14 +1394,14 @@ namespace Shalltear {
 			if (cull != B::DepthCullNone) {
 				AttributeOutput(*GraphEffectAttributes::Find("alive"), out);
 			}
-			Finish(GRAPH_EFFECT_POSITION_DEPTH, str(GRAPH_EFFECT_COMPOSITIONS[composition]) + " Position (Depth)", out);
+			Finish(GraphEffectPositionDepth, str(GraphEffectCompositions[composition]) + " Position (Depth)", out);
 		}
 
 		void BuildOrient(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 mode = ChoiceOf(node, "Mode", B::ORIENT_MODES, 0);
-			const u32 pair = ChoiceOf(node, "Axes", B::ORIENT_AXES, B::AxesZY);
-			if (mode >= std::size(B::ORIENT_MODES) || pair >= std::size(B::ORIENT_AXES)) {
+			const u32 mode = ChoiceOf(node, "Mode", B::OrientModes, 0);
+			const u32 pair = ChoiceOf(node, "Axes", B::OrientAxesOptions, B::AxesZY);
+			if (mode >= std::size(B::OrientModes) || pair >= std::size(B::OrientAxesOptions)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1422,11 +1422,11 @@ namespace Shalltear {
 				add("End", {-1.0f, 0.0f, 0.0f}, GraphPortSpace::Position);
 				break;
 			case B::OrientAdvanced: {
-				constexpr std::string_view NAMES[] = {"Axis X", "Axis Y", "Axis Z"};
+				constexpr std::string_view Names[] = {"Axis X", "Axis Y", "Axis Z"};
 				constexpr u32 FIRST[] = {0, 1, 2, 1, 2, 0};
 				constexpr u32 SECOND[] = {1, 2, 0, 0, 1, 2};
 				for (const u32 axis : {FIRST[pair], SECOND[pair]}) {
-					add(NAMES[axis], {axis == 0 ? 1.0f : 0.0f, axis == 1 ? 1.0f : 0.0f, axis == 2 ? 1.0f : 0.0f}, GraphPortSpace::Direction);
+					add(Names[axis], {axis == 0 ? 1.0f : 0.0f, axis == 1 ? 1.0f : 0.0f, axis == 2 ? 1.0f : 0.0f}, GraphPortSpace::Direction);
 				}
 				break;
 			}
@@ -1440,18 +1440,18 @@ namespace Shalltear {
 			default:
 				break;
 			}
-			out.outputs.assign(std::begin(B::AXES_OUTPUTS), std::end(B::AXES_OUTPUTS));
-			Finish(GRAPH_EFFECT_ORIENT, "Orient: " + str(B::ORIENT_MODE_NAMES[mode]), out);
+			out.outputs.assign(std::begin(B::AxesOutputs), std::end(B::AxesOutputs));
+			Finish(GraphEffectOrient, "Orient: " + str(B::OrientModeNames[mode]), out);
 		}
 
 		void BuildFlipbookPlayer(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 mode = ChoiceOf(node, "Mode", B::FLIPBOOK_MODES, 0);
-			const u32 rate = ChoiceOf(node, "Frame Rate Mode", B::FRAME_RATE_MODES, 0);
-			const u32 cycles = ChoiceOf(node, "Cycles Mode", B::CYCLES_MODES, 0);
-			const u32 range = ChoiceOf(node, "Animation Range", B::ANIMATION_RANGES, 0);
-			if (mode >= std::size(B::FLIPBOOK_MODES) || rate >= std::size(B::FRAME_RATE_MODES) || cycles >= std::size(B::CYCLES_MODES) ||
-				range >= std::size(B::ANIMATION_RANGES)) {
+			const u32 mode = ChoiceOf(node, "Mode", B::FlipbookModes, 0);
+			const u32 rate = ChoiceOf(node, "Frame Rate Mode", B::FrameRateModes, 0);
+			const u32 cycles = ChoiceOf(node, "Cycles Mode", B::CyclesModes, 0);
+			const u32 range = ChoiceOf(node, "Animation Range", B::AnimationRanges, 0);
+			if (mode >= std::size(B::FlipbookModes) || rate >= std::size(B::FrameRateModes) || cycles >= std::size(B::CyclesModes) ||
+				range >= std::size(B::AnimationRanges)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1482,7 +1482,7 @@ namespace Shalltear {
 						constant.keys.push_back(key);
 					}
 					add("Frame Rate Curve", P::Curve, {}, "Frame Rate");
-					out.inputs.back().defaultJson = out.strings.emplace_back(GraphCurves::Write(constant));
+					out.inputs.back().defaultJSON = out.strings.emplace_back(GraphCurves::Write(constant));
 					if (rate == B::RateBySpeed) {
 						add("Speed Range", P::Float2, {0.0f, 1.0f});
 					} else if (rate == B::RateCustom) {
@@ -1513,7 +1513,7 @@ namespace Shalltear {
 			if (ranged && range != B::EntireFlipbook) {
 				AttributeOutput(*GraphEffectAttributes::Find("texIndexBlend"), out);
 			}
-			Finish(GRAPH_EFFECT_FLIPBOOK_PLAYER, "Flipbook Player", out);
+			Finish(GraphEffectFlipbookPlayer, "Flipbook Player", out);
 		}
 
 		void MeshPlacementPorts(GraphBuiltDefinition& out, u32 placement, u32 surface) {
@@ -1535,38 +1535,38 @@ namespace Shalltear {
 
 		void BuildSampleMesh(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 mode = ChoiceOf(node, "Mode", B::ADDRESSING_MODES, B::AddressClamp);
-			const u32 placement = ChoiceOf(node, "Placement Mode", B::MESH_PLACEMENTS, B::PlaceVertex);
-			const u32 surface = ChoiceOf(node, "Surface Coordinates", B::SURFACE_COORDINATES, B::SurfaceUniform);
-			if (mode >= std::size(B::ADDRESSING_MODES) || placement >= std::size(B::MESH_PLACEMENTS) || surface >= std::size(B::SURFACE_COORDINATES)) {
+			const u32 mode = ChoiceOf(node, "Mode", B::AddressingModes, B::AddressClamp);
+			const u32 placement = ChoiceOf(node, "Placement Mode", B::MeshPlacements, B::PlaceVertex);
+			const u32 surface = ChoiceOf(node, "Surface Coordinates", B::SurfaceCoordinatesOptions, B::SurfaceUniform);
+			if (mode >= std::size(B::AddressingModes) || placement >= std::size(B::MeshPlacements) || surface >= std::size(B::SurfaceCoordinatesOptions)) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
-			out.inputs.push_back(B::MESH_INPUT[0]);
+			out.inputs.push_back(B::MeshInput[0]);
 			MeshPlacementPorts(out, placement, surface);
-			out.inputs.insert(out.inputs.end(), std::begin(B::MESH_TRANSFORM_INPUTS), std::end(B::MESH_TRANSFORM_INPUTS));
+			out.inputs.insert(out.inputs.end(), std::begin(B::MeshTransformInputs), std::end(B::MeshTransformInputs));
 			constexpr P TYPES[] = {P::Float3, P::Float3, P::Float3, P::Float3, P::Float, P::Float4, P::Float4};
 			for (u32 output = 0; output < B::MESH_OUTPUT_COUNT; ++output) {
-				if (ToggleOf(node, B::SAMPLE_MESH_SETTINGS[output].key, B::SAMPLE_MESH_SETTINGS[output].defaultIndex != 0)) {
-					out.outputs.push_back({B::MESH_OUTPUTS[output], TYPES[output]});
+				if (ToggleOf(node, B::SampleMeshSettings[output].key, B::SampleMeshSettings[output].defaultIndex != 0)) {
+					out.outputs.push_back({B::MeshOutputs[output], TYPES[output]});
 				}
 			}
-			Finish(GRAPH_EFFECT_SAMPLE_MESH, "Sample Mesh", out);
+			Finish(GraphEffectSampleMesh, "Sample Mesh", out);
 		}
 
 		void BuildPositionMesh(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 spawn = ChoiceOf(node, "Spawn Mode", B::SPAWN_MODES, 0);
-			const u32 placement = ChoiceOf(node, "Placement Mode", B::MESH_PLACEMENTS, B::PlaceVertex);
-			const u32 surface = ChoiceOf(node, "Surface Coordinates", B::SURFACE_COORDINATES, B::SurfaceUniform);
-			const u32 orientation = ChoiceOf(node, "Apply Orientation", B::ORIENTATIONS, 1);
-			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GRAPH_EFFECT_COMPOSITIONS, 0),
-										ChoiceOf(node, "Composition Direction", GRAPH_EFFECT_COMPOSITIONS, 0)};
-			const u32 axesComposition = ChoiceOf(node, "Composition Axes", B::AXES_COMPOSITIONS, 0);
-			if (spawn >= std::size(B::SPAWN_MODES) || placement >= std::size(B::MESH_PLACEMENTS) || surface >= std::size(B::SURFACE_COORDINATES) ||
-				ChoiceOf(node, "Mode", B::ADDRESSING_MODES, B::AddressClamp) >= std::size(B::ADDRESSING_MODES) || orientation >= std::size(B::ORIENTATIONS) ||
-				axesComposition >= std::size(B::AXES_COMPOSITIONS) ||
-				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GRAPH_EFFECT_COMPOSITIONS); })) {
+			const u32 spawn = ChoiceOf(node, "Spawn Mode", B::SpawnModes, 0);
+			const u32 placement = ChoiceOf(node, "Placement Mode", B::MeshPlacements, B::PlaceVertex);
+			const u32 surface = ChoiceOf(node, "Surface Coordinates", B::SurfaceCoordinatesOptions, B::SurfaceUniform);
+			const u32 orientation = ChoiceOf(node, "Apply Orientation", B::Orientations, 1);
+			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GraphEffectCompositions, 0),
+										ChoiceOf(node, "Composition Direction", GraphEffectCompositions, 0)};
+			const u32 axesComposition = ChoiceOf(node, "Composition Axes", B::AxesCompositions, 0);
+			if (spawn >= std::size(B::SpawnModes) || placement >= std::size(B::MeshPlacements) || surface >= std::size(B::SurfaceCoordinatesOptions) ||
+				ChoiceOf(node, "Mode", B::AddressingModes, B::AddressClamp) >= std::size(B::AddressingModes) || orientation >= std::size(B::Orientations) ||
+				axesComposition >= std::size(B::AxesCompositions) ||
+				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GraphEffectCompositions); })) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1581,11 +1581,11 @@ namespace Shalltear {
 			if (direction && compositions[1] == 3) {
 				AddPort(out, "Blend Direction", {1.0f}, GraphPortSpace::None, P::Float);
 			}
-			out.inputs.push_back(B::MESH_INPUT[0]);
+			out.inputs.push_back(B::MeshInput[0]);
 			if (spawn == 1) {
 				MeshPlacementPorts(out, placement, surface);
 			}
-			out.inputs.insert(out.inputs.end(), std::begin(B::MESH_TRANSFORM_INPUTS), std::end(B::MESH_TRANSFORM_INPUTS));
+			out.inputs.insert(out.inputs.end(), std::begin(B::MeshTransformInputs), std::end(B::MeshTransformInputs));
 			AttributeOutput(*GraphEffectAttributes::Find("position"), out);
 			if (direction) {
 				AttributeOutput(*GraphEffectAttributes::Find("direction"), out);
@@ -1595,19 +1595,19 @@ namespace Shalltear {
 					AttributeOutput(*GraphEffectAttributes::Find(axis), out);
 				}
 			}
-			Finish(GRAPH_EFFECT_POSITION_MESH, str(GRAPH_EFFECT_COMPOSITIONS[compositions[0]]) + " Position (Mesh)", out);
+			Finish(GraphEffectPositionMesh, str(GraphEffectCompositions[compositions[0]]) + " Position (Mesh)", out);
 		}
 
 		void BuildPositionSequential(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GRAPH_EFFECT_COMPOSITIONS, 1),
-										ChoiceOf(node, "Composition Direction", GRAPH_EFFECT_COMPOSITIONS, 0),
-										ChoiceOf(node, "Composition Target Position", GRAPH_EFFECT_COMPOSITIONS, 1)};
-			const u32 shape = ChoiceOf(node, "Shape", B::SEQUENTIAL_SHAPES, B::SequentialLine);
-			const u32 index = ChoiceOf(node, "Index", B::SEQUENTIAL_INDEX_MODES, 0);
-			if (shape >= std::size(B::SEQUENTIAL_SHAPES) || index >= std::size(B::SEQUENTIAL_INDEX_MODES) ||
-				ChoiceOf(node, "Mode", B::ADDRESSING_MODES, B::AddressClamp) >= std::size(B::ADDRESSING_MODES) ||
-				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GRAPH_EFFECT_COMPOSITIONS); })) {
+			const u32 compositions[] = {ChoiceOf(node, "Composition Position", GraphEffectCompositions, 1),
+										ChoiceOf(node, "Composition Direction", GraphEffectCompositions, 0),
+										ChoiceOf(node, "Composition Target Position", GraphEffectCompositions, 1)};
+			const u32 shape = ChoiceOf(node, "Shape", B::SequentialShapes, B::SequentialLine);
+			const u32 index = ChoiceOf(node, "Index", B::SequentialIndexModes, 0);
+			if (shape >= std::size(B::SequentialShapes) || index >= std::size(B::SequentialIndexModes) ||
+				ChoiceOf(node, "Mode", B::AddressingModes, B::AddressClamp) >= std::size(B::AddressingModes) ||
+				std::any_of(std::begin(compositions), std::end(compositions), [](u32 composition) { return composition >= std::size(GraphEffectCompositions); })) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
@@ -1661,45 +1661,45 @@ namespace Shalltear {
 			if (target) {
 				AttributeOutput(*GraphEffectAttributes::Find("targetPosition"), out);
 			}
-			Finish(GRAPH_EFFECT_POSITION_SEQUENTIAL,
-				   str(GRAPH_EFFECT_COMPOSITIONS[compositions[0]]) + " Position Sequential " + str(B::SEQUENTIAL_SHAPES[shape]), out);
+			Finish(GraphEffectPositionSequential,
+				   str(GraphEffectCompositions[compositions[0]]) + " Position Sequential " + str(B::SequentialShapes[shape]), out);
 		}
 
 		void BuildTriggerEvent(const GraphNode& node, GraphBuiltDefinition& out) {
 			namespace B = GraphEffectBlocks;
-			const u32 mode = ChoiceOf(node, "Mode", GRAPH_EFFECT_TRIGGER_MODES, 0);
-			if (mode >= std::size(GRAPH_EFFECT_TRIGGER_MODES)) {
+			const u32 mode = ChoiceOf(node, "Mode", GraphEffectTriggerModes, 0);
+			if (mode >= std::size(GraphEffectTriggerModes)) {
 				out.error = "has a Mode that isn't one of its options";
 				return;
 			}
-			out.inputs.assign(std::begin(B::TRIGGER_EVENT_INPUTS), std::end(B::TRIGGER_EVENT_INPUTS));
-			out.outputs.assign(std::begin(B::TRIGGER_EVENT_OUTPUTS), std::end(B::TRIGGER_EVENT_OUTPUTS));
-			Finish(GRAPH_EFFECT_TRIGGER_EVENT, "Trigger Event " + str(B::TRIGGER_MODE_NAMES[mode]), out);
+			out.inputs.assign(std::begin(B::TriggerEventInputs), std::end(B::TriggerEventInputs));
+			out.outputs.assign(std::begin(B::TriggerEventOutputs), std::end(B::TriggerEventOutputs));
+			Finish(GraphEffectTriggerEvent, "Trigger Event " + str(B::TriggerModeNames[mode]), out);
 		}
 
 		void BuildInitialize(const GraphNode& node, GraphBuiltDefinition& out) {
-			const u32 type = ChoiceOf(node, "Data Type", GRAPH_EFFECT_DATA_TYPES, 0);
-			if (type >= std::size(GRAPH_EFFECT_DATA_TYPES)) {
+			const u32 type = ChoiceOf(node, "Data Type", GraphEffectDataTypes, 0);
+			if (type >= std::size(GraphEffectDataTypes)) {
 				out.error = "has a Data Type that isn't one of its options";
 				return;
 			}
-			out.inputs.assign(std::begin(INITIALIZE_INPUTS), std::end(INITIALIZE_INPUTS));
-			Finish(GRAPH_EFFECT_INITIALIZE, type == 1 ? "Initialize Particle Strip" : "Initialize Particle", out);
+			out.inputs.assign(std::begin(InitializeInputs), std::end(InitializeInputs));
+			Finish(GraphEffectInitialize, type == 1 ? "Initialize Particle Strip" : "Initialize Particle", out);
 		}
 
 		void BuildNoise(const GraphNode& node, bool curl, GraphBuiltDefinition& out) {
-			const std::span<const std::string_view> dimensions = curl ? std::span<const std::string_view>(GRAPH_EFFECT_CURL_DIMENSIONS)
-																	  : std::span<const std::string_view>(GRAPH_EFFECT_NOISE_DIMENSIONS);
-			const u32 type = ChoiceOf(node, "Type", GRAPH_EFFECT_NOISE_TYPES, 1);
+			const std::span<const std::string_view> dimensions = curl ? std::span<const std::string_view>(GraphEffectCurlDimensions)
+																	  : std::span<const std::string_view>(GraphEffectNoiseDimensions);
+			const u32 type = ChoiceOf(node, "Type", GraphEffectNoiseTypes, 1);
 			const u32 dimension = ChoiceOf(node, "Dimensions", dimensions, curl ? 0 : 1);
-			if (type >= std::size(GRAPH_EFFECT_NOISE_TYPES) || dimension >= dimensions.size()) {
+			if (type >= std::size(GraphEffectNoiseTypes) || dimension >= dimensions.size()) {
 				out.error = "has a setting that isn't one of its options";
 				return;
 			}
 			const u32 width = curl ? dimension + 2 : dimension + 1;
 			constexpr P VECTORS[] = {P::Float, P::Float2, P::Float3};
 			out.inputs.push_back({"Coordinate", VECTORS[width - 1]});
-			out.inputs.insert(out.inputs.end(), std::begin(NOISE_COMMON_INPUTS), std::end(NOISE_COMMON_INPUTS));
+			out.inputs.insert(out.inputs.end(), std::begin(NoiseCommonInputs), std::end(NoiseCommonInputs));
 			if (curl) {
 				out.inputs.push_back({"Amplitude", P::Float, {1.0f, 0.0f, 0.0f, 0.0f}});
 				out.outputs.push_back({"Noise", VECTORS[width - 1]});
@@ -1708,20 +1708,20 @@ namespace Shalltear {
 				out.outputs.push_back({"Noise", P::Float});
 				out.outputs.push_back({"Derivatives", VECTORS[width - 1]});
 			}
-			Finish(curl ? GRAPH_EFFECT_CURL_NOISE : GRAPH_EFFECT_NOISE,
-				   std::format("{} {} {}D", GRAPH_EFFECT_NOISE_TYPES[type], curl ? "Curl Noise" : "Noise", width), out);
+			Finish(curl ? GraphEffectCurlNoise : GraphEffectNoiseDefinition,
+				   std::format("{} {} {}D", GraphEffectNoiseTypes[type], curl ? "Curl Noise" : "Noise", width), out);
 		}
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphEffectDefinitions() { return EFFECT_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphEffectDefinitions() { return EffectDefinitions; }
 
 	namespace GraphEffectAttributes {
 
-		std::span<const GraphEffectAttributeInfo> All() { return ATTRIBUTES; }
+		std::span<const GraphEffectAttributeInfo> All() { return Attributes; }
 
 		const GraphEffectAttributeInfo* Find(std::string_view name) {
-			for (const GraphEffectAttributeInfo& attribute : ATTRIBUTES) {
+			for (const GraphEffectAttributeInfo& attribute : Attributes) {
 				if (attribute.name == name) {
 					return &attribute;
 				}
@@ -1733,51 +1733,51 @@ namespace Shalltear {
 
 		str SourceBinding(std::string_view name) { return "SourceAttribute/" + str(name); }
 
-		str RateCount(u32 node) { return str(GRAPH_EFFECT_RATE_COUNT) + "_" + std::to_string(node); }
+		str RateCount(u32 node) { return str(GraphEffectRateCount) + "_" + std::to_string(node); }
 
 		bool BuildsPerNode(std::string_view def) {
-			return def == GRAPH_EFFECT_SET_ATTRIBUTE || def == GRAPH_EFFECT_SET_SPAWN_EVENT || def == GRAPH_EFFECT_GET_ATTRIBUTE ||
-				   def == GRAPH_EFFECT_RANDOM_NUMBER || def == GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE || def == GRAPH_EFFECT_NOISE ||
-				   def == GRAPH_EFFECT_CURL_NOISE || def == GRAPH_EFFECT_POSITION_SHAPE || def == GRAPH_EFFECT_COLLISION_SHAPE ||
-				   def == GRAPH_EFFECT_COLLISION_DEPTH || def == GRAPH_EFFECT_POSITION_DEPTH || def == GRAPH_EFFECT_ORIENT || def == GRAPH_EFFECT_FLIPBOOK_PLAYER || def == GRAPH_EFFECT_SAMPLE_MESH ||
-				   def == GRAPH_EFFECT_POSITION_MESH || def == GRAPH_EFFECT_POSITION_SEQUENTIAL || def == GRAPH_EFFECT_INITIALIZE ||
-				   def == GRAPH_EFFECT_TRIGGER_EVENT;
+			return def == GraphEffectSetAttribute || def == GraphEffectSetSpawnEvent || def == GraphEffectGetAttribute ||
+				   def == GraphEffectRandomNumber || def == GraphEffectAttributeFromCurve || def == GraphEffectNoiseDefinition ||
+				   def == GraphEffectCurlNoise || def == GraphEffectPositionShape || def == GraphEffectCollisionShape ||
+				   def == GraphEffectCollisionDepth || def == GraphEffectPositionDepth || def == GraphEffectOrient || def == GraphEffectFlipbookPlayer || def == GraphEffectSampleMesh ||
+				   def == GraphEffectPositionMesh || def == GraphEffectPositionSequential || def == GraphEffectInitialize ||
+				   def == GraphEffectTriggerEvent;
 		}
 
 		void Build(const GraphNode& node, GraphBuiltDefinition& out) {
-			if (node.def == GRAPH_EFFECT_SET_ATTRIBUTE) {
+			if (node.def == GraphEffectSetAttribute) {
 				BuildSetAttribute(node, out);
-			} else if (node.def == GRAPH_EFFECT_SET_SPAWN_EVENT) {
+			} else if (node.def == GraphEffectSetSpawnEvent) {
 				BuildSetSpawnEvent(node, out);
-			} else if (node.def == GRAPH_EFFECT_GET_ATTRIBUTE) {
+			} else if (node.def == GraphEffectGetAttribute) {
 				BuildGetAttribute(node, out);
-			} else if (node.def == GRAPH_EFFECT_RANDOM_NUMBER) {
+			} else if (node.def == GraphEffectRandomNumber) {
 				BuildRandomNumber(node, out);
-			} else if (node.def == GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE) {
+			} else if (node.def == GraphEffectAttributeFromCurve) {
 				BuildAttributeFromCurve(node, out);
-			} else if (node.def == GRAPH_EFFECT_NOISE || node.def == GRAPH_EFFECT_CURL_NOISE) {
-				BuildNoise(node, node.def == GRAPH_EFFECT_CURL_NOISE, out);
-			} else if (node.def == GRAPH_EFFECT_POSITION_SHAPE) {
+			} else if (node.def == GraphEffectNoiseDefinition || node.def == GraphEffectCurlNoise) {
+				BuildNoise(node, node.def == GraphEffectCurlNoise, out);
+			} else if (node.def == GraphEffectPositionShape) {
 				BuildPositionShape(node, out);
-			} else if (node.def == GRAPH_EFFECT_COLLISION_SHAPE) {
+			} else if (node.def == GraphEffectCollisionShape) {
 				BuildCollisionShape(node, out);
-			} else if (node.def == GRAPH_EFFECT_COLLISION_DEPTH) {
+			} else if (node.def == GraphEffectCollisionDepth) {
 				BuildCollisionDepth(node, out);
-			} else if (node.def == GRAPH_EFFECT_POSITION_DEPTH) {
+			} else if (node.def == GraphEffectPositionDepth) {
 				BuildPositionDepth(node, out);
-			} else if (node.def == GRAPH_EFFECT_ORIENT) {
+			} else if (node.def == GraphEffectOrient) {
 				BuildOrient(node, out);
-			} else if (node.def == GRAPH_EFFECT_FLIPBOOK_PLAYER) {
+			} else if (node.def == GraphEffectFlipbookPlayer) {
 				BuildFlipbookPlayer(node, out);
-			} else if (node.def == GRAPH_EFFECT_SAMPLE_MESH) {
+			} else if (node.def == GraphEffectSampleMesh) {
 				BuildSampleMesh(node, out);
-			} else if (node.def == GRAPH_EFFECT_POSITION_MESH) {
+			} else if (node.def == GraphEffectPositionMesh) {
 				BuildPositionMesh(node, out);
-			} else if (node.def == GRAPH_EFFECT_POSITION_SEQUENTIAL) {
+			} else if (node.def == GraphEffectPositionSequential) {
 				BuildPositionSequential(node, out);
-			} else if (node.def == GRAPH_EFFECT_INITIALIZE) {
+			} else if (node.def == GraphEffectInitialize) {
 				BuildInitialize(node, out);
-			} else if (node.def == GRAPH_EFFECT_TRIGGER_EVENT) {
+			} else if (node.def == GraphEffectTriggerEvent) {
 				BuildTriggerEvent(node, out);
 			} else {
 				out.error = "is no node an effect builds";
@@ -1788,7 +1788,7 @@ namespace Shalltear {
 
 	namespace GraphEffectShading {
 
-		constexpr std::string_view DEFAULT_DOCUMENT = R"({
+		constexpr std::string_view DefaultDocument = R"({
 	"_type": "NodeShader",
 	"version": 1,
 	"nextId": 15,
@@ -1833,7 +1833,7 @@ namespace Shalltear {
 		Held HeldNodeShader(const GraphNode& output, Guid& asset) {
 			asset = Guid{};
 			for (const GraphSetting& setting : output.settings) {
-				if (setting.key != GRAPH_EFFECT_NODE_SHADER_SETTING) {
+				if (setting.key != GraphEffectNodeShaderSetting) {
 					continue;
 				}
 				const str& value = setting.value;
@@ -1845,10 +1845,10 @@ namespace Shalltear {
 			return Held::Default;
 		}
 
-		std::string_view DefaultDocumentText() { return DEFAULT_DOCUMENT; }
+		std::string_view DefaultDocumentText() { return DefaultDocument; }
 
 		bool IsNodeShaderOutput(std::string_view def) {
-			return def == GRAPH_EFFECT_OUTPUT_NODE_SHADER || def == GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH || def == GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP;
+			return def == GraphEffectOutputNodeShader || def == GraphEffectOutputNodeShaderMesh || def == GraphEffectOutputNodeShaderStrip;
 		}
 
 		void Build(const GraphNode& node, const GraphDocument* graph, GraphBuiltDefinition& out) {
@@ -1925,7 +1925,7 @@ namespace Shalltear {
 										 : property.kind == GraphPropertyKind::Texture2DArray ? 1u
 										 : property.kind == GraphPropertyKind::Texture3D	  ? 2u
 																							  : 3u;
-						port.binding = GRAPH_EFFECT_NODE_SHADER_TEXTURE_BINDINGS[kind];
+						port.binding = GraphEffectNodeShaderTextureBindings[kind];
 					}
 					out.inputs.push_back(port);
 				}

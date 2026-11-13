@@ -33,7 +33,7 @@ namespace {
 	constexpr const char* V2_DLL = "ShalltearAudioScriptModuleV2" SLT_TEST_DLL_SUFFIX;
 	constexpr const char* TONE_PATH = "project://Probe.sltone";
 
-	const StringHash TONE_TYPE{"AudioScriptTone"};
+	const StringHash ToneType{"AudioScriptTone"};
 
 	class AudioModuleReloadFixture : public ::testing::Test {
 	protected:
@@ -123,7 +123,7 @@ namespace {
 		}
 
 		void StartEverything() {
-			ASSERT_TRUE(AssetDatabase::CreateAsset(Path(TONE_PATH), TONE_TYPE).IsValid());
+			ASSERT_TRUE(AssetDatabase::CreateAsset(Path(TONE_PATH), ToneType).IsValid());
 			const auto makeMixer = Resolve<void* (*)()>("AudioScriptModuleMakeMixer");
 			const auto play = Resolve<bool (*)(const char*)>("AudioScriptModulePlay");
 			ASSERT_NE(makeMixer, nullptr);

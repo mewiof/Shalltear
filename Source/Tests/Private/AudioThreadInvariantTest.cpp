@@ -1165,7 +1165,7 @@ TEST(AudioThreadInvariantTest, BuiltinEffectsAllocateNothing) {
 	for (size_t frame = 0; frame < tone.size(); ++frame) {
 		tone[frame] = 0.4f * std::sin(static_cast<f32>(frame) * 0.043f);
 	}
-	AudioClipData* clip = AudioTesting::MakePcm(tone, 1, 48000);
+	AudioClipData* clip = AudioTesting::MakePCM(tone, 1, 48000);
 	ASSERT_NE(clip, nullptr);
 
 	u64 sent = 0;
@@ -1328,7 +1328,7 @@ TEST(AudioThreadInvariantTest, VoicesWithBuiltinsAllocateNothing) {
 	for (size_t frame = 0; frame < tone.size(); ++frame) {
 		tone[frame] = 0.4f * std::sin(static_cast<f32>(frame) * 0.043f);
 	}
-	AudioClipData* clip = AudioTesting::MakePcm(tone, 1, 48000);
+	AudioClipData* clip = AudioTesting::MakePCM(tone, 1, 48000);
 	ASSERT_NE(clip, nullptr);
 
 	u64 sent = 0;

@@ -606,7 +606,7 @@ namespace Shalltear {
 			return true;
 		}
 
-		constexpr HandleResolverScope LIVE_SCOPE{&LiveToGuid, &LiveToHandle, nullptr};
+		constexpr HandleResolverScope LiveScope{&LiveToGuid, &LiveToHandle, nullptr};
 
 		bool KeyNames(std::string_view key, const FieldInfo& field) {
 			return StringHash(key) == field.name || key == std::format("{:016x}", field.name.GetValue());
@@ -615,7 +615,7 @@ namespace Shalltear {
 	} // anonymous namespace
 
 	ScopedLiveHandles::ScopedLiveHandles() {
-		HandleResolver::PushScope(LIVE_SCOPE);
+		HandleResolver::PushScope(LiveScope);
 	}
 
 	ScopedLiveHandles::~ScopedLiveHandles() {

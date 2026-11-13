@@ -362,13 +362,13 @@ TEST(GraphDocumentTest, RedirectSplitsAndRejoins) {
 	ASSERT_NE(redirect, 0u);
 	const GraphNode* bend = NodeById(document, redirect);
 	ASSERT_NE(bend, nullptr);
-	EXPECT_EQ(bend->def, GraphDocumentOps::REDIRECT_DEF);
+	EXPECT_EQ(bend->def, GraphDocumentOps::RedirectDef);
 	EXPECT_EQ(bend->group, group);
 	const GraphInput* fed = InputOf(*NodeById(document, 3), "A");
 	ASSERT_NE(fed, nullptr);
 	EXPECT_EQ(fed->fromNode, redirect);
-	EXPECT_EQ(fed->fromPort, GraphDocumentOps::REDIRECT_OUT);
-	const GraphInput* through = InputOf(*bend, GraphDocumentOps::REDIRECT_IN);
+	EXPECT_EQ(fed->fromPort, GraphDocumentOps::RedirectOut);
+	const GraphInput* through = InputOf(*bend, GraphDocumentOps::RedirectIn);
 	ASSERT_NE(through, nullptr);
 	EXPECT_EQ(through->fromNode, 2u);
 	EXPECT_EQ(GraphDocumentOps::InsertRedirect(document, 3, "B", Vec2()), 0u);

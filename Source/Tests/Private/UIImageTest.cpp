@@ -20,7 +20,7 @@ using namespace UITest;
 
 namespace {
 
-	constexpr RHI::TextureHandle FAKE_GPU_TEXTURE{5u, 1u};
+	constexpr RHI::TextureHandle FakeGPUTexture{5u, 1u};
 
 	UI::ContextDesc Desc(f32 scale = 1.0f) {
 		UI::ContextDesc desc;
@@ -31,7 +31,7 @@ namespace {
 
 	void MakeTexture(TextureAsset& out, Vec2I size) {
 		out.size = size;
-		out.texture = FAKE_GPU_TEXTURE;
+		out.texture = FakeGPUTexture;
 	}
 
 	UI::ElementHandle AddImage(UI::Context& ctx, const UI::ImageDesc& image, f32 width = -1.0f, f32 height = -1.0f) {
@@ -56,7 +56,7 @@ namespace {
 		ctx.BuildRenderList(list);
 		std::vector<UI::UIQuad> quads;
 		for (const UI::UICommand& command : list.commands) {
-			if (command.kind != UI::UICommandKind::Quads || command.texture != FAKE_GPU_TEXTURE) {
+			if (command.kind != UI::UICommandKind::Quads || command.texture != FakeGPUTexture) {
 				continue;
 			}
 			for (u32 i = 0; i < command.quadCount; ++i) {
@@ -91,14 +91,14 @@ namespace {
 			AssetDatabase::Initialize();
 
 			std::vector<u8> pixels(32 * 16 * 4, 255);
-			TestImages::WriteTga(_root / "Atlas.tga", 32, 16, pixels.data());
+			TestImages::WriteTGA(_root / "Atlas.tga", 32, 16, pixels.data());
 			ASSERT_TRUE(AssetDatabase::EnsureAssetIdentity(Path("project://Atlas.tga")).IsValid());
 			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), Settings(0.0)));
 
 			Asset* loaded = AssetDatabase::LoadAsset(Path("project://Atlas.tga"));
 			ASSERT_NE(loaded, nullptr);
 			_atlas = static_cast<TextureAsset*>(loaded);
-			_atlas->texture = FAKE_GPU_TEXTURE;
+			_atlas->texture = FakeGPUTexture;
 		}
 
 		static JSONValue Settings(f64 pixelsPerUnit) {
@@ -130,7 +130,7 @@ namespace {
 			ASSERT_TRUE(AssetDatabase::WriteImporterSettings(Path("project://Atlas.tga"), Settings(pixelsPerUnit)));
 			ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Atlas.tga")));
 			ASSERT_EQ(_atlas->settings.pixelsPerUnit, static_cast<f32>(pixelsPerUnit));
-			_atlas->texture = FAKE_GPU_TEXTURE;
+			_atlas->texture = FakeGPUTexture;
 		}
 
 		void TearDown() override {

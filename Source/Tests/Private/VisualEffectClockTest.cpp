@@ -19,7 +19,7 @@ namespace {
 
 	GraphDocument EffectDocument() {
 		GraphDocument document;
-		document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+		document.type = str(GraphEffectDocumentType);
 		return document;
 	}
 
@@ -87,21 +87,21 @@ TEST(GraphEffectTimingTest, CompileReadsGraphsSettingsInsideLimits) {
 
 TEST(GraphEffectTimingTest, UpdateModeStoredWhenChanged) {
 	GraphDocument document = EffectDocument();
-	EXPECT_FALSE(Ops::SetUpdateMode(document, GRAPH_EFFECT_FIXED_DELTA_TIME, true));
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_FIXED_DELTA_TIME, false));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_FIXED_DELTA_TIME), "false");
+	EXPECT_FALSE(Ops::SetUpdateMode(document, GraphEffectFixedDeltaTime, true));
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectFixedDeltaTime, false));
+	EXPECT_EQ(Stored(document, GraphEffectFixedDeltaTime), "false");
 	EXPECT_FALSE(GraphEffectTarget::Timing(document).fixedDeltaTime);
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_EXACT_FIXED_TIME, true));
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_IGNORE_TIME_SCALE, true));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_EXACT_FIXED_TIME), "true");
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectExactFixedTime, true));
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectIgnoreTimeScale, true));
+	EXPECT_EQ(Stored(document, GraphEffectExactFixedTime), "true");
 	const GraphEffectTiming timing = GraphEffectTarget::Timing(document);
 	EXPECT_TRUE(timing.exactFixedTime && timing.ignoreTimeScale);
 
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_FIXED_DELTA_TIME, true));
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_EXACT_FIXED_TIME, false));
-	ASSERT_TRUE(Ops::SetUpdateMode(document, GRAPH_EFFECT_IGNORE_TIME_SCALE, false));
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectFixedDeltaTime, true));
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectExactFixedTime, false));
+	ASSERT_TRUE(Ops::SetUpdateMode(document, GraphEffectIgnoreTimeScale, false));
 	EXPECT_TRUE(document.settings.empty());
-	EXPECT_FALSE(Ops::SetUpdateMode(document, GRAPH_EFFECT_PREWARM_STEP_COUNT, true));
+	EXPECT_FALSE(Ops::SetUpdateMode(document, GraphEffectPrewarmStepCount, true));
 	EXPECT_TRUE(document.settings.empty());
 }
 
@@ -109,10 +109,10 @@ TEST(GraphEffectTimingTest, CullingFlagsStoredWhenChanged) {
 	GraphDocument document = EffectDocument();
 	EXPECT_FALSE(Ops::SetCullingFlags(document, GRAPH_EFFECT_CULL_DEFAULT));
 	ASSERT_TRUE(Ops::SetCullingFlags(document, GRAPH_EFFECT_CULL_SIMULATION));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_CULLING_FLAGS), "1");
+	EXPECT_EQ(Stored(document, GraphEffectCullingFlags), "1");
 	EXPECT_EQ(GraphEffectTarget::Timing(document).cullingFlags, 1u);
 	ASSERT_TRUE(Ops::SetCullingFlags(document, 0));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_CULLING_FLAGS), "0");
+	EXPECT_EQ(Stored(document, GraphEffectCullingFlags), "0");
 	EXPECT_EQ(GraphEffectTarget::Timing(document).cullingFlags, 0u);
 	EXPECT_FALSE(Ops::SetCullingFlags(document, 4));
 	ASSERT_TRUE(Ops::SetCullingFlags(document, GRAPH_EFFECT_CULL_DEFAULT));
@@ -120,7 +120,7 @@ TEST(GraphEffectTimingTest, CullingFlagsStoredWhenChanged) {
 
 	for (std::string_view stored : {"1.5", "-1", "4", "\"1\""}) {
 		GraphDocument held = EffectDocument();
-		held.settings.push_back({str(GRAPH_EFFECT_CULLING_FLAGS), str(stored)});
+		held.settings.push_back({str(GraphEffectCullingFlags), str(stored)});
 		EXPECT_EQ(GraphEffectTarget::Timing(held).cullingFlags, 3u) << stored;
 	}
 }
@@ -133,14 +133,14 @@ TEST(GraphEffectInstancingTest, InstancingStoredWhenChanged) {
 	EXPECT_EQ(held.refused, 0u);
 	EXPECT_FALSE(Ops::SetInstancingMode(document, GRAPH_EFFECT_INSTANCING_AUTOMATIC));
 	ASSERT_TRUE(Ops::SetInstancingMode(document, GRAPH_EFFECT_INSTANCING_DISABLED));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_INSTANCING_MODE), "-1");
+	EXPECT_EQ(Stored(document, GraphEffectInstancingMode), "-1");
 	ASSERT_TRUE(Ops::SetInstancingMode(document, GRAPH_EFFECT_INSTANCING_CUSTOM));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_INSTANCING_MODE), "1");
+	EXPECT_EQ(Stored(document, GraphEffectInstancingMode), "1");
 	EXPECT_EQ(GraphEffectTarget::Instancing(document).mode, GRAPH_EFFECT_INSTANCING_CUSTOM);
 	EXPECT_FALSE(Ops::SetInstancingMode(document, 2));
 	EXPECT_FALSE(Ops::SetInstancingCapacity(document, 64));
 	ASSERT_TRUE(Ops::SetInstancingCapacity(document, 5));
-	EXPECT_EQ(Stored(document, GRAPH_EFFECT_INSTANCING_CAPACITY), "5");
+	EXPECT_EQ(Stored(document, GraphEffectInstancingCapacity), "5");
 	ASSERT_TRUE(Ops::SetInstancingCapacity(document, 0));
 	EXPECT_EQ(GraphEffectTarget::Instancing(document).capacity, 1u);
 	ASSERT_TRUE(Ops::SetInstancingCapacity(document, 70000));
@@ -151,12 +151,12 @@ TEST(GraphEffectInstancingTest, InstancingStoredWhenChanged) {
 
 	for (std::string_view stored : {"2", "0.5", "-2", "\"1\""}) {
 		GraphDocument read = EffectDocument();
-		read.settings.push_back({str(GRAPH_EFFECT_INSTANCING_MODE), str(stored)});
+		read.settings.push_back({str(GraphEffectInstancingMode), str(stored)});
 		EXPECT_EQ(GraphEffectTarget::Instancing(read).mode, GRAPH_EFFECT_INSTANCING_AUTOMATIC) << stored;
 	}
 	for (const auto& [stored, capacity] : {std::pair<std::string_view, u32>{"-3", 1u}, {"7.9", 7u}, {"\"7\"", 64u}}) {
 		GraphDocument read = EffectDocument();
-		read.settings.push_back({str(GRAPH_EFFECT_INSTANCING_CAPACITY), str(stored)});
+		read.settings.push_back({str(GraphEffectInstancingCapacity), str(stored)});
 		EXPECT_EQ(GraphEffectTarget::Instancing(read).capacity, capacity) << stored;
 	}
 }
@@ -173,11 +173,11 @@ TEST(GraphEffectInstancingTest, GpuEventRefusesInstancing) {
 		Ops::SetInstancingMode(document, GRAPH_EFFECT_INSTANCING_CUSTOM);
 		return GraphEffectTarget::Instancing(document);
 	};
-	const GraphEffectInstancing events = with(GRAPH_EFFECT_GPU_EVENT);
+	const GraphEffectInstancing events = with(GraphEffectGPUEvent);
 	EXPECT_EQ(events.refused, GRAPH_EFFECT_INSTANCING_GPU_EVENT);
 	EXPECT_EQ(events.mode, GRAPH_EFFECT_INSTANCING_CUSTOM);
-	EXPECT_EQ(with(GRAPH_EFFECT_OUTPUT_EVENT).refused, 0u);
-	EXPECT_EQ(with(GRAPH_EFFECT_INITIALIZE).refused, 0u);
+	EXPECT_EQ(with(GraphEffectOutputEventDefinition).refused, 0u);
+	EXPECT_EQ(with(GraphEffectInitialize).refused, 0u);
 }
 
 TEST(GraphEffectTimingTest, Prewarms3FieldsLinkInInspector) {

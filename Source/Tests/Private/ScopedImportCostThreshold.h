@@ -8,8 +8,8 @@ namespace Shalltear {
 
 	class ScopedImportCostThreshold {
 	public:
-		static constexpr u64 CacheEverything = 0;
-		static constexpr u64 CacheNothing = UINT64_MAX;
+		static constexpr u64 CACHE_EVERYTHING = 0;
+		static constexpr u64 CACHE_NOTHING = UINT64_MAX;
 
 		explicit ScopedImportCostThreshold(u64 micros)
 			: _previous(ImportArtifactStore::GetCostThresholdMicros()) {

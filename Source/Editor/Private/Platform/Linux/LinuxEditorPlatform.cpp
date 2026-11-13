@@ -18,7 +18,7 @@ namespace Shalltear::EditorPlatform {
 		}
 
 		str ToFileUri(const str& path) {
-			static const char HEX[] = "0123456789ABCDEF";
+			static const char hex[] = "0123456789ABCDEF";
 			str uri = "file://";
 			for (const char c : path) {
 				const unsigned char byte = static_cast<unsigned char>(c);
@@ -28,8 +28,8 @@ namespace Shalltear::EditorPlatform {
 					uri.push_back(c);
 				} else {
 					uri.push_back('%');
-					uri.push_back(HEX[byte >> 4]);
-					uri.push_back(HEX[byte & 0xF]);
+					uri.push_back(hex[byte >> 4]);
+					uri.push_back(hex[byte & 0xF]);
 				}
 			}
 			return uri;

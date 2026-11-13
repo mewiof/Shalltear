@@ -566,7 +566,7 @@ TEST_F(VisualEffectComponentFixture, UpdatesRunInTurn) {
 	RenderSystem::RenderAll();
 
 	EXPECT_EQ(instance->GetTime(), 1.0f);
-	EXPECT_EQ(instance->GetCpuSystem(0)->GetFrame(), 3u);
+	EXPECT_EQ(instance->GetCPUSystem(0)->GetFrame(), 3u);
 	EXPECT_EQ(instance->GetSystem(1).GetSimulatedFrames(), 3u);
 	Vec3 positions[4];
 	ASSERT_EQ(effect->GetParticles("Sparks", "position", positions), 4u);
@@ -600,7 +600,7 @@ TEST_F(VisualEffectComponentFixture, PrewarmRunsOnStartAndReinit) {
 		EffectInstance* instance = EffectComponentAccess::Instance(*effect.Get());
 		ASSERT_NE(instance, nullptr);
 		EXPECT_EQ(instance->GetTime(), 1.5f) << when;
-		EXPECT_EQ(instance->GetCpuSystem(0)->GetFrame(), 11u) << when;
+		EXPECT_EQ(instance->GetCPUSystem(0)->GetFrame(), 11u) << when;
 		EXPECT_EQ(instance->GetSystem(1).GetSimulatedFrames(), 11u) << when;
 		Vec3 positions[4];
 		ASSERT_EQ(effect->GetParticles("Sparks", "position", positions), 4u) << when;
@@ -3027,14 +3027,14 @@ protected:
 		return pixels[(static_cast<size_t>(y) * size.x + x) * 4 + channel] > 150;
 	}
 
-	static constexpr Vec3 FOG_COLOR{0.1f, 0.3f, 0.9f};
+	static constexpr Vec3 FogColor{0.1f, 0.3f, 0.9f};
 	static void InFog(ShadingStage& stage) {
 		Handle<SceneObject> object = SceneSystem::CreateObject("Environment", stage.scene);
 		Handle<Environment> environment = object->AddComponent<Environment>();
 		environment->SetSkyMode(SkyMode::None);
 		environment->SetFog(true);
 		environment->SetFogMode(FogMode::Linear);
-		environment->SetFogColor(Color(FOG_COLOR.x, FOG_COLOR.y, FOG_COLOR.z, 1.0f));
+		environment->SetFogColor(Color(FogColor.x, FogColor.y, FogColor.z, 1.0f));
 		environment->SetFogStart(1.0f);
 		environment->SetFogEnd(4.0f);
 		SceneSystem::EndFrame();
@@ -3181,7 +3181,7 @@ TEST_F(VisualEffectOutputFixture, OutputFoggedLikeBlend) {
 		GTEST_SKIP() << "no Vulkan device";
 	}
 	const Vec3 green{0.0f, 1.0f, 0.0f};
-	const Vec3 halfFogged = green * 0.5f + FOG_COLOR * 0.5f;
+	const Vec3 halfFogged = green * 0.5f + FogColor * 0.5f;
 	const f32 half = 0.5f / UNIT;
 	const str placed = std::format(R"(,{{"id":11,"def":"Block/SetAttribute","settings":{{"Attribute":"position"}},"in":{{"Position":{{"value":[{},{},0.5]}}}}}})",
 								   half, -half);
@@ -3640,9 +3640,9 @@ namespace {
 						   port);
 	}
 
-	constexpr std::string_view FLAT = R"("target":"unlit","blend":"opaque","cull":"off")";
+	constexpr std::string_view Flat = R"("target":"unlit","blend":"opaque","cull":"off")";
 
-	const str TintGraph = NodeShaderText(FLAT, R"({"id":1,"name":"Tint","reference":"_Tint","type":"Color","default":[0,1,0,1]})",
+	const str TintGraph = NodeShaderText(Flat, R"({"id":1,"name":"Tint","reference":"_Tint","type":"Color","default":[0,1,0,1]})",
 										 R"({"id":10,"def":"Input/Property","settings":{"property":1}})", ColorFrom(10, "Out"));
 
 } // anonymous namespace
@@ -3688,7 +3688,7 @@ TEST_F(VisualEffectNodeShaderFixture, PerParticlePropertyShades) {
 				{{"id":6,"def":"Block/SetAttribute","settings":{{"Attribute":"size"}},"in":{{"Size":{{"value":[1]}}}}}},
 				{{"id":7,"def":"Block/SetAttribute","settings":{{"Attribute":"color"}},"in":{{"Color":{{"from":[25,"Out"]}}}}}}]}},
 			{2}]}})",
-									  half, -half, Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, tint, "", in));
+									  half, -half, Shaded(GraphEffectOutputNodeShader, tint, "", in));
 		WriteProjectFile(name, graph);
 		return AssetDatabase::LoadAsset(Path(str("project://") + name));
 	};
@@ -3727,12 +3727,12 @@ TEST_F(VisualEffectNodeShaderFixture, NewOutputShadesBothFaces) {
 		GTEST_SKIP() << "no Vulkan device";
 	}
 	const std::string_view facing = R"({"id":30,"def":"Block/Orient"})";
-	Asset* turned = ImportDrawn("Default.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, Guid{}, "", "{}", facing));
+	Asset* turned = ImportDrawn("Default.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, Guid{}, "", "{}", facing));
 	if (!turned) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	Asset* behind = ImportDrawn("DefaultBehind.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, Guid{}));
-	Asset* cube = ImportDrawn("DefaultMesh.sleffect", 1, 0.5f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH, Guid{}));
+	Asset* behind = ImportDrawn("DefaultBehind.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, Guid{}));
+	Asset* cube = ImportDrawn("DefaultMesh.sleffect", 1, 0.5f, "", Shaded(GraphEffectOutputNodeShaderMesh, Guid{}));
 	ASSERT_TRUE(behind && cube);
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
@@ -3757,11 +3757,11 @@ TEST_F(VisualEffectNodeShaderFixture, BackCullingDrawsFront) {
 	for (std::string_view primitive : {"Triangle", "Quad", "Octagon"}) {
 		SCOPED_TRACE(primitive);
 		const str type = std::format(R"("Primitive Type":"{}")", primitive);
-		Asset* turned = ImportDrawn((str(primitive) + "Turned.sleffect").c_str(), 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, front, type, "{}", facing));
+		Asset* turned = ImportDrawn((str(primitive) + "Turned.sleffect").c_str(), 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, front, type, "{}", facing));
 		if (!turned) {
 			GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 		}
-		Asset* behind = ImportDrawn((str(primitive) + "Behind.sleffect").c_str(), 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, front, type));
+		Asset* behind = ImportDrawn((str(primitive) + "Behind.sleffect").c_str(), 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, front, type));
 		ASSERT_NE(behind, nullptr);
 		EXPECT_GT(Footprint(turned), 50u);
 		EXPECT_EQ(Footprint(behind), 0u);
@@ -3780,13 +3780,13 @@ TEST_F(VisualEffectNodeShaderFixture, LitGraphShadesLikeQuad) {
 		{"id":7,"def":"Block/Roughness","in":{"Value":{"value":[0.5]}}},
 		{"id":8,"def":"Block/Metallic"},{"id":9,"def":"Block/Alpha"}]})";
 	const Guid lit = AddGraph("Lit.slshader", NodeShaderText(R"("target":"lit","blend":"opaque","cull":"off")", "", "", stack));
-	const Guid unlit = AddGraph("Unlit.slshader", NodeShaderText(FLAT, "", "", stack));
+	const Guid unlit = AddGraph("Unlit.slshader", NodeShaderText(Flat, "", "", stack));
 	const std::string_view facing = R"({"id":30,"def":"Block/Orient"})";
-	Asset* litParticle = ImportDrawn("LitGraph.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, lit, "", "{}", facing));
+	Asset* litParticle = ImportDrawn("LitGraph.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, lit, "", "{}", facing));
 	if (!litParticle) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	Asset* unlitParticle = ImportDrawn("UnlitGraph.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, unlit, "", "{}", facing));
+	Asset* unlitParticle = ImportDrawn("UnlitGraph.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, unlit, "", "{}", facing));
 	ASSERT_NE(unlitParticle, nullptr);
 
 	MaterialAsset green;
@@ -3829,12 +3829,12 @@ TEST_F(VisualEffectNodeShaderFixture, NodeShaderOutputFogged) {
 		Vec3 expected;
 	};
 	const Case cases[] = {
-		{"Opaque", opaque, green * 0.5f + FOG_COLOR * 0.5f},
+		{"Opaque", opaque, green * 0.5f + FogColor * 0.5f},
 		{"Additive", additive, green * 0.5f},
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
-		Asset* imported = ImportDrawn((str("FoggedGraph") + entry.name + ".sleffect").c_str(), 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, entry.graph));
+		Asset* imported = ImportDrawn((str("FoggedGraph") + entry.name + ".sleffect").c_str(), 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, entry.graph));
 		if (!imported) {
 			GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 		}
@@ -3858,17 +3858,17 @@ TEST_F(VisualEffectNodeShaderFixture, TexturePropertyUpright) {
 	WriteFlipbookSheet(_root / "Sheet.tga");
 	Asset* sheet = AssetDatabase::LoadAsset(Path("project://Sheet.tga"));
 	ASSERT_NE(sheet, nullptr);
-	const Guid sampled = AddGraph("Sampled.slshader", NodeShaderText(FLAT, R"({"id":1,"name":"Sheet","reference":"_Sheet","type":"Texture2D"})",
+	const Guid sampled = AddGraph("Sampled.slshader", NodeShaderText(Flat, R"({"id":1,"name":"Sheet","reference":"_Sheet","type":"Texture2D"})",
 																	 R"({"id":10,"def":"Input/Property","settings":{"property":1}},
 		{"id":11,"def":"Input/SampleTexture2D","in":{"Texture":{"from":[10,"Out"]}}})",
 																	 ColorFrom(11, "RGBA")));
 	const str held = std::format(R"({{"_Sheet":{{"value":"{}"}}}})", sheet->assetId.ToString());
-	Asset* graph = ImportDrawn("SheetGraph.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, sampled, "", held));
+	Asset* graph = ImportDrawn("SheetGraph.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, sampled, "", held));
 	if (!graph) {
 		AssetDatabase::UnloadAsset(sheet);
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	Asset* empty = ImportDrawn("EmptyGraph.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, sampled));
+	Asset* empty = ImportDrawn("EmptyGraph.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, sampled));
 	const str white = R"(,{"id":8,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"value":[1,1,1]}}})";
 	Asset* reference = ImportDrawn("SheetMain.sleffect", 1, 1.0f, white,
 								   Output(9, "Context/OutputParticlePrimitive", R"({"Blend Mode":"Opaque"})",
@@ -3911,16 +3911,16 @@ TEST_F(VisualEffectNodeShaderFixture, KeywordIsVariantOutputsSettingChose) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device";
 	}
-	const Guid keyed = AddGraph("Keyed.slshader", NodeShaderText(FLAT, R"({"id":1,"name":"Use Red","reference":"_USE_RED","type":"BooleanKeyword","default":[0]})",
+	const Guid keyed = AddGraph("Keyed.slshader", NodeShaderText(Flat, R"({"id":1,"name":"Use Red","reference":"_USE_RED","type":"BooleanKeyword","default":[0]})",
 																 R"({"id":11,"def":"Input/Vector3","in":{"X":{"value":[1]}}},
 		{"id":12,"def":"Input/Vector3","in":{"Y":{"value":[1]}}},
 		{"id":10,"def":"Utility/Keyword","settings":{"property":1},"in":{"On":{"from":[11,"Out"]},"Off":{"from":[12,"Out"]}}})",
 																 ColorFrom(10, "Out")));
-	Asset* red = ImportDrawn("Red.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, keyed, R"("Use Red":true)"));
+	Asset* red = ImportDrawn("Red.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, keyed, R"("Use Red":true)"));
 	if (!red) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	Asset* green = ImportDrawn("Green.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, keyed));
+	Asset* green = ImportDrawn("Green.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, keyed));
 	ASSERT_NE(green, nullptr);
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
@@ -3939,12 +3939,12 @@ TEST_F(VisualEffectNodeShaderFixture, NoiseSharesOneHelper) {
 	if (!RenderSystem::IsRenderingAvailable()) {
 		GTEST_SKIP() << "no Vulkan device";
 	}
-	const Guid noisy = AddGraph("Noisy.slshader", NodeShaderText(FLAT, R"({"id":1,"name":"Amount","reference":"_Amount","type":"Float","default":[1]})",
+	const Guid noisy = AddGraph("Noisy.slshader", NodeShaderText(Flat, R"({"id":1,"name":"Amount","reference":"_Amount","type":"Float","default":[1]})",
 																 R"({"id":10,"def":"Input/Property","settings":{"property":1}},
 		{"id":11,"def":"Procedural/GradientNoise"},
 		{"id":12,"def":"Math/Add","in":{"A":{"from":[11,"Out"]},"B":{"from":[10,"Out"]}}})",
 																 ColorFrom(12, "Out")));
-	Asset* plain = ImportDrawn("Plain.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, noisy));
+	Asset* plain = ImportDrawn("Plain.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, noisy));
 	if (!plain) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
@@ -3958,7 +3958,7 @@ TEST_F(VisualEffectNodeShaderFixture, NoiseSharesOneHelper) {
 			{{"id":5,"def":"Block/SetAttribute","settings":{{"Attribute":"position"}},"in":{{"Position":{{"value":[{},{},0.5]}}}}}},
 			{{"id":6,"def":"Block/SetAttribute","settings":{{"Attribute":"size"}},"in":{{"Size":{{"value":[1]}}}}}}]}},
 		{}]}})",
-								  half, -half, Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, noisy, "", R"({"_Amount":{"from":[21,"Out"]}})"));
+								  half, -half, Shaded(GraphEffectOutputNodeShader, noisy, "", R"({"_Amount":{"from":[21,"Out"]}})"));
 	WriteProjectFile("Noisy.sleffect", graph);
 	Asset* imported = AssetDatabase::LoadAsset(Path("project://Noisy.sleffect"));
 	ASSERT_NE(imported, nullptr);
@@ -3976,15 +3976,15 @@ TEST_F(VisualEffectNodeShaderFixture, GraphsVertexStackMovesElementAndShadow) {
 		GTEST_SKIP() << "no Vulkan device";
 	}
 	const str fragment = R"({"id":5,"def":"Context/Fragment","blocks":[{"id":6,"def":"Block/BaseColor","in":{"Value":{"value":[0,1,0]}}},{"id":7,"def":"Block/Alpha"}]})";
-	const Guid still = AddGraph("Still.slshader", NodeShaderText(FLAT, "", "", fragment));
-	const Guid lifted = AddGraph("Lifted.slshader", NodeShaderText(FLAT, "", R"({"id":10,"def":"Input/Position","settings":{"Space":"Object"}},
+	const Guid still = AddGraph("Still.slshader", NodeShaderText(Flat, "", "", fragment));
+	const Guid lifted = AddGraph("Lifted.slshader", NodeShaderText(Flat, "", R"({"id":10,"def":"Input/Position","settings":{"Space":"Object"}},
 		{"id":11,"def":"Math/Add","in":{"A":{"from":[10,"Out"]},"B":{"value":[0,0.5,0]}}})",
 																   str(R"({"id":2,"def":"Context/Vertex","blocks":[{"id":3,"def":"Block/Position","in":{"Value":{"from":[11,"Out"]}}}]},)") + fragment));
-	Asset* stillParticle = ImportDrawn("Still.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, still));
+	Asset* stillParticle = ImportDrawn("Still.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, still));
 	if (!stillParticle) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}
-	Asset* liftedParticle = ImportDrawn("Lifted.sleffect", 1, 1.0f, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, lifted));
+	Asset* liftedParticle = ImportDrawn("Lifted.sleffect", 1, 1.0f, "", Shaded(GraphEffectOutputNodeShader, lifted));
 	ASSERT_NE(liftedParticle, nullptr);
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
@@ -3997,15 +3997,15 @@ TEST_F(VisualEffectNodeShaderFixture, GraphsVertexStackMovesElementAndShadow) {
 	AssetDatabase::UnloadAsset(stillParticle);
 	AssetDatabase::UnloadAsset(liftedParticle);
 
-	const Guid far = AddGraph("Far.slshader", NodeShaderText(FLAT, "", R"({"id":10,"def":"Input/Position","settings":{"Space":"Object"}},
+	const Guid far = AddGraph("Far.slshader", NodeShaderText(Flat, "", R"({"id":10,"def":"Input/Position","settings":{"Space":"Object"}},
 		{"id":11,"def":"Math/Add","in":{"A":{"from":[10,"Out"]},"B":{"value":[0,50,0]}}})",
 															 str(R"({"id":2,"def":"Context/Vertex","blocks":[{"id":3,"def":"Block/Position","in":{"Value":{"from":[11,"Out"]}}}]},)") + fragment));
 	const auto caster = [&](const char* name, const Guid& graph) {
-		return ImportAbove(name, "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, graph, R"("Cast Shadows":true)"));
+		return ImportAbove(name, "", Shaded(GraphEffectOutputNodeShader, graph, R"("Cast Shadows":true)"));
 	};
 	Asset* stillCaster = caster("StillCaster.sleffect", still);
 	Asset* farCaster = caster("FarCaster.sleffect", far);
-	Asset* quiet = ImportAbove("QuietGraph.sleffect", "", Shaded(GRAPH_EFFECT_OUTPUT_NODE_SHADER, still));
+	Asset* quiet = ImportAbove("QuietGraph.sleffect", "", Shaded(GraphEffectOutputNodeShader, still));
 	ASSERT_TRUE(stillCaster && farCaster && quiet);
 	EXPECT_GT(Shadowed(stillCaster), 30u);
 	EXPECT_EQ(Shadowed(quiet), 0u);
@@ -4117,7 +4117,7 @@ TEST_F(VisualEffectStripFixture, StripSurvivesDeadParticle) {
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
-		Asset* imported = ImportStrip((str("Strip") + entry.name + ".sleffect").c_str(), entry.lifetime, StripOutput(GRAPH_EFFECT_OUTPUT_STRIP, R"({"Use Base Color Map":"None"})"));
+		Asset* imported = ImportStrip((str("Strip") + entry.name + ".sleffect").c_str(), entry.lifetime, StripOutput(GraphEffectOutputStrip, R"({"Use Base Color Map":"None"})"));
 		if (!imported) {
 			GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 		}
@@ -4161,7 +4161,7 @@ TEST_F(VisualEffectStripFixture, StripUVFollowsTiling) {
 	};
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
-		Asset* imported = ImportStrip((str("StripUV") + entry.name + ".sleffect").c_str(), "", StripOutput(GRAPH_EFFECT_OUTPUT_STRIP, entry.settings, entry.in));
+		Asset* imported = ImportStrip((str("StripUV") + entry.name + ".sleffect").c_str(), "", StripOutput(GraphEffectOutputStrip, entry.settings, entry.in));
 		if (!imported) {
 			AssetDatabase::UnloadAsset(sheet);
 			GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
@@ -4175,7 +4175,7 @@ TEST_F(VisualEffectStripFixture, StripUVFollowsTiling) {
 		AssetDatabase::UnloadAsset(imported);
 	}
 
-	Asset* swapped = ImportStrip("StripUVSwapped.sleffect", "", StripOutput(GRAPH_EFFECT_OUTPUT_STRIP, R"({"Swap UV":true})", "{" + texture + "}"));
+	Asset* swapped = ImportStrip("StripUVSwapped.sleffect", "", StripOutput(GraphEffectOutputStrip, R"({"Swap UV":true})", "{" + texture + "}"));
 	ASSERT_NE(swapped, nullptr);
 	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
 	Vec2I size{};
@@ -4194,7 +4194,7 @@ TEST_F(VisualEffectStripFixture, NodeShaderStripShadesSegmentsWithGraph) {
 	const std::string_view middle = R"({"id":61,"def":"Math/Subtract","in":{"A":{"from":[20,"particleIndexInStrip"]},"B":{"value":[2,0,0,0]}}},
 		{"id":62,"def":"Math/Sign","in":{"In":{"from":[61,"Out"]}}},
 		{"id":60,"def":"Math/Absolute","in":{"In":{"from":[62,"Out"]}}})";
-	Asset* imported = ImportStrip("StripGraph.sleffect", middle, StripOutput(GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP));
+	Asset* imported = ImportStrip("StripGraph.sleffect", middle, StripOutput(GraphEffectOutputNodeShaderStrip));
 	if (!imported) {
 		GTEST_SKIP() << "import failed (dxcompiler.dll unavailable?)";
 	}

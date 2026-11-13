@@ -47,7 +47,7 @@ namespace {
 TEST(AudioMeterTest, NothingIsMeasuredOrAllocatedUntilAsked) {
 	OfflineMixer mixer;
 	const OfflineBus bus = mixer.Bus(1);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.5f, 0.5f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.5f, 0.5f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, bus)));
@@ -63,7 +63,7 @@ TEST(AudioMeterTest, NothingIsMeasuredOrAllocatedUntilAsked) {
 TEST(AudioMeterTest, MeterReadsRmsAndPeak) {
 	OfflineMixer mixer;
 	const OfflineBus bus = mixer.Bus(1, {}, 0.5f);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.8f, 0.4f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.8f, 0.4f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, bus)));
@@ -82,7 +82,7 @@ TEST(AudioMeterTest, AverageSettlesOverVuMetersIntegrationTime) {
 	const OfflineBus bus = mixer.Bus(1);
 	ASSERT_TRUE(mixer.Get().EnableMetering(true));
 	mixer.Render(BLOCK);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.5f, 0.5f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.5f, 0.5f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, bus)));
@@ -100,7 +100,7 @@ TEST(AudioMeterTest, AverageSettlesOverVuMetersIntegrationTime) {
 TEST(AudioMeterTest, PeakFallsOnSkippedBus) {
 	OfflineMixer mixer;
 	const OfflineBus bus = mixer.Bus(1);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.5f, 0.5f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.5f, 0.5f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, bus)));
@@ -124,7 +124,7 @@ TEST(AudioMeterTest, PeakFallsOnSkippedBus) {
 TEST(AudioMeterTest, TurnedOffMeterKeepsLastReading) {
 	OfflineMixer mixer;
 	const OfflineBus bus = mixer.Bus(1);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.5f, 0.5f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.5f, 0.5f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, bus)));
@@ -142,7 +142,7 @@ TEST(AudioMeterTest, TurnedOffMeterKeepsLastReading) {
 TEST(AudioMeterTest, BusNewToSlotStartsAtSilence) {
 	OfflineMixer mixer;
 	const OfflineBus first = mixer.Bus(1);
-	ClipBlock clip(MakePcm(Sine(RATE, 0.5f, 0.5f), 2, RATE));
+	ClipBlock clip(MakePCM(Sine(RATE, 0.5f, 0.5f), 2, RATE));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(play, first)));
@@ -173,8 +173,8 @@ TEST(AudioMeterTest, FaderPointReadsFaderOutput) {
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Row(sender, 0, AudioBusRowKind::Send, target, 1.0f, nullptr, false, false, 1)));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Row(sender, 1, AudioBusRowKind::Fader)));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::RowCount(sender, 2)));
-	ClipBlock own(MakePcm(Sine(RATE, 0.8f, 0.8f), 2, RATE));
-	ClipBlock sent(MakePcm(Sine(RATE, 0.3f, 0.3f), 2, RATE));
+	ClipBlock own(MakePCM(Sine(RATE, 0.8f, 0.8f), 2, RATE));
+	ClipBlock sent(MakePCM(Sine(RATE, 0.3f, 0.3f), 2, RATE));
 	AudioCommand playOwn = mixer.Play(0, own.Get());
 	playOwn.loop = true;
 	AudioCommand playSent = mixer.Play(1, sent.Get());

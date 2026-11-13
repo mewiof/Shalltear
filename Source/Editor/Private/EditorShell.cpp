@@ -59,7 +59,7 @@ namespace Shalltear {
 
 		constexpr f32 STATUS_REFRESH_SECONDS = 0.25f;
 
-		constexpr std::string_view GRAPHICS_API_LABEL = "Vulkan";
+		constexpr std::string_view GraphicsAPILabel = "Vulkan";
 
 		Color CompileGlyphColor(CompileState state, u32 warningCount) {
 			switch (state) {
@@ -470,15 +470,15 @@ namespace Shalltear {
 		context.SetStyle(_statusRight, readoutStyle);
 		context.SetText(_statusRight, font, EditorTheme::GetMetric(MetricToken::FontBody), TextDim(), "");
 
-		UI::ElementHandle graphicsApi = context.CreateElement();
-		context.AppendChild(statusBar, graphicsApi);
-		context.SetStyle(graphicsApi, readoutStyle);
-		context.SetText(graphicsApi, font, EditorTheme::GetMetric(MetricToken::FontBody), TextDim(), GRAPHICS_API_LABEL);
-		str graphicsTooltip = std::format("Graphics API: {}", GRAPHICS_API_LABEL);
+		UI::ElementHandle graphicsAPI = context.CreateElement();
+		context.AppendChild(statusBar, graphicsAPI);
+		context.SetStyle(graphicsAPI, readoutStyle);
+		context.SetText(graphicsAPI, font, EditorTheme::GetMetric(MetricToken::FontBody), TextDim(), GraphicsAPILabel);
+		str graphicsTooltip = std::format("Graphics API: {}", GraphicsAPILabel);
 		if (RHI::Device* device = RenderSystem::GetDevice()) {
 			graphicsTooltip += " on " + device->GetSelectedAdapter().name;
 		}
-		context.SetTooltip(graphicsApi, graphicsTooltip);
+		context.SetTooltip(graphicsAPI, graphicsTooltip);
 	}
 
 	void EditorShell::OpenAboutPopup(UI::Context& context) {

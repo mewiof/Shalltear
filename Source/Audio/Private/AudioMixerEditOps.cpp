@@ -19,7 +19,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 		bool HasGroup(const AudioMixer& mixer, std::string_view id) { return FindGroup(mixer, id) >= 0; }
 
 		str FreeId(const AudioMixer& mixer, std::string_view name) {
-			str base(name.empty() ? NEW_GROUP_NAME : name);
+			str base(name.empty() ? NewGroupName : name);
 			std::replace(base.begin(), base.end(), '/', '_');
 			if (!HasGroup(mixer, base)) {
 				return base;
@@ -158,7 +158,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 		}
 		AudioMixer::Group group;
 		group.id = FreeId(mixer, name);
-		group.name = str(name.empty() ? NEW_GROUP_NAME : name);
+		group.name = str(name.empty() ? NewGroupName : name);
 		group.parent = str(parent);
 		group.clock = mixer.groups[static_cast<size_t>(above)].clock;
 		group.followTimeScale = mixer.groups[static_cast<size_t>(above)].followTimeScale;
@@ -854,7 +854,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 			return -1;
 		}
 		AudioMixer::Snapshot copy = mixer.snapshots[from];
-		const str name = FreeSnapshotName(mixer, std::format("{}{}", copy.name, COPY_SUFFIX), ~0u);
+		const str name = FreeSnapshotName(mixer, std::format("{}{}", copy.name, CopySuffix), ~0u);
 		copy.id = FreeSnapshotId(mixer, name);
 		copy.name = name;
 		mixer.snapshots.push_back(std::move(copy));
@@ -925,7 +925,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 			if (!mixer.views.empty()) {
 				return;
 			}
-			mixer.views.push_back(str(DEFAULT_VIEW_NAME));
+			mixer.views.push_back(str(DefaultViewName));
 			for (AudioMixer::Group& group : mixer.groups) {
 				group.shownIn = 1;
 			}
@@ -949,7 +949,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 
 	std::string_view ViewName(const AudioMixer& mixer, u32 view) {
 		if (mixer.views.empty()) {
-			return view == 0 ? DEFAULT_VIEW_NAME : std::string_view();
+			return view == 0 ? DefaultViewName : std::string_view();
 		}
 		return view < mixer.views.size() ? std::string_view(mixer.views[view]) : std::string_view();
 	}
@@ -968,7 +968,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 		}
 		OwnViews(mixer);
 		const u32 copy = static_cast<u32>(mixer.views.size());
-		mixer.views.push_back(mixer.views[from] + str(COPY_SUFFIX));
+		mixer.views.push_back(mixer.views[from] + str(CopySuffix));
 		for (AudioMixer::Group& group : mixer.groups) {
 			group.shownIn |= ((group.shownIn >> from) & 1u) << copy;
 		}
@@ -1237,7 +1237,7 @@ namespace Shalltear::AudioImpl::AudioMixerEditOps {
 			return {};
 		}
 		AudioMixer::ExposedParameter exposed;
-		exposed.name = FreeExposedName(mixer, NEW_EXPOSED_NAME, -1);
+		exposed.name = FreeExposedName(mixer, NewExposedName, -1);
 		exposed.group = ref.group;
 		exposed.parameter = ref.parameter;
 		exposed.target = ref.target;

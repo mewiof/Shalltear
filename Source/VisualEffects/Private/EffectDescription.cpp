@@ -10,18 +10,18 @@ namespace Shalltear::VisualEffectsImpl {
 
 	namespace {
 
-		constexpr std::string_view TIME_INPUT = "TimeParameters";
-		constexpr std::string_view SMOOTH_DELTA_INPUT = "SmoothDeltaTime";
-		constexpr std::string_view RANDOM_INPUTS[] = {"RandomKey/Particle", "RandomKey/Effect"};
-		constexpr std::string_view CONSTANT_RANDOM_INPUTS[] = {"RandomKey/ParticleConstant", "RandomKey/EffectConstant"};
-		constexpr std::string_view PARTICLE_RANDOM_INPUTS[] = {"RandomKey/Particle", "RandomKey/ParticleConstant", "RandomKey/Effect",
-															   "RandomKey/EffectConstant"};
-		constexpr std::string_view ROW_INPUTS[] = {"Space/Foreign/X", "Space/Foreign/Y", "Space/Foreign/Z"};
-		constexpr std::string_view ATTRIBUTE_PREFIX = "Attribute/";
-		constexpr std::string_view SOURCE_PREFIX = "SourceAttribute/";
-		constexpr std::string_view PARTICLE_ID = "particleId";
-		constexpr std::string_view SPAWN_INDEX = "spawnIndex";
-		constexpr std::string_view SPAWN_COUNT = "spawnCount";
+		constexpr std::string_view TimeInput = "TimeParameters";
+		constexpr std::string_view SmoothDeltaInput = "SmoothDeltaTime";
+		constexpr std::string_view RandomInputs[] = {"RandomKey/Particle", "RandomKey/Effect"};
+		constexpr std::string_view ConstantRandomInputs[] = {"RandomKey/ParticleConstant", "RandomKey/EffectConstant"};
+		constexpr std::string_view ParticleRandomInputs[] = {"RandomKey/Particle", "RandomKey/ParticleConstant", "RandomKey/Effect",
+															 "RandomKey/EffectConstant"};
+		constexpr std::string_view RowInputs[] = {"Space/Foreign/X", "Space/Foreign/Y", "Space/Foreign/Z"};
+		constexpr std::string_view AttributePrefix = "Attribute/";
+		constexpr std::string_view SourcePrefix = "SourceAttribute/";
+		constexpr std::string_view ParticleId = "particleId";
+		constexpr std::string_view SpawnIndex = "spawnIndex";
+		constexpr std::string_view SpawnCount = "spawnCount";
 
 		void WriteStrings(CookWriter& out, const Vector<str>& strings) {
 			out.Write(static_cast<u32>(strings.size()));
@@ -134,12 +134,12 @@ namespace Shalltear::VisualEffectsImpl {
 		}
 
 		bool EffectSlotOf(const EffectDescription& description, std::string_view name, u32& slot, u32& width) {
-			if (name == TIME_INPUT) {
+			if (name == TimeInput) {
 				slot = EFFECT_SLOT_TIME;
 				width = 4;
 				return true;
 			}
-			if (name == SMOOTH_DELTA_INPUT) {
+			if (name == SmoothDeltaInput) {
 				slot = EFFECT_SLOT_SMOOTH_DELTA;
 				width = 1;
 				return true;
@@ -155,7 +155,7 @@ namespace Shalltear::VisualEffectsImpl {
 			for (u32 i = 0; i < description.meshes.size(); ++i) {
 				const str& binding = description.meshes[i].binding;
 				for (const bool indices : {false, true}) {
-					if (name == binding + str(indices ? EFFECT_MESH_INDEX_COUNT_INPUT : EFFECT_MESH_VERTEX_COUNT_INPUT)) {
+					if (name == binding + str(indices ? EffectMeshIndexCountInput : EffectMeshVertexCountInput)) {
 						slot = EffectMeshSlot(description, i, indices);
 						width = 1;
 						found = true;
@@ -175,23 +175,23 @@ namespace Shalltear::VisualEffectsImpl {
 				width = wide;
 				return true;
 			};
-			for (u32 i = 0; i < std::size(PARTICLE_RANDOM_INPUTS); ++i) {
-				if (name == PARTICLE_RANDOM_INPUTS[i]) {
+			for (u32 i = 0; i < std::size(ParticleRandomInputs); ++i) {
+				if (name == ParticleRandomInputs[i]) {
 					return at(EFFECT_PARTICLE_SLOT_RANDOM + i, 1);
 				}
 			}
-			for (u32 i = 0; i < std::size(ROW_INPUTS); ++i) {
-				if (name == ROW_INPUTS[i]) {
+			for (u32 i = 0; i < std::size(RowInputs); ++i) {
+				if (name == RowInputs[i]) {
 					return at(EFFECT_PARTICLE_SLOT_ROWS + i, 4);
 				}
 			}
-			if (name.starts_with(ATTRIBUTE_PREFIX)) {
-				const std::string_view attribute = name.substr(ATTRIBUTE_PREFIX.size());
-				if (attribute == PARTICLE_ID) {
+			if (name.starts_with(AttributePrefix)) {
+				const std::string_view attribute = name.substr(AttributePrefix.size());
+				if (attribute == ParticleId) {
 					return at(EFFECT_PARTICLE_SLOT_ID, 1);
 				}
 				if (initialize) {
-					return attribute == SPAWN_INDEX && at(EFFECT_PARTICLE_SLOT_SPAWN_INDEX, 1);
+					return attribute == SpawnIndex && at(EFFECT_PARTICLE_SLOT_SPAWN_INDEX, 1);
 				}
 				for (u32 i = 0; i < system.stored.size(); ++i) {
 					if (system.stored[i].attribute == attribute) {
@@ -200,9 +200,9 @@ namespace Shalltear::VisualEffectsImpl {
 				}
 				return false;
 			}
-			if (initialize && name.starts_with(SOURCE_PREFIX)) {
-				const std::string_view attribute = name.substr(SOURCE_PREFIX.size());
-				if (attribute == SPAWN_COUNT) {
+			if (initialize && name.starts_with(SourcePrefix)) {
+				const std::string_view attribute = name.substr(SourcePrefix.size());
+				if (attribute == SpawnCount) {
 					return at(EFFECT_PARTICLE_SLOT_SPAWN_COUNT, 1);
 				}
 				for (u32 i = 0; i < system.source.size(); ++i) {
@@ -214,7 +214,7 @@ namespace Shalltear::VisualEffectsImpl {
 			return false;
 		}
 
-		bool CpuSystemFits(const EffectSystem& system, str& error) {
+		bool CPUSystemFits(const EffectSystem& system, str& error) {
 			if (!system.cpu) {
 				if (!system.initializeProgram.IsEmpty() || !system.updateProgram.IsEmpty() || !system.initializeOutputEvents.empty() ||
 					!system.updateOutputEvents.empty() || !system.initializeCarried.empty() || !system.updateCarried.empty() ||
@@ -289,10 +289,10 @@ namespace Shalltear::VisualEffectsImpl {
 					u32 slot = 0;
 					u32 width = 0;
 					bool found = true;
-					if (std::find(std::begin(RANDOM_INPUTS), std::end(RANDOM_INPUTS), input.name) != std::end(RANDOM_INPUTS)) {
+					if (std::find(std::begin(RandomInputs), std::end(RandomInputs), input.name) != std::end(RandomInputs)) {
 						slot = EFFECT_SLOT_RANDOM;
 						width = 1;
-					} else if (std::find(std::begin(CONSTANT_RANDOM_INPUTS), std::end(CONSTANT_RANDOM_INPUTS), input.name) != std::end(CONSTANT_RANDOM_INPUTS)) {
+					} else if (std::find(std::begin(ConstantRandomInputs), std::end(ConstantRandomInputs), input.name) != std::end(ConstantRandomInputs)) {
 						slot = EFFECT_SLOT_CONSTANT_RANDOM;
 						width = 1;
 					} else {
@@ -381,7 +381,7 @@ namespace Shalltear::VisualEffectsImpl {
 				if (system.capacity == 0 || system.attributeCount == 0 || !kernels) {
 					return refuse("a system uses a kernel the asset doesn't have, or is empty");
 				}
-				if (!CpuSystemFits(system, error)) {
+				if (!CPUSystemFits(system, error)) {
 					return false;
 				}
 				if (system.strips > 0 && system.capacity % system.strips != 0) {

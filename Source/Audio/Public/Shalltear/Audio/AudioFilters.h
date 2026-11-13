@@ -170,10 +170,10 @@ namespace Shalltear {
 		void SetReverbLevel(f32 reverbLevel) { _reverbLevel = reverbLevel; }
 		f32 GetReverbDelay() const { return _reverbDelay; }
 		void SetReverbDelay(f32 reverbDelay) { _reverbDelay = reverbDelay; }
-		f32 GetHfReference() const { return _hfReference; }
-		void SetHfReference(f32 hfReference) { _hfReference = hfReference; }
-		f32 GetLfReference() const { return _lfReference; }
-		void SetLfReference(f32 lfReference) { _lfReference = lfReference; }
+		f32 GetHFReference() const { return _hfReference; }
+		void SetHFReference(f32 hfReference) { _hfReference = hfReference; }
+		f32 GetLFReference() const { return _lfReference; }
+		void SetLFReference(f32 lfReference) { _lfReference = lfReference; }
 		f32 GetDiffusion() const { return _diffusion; }
 		void SetDiffusion(f32 diffusion) { _diffusion = diffusion; }
 		f32 GetDensity() const { return _density; }

@@ -7,12 +7,12 @@
 
 namespace Shalltear::GraphEffectBlocks {
 
-	inline constexpr std::string_view POSITION_SHAPES[] = {"Sphere", "OrientedBox", "Cone", "Torus", "Circle", "Line", "SignedDistanceField"};
-	inline constexpr std::string_view POSITION_SHAPE_NAMES[] = {"Sphere", "Box", "Cone / Cylinder", "Torus", "Circle", "Line", "Signed Distance Field"};
-	inline constexpr std::string_view POSITION_MODES[] = {"Surface", "Volume", "ThicknessAbsolute", "ThicknessRelative"};
-	inline constexpr std::string_view SPAWN_MODES[] = {"Random", "Custom"};
-	inline constexpr std::string_view HEIGHT_MODES[] = {"Base", "Volume"};
-	inline constexpr std::string_view ORIENTATIONS[] = {"None", "Direction", "Axes", "DirectionAndAxes"};
+	inline constexpr std::string_view PositionShapes[] = {"Sphere", "OrientedBox", "Cone", "Torus", "Circle", "Line", "SignedDistanceField"};
+	inline constexpr std::string_view PositionShapeNames[] = {"Sphere", "Box", "Cone / Cylinder", "Torus", "Circle", "Line", "Signed Distance Field"};
+	inline constexpr std::string_view PositionModes[] = {"Surface", "Volume", "ThicknessAbsolute", "ThicknessRelative"};
+	inline constexpr std::string_view SpawnModes[] = {"Random", "Custom"};
+	inline constexpr std::string_view HeightModes[] = {"Base", "Volume"};
+	inline constexpr std::string_view Orientations[] = {"None", "Direction", "Axes", "DirectionAndAxes"};
 
 	enum PositionShape : u32 { Sphere = 0,
 							   OrientedBox,
@@ -22,20 +22,20 @@ namespace Shalltear::GraphEffectBlocks {
 							   Line,
 							   PositionSDF };
 
-	inline constexpr u32 ALL_POSITION_SHAPES = (1u << std::size(POSITION_SHAPES)) - 1u;
+	inline constexpr u32 ALL_POSITION_SHAPES = (1u << std::size(PositionShapes)) - 1u;
 	inline constexpr u32 ALL_BUT_LINE = ALL_POSITION_SHAPES & ~(1u << Line);
 	inline constexpr u32 ALL_BUT_BOX = ALL_POSITION_SHAPES & ~(1u << OrientedBox);
 	inline constexpr u32 DIRECTION_OPTIONS = (1u << 1) | (1u << 3);
 	inline constexpr u32 AXES_OPTIONS = (1u << 2) | (1u << 3);
-	inline constexpr GraphSettingDefinition POSITION_SHAPE_SETTINGS[] = {
-		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = POSITION_SHAPES, .inGraph = true},
-		{.key = "Position Mode", .kind = GraphSettingKind::Choice, .options = POSITION_MODES, .inGraph = true, .whenSetting = 0, .whenOptions = ALL_BUT_LINE},
-		{.key = "Spawn Mode", .kind = GraphSettingKind::Choice, .options = SPAWN_MODES, .inGraph = true, .whenSetting = 0, .whenOptions = ALL_BUT_BOX},
-		{.key = "Height Mode", .kind = GraphSettingKind::Choice, .options = HEIGHT_MODES, .defaultIndex = 1, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << Cone},
-		{.key = "Apply Orientation", .kind = GraphSettingKind::Choice, .options = ORIENTATIONS, .defaultIndex = 1},
-		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS},
-		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .whenSetting = 4, .whenOptions = DIRECTION_OPTIONS},
-		{.key = "Composition Axes", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .whenSetting = 4, .whenOptions = AXES_OPTIONS},
+	inline constexpr GraphSettingDefinition PositionShapeSettings[] = {
+		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = PositionShapes, .inGraph = true},
+		{.key = "Position Mode", .kind = GraphSettingKind::Choice, .options = PositionModes, .inGraph = true, .whenSetting = 0, .whenOptions = ALL_BUT_LINE},
+		{.key = "Spawn Mode", .kind = GraphSettingKind::Choice, .options = SpawnModes, .inGraph = true, .whenSetting = 0, .whenOptions = ALL_BUT_BOX},
+		{.key = "Height Mode", .kind = GraphSettingKind::Choice, .options = HeightModes, .defaultIndex = 1, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << Cone},
+		{.key = "Apply Orientation", .kind = GraphSettingKind::Choice, .options = Orientations, .defaultIndex = 1},
+		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions},
+		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .whenSetting = 4, .whenOptions = DIRECTION_OPTIONS},
+		{.key = "Composition Axes", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .whenSetting = 4, .whenOptions = AXES_OPTIONS},
 		{.key = "Kill Outliers", .kind = GraphSettingKind::Toggle, .whenSetting = 0, .whenOptions = 1u << PositionSDF},
 		{.key = "Projection Steps", .kind = GraphSettingKind::Number, .defaultValue = {2.0f}, .whenSetting = 0, .whenOptions = 1u << PositionSDF},
 	};
@@ -52,13 +52,13 @@ namespace Shalltear::GraphEffectBlocks {
 
 	inline constexpr u32 MAX_PROJECTION_STEPS = 32;
 
-	inline constexpr std::string_view COLLISION_SHAPES[] = {"Sphere", "OrientedBox", "Cone", "Plane", "SignedDistanceField"};
-	inline constexpr std::string_view COLLISION_SHAPE_NAMES[] = {"Sphere", "Box", "Cone / Cylinder", "Plane", "Signed Distance Field"};
-	inline constexpr std::string_view COLLISION_MODES[] = {"Solid", "Inverted"};
-	inline constexpr std::string_view RADIUS_MODES[] = {"None", "FromSize", "Custom"};
-	inline constexpr std::string_view COLLISION_ATTRIBUTES[] = {"NoWrite", "WritePunctualContactOnly", "WriteAlways"};
-	inline constexpr std::string_view BEHAVIORS[] = {"None", "Collision", "Kill"};
-	inline constexpr std::string_view BEHAVIOR_NAMES[] = {"Trigger", "Collision", "Kill"};
+	inline constexpr std::string_view CollisionShapes[] = {"Sphere", "OrientedBox", "Cone", "Plane", "SignedDistanceField"};
+	inline constexpr std::string_view CollisionShapeNames[] = {"Sphere", "Box", "Cone / Cylinder", "Plane", "Signed Distance Field"};
+	inline constexpr std::string_view CollisionModes[] = {"Solid", "Inverted"};
+	inline constexpr std::string_view RadiusModes[] = {"None", "FromSize", "Custom"};
+	inline constexpr std::string_view CollisionAttributes[] = {"NoWrite", "WritePunctualContactOnly", "WriteAlways"};
+	inline constexpr std::string_view Behaviors[] = {"None", "Collision", "Kill"};
+	inline constexpr std::string_view BehaviorNames[] = {"Trigger", "Collision", "Kill"};
 
 	enum CollisionShape : u32 { CollideSphere = 0,
 								CollideBox,
@@ -69,13 +69,13 @@ namespace Shalltear::GraphEffectBlocks {
 								   BehaviorCollision,
 								   BehaviorKill };
 
-	inline constexpr GraphSettingDefinition COLLISION_SHAPE_SETTINGS[] = {
-		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = COLLISION_SHAPES, .defaultIndex = CollidePlane, .inGraph = true},
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = COLLISION_MODES, .inGraph = true},
-		{.key = "Radius Mode", .kind = GraphSettingKind::Choice, .options = RADIUS_MODES, .inGraph = true},
-		{.key = "Collision Attributes", .kind = GraphSettingKind::Choice, .options = COLLISION_ATTRIBUTES, .inGraph = true},
+	inline constexpr GraphSettingDefinition CollisionShapeSettings[] = {
+		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = CollisionShapes, .defaultIndex = CollidePlane, .inGraph = true},
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = CollisionModes, .inGraph = true},
+		{.key = "Radius Mode", .kind = GraphSettingKind::Choice, .options = RadiusModes, .inGraph = true},
+		{.key = "Collision Attributes", .kind = GraphSettingKind::Choice, .options = CollisionAttributes, .inGraph = true},
 		{.key = "Rough Surface", .kind = GraphSettingKind::Toggle, .inGraph = true, .whenSetting = 5, .whenOptions = 1u << BehaviorCollision},
-		{.key = "Behavior", .kind = GraphSettingKind::Choice, .options = BEHAVIORS, .defaultIndex = BehaviorCollision},
+		{.key = "Behavior", .kind = GraphSettingKind::Choice, .options = Behaviors, .defaultIndex = BehaviorCollision},
 		{.key = "Write Rough Normal", .kind = GraphSettingKind::Toggle, .defaultIndex = 1, .whenSetting = 4, .whenOptions = 1u << 1},
 		{.key = "Override Bounce Threshold", .kind = GraphSettingKind::Toggle, .whenSetting = 5, .whenOptions = 1u << BehaviorCollision},
 	};
@@ -88,14 +88,14 @@ namespace Shalltear::GraphEffectBlocks {
 									   WriteRoughNormalKey,
 									   OverrideBounceThresholdKey };
 
-	inline constexpr std::string_view SURFACE_THICKNESSES[] = {"Infinite", "Custom"};
+	inline constexpr std::string_view SurfaceThicknesses[] = {"Infinite", "Custom"};
 
-	inline constexpr GraphSettingDefinition COLLISION_DEPTH_SETTINGS[] = {
-		{.key = "Surface Thickness", .kind = GraphSettingKind::Choice, .options = SURFACE_THICKNESSES, .inGraph = true},
-		{.key = "Radius Mode", .kind = GraphSettingKind::Choice, .options = RADIUS_MODES, .inGraph = true},
-		{.key = "Collision Attributes", .kind = GraphSettingKind::Choice, .options = COLLISION_ATTRIBUTES, .inGraph = true},
+	inline constexpr GraphSettingDefinition CollisionDepthSettings[] = {
+		{.key = "Surface Thickness", .kind = GraphSettingKind::Choice, .options = SurfaceThicknesses, .inGraph = true},
+		{.key = "Radius Mode", .kind = GraphSettingKind::Choice, .options = RadiusModes, .inGraph = true},
+		{.key = "Collision Attributes", .kind = GraphSettingKind::Choice, .options = CollisionAttributes, .inGraph = true},
 		{.key = "Rough Surface", .kind = GraphSettingKind::Toggle, .inGraph = true, .whenSetting = 4, .whenOptions = 1u << BehaviorCollision},
-		{.key = "Behavior", .kind = GraphSettingKind::Choice, .options = BEHAVIORS, .defaultIndex = BehaviorCollision},
+		{.key = "Behavior", .kind = GraphSettingKind::Choice, .options = Behaviors, .defaultIndex = BehaviorCollision},
 		{.key = "Write Rough Normal", .kind = GraphSettingKind::Toggle, .defaultIndex = 1, .whenSetting = 3, .whenOptions = 1u << 1},
 		{.key = "Override Bounce Threshold", .kind = GraphSettingKind::Toggle, .whenSetting = 4, .whenOptions = 1u << BehaviorCollision},
 	};
@@ -107,8 +107,8 @@ namespace Shalltear::GraphEffectBlocks {
 									   DepthWriteRoughNormalKey,
 									   DepthOverrideBounceThresholdKey };
 
-	inline constexpr std::string_view DEPTH_POSITION_MODES[] = {"Random", "Sequential", "Custom"};
-	inline constexpr std::string_view DEPTH_CULL_MODES[] = {"None", "Far Plane", "Range"};
+	inline constexpr std::string_view DepthPositionModes[] = {"Random", "Sequential", "Custom"};
+	inline constexpr std::string_view DepthCullModes[] = {"None", "Far Plane", "Range"};
 	enum DepthPositionMode : u32 { DepthRandom = 0,
 								   DepthSequential,
 								   DepthCustom };
@@ -116,34 +116,34 @@ namespace Shalltear::GraphEffectBlocks {
 							   DepthCullFarPlane,
 							   DepthCullRange };
 
-	inline constexpr GraphSettingDefinition POSITION_DEPTH_SETTINGS[] = {
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = DEPTH_POSITION_MODES, .inGraph = true},
-		{.key = "Cull Mode", .kind = GraphSettingKind::Choice, .options = DEPTH_CULL_MODES, .inGraph = true},
-		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS},
+	inline constexpr GraphSettingDefinition PositionDepthSettings[] = {
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = DepthPositionModes, .inGraph = true},
+		{.key = "Cull Mode", .kind = GraphSettingKind::Choice, .options = DepthCullModes, .inGraph = true},
+		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions},
 	};
 	enum PositionDepthSetting : u32 { DepthPositionModeKey = 0,
 									  DepthCullModeKey,
 									  DepthCompositionKey };
 
-	inline constexpr std::string_view FORCE_MODES[] = {"Absolute", "Relative"};
+	inline constexpr std::string_view ForceModes[] = {"Absolute", "Relative"};
 
-	inline constexpr GraphSettingDefinition FORCE_SETTINGS[] = {{.key = "Mode", .kind = GraphSettingKind::Choice, .options = FORCE_MODES, .inGraph = true}};
-	inline constexpr GraphPortDefinition FORCE_INPUTS[] = {
+	inline constexpr GraphSettingDefinition ForceSettings[] = {{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ForceModes, .inGraph = true}};
+	inline constexpr GraphPortDefinition ForceInputs[] = {
 		{.name = "Force", .type = GraphPortType::Float3, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 0, .whenOptions = 1u << 0, .space = GraphPortSpace::Vector},
 		{.name = "Velocity", .type = GraphPortType::Float3, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 0, .whenOptions = 1u << 1, .space = GraphPortSpace::Vector},
 		{.name = "Drag", .type = GraphPortType::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 0, .whenOptions = 1u << 1},
 	};
-	inline constexpr GraphPortDefinition GRAVITY_INPUTS[] = {
+	inline constexpr GraphPortDefinition GravityInputs[] = {
 		{.name = "Force", .type = GraphPortType::Float3, .defaultValue = {0.0f, -9.81f, 0.0f, 0.0f}, .space = GraphPortSpace::Vector}};
 
-	inline constexpr GraphSettingDefinition LINEAR_DRAG_SETTINGS[] = {{.key = "Use Particle Size", .kind = GraphSettingKind::Toggle, .inGraph = true}};
-	inline constexpr GraphPortDefinition LINEAR_DRAG_INPUTS[] = {{.name = "Drag Coefficient", .type = GraphPortType::Float, .defaultValue = {0.5f, 0.0f, 0.0f, 0.0f}}};
+	inline constexpr GraphSettingDefinition LinearDragSettings[] = {{.key = "Use Particle Size", .kind = GraphSettingKind::Toggle, .inGraph = true}};
+	inline constexpr GraphPortDefinition LinearDragInputs[] = {{.name = "Drag Coefficient", .type = GraphPortType::Float, .defaultValue = {0.5f, 0.0f, 0.0f, 0.0f}}};
 
-	inline constexpr GraphSettingDefinition TURBULENCE_SETTINGS[] = {
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = FORCE_MODES, .defaultIndex = 1, .inGraph = true},
-		{.key = "Noise Type", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_NOISE_TYPES, .inGraph = true},
+	inline constexpr GraphSettingDefinition TurbulenceSettings[] = {
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ForceModes, .defaultIndex = 1, .inGraph = true},
+		{.key = "Noise Type", .kind = GraphSettingKind::Choice, .options = GraphEffectNoiseTypes, .inGraph = true},
 	};
-	inline constexpr GraphPortDefinition TURBULENCE_INPUTS[] = {
+	inline constexpr GraphPortDefinition TurbulenceInputs[] = {
 		{.name = "Position", .type = GraphPortType::Float3, .label = "Field Position", .space = GraphPortSpace::Matrix},
 		{.name = "Angles", .type = GraphPortType::Float3, .label = "Field Angles"},
 		{.name = "Scale", .type = GraphPortType::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}, .label = "Field Scale"},
@@ -155,7 +155,7 @@ namespace Shalltear::GraphEffectBlocks {
 		{.name = "Lacunarity", .type = GraphPortType::Float, .defaultValue = {2.0f, 0.0f, 0.0f, 0.0f}},
 	};
 
-	inline constexpr GraphPortDefinition CONFORM_TO_SPHERE_INPUTS[] = {
+	inline constexpr GraphPortDefinition ConformToSphereInputs[] = {
 		{.name = "Center", .type = GraphPortType::Float3, .space = GraphPortSpace::Position},
 		{.name = "Radius", .type = GraphPortType::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}},
 		{.name = "Attraction Speed", .type = GraphPortType::Float, .defaultValue = {5.0f, 0.0f, 0.0f, 0.0f}},
@@ -164,19 +164,19 @@ namespace Shalltear::GraphEffectBlocks {
 		{.name = "Stick Force", .type = GraphPortType::Float, .defaultValue = {50.0f, 0.0f, 0.0f, 0.0f}},
 	};
 
-	inline constexpr GraphPortDefinition VELOCITY_OUTPUT[] = {{.name = "velocity", .type = GraphPortType::Float3}};
+	inline constexpr GraphPortDefinition VelocityOutput[] = {{.name = "velocity", .type = GraphPortType::Float3}};
 
-	inline constexpr GraphPortDefinition FIELD_TRANSFORM_INPUTS[] = {
+	inline constexpr GraphPortDefinition FieldTransformInputs[] = {
 		{.name = "Center", .type = GraphPortType::Float3, .label = "Field Center", .space = GraphPortSpace::Matrix},
 		{.name = "Angles", .type = GraphPortType::Float3, .label = "Field Angles"},
 		{.name = "Size", .type = GraphPortType::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}, .label = "Field Size"},
 	};
 
-	inline constexpr std::string_view DATA_ENCODINGS[] = {"UnsignedNormalized", "Signed"};
+	inline constexpr std::string_view DataEncodings[] = {"UnsignedNormalized", "Signed"};
 
-	inline constexpr GraphSettingDefinition VECTOR_FIELD_SETTINGS[] = {
-		{.key = "Data Encoding", .kind = GraphSettingKind::Choice, .options = DATA_ENCODINGS, .inGraph = true},
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = FORCE_MODES, .defaultIndex = 1, .inGraph = true},
+	inline constexpr GraphSettingDefinition VectorFieldSettings[] = {
+		{.key = "Data Encoding", .kind = GraphSettingKind::Choice, .options = DataEncodings, .inGraph = true},
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ForceModes, .defaultIndex = 1, .inGraph = true},
 		{.key = "Closed Field", .kind = GraphSettingKind::Toggle},
 		{.key = "Conserve Magnitude", .kind = GraphSettingKind::Toggle},
 	};
@@ -184,27 +184,27 @@ namespace Shalltear::GraphEffectBlocks {
 									VectorFieldModeKey,
 									ClosedFieldKey,
 									ConserveMagnitudeKey };
-	inline constexpr GraphPortDefinition VECTOR_FIELD_INPUTS[] = {
+	inline constexpr GraphPortDefinition VectorFieldInputs[] = {
 		{.name = "Vector Field", .type = GraphPortType::Texture3D},
-		FIELD_TRANSFORM_INPUTS[0],
-		FIELD_TRANSFORM_INPUTS[1],
-		FIELD_TRANSFORM_INPUTS[2],
+		FieldTransformInputs[0],
+		FieldTransformInputs[1],
+		FieldTransformInputs[2],
 		{.name = "Intensity", .type = GraphPortType::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}},
 		{.name = "Drag", .type = GraphPortType::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 1, .whenOptions = 1u << 1},
 	};
 
-	inline constexpr GraphPortDefinition CONFORM_TO_SDF_INPUTS[] = {
+	inline constexpr GraphPortDefinition ConformToSDFInputs[] = {
 		{.name = "Distance Field", .type = GraphPortType::Texture3D},
-		FIELD_TRANSFORM_INPUTS[0],
-		FIELD_TRANSFORM_INPUTS[1],
-		FIELD_TRANSFORM_INPUTS[2],
-		CONFORM_TO_SPHERE_INPUTS[2],
-		CONFORM_TO_SPHERE_INPUTS[3],
-		CONFORM_TO_SPHERE_INPUTS[4],
-		CONFORM_TO_SPHERE_INPUTS[5],
+		FieldTransformInputs[0],
+		FieldTransformInputs[1],
+		FieldTransformInputs[2],
+		ConformToSphereInputs[2],
+		ConformToSphereInputs[3],
+		ConformToSphereInputs[4],
+		ConformToSphereInputs[5],
 	};
 
-	inline constexpr GraphPortDefinition SAMPLE_SDF_INPUTS[] = {
+	inline constexpr GraphPortDefinition SampleSDFInputs[] = {
 		{.name = "Texture", .type = GraphPortType::Texture3D},
 		{.name = "Center", .type = GraphPortType::Float3, .label = "Oriented Box Center", .space = GraphPortSpace::Matrix},
 		{.name = "Angles", .type = GraphPortType::Float3, .label = "Oriented Box Angles"},
@@ -212,13 +212,13 @@ namespace Shalltear::GraphEffectBlocks {
 		{.name = "Position", .type = GraphPortType::Float3, .space = GraphPortSpace::Position},
 		{.name = "Mip Level", .type = GraphPortType::Float},
 	};
-	inline constexpr GraphPortDefinition SAMPLE_SDF_OUTPUTS[] = {{.name = "distance", .type = GraphPortType::Float}, {.name = "direction", .type = GraphPortType::Float3}};
+	inline constexpr GraphPortDefinition SampleSDFOutputs[] = {{.name = "distance", .type = GraphPortType::Float}, {.name = "direction", .type = GraphPortType::Float3}};
 
-	inline constexpr std::string_view ORIENT_MODES[] = {"FaceCameraPlane", "FaceCameraPosition", "LookAtPosition", "LookAtLine", "Advanced",
-														"FixedAxis", "AlongVelocity", "CustomZ", "CustomY"};
-	inline constexpr std::string_view ORIENT_MODE_NAMES[] = {"Face Camera Plane", "Face Camera Position", "Look At Position", "Look At Line", "Advanced",
-															 "Fixed Axis", "Along Velocity", "Custom Z", "Custom Y"};
-	inline constexpr std::string_view ORIENT_AXES[] = {"XY", "YZ", "ZX", "YX", "ZY", "XZ"};
+	inline constexpr std::string_view OrientModes[] = {"FaceCameraPlane", "FaceCameraPosition", "LookAtPosition", "LookAtLine", "Advanced",
+													   "FixedAxis", "AlongVelocity", "CustomZ", "CustomY"};
+	inline constexpr std::string_view OrientModeNames[] = {"Face Camera Plane", "Face Camera Position", "Look At Position", "Look At Line", "Advanced",
+														   "Fixed Axis", "Along Velocity", "Custom Z", "Custom Y"};
+	inline constexpr std::string_view OrientAxesOptions[] = {"XY", "YZ", "ZX", "YX", "ZY", "XZ"};
 
 	enum OrientMode : u32 { FaceCameraPlane = 0,
 							FaceCameraPosition,
@@ -236,17 +236,17 @@ namespace Shalltear::GraphEffectBlocks {
 							AxesZY,
 							AxesXZ };
 
-	inline constexpr GraphSettingDefinition ORIENT_SETTINGS[] = {
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ORIENT_MODES, .inGraph = true},
-		{.key = "Axes", .kind = GraphSettingKind::Choice, .options = ORIENT_AXES, .defaultIndex = AxesZY, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << OrientAdvanced},
+	inline constexpr GraphSettingDefinition OrientSettings[] = {
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = OrientModes, .inGraph = true},
+		{.key = "Axes", .kind = GraphSettingKind::Choice, .options = OrientAxesOptions, .defaultIndex = AxesZY, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << OrientAdvanced},
 	};
-	inline constexpr GraphPortDefinition AXES_OUTPUTS[] = {
+	inline constexpr GraphPortDefinition AxesOutputs[] = {
 		{.name = "axisX", .type = GraphPortType::Float3}, {.name = "axisY", .type = GraphPortType::Float3}, {.name = "axisZ", .type = GraphPortType::Float3}};
 
-	inline constexpr std::string_view FLIPBOOK_MODES[] = {"FrameRate", "Cycles"};
-	inline constexpr std::string_view FRAME_RATE_MODES[] = {"Constant", "Random", "OverLifetime", "BySpeed", "Custom"};
-	inline constexpr std::string_view CYCLES_MODES[] = {"Constant", "Random", "RandomFullCycle"};
-	inline constexpr std::string_view ANIMATION_RANGES[] = {"EntireFlipbook", "FlipbookRow", "FlipbookColumn", "StartEndFrames"};
+	inline constexpr std::string_view FlipbookModes[] = {"FrameRate", "Cycles"};
+	inline constexpr std::string_view FrameRateModes[] = {"Constant", "Random", "OverLifetime", "BySpeed", "Custom"};
+	inline constexpr std::string_view CyclesModes[] = {"Constant", "Random", "RandomFullCycle"};
+	inline constexpr std::string_view AnimationRanges[] = {"EntireFlipbook", "FlipbookRow", "FlipbookColumn", "StartEndFrames"};
 
 	enum FlipbookMode : u32 { ByFrameRate = 0,
 							  ByCycles };
@@ -263,12 +263,12 @@ namespace Shalltear::GraphEffectBlocks {
 								FlipbookColumn,
 								StartEndFrames };
 
-	inline constexpr GraphSettingDefinition FLIPBOOK_PLAYER_SETTINGS[] = {
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = FLIPBOOK_MODES, .inGraph = true},
-		{.key = "Frame Rate Mode", .kind = GraphSettingKind::Choice, .options = FRAME_RATE_MODES, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByFrameRate},
-		{.key = "Cycles Mode", .kind = GraphSettingKind::Choice, .options = CYCLES_MODES, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByCycles},
+	inline constexpr GraphSettingDefinition FlipbookPlayerSettings[] = {
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = FlipbookModes, .inGraph = true},
+		{.key = "Frame Rate Mode", .kind = GraphSettingKind::Choice, .options = FrameRateModes, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByFrameRate},
+		{.key = "Cycles Mode", .kind = GraphSettingKind::Choice, .options = CyclesModes, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByCycles},
 		{.key = "Use Custom Range", .kind = GraphSettingKind::Toggle, .whenSetting = 0, .whenOptions = 1u << ByFrameRate},
-		{.key = "Animation Range", .kind = GraphSettingKind::Choice, .options = ANIMATION_RANGES, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByCycles, .orSetting = 3, .orOptions = 1u << 1},
+		{.key = "Animation Range", .kind = GraphSettingKind::Choice, .options = AnimationRanges, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << ByCycles, .orSetting = 3, .orOptions = 1u << 1},
 		{.key = "Reverse", .kind = GraphSettingKind::Toggle},
 		{.key = "Clamp Blending", .kind = GraphSettingKind::Toggle, .whenSetting = 0, .whenOptions = 1u << ByCycles},
 		{.key = "Custom Curve", .kind = GraphSettingKind::Toggle, .whenSetting = 0, .whenOptions = 1u << ByCycles},
@@ -281,12 +281,12 @@ namespace Shalltear::GraphEffectBlocks {
 									   ReverseKey,
 									   ClampBlendingKey,
 									   CustomCurveKey };
-	inline constexpr GraphPortDefinition FLIPBOOK_PLAYER_INPUTS[] = {{.name = "Frame Rate", .type = GraphPortType::Float, .defaultValue = {24.0f, 0.0f, 0.0f, 0.0f}}};
-	inline constexpr GraphPortDefinition TEX_INDEX_OUTPUT[] = {{.name = "texIndex", .type = GraphPortType::Float}};
+	inline constexpr GraphPortDefinition FlipbookPlayerInputs[] = {{.name = "Frame Rate", .type = GraphPortType::Float, .defaultValue = {24.0f, 0.0f, 0.0f, 0.0f}}};
+	inline constexpr GraphPortDefinition TexIndexOutput[] = {{.name = "texIndex", .type = GraphPortType::Float}};
 
-	inline constexpr std::string_view MESH_PLACEMENTS[] = {"Vertex", "Edge", "Surface"};
-	inline constexpr std::string_view SURFACE_COORDINATES[] = {"Barycentric", "Uniform"};
-	inline constexpr std::string_view ADDRESSING_MODES[] = {"Wrap", "Clamp", "Mirror"};
+	inline constexpr std::string_view MeshPlacements[] = {"Vertex", "Edge", "Surface"};
+	inline constexpr std::string_view SurfaceCoordinatesOptions[] = {"Barycentric", "Uniform"};
+	inline constexpr std::string_view AddressingModes[] = {"Wrap", "Clamp", "Mirror"};
 
 	enum MeshPlacement : u32 { PlaceVertex = 0,
 							   PlaceEdge,
@@ -297,7 +297,7 @@ namespace Shalltear::GraphEffectBlocks {
 								AddressClamp,
 								AddressMirror };
 
-	inline constexpr std::string_view MESH_OUTPUTS[] = {"Position", "Normal", "Tangent", "Bitangent", "Bitangent Sign", "Color", "Tex Coord 0"};
+	inline constexpr std::string_view MeshOutputs[] = {"Position", "Normal", "Tangent", "Bitangent", "Bitangent Sign", "Color", "Tex Coord 0"};
 	enum MeshOutput : u32 { OutPosition = 0,
 							OutNormal,
 							OutTangent,
@@ -305,9 +305,9 @@ namespace Shalltear::GraphEffectBlocks {
 							OutBitangentSign,
 							OutColor,
 							OutTexCoord0 };
-	inline constexpr u32 MESH_OUTPUT_COUNT = static_cast<u32>(std::size(MESH_OUTPUTS));
+	inline constexpr u32 MESH_OUTPUT_COUNT = static_cast<u32>(std::size(MeshOutputs));
 
-	inline constexpr GraphSettingDefinition SAMPLE_MESH_SETTINGS[] = {
+	inline constexpr GraphSettingDefinition SampleMeshSettings[] = {
 		{.key = "Output Position", .kind = GraphSettingKind::Toggle, .defaultIndex = 1},
 		{.key = "Output Normal", .kind = GraphSettingKind::Toggle},
 		{.key = "Output Tangent", .kind = GraphSettingKind::Toggle},
@@ -315,24 +315,24 @@ namespace Shalltear::GraphEffectBlocks {
 		{.key = "Output Bitangent Sign", .kind = GraphSettingKind::Toggle},
 		{.key = "Output Color", .kind = GraphSettingKind::Toggle, .defaultIndex = 1},
 		{.key = "Output Tex Coord 0", .kind = GraphSettingKind::Toggle, .defaultIndex = 1},
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ADDRESSING_MODES, .defaultIndex = AddressClamp, .inGraph = true},
-		{.key = "Placement Mode", .kind = GraphSettingKind::Choice, .options = MESH_PLACEMENTS, .inGraph = true},
-		{.key = "Surface Coordinates", .kind = GraphSettingKind::Choice, .options = SURFACE_COORDINATES, .defaultIndex = SurfaceUniform, .inGraph = true, .whenSetting = 8, .whenOptions = 1u << PlaceSurface},
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = AddressingModes, .defaultIndex = AddressClamp, .inGraph = true},
+		{.key = "Placement Mode", .kind = GraphSettingKind::Choice, .options = MeshPlacements, .inGraph = true},
+		{.key = "Surface Coordinates", .kind = GraphSettingKind::Choice, .options = SurfaceCoordinatesOptions, .defaultIndex = SurfaceUniform, .inGraph = true, .whenSetting = 8, .whenOptions = 1u << PlaceSurface},
 	};
 	enum SampleMeshSetting : u32 { SampleMeshModeKey = MESH_OUTPUT_COUNT,
 								   SampleMeshPlacementKey,
 								   SampleMeshSurfaceKey };
 
-	inline constexpr std::string_view AXES_COMPOSITIONS[] = {"Set", "Blend"};
-	inline constexpr GraphSettingDefinition POSITION_MESH_SETTINGS[] = {
-		{.key = "Spawn Mode", .kind = GraphSettingKind::Choice, .options = SPAWN_MODES, .inGraph = true},
-		{.key = "Placement Mode", .kind = GraphSettingKind::Choice, .options = MESH_PLACEMENTS, .inGraph = true},
-		{.key = "Surface Coordinates", .kind = GraphSettingKind::Choice, .options = SURFACE_COORDINATES, .defaultIndex = SurfaceUniform, .inGraph = true, .whenSetting = 1, .whenOptions = 1u << PlaceSurface},
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ADDRESSING_MODES, .defaultIndex = AddressClamp, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << 1},
-		{.key = "Apply Orientation", .kind = GraphSettingKind::Choice, .options = ORIENTATIONS, .defaultIndex = 1},
-		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS},
-		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .whenSetting = 4, .whenOptions = DIRECTION_OPTIONS},
-		{.key = "Composition Axes", .kind = GraphSettingKind::Choice, .options = AXES_COMPOSITIONS, .whenSetting = 4, .whenOptions = AXES_OPTIONS},
+	inline constexpr std::string_view AxesCompositions[] = {"Set", "Blend"};
+	inline constexpr GraphSettingDefinition PositionMeshSettings[] = {
+		{.key = "Spawn Mode", .kind = GraphSettingKind::Choice, .options = SpawnModes, .inGraph = true},
+		{.key = "Placement Mode", .kind = GraphSettingKind::Choice, .options = MeshPlacements, .inGraph = true},
+		{.key = "Surface Coordinates", .kind = GraphSettingKind::Choice, .options = SurfaceCoordinatesOptions, .defaultIndex = SurfaceUniform, .inGraph = true, .whenSetting = 1, .whenOptions = 1u << PlaceSurface},
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = AddressingModes, .defaultIndex = AddressClamp, .inGraph = true, .whenSetting = 0, .whenOptions = 1u << 1},
+		{.key = "Apply Orientation", .kind = GraphSettingKind::Choice, .options = Orientations, .defaultIndex = 1},
+		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions},
+		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .whenSetting = 4, .whenOptions = DIRECTION_OPTIONS},
+		{.key = "Composition Axes", .kind = GraphSettingKind::Choice, .options = AxesCompositions, .whenSetting = 4, .whenOptions = AXES_OPTIONS},
 	};
 	enum PositionMeshSetting : u32 { MeshSpawnModeKey = 0,
 									 MeshPlacementKey,
@@ -343,30 +343,30 @@ namespace Shalltear::GraphEffectBlocks {
 									 MeshCompositionDirectionKey,
 									 MeshCompositionAxesKey };
 
-	inline constexpr GraphPortDefinition MESH_TRANSFORM_INPUTS[] = {
+	inline constexpr GraphPortDefinition MeshTransformInputs[] = {
 		{.name = "Transform Position", .type = GraphPortType::Float3, .space = GraphPortSpace::Matrix},
 		{.name = "Transform Angles", .type = GraphPortType::Float3},
 		{.name = "Transform Scale", .type = GraphPortType::Float3, .defaultValue = {1.0f, 1.0f, 1.0f, 0.0f}},
 	};
-	inline constexpr GraphPortDefinition MESH_INPUT[] = {{.name = "Mesh", .type = GraphPortType::Mesh}};
-	inline constexpr GraphPortDefinition SAMPLE_MESH_INDEX_INPUTS[] = {MESH_INPUT[0], {.name = "Index", .type = GraphPortType::Float}};
-	inline constexpr GraphPortDefinition SAMPLE_MESH_INDEX_OUTPUTS[] = {{.name = "Index", .type = GraphPortType::Float}};
-	inline constexpr GraphPortDefinition MESH_COUNT_OUTPUTS[] = {{.name = "Count", .type = GraphPortType::Float}};
+	inline constexpr GraphPortDefinition MeshInput[] = {{.name = "Mesh", .type = GraphPortType::Mesh}};
+	inline constexpr GraphPortDefinition SampleMeshIndexInputs[] = {MeshInput[0], {.name = "Index", .type = GraphPortType::Float}};
+	inline constexpr GraphPortDefinition SampleMeshIndexOutputs[] = {{.name = "Index", .type = GraphPortType::Float}};
+	inline constexpr GraphPortDefinition MeshCountOutputs[] = {{.name = "Count", .type = GraphPortType::Float}};
 
-	inline constexpr std::string_view SEQUENTIAL_SHAPES[] = {"Line", "Circle", "ThreeDimensional"};
-	inline constexpr std::string_view SEQUENTIAL_INDEX_MODES[] = {"ParticleID", "Custom"};
+	inline constexpr std::string_view SequentialShapes[] = {"Line", "Circle", "ThreeDimensional"};
+	inline constexpr std::string_view SequentialIndexModes[] = {"ParticleID", "Custom"};
 	enum SequentialShape : u32 { SequentialLine = 0,
 								 SequentialCircle,
 								 SequentialThreeDimensional };
-	inline constexpr GraphSettingDefinition POSITION_SEQUENTIAL_SETTINGS[] = {
-		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .defaultIndex = 1, .whenSetting = 5, .whenOptions = 1u << 1},
-		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .whenSetting = 5, .whenOptions = 1u << 1},
-		{.key = "Composition Target Position", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_COMPOSITIONS, .defaultIndex = 1, .whenSetting = 6, .whenOptions = 1u << 1},
-		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = SEQUENTIAL_SHAPES},
-		{.key = "Index", .kind = GraphSettingKind::Choice, .options = SEQUENTIAL_INDEX_MODES, .inGraph = true},
+	inline constexpr GraphSettingDefinition PositionSequentialSettings[] = {
+		{.key = "Composition Position", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .defaultIndex = 1, .whenSetting = 5, .whenOptions = 1u << 1},
+		{.key = "Composition Direction", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .whenSetting = 5, .whenOptions = 1u << 1},
+		{.key = "Composition Target Position", .kind = GraphSettingKind::Choice, .options = GraphEffectCompositions, .defaultIndex = 1, .whenSetting = 6, .whenOptions = 1u << 1},
+		{.key = "Shape", .kind = GraphSettingKind::Choice, .options = SequentialShapes},
+		{.key = "Index", .kind = GraphSettingKind::Choice, .options = SequentialIndexModes, .inGraph = true},
 		{.key = "Write Position", .kind = GraphSettingKind::Toggle, .defaultIndex = 1, .inGraph = true},
 		{.key = "Write Target Position", .kind = GraphSettingKind::Toggle, .inGraph = true},
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = ADDRESSING_MODES, .defaultIndex = AddressClamp, .inGraph = true},
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = AddressingModes, .defaultIndex = AddressClamp, .inGraph = true},
 	};
 	enum PositionSequentialSetting : u32 { SequentialCompositionPositionKey = 0,
 										   SequentialCompositionDirectionKey,
@@ -377,20 +377,20 @@ namespace Shalltear::GraphEffectBlocks {
 										   SequentialWriteTargetKey,
 										   SequentialModeKey };
 
-	inline constexpr std::string_view CAMERA_FADE_MODES[] = {"Color", "Alpha", "ColorAndAlpha"};
+	inline constexpr std::string_view CameraFadeModes[] = {"Color", "Alpha", "ColorAndAlpha"};
 	enum CameraFadeMode : u32 { FadeColor = 0,
 								FadeAlpha,
 								FadeColorAndAlpha };
-	inline constexpr GraphSettingDefinition CAMERA_FADE_SETTINGS[] = {
-		{.key = "Fade Mode", .kind = GraphSettingKind::Choice, .options = CAMERA_FADE_MODES, .defaultIndex = FadeAlpha, .inGraph = true},
+	inline constexpr GraphSettingDefinition CameraFadeSettings[] = {
+		{.key = "Fade Mode", .kind = GraphSettingKind::Choice, .options = CameraFadeModes, .defaultIndex = FadeAlpha, .inGraph = true},
 		{.key = "Cull When Faded", .kind = GraphSettingKind::Toggle, .defaultIndex = 1},
 		{.key = "Affect Shadows", .kind = GraphSettingKind::Toggle},
 	};
-	inline constexpr GraphPortDefinition CAMERA_FADE_INPUTS[] = {
+	inline constexpr GraphPortDefinition CameraFadeInputs[] = {
 		{.name = "Faded Distance", .type = GraphPortType::Float, .defaultValue = {0.5f, 0.0f, 0.0f, 0.0f}},
 		{.name = "Visible Distance", .type = GraphPortType::Float, .defaultValue = {2.0f, 0.0f, 0.0f, 0.0f}},
 	};
-	inline constexpr GraphPortDefinition CAMERA_FADE_OUTPUTS[] = {
+	inline constexpr GraphPortDefinition CameraFadeOutputs[] = {
 		{.name = "color", .type = GraphPortType::Float3}, {.name = "alpha", .type = GraphPortType::Float}, {.name = "alive", .type = GraphPortType::Boolean}};
 
 	enum TriggerMode : u32 { TriggerAlways = 0,
@@ -398,20 +398,20 @@ namespace Shalltear::GraphEffectBlocks {
 							 TriggerOverDistance,
 							 TriggerOnDie,
 							 TriggerOnCollide };
-	inline constexpr std::string_view TRIGGER_MODE_NAMES[] = {"Always", "Over Time", "Over Distance", "On Die", "On Collide"};
+	inline constexpr std::string_view TriggerModeNames[] = {"Always", "Over Time", "Over Distance", "On Die", "On Collide"};
 	inline constexpr u32 TRIGGER_COUNT_MODES = (1u << TriggerAlways) | (1u << TriggerOnDie) | (1u << TriggerOnCollide);
 	inline constexpr u32 TRIGGER_RATE_MODES = (1u << TriggerOverTime) | (1u << TriggerOverDistance);
-	inline constexpr GraphSettingDefinition TRIGGER_EVENT_SETTINGS[] = {
-		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = GRAPH_EFFECT_TRIGGER_MODES, .inGraph = true},
+	inline constexpr GraphSettingDefinition TriggerEventSettings[] = {
+		{.key = "Mode", .kind = GraphSettingKind::Choice, .options = GraphEffectTriggerModes, .inGraph = true},
 		{.key = "Clamp To One", .kind = GraphSettingKind::Toggle, .defaultIndex = 1, .whenSetting = 0, .whenOptions = TRIGGER_RATE_MODES},
 	};
-	inline constexpr GraphPortDefinition TRIGGER_EVENT_INPUTS[] = {
+	inline constexpr GraphPortDefinition TriggerEventInputs[] = {
 		{.name = "Count", .type = GraphPortType::Float, .defaultValue = {1.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 0, .whenOptions = TRIGGER_COUNT_MODES},
 		{.name = "Rate", .type = GraphPortType::Float, .defaultValue = {10.0f, 0.0f, 0.0f, 0.0f}, .whenSetting = 0, .whenOptions = TRIGGER_RATE_MODES},
 	};
-	inline constexpr GraphPortDefinition TRIGGER_EVENT_OUTPUTS[] = {
-		{.name = GRAPH_EFFECT_EVT, .type = GraphPortType::GPUEvent},
-		{.name = GRAPH_EFFECT_RATE_COUNT, .type = GraphPortType::Float},
+	inline constexpr GraphPortDefinition TriggerEventOutputs[] = {
+		{.name = GraphEffectEvt, .type = GraphPortType::GPUEvent},
+		{.name = GraphEffectRateCount, .type = GraphPortType::Float},
 	};
 
 	struct ElementSphere {

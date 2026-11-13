@@ -530,11 +530,11 @@ TEST(EditorThemeTest, PartialThemeInheritsNotResolvingToBlack) {
 	const Color inheritedSurface = EditorTheme::GetColor(EditorTheme::ColorToken::Surface);
 	const f32 inheritedRadiusLg = EditorTheme::GetMetric(EditorTheme::MetricToken::RadiusLg);
 
-	constexpr StringHash PARTIAL("TestPartial");
+	constexpr StringHash Partial("TestPartial");
 	EditorTheme::ThemeDesc desc = EditorTheme::MakeDefaultDesc();
 	desc.Set(EditorTheme::ColorToken::Accent, "#ff00ff");
-	EditorTheme::Register(PARTIAL, desc);
-	ASSERT_TRUE(EditorTheme::SetActive(PARTIAL));
+	EditorTheme::Register(Partial, desc);
+	ASSERT_TRUE(EditorTheme::SetActive(Partial));
 
 	EXPECT_EQ(EditorTheme::GetColor(EditorTheme::ColorToken::Accent), Color::FromHex("#ff00ff"));
 	EXPECT_EQ(EditorTheme::GetColor(EditorTheme::ColorToken::Surface), inheritedSurface);

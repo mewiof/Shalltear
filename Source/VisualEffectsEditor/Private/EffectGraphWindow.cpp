@@ -123,10 +123,10 @@ namespace Shalltear {
 			});
 		}
 
-		constexpr std::string_view EDITED_EXTENSIONS[] = {GRAPH_EFFECT_EXTENSION, GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION,
-														  GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION};
+		constexpr std::string_view EditedExtensions[] = {GraphEffectExtension, GraphEffectOperatorSubgraphExtension,
+														 GraphEffectBlockSubgraphExtension};
 		bool IsEditedPath(std::string_view path) {
-			return std::any_of(std::begin(EDITED_EXTENSIONS), std::end(EDITED_EXTENSIONS), [path](std::string_view extension) { return EndsWith(path, extension); });
+			return std::any_of(std::begin(EditedExtensions), std::end(EditedExtensions), [path](std::string_view extension) { return EndsWith(path, extension); });
 		}
 
 		bool DraggedSubgraph(const UI::DragPayload& payload, std::string_view extension, Guid& out) {
@@ -171,11 +171,11 @@ namespace Shalltear {
 		}
 
 		bool IsColorPort(const GraphNode& node, const GraphPortDefinition& port) {
-			return node.def == GRAPH_EFFECT_SET_ATTRIBUTE && port.type == GraphPortType::Float3 && std::string_view(port.name) == "Color";
+			return node.def == GraphEffectSetAttribute && port.type == GraphPortType::Float3 && std::string_view(port.name) == "Color";
 		}
 
 		bool IsEventName(const GraphNode& node, const GraphSettingDefinition& setting) {
-			return node.def == GRAPH_EFFECT_EVENT && setting.kind == GraphSettingKind::Text;
+			return node.def == GraphEffectEvent && setting.kind == GraphSettingKind::Text;
 		}
 
 		str MissingLabel(const GraphNode& node) {
@@ -375,7 +375,7 @@ namespace Shalltear {
 				port.inlineValue.text = MeshCaption(HeldMesh(node, input.name));
 			}
 			if (input.space != GraphPortSpace::None) {
-				port.space = fed && fed->space == GRAPH_SPACE_WORLD ? "W" : "L";
+				port.space = fed && fed->space == GraphSpaceWorld ? "W" : "L";
 			}
 			out.push_back(std::move(port));
 		}
@@ -410,7 +410,7 @@ namespace Shalltear {
 					desc.settings.back().action = "Send";
 				}
 			}
-			const bool named = definition->flowInputs.size() > 1 || context.node.def == GRAPH_EFFECT_SYSTEM_SUBGRAPH;
+			const bool named = definition->flowInputs.size() > 1 || context.node.def == GraphEffectSystemSubgraph;
 			for (std::string_view slot : definition->flowInputs) {
 				GraphFlowPortDesc port;
 				port.label = named ? str(slot) : str();
@@ -462,12 +462,12 @@ namespace Shalltear {
 				continue;
 			}
 			desc.label = str(definition->name);
-			desc.compact = node.def == GraphDocumentOps::REDIRECT_DEF;
+			desc.compact = node.def == GraphDocumentOps::RedirectDef;
 			if (const GraphProperty* property = FindProperty(*document, Shared::PropertyOf(*document, node.id))) {
 				desc.label = property->name;
 			}
 			DescribePorts(node, *definition, desc.inputs);
-			if (node.def == Shared::PROPERTY_NODE) {
+			if (node.def == Shared::PropertyNode) {
 				for (GraphPortDesc& port : desc.inputs) {
 					port.label.clear();
 				}
@@ -478,7 +478,7 @@ namespace Shalltear {
 			}
 			for (const GraphPortDefinition& output : definition->outputs) {
 				GraphPortDesc port;
-				port.label = desc.compact || node.def == Shared::PROPERTY_NODE ? str() : str(GraphPortLabel(output));
+				port.label = desc.compact || node.def == Shared::PropertyNode ? str() : str(GraphPortLabel(output));
 				port.color = Shared::PortColor(output.type);
 				desc.outputs.push_back(std::move(port));
 			}
@@ -589,21 +589,21 @@ namespace Shalltear {
 		};
 		_window.ReadRecordedSystems();
 		for (const GraphContext& initialize : document->contexts) {
-			if (initialize.node.def != GRAPH_EFFECT_INITIALIZE) {
+			if (initialize.node.def != GraphEffectInitialize) {
 				continue;
 			}
 			GraphOutlineDesc outline;
 			outline.nodes.push_back(initialize.node.id);
 			outline.id = initialize.node.id;
-			const GraphSetting* named = GraphWindowParts::FindSetting(initialize.node.settings, GRAPH_EFFECT_SYSTEM_NAME);
+			const GraphSetting* named = GraphWindowParts::FindSetting(initialize.node.settings, GraphEffectSystemName);
 			outline.title = named ? GraphWindowParts::ReadString(named->value) : str();
-			outline.title = outline.title.empty() ? str(GRAPH_EFFECT_DEFAULT_SYSTEM_NAME) : outline.title;
+			outline.title = outline.title.empty() ? str(GraphEffectDefaultSystemName) : outline.title;
 			for (const RecordedSystem& system : _window._recordedSystems) {
 				outline.title = system.initialize == initialize.node.id ? system.name : outline.title;
 			}
 			u32 update = 0;
 			for (const GraphContext& context : document->contexts) {
-				if (context.node.def == GRAPH_EFFECT_UPDATE && fedBy(context, initialize.node.id)) {
+				if (context.node.def == GraphEffectUpdate && fedBy(context, initialize.node.id)) {
 					update = context.node.id;
 					outline.nodes.push_back(update);
 				}
@@ -621,7 +621,7 @@ namespace Shalltear {
 		const u32 initialize = static_cast<u32>(outline);
 		const str value = title.empty() ? str() : Shared::Quote(title);
 		_window.Edit("Rename System", [&](GraphDocument& document) {
-			return Shared::SetNodeSetting(document, initialize, GRAPH_EFFECT_SYSTEM_NAME, value, &_window._definitions);
+			return Shared::SetNodeSetting(document, initialize, GraphEffectSystemName, value, &_window._definitions);
 		});
 	}
 
@@ -691,7 +691,7 @@ namespace Shalltear {
 		EffectGraphWindow* window = &_window;
 		Vector<UI::Widgets::MenuItem> items{GetMemoryResource(MemTag::UI)};
 		const GraphNode* held = Element(static_cast<u32>(node));
-		const bool system = held && held->def == GRAPH_EFFECT_SYSTEM_SUBGRAPH;
+		const bool system = held && held->def == GraphEffectSystemSubgraph;
 		if (held && GraphSubgraphs::AssetOf(*held).IsValid()) {
 			items.push_back({system ? "Enter Subgraph" : "Open Subgraph", "", true, false,
 							 [asset = GraphSubgraphs::AssetOf(*held)]() { EffectGraphWindowRegistry::Open(asset); }});
@@ -776,8 +776,8 @@ namespace Shalltear {
 		u64 property = 0;
 		Guid subgraph;
 		return _window._blackboard.OwnsPayload(payload, property) || _window._outputs.OwnsPayload(payload, property) ||
-			   (DraggedSubgraph(payload, GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION, subgraph) && Offered(subgraph, 0)) ||
-			   (DraggedSubgraph(payload, GRAPH_EFFECT_EXTENSION, subgraph) && UsableSystem(subgraph));
+			   (DraggedSubgraph(payload, GraphEffectOperatorSubgraphExtension, subgraph) && Offered(subgraph, 0)) ||
+			   (DraggedSubgraph(payload, GraphEffectExtension, subgraph) && UsableSystem(subgraph));
 	}
 
 	bool EffectGraphWindow::Model::UsableSystem(const Guid& subgraph) const {
@@ -798,7 +798,7 @@ namespace Shalltear {
 
 	void EffectGraphWindow::Model::OnDrop(const UI::DragPayload& payload, Vec2 graph) {
 		u32 created = 0;
-		if (Guid subgraph; DraggedSubgraph(payload, GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION, subgraph)) {
+		if (Guid subgraph; DraggedSubgraph(payload, GraphEffectOperatorSubgraphExtension, subgraph)) {
 			if (!Offered(subgraph, 0)) {
 				return;
 			}
@@ -806,7 +806,7 @@ namespace Shalltear {
 				created = Shared::AddSubgraphNode(document, subgraph, graph);
 				return created != 0;
 			});
-		} else if (DraggedSubgraph(payload, GRAPH_EFFECT_EXTENSION, subgraph)) {
+		} else if (DraggedSubgraph(payload, GraphEffectExtension, subgraph)) {
 			if (!UsableSystem(subgraph)) {
 				return;
 			}
@@ -832,19 +832,19 @@ namespace Shalltear {
 	bool EffectGraphWindow::Model::AcceptsNodeDrop(GraphNodeId node, const UI::DragPayload& payload) const {
 		const GraphDocument* document = Doc();
 		Guid subgraph;
-		return document && FindContext(*document, static_cast<u32>(node)) && DraggedSubgraph(payload, GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION, subgraph) &&
+		return document && FindContext(*document, static_cast<u32>(node)) && DraggedSubgraph(payload, GraphEffectBlockSubgraphExtension, subgraph) &&
 			   Offered(subgraph, static_cast<u32>(node));
 	}
 
 	void EffectGraphWindow::Model::OnNodeDrop(GraphNodeId node, const UI::DragPayload& payload) {
 		const GraphDocument* document = Doc();
 		Guid subgraph;
-		if (!document || !AcceptsNodeDrop(node, payload) || !DraggedSubgraph(payload, GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION, subgraph)) {
+		if (!document || !AcceptsNodeDrop(node, payload) || !DraggedSubgraph(payload, GraphEffectBlockSubgraphExtension, subgraph)) {
 			return;
 		}
 		Ops::BlockChoice choice;
-		choice.def = str(GRAPH_EFFECT_SUBGRAPH_BLOCK);
-		choice.settings.push_back({str(GRAPH_SUBGRAPH_ASSET_SETTING), Shared::Quote(subgraph.ToString())});
+		choice.def = str(GraphEffectSubgraphBlock);
+		choice.settings.push_back({str(GraphSubgraphAssetSetting), Shared::Quote(subgraph.ToString())});
 		u32 created = 0;
 		_window.Edit("Create Block", [&](GraphDocument& edited) {
 			const GraphContext* context = FindContext(edited, static_cast<u32>(node));
@@ -903,7 +903,7 @@ namespace Shalltear {
 			return;
 		}
 		Ops::ContextChoices(_contextChoices);
-		if (document->type != GRAPH_EFFECT_DOCUMENT_TYPE) {
+		if (document->type != GraphEffectDocumentType) {
 			_contextChoices.clear();
 		}
 		if (from && (from->side == GraphPortSide::FlowOutput || from->side == GraphPortSide::FlowInput)) {
@@ -1217,7 +1217,7 @@ namespace Shalltear {
 		} else if (picked.kind == GraphSettingKind::Asset) {
 			option("None", "null");
 			option(picked.defaultText, "");
-			const GraphShadingTarget* shading = GraphShadingTargets::Find(GRAPH_SHADER_DOCUMENT_TYPE);
+			const GraphShadingTarget* shading = GraphShadingTargets::Find(GraphShaderDocumentType);
 			Vector<Guid> found{GetMemoryResource(MemTag::Editor)};
 			for (std::string_view extension : picked.options) {
 				GraphSubgraphs::ProjectFiles(extension, found);
@@ -1226,7 +1226,7 @@ namespace Shalltear {
 					const str name = std::filesystem::path(path.ToString()).stem().generic_string();
 					GraphDocument held;
 					str error;
-					if (picked.key == GRAPH_EFFECT_NODE_SHADER_SETTING &&
+					if (picked.key == GraphEffectNodeShaderSetting &&
 						(!shading || !GraphDocumentOps::Read(FileSystem::ReadTextFile(path, MemTag::Editor), held, error) ||
 						 !shading->canShadeEffects(held, name, error))) {
 						continue;
@@ -1291,7 +1291,7 @@ namespace Shalltear {
 			return;
 		}
 		const GraphInput* fed = FindInput(*held, port);
-		const std::string_view next = fed && fed->space == GRAPH_SPACE_WORLD ? std::string_view() : GRAPH_SPACE_WORLD;
+		const std::string_view next = fed && fed->space == GraphSpaceWorld ? std::string_view() : GraphSpaceWorld;
 		_window.Edit("Change Space", [&](GraphDocument& document) { return GraphDocumentOps::SetInputSpace(document, node, port, next); });
 	}
 
@@ -1434,7 +1434,7 @@ namespace Shalltear {
 		_inspectedProperty = 0;
 		_canvas.ResetView();
 		_canvas.SetSelection({});
-		if (document->type == GRAPH_EFFECT_DOCUMENT_TYPE) {
+		if (document->type == GraphEffectDocumentType) {
 			VisualEffectsEditor::EffectLiveCompiles::Seed(asset, *document);
 			_seenAdopted = VisualEffectsEditor::EffectLiveCompiles::GetStatus(asset).adopted;
 			GraphEffect check;
@@ -1514,7 +1514,7 @@ namespace Shalltear {
 		if (!document) {
 			return false;
 		}
-		if (document->type != GRAPH_EFFECT_DOCUMENT_TYPE) {
+		if (document->type != GraphEffectDocumentType) {
 			_diagnostics.clear();
 			const bool checked = GraphEffectTarget::CheckSubgraph(*document, _open, _diagnostics, &_definitions);
 			_needsNodeRebuild = true;
@@ -1531,19 +1531,19 @@ namespace Shalltear {
 	}
 
 	void EffectGraphWindow::RefreshWindowWarnings() {
-		static constexpr std::string_view NEEDS_RECORDING = "recording-needs-instance";
-		std::erase_if(_diagnostics, [](const GraphDiagnostic& said) { return said.key == NEEDS_RECORDING; });
+		static constexpr std::string_view NeedsRecording = "recording-needs-instance";
+		std::erase_if(_diagnostics, [](const GraphDiagnostic& said) { return said.key == NeedsRecording; });
 		_warnedDetached = !_attached.Get();
 		const GraphDocument* document = GetDocument();
-		if (!document || document->type != GRAPH_EFFECT_DOCUMENT_TYPE || !_warnedDetached) {
+		if (!document || document->type != GraphEffectDocumentType || !_warnedDetached) {
 			return;
 		}
 		for (const GraphContext& context : document->contexts) {
-			if (context.node.def == GRAPH_EFFECT_INITIALIZE && GraphEffectRules::BoundsModeOf(context.node) == GRAPH_EFFECT_BOUNDS_RECORDED &&
-				!GraphEffectRules::IgnoresError(context.node, NEEDS_RECORDING)) {
+			if (context.node.def == GraphEffectInitialize && GraphEffectRules::BoundsModeOf(context.node) == GRAPH_EFFECT_BOUNDS_RECORDED &&
+				!GraphEffectRules::IgnoresError(context.node, NeedsRecording)) {
 				_diagnostics.push_back({context.node.id,
 										"To record bounds, select an object playing this graph (the window attaches to it)",
-										GraphDiagnosticSeverity::Warning, str(NEEDS_RECORDING)});
+										GraphDiagnosticSeverity::Warning, str(NeedsRecording)});
 			}
 		}
 	}
@@ -1790,7 +1790,7 @@ namespace Shalltear {
 			return;
 		}
 		GraphNode* node = _inspected != 0 ? GraphDocumentOps::FindNode(*document, _inspected) : nullptr;
-		if (!node && document->type == GRAPH_EFFECT_DOCUMENT_TYPE) {
+		if (!node && document->type == GraphEffectDocumentType) {
 			BuildAssetSettings(context, *document);
 			return;
 		}
@@ -1912,7 +1912,7 @@ namespace Shalltear {
 		if (!context) {
 			return;
 		}
-		const bool operatorSubgraph = document && document->type == GRAPH_EFFECT_OPERATOR_SUBGRAPH_DOCUMENT_TYPE;
+		const bool operatorSubgraph = document && document->type == GraphEffectOperatorSubgraphDocumentType;
 		if (context->IsAlive(_outputsHost)) {
 			UI::Style host = context->GetStyle(_outputsHost);
 			host.display = operatorSubgraph ? UI::Display::Flex : UI::Display::None;
@@ -1928,7 +1928,7 @@ namespace Shalltear {
 		}
 		str category;
 		for (const GraphSetting& setting : document->settings) {
-			if (setting.key == GRAPH_SUBGRAPH_CATEGORY_SETTING) {
+			if (setting.key == GraphSubgraphCategorySetting) {
 				LinearAllocator arena(setting.value.size() + 64, MemTag::Editor);
 				const JSONValue value = JSONParse(setting.value, arena);
 				category = value.IsString() ? str(value.AsString()) : str();
@@ -1940,7 +1940,7 @@ namespace Shalltear {
 		field.font = UISystem::GetDefaultFont();
 		field.fontSizePx = FontRow();
 		field.onCommit = [this](std::string_view text) {
-			Edit("Set Category", [&](GraphDocument& edited) { return Shared::SetGraphSetting(edited, GRAPH_SUBGRAPH_CATEGORY_SETTING, Shared::Quote(text)); });
+			Edit("Set Category", [&](GraphDocument& edited) { return Shared::SetGraphSetting(edited, GraphSubgraphCategorySetting, Shared::Quote(text)); });
 		};
 		UI::ElementHandle input = UI::Widgets::TextField(*context, _subtitle, field);
 		UI::Style grow = context->GetStyle(input);
@@ -2181,10 +2181,10 @@ namespace Shalltear {
 		Vector<RecordedSystem> read{GetMemoryResource(MemTag::Editor)};
 		GraphEffect effect;
 		Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-		if (document && document->type == GRAPH_EFFECT_DOCUMENT_TYPE &&
+		if (document && document->type == GraphEffectDocumentType &&
 			GraphEffectTarget::Compile(*document, AssetDatabase::LookupPath(_open).ToString(), effect, diagnostics, &_definitions)) {
 			const u32 own = static_cast<u32>(std::count_if(document->contexts.begin(), document->contexts.end(),
-														   [](const GraphContext& context) { return context.node.def == GRAPH_EFFECT_INITIALIZE; }));
+														   [](const GraphContext& context) { return context.node.def == GraphEffectInitialize; }));
 			for (u32 s = 0; s < effect.systems.size(); ++s) {
 				RecordedSystem system;
 				system.initialize = s < own ? effect.systems[s].initialize : 0u;
@@ -2393,15 +2393,15 @@ namespace Shalltear {
 			context.SetTooltip(name, Ops::BoundsExclusionTooltip(exclusion));
 			UI::Widgets::Spacer(context, line);
 			UI::Widgets::DropdownDesc mode;
-			mode.items = GRAPH_EFFECT_BOUNDS_MODES;
+			mode.items = GraphEffectBoundsModes;
 			mode.selected = GraphEffectRules::BoundsModeOf(*node);
 			mode.font = UISystem::GetDefaultFont();
 			mode.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
 			const u32 initialize = system.initialize;
 			mode.onSelect = [this, initialize](u32 index) {
-				if (index < std::size(GRAPH_EFFECT_BOUNDS_MODES)) {
+				if (index < std::size(GraphEffectBoundsModes)) {
 					Edit("Bounds Setting Mode", [&](GraphDocument& edited) {
-						return Shared::SetNodeSetting(edited, initialize, GRAPH_EFFECT_BOUNDS_SETTING_MODE, Shared::Quote(GRAPH_EFFECT_BOUNDS_MODES[index]));
+						return Shared::SetNodeSetting(edited, initialize, GraphEffectBoundsSettingMode, Shared::Quote(GraphEffectBoundsModes[index]));
 					});
 				}
 			};
@@ -2649,7 +2649,7 @@ namespace Shalltear {
 		}
 
 		void RegisterOpener(const void* owner) {
-			for (const std::string_view extension : EDITED_EXTENSIONS) {
+			for (const std::string_view extension : EditedExtensions) {
 				AssetOpeners::Register(extension, [](const Guid& asset) { Open(asset); }, owner);
 			}
 		}

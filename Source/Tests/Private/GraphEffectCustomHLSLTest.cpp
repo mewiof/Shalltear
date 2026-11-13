@@ -32,7 +32,7 @@ namespace {
 		return document;
 	}
 
-	str Json(std::string_view text) {
+	str JSON(std::string_view text) {
 		str out = "\"";
 		for (char c : text) {
 			if (c == '"' || c == '\\') {
@@ -48,7 +48,7 @@ namespace {
 	}
 
 	str Block(u32 id, std::string_view code, std::string_view in = {}, std::string_view settings = {}) {
-		return std::format(R"({{"id":{},"def":"Block/CustomHLSL","settings":{{"HLSL Code":{}{}}}{}}})", id, Json(code), settings,
+		return std::format(R"({{"id":{},"def":"Block/CustomHLSL","settings":{{"HLSL Code":{}{}}}{}}})", id, JSON(code), settings,
 						   in.empty() ? str() : ",\"in\":{" + str(in) + "}");
 	}
 
@@ -60,7 +60,7 @@ namespace {
 						   nodes, initialize, update, output);
 	}
 
-	constexpr std::string_view LIFT = "void Lift(inout EffectAttributes attributes, in float3 offset, float scale)\n"
+	constexpr std::string_view Lift = "void Lift(inout EffectAttributes attributes, in float3 offset, float scale)\n"
 									  "{\n"
 									  "  attributes.position += offset;\n"
 									  "  attributes.size = scale * 2;\n"
@@ -131,7 +131,7 @@ namespace {
 } // anonymous namespace
 
 TEST(GraphCustomHLSLTest, FunctionFoundByReturnType) {
-	constexpr std::string_view CODE = "#include \"Common.hlsl\"\n"
+	constexpr std::string_view Code = "#include \"Common.hlsl\"\n"
 									  "static const float K = 2;\n"
 									  "/// Hidden\n"
 									  "float Helper(float x) { return x * K; }\n"
@@ -146,7 +146,7 @@ TEST(GraphCustomHLSLTest, FunctionFoundByReturnType) {
 									  "void Last (inout EffectAttributes attributes)\n"
 									  "{ }\n";
 	Vector<GraphCustomHLSL::Function> functions{GetMemoryResource(MemTag::Editor)};
-	GraphCustomHLSL::Parse(CODE, functions);
+	GraphCustomHLSL::Parse(Code, functions);
 	ASSERT_EQ(functions.size(), 3u);
 	EXPECT_EQ(functions[0].name, "Helper");
 	EXPECT_TRUE(functions[0].hidden);
@@ -177,7 +177,7 @@ TEST(GraphCustomHLSLTest, FunctionFoundByReturnType) {
 }
 
 TEST(GraphCustomHLSLTest, AttributeAccessReadFromCode) {
-	constexpr std::string_view BODY = "{\n"
+	constexpr std::string_view Body = "{\n"
 									  "  a.position = float3(0, 0, 0);\n"
 									  "  a.velocity += 1;\n"
 									  "  a.age++;\n"
@@ -191,7 +191,7 @@ TEST(GraphCustomHLSLTest, AttributeAccessReadFromCode) {
 									  "  float other = data.angleX + a . direction.y;\n"
 									  "}";
 	Vector<GraphCustomHLSL::FieldAccess> accesses{GetMemoryResource(MemTag::Editor)};
-	GraphCustomHLSL::Accesses(BODY, "a", accesses);
+	GraphCustomHLSL::Accesses(Body, "a", accesses);
 	const auto find = [&](std::string_view field) -> const GraphCustomHLSL::FieldAccess* {
 		for (const GraphCustomHLSL::FieldAccess& access : accesses) {
 			if (access.field == field) {
@@ -224,7 +224,7 @@ TEST(GraphCustomHLSLTest, AttributeAccessReadFromCode) {
 }
 
 TEST_F(GraphEffectCustomHLSLFixture, BlockPortsFromParameters) {
-	constexpr std::string_view CODE = "/// Hidden\n"
+	constexpr std::string_view Code = "/// Hidden\n"
 									  "void Helper(inout EffectAttributes attributes) {}\n"
 									  "void Paint(inout EffectAttributes attributes, in float4 tint, bool on)\n"
 									  "{\n"
@@ -233,7 +233,7 @@ TEST_F(GraphEffectCustomHLSLFixture, BlockPortsFromParameters) {
 									  "}\n"
 									  "void Paint(inout EffectAttributes attributes) {}\n"
 									  "void Other(inout EffectAttributes attributes) { attributes.size = 2; }\n";
-	const GraphDocument document = Parse(Effect(Block(50, CODE)));
+	const GraphDocument document = Parse(Effect(Block(50, Code)));
 	GraphDefinitions definitions;
 	const GraphNode& node = document.contexts[0].blocks[0];
 	const GraphNodeDefinition* definition = definitions.Find(document, node);
@@ -256,7 +256,7 @@ TEST_F(GraphEffectCustomHLSLFixture, BlockPortsFromParameters) {
 
 	const GraphSettingDefinition* available = nullptr;
 	for (const GraphSettingDefinition& setting : definition->settings) {
-		available = setting.key == GRAPH_CUSTOM_HLSL_FUNCTION ? &setting : available;
+		available = setting.key == GraphCustomHLSLFunction ? &setting : available;
 	}
 	ASSERT_NE(available, nullptr);
 	ASSERT_EQ(available->options.size(), 2u);
@@ -264,7 +264,7 @@ TEST_F(GraphEffectCustomHLSLFixture, BlockPortsFromParameters) {
 	EXPECT_EQ(available->options[1], "Other");
 	EXPECT_TRUE(available->inGraph);
 
-	GraphDocument chosen = Parse(Effect(Block(50, CODE, {}, R"(,"Available Function":"Other","Block Name":"Mine")")));
+	GraphDocument chosen = Parse(Effect(Block(50, Code, {}, R"(,"Available Function":"Other","Block Name":"Mine")")));
 	const GraphNodeDefinition* other = definitions.Find(chosen, chosen.contexts[0].blocks[0]);
 	ASSERT_NE(other, nullptr);
 	EXPECT_EQ(other->name, "Mine");
@@ -272,18 +272,18 @@ TEST_F(GraphEffectCustomHLSLFixture, BlockPortsFromParameters) {
 	EXPECT_EQ(other->outputs[0].name, "size");
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	EXPECT_TRUE(Compile(Effect(Block(50, CODE, {}, R"(,"Available Function":"Gone")")), effect, diagnostics)) << Said(diagnostics);
+	EXPECT_TRUE(Compile(Effect(Block(50, Code, {}, R"(,"Available Function":"Gone")")), effect, diagnostics)) << Said(diagnostics);
 }
 
 TEST_F(GraphEffectCustomHLSLFixture, OperatorPortsFromSignature) {
-	constexpr std::string_view CODE = "/// return: sum\n"
+	constexpr std::string_view Code = "/// return: sum\n"
 									  "float Mix(in float3 a, out float2 b, uint n, inout bool c, float4x4 m)\n"
 									  "{\n"
 									  "  b = a.xy; c = true;\n"
 									  "  return a.x + n;\n"
 									  "}";
 	const GraphDocument document =
-		Parse(Effect({}, std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{},"Operator Name":"Mixer"}}}})", Json(CODE))));
+		Parse(Effect({}, std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{},"Operator Name":"Mixer"}}}})", JSON(Code))));
 	GraphDefinitions definitions;
 	const GraphNodeDefinition* definition = definitions.Find(document, document.nodes[0]);
 	ASSERT_NE(definition, nullptr);
@@ -304,7 +304,7 @@ TEST_F(GraphEffectCustomHLSLFixture, OperatorPortsFromSignature) {
 	EXPECT_TRUE(definition->customHLSL->error.empty()) << definition->customHLSL->error;
 	EXPECT_TRUE(definition->customHLSL->attributes.empty());
 
-	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR);
+	const GraphNodeDefinition* table = GraphNodeLibrary::Find(GraphEffectCustomHLSLOperator);
 	ASSERT_NE(table, nullptr);
 	ASSERT_EQ(table->inputs.size(), 1u);
 	EXPECT_EQ(table->inputs[0].name, "value");
@@ -342,7 +342,7 @@ TEST_F(GraphEffectCustomHLSLFixture, UnrunnableCodeRefusedOnNode) {
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	const auto operatorRefusal = [&](std::string_view code) {
 		const str text = Effect(R"({"id":50,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[40,"out"]}}})",
-								std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{}}}}})", Json(code)));
+								std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{}}}}})", JSON(code)));
 		EXPECT_FALSE(Compile(text, effect, diagnostics));
 		return Said(diagnostics);
 	};
@@ -354,39 +354,39 @@ TEST_F(GraphEffectCustomHLSLFixture, UnrunnableCodeRefusedOnNode) {
 	const GraphNodeDefinition* definition = definitions.Find(broken, broken.contexts[0].blocks[0]);
 	ASSERT_NE(definition, nullptr);
 	EXPECT_TRUE(std::any_of(definition->settings.begin(), definition->settings.end(),
-							[](const GraphSettingDefinition& setting) { return setting.key == GRAPH_CUSTOM_HLSL_CODE && setting.multiline; }));
+							[](const GraphSettingDefinition& setting) { return setting.key == GraphCustomHLSLCode && setting.multiline; }));
 }
 
 TEST_F(GraphEffectCustomHLSLFixture, BlockFitsParticleContexts) {
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_INITIALIZE, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK));
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK));
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK));
-	EXPECT_TRUE(GraphEffectRules::Holds(GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK));
-	EXPECT_FALSE(GraphEffectRules::Holds(GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectInitialize, GraphEffectCustomHLSLBlock));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectUpdate, GraphEffectCustomHLSLBlock));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectOutputDefinition, GraphEffectCustomHLSLBlock));
+	EXPECT_TRUE(GraphEffectRules::Holds(GraphEffectOutputMesh, GraphEffectCustomHLSLBlock));
+	EXPECT_FALSE(GraphEffectRules::Holds(GraphEffectSpawn, GraphEffectCustomHLSLBlock));
 
 	const GraphDocument document = Parse(Effect({}));
 	const auto offered = [&](u32 context) {
 		Vector<EffectGraphEditOps::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 		EffectGraphEditOps::BlockChoices(document, context, choices);
 		return std::any_of(choices.begin(), choices.end(), [](const EffectGraphEditOps::BlockChoice& choice) {
-			return choice.def == GRAPH_EFFECT_CUSTOM_HLSL_BLOCK && choice.category == "HLSL" && choice.name == "Custom HLSL";
+			return choice.def == GraphEffectCustomHLSLBlock && choice.category == "HLSL" && choice.name == "Custom HLSL";
 		});
 	};
 	EXPECT_TRUE(offered(1));
 	EXPECT_TRUE(offered(2));
 	EXPECT_TRUE(offered(3));
-	EXPECT_TRUE(EffectGraphEditOps::IsOperator(*GraphNodeLibrary::Find(GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR)));
-	EXPECT_TRUE(GraphEffectRules::IsEffectOnly(GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR));
+	EXPECT_TRUE(EffectGraphEditOps::IsOperator(*GraphNodeLibrary::Find(GraphEffectCustomHLSLOperator)));
+	EXPECT_TRUE(GraphEffectRules::IsEffectOnly(GraphEffectCustomHLSLOperator));
 
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	const str inOutput = Block(52, "void Fade(inout EffectAttributes attributes) { attributes.alpha *= 0.5; }");
-	ASSERT_TRUE(Compile(Effect(Block(50, LIFT), {}, Block(51, LIFT), inOutput), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Effect(Block(50, Lift), {}, Block(51, Lift), inOutput), effect, diagnostics)) << Said(diagnostics);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("SltCustomHLSL_"), str::npos);
 }
 
 TEST_F(GraphEffectCustomHLSLFixture, KernelHoldsFunctionOnce) {
-	const str blocks = Block(50, LIFT, R"("scale":{"value":[1]})") + "," + Block(51, LIFT, R"("scale":{"value":[2]})") + "," +
+	const str blocks = Block(50, Lift, R"("scale":{"value":[1]})") + "," + Block(51, Lift, R"("scale":{"value":[2]})") + "," +
 					   Block(52, "void Other(inout EffectAttributes attributes) { attributes.alpha = 0.5; }");
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -413,7 +413,7 @@ TEST_F(GraphEffectCustomHLSLFixture, ACPUProgramRefusesCustomHLSLByName) {
 {{"id":4,"def":"Context/Spawn","blocks":[{{"id":5,"def":"Block/ConstantSpawnRate","in":{{"Rate":{{"from":[40,"out"]}}}}}}]}},
 {{"id":1,"def":"Context/Initialize","flow":[[4,"In"]],"settings":{{"Capacity":64}},"blocks":[]}},
 {{"id":3,"def":"Context/OutputParticlePrimitive","flow":[[1,"In"]],"blocks":[]}}]}})",
-								 Json(GraphCustomHLSL::DEFAULT_OPERATOR_CODE));
+								 JSON(GraphCustomHLSL::DefaultOperatorCode));
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	EXPECT_FALSE(Compile(text, effect, diagnostics));
@@ -452,7 +452,7 @@ TEST_F(GraphEffectCustomHLSLFixture, ShaderFileIncludedWhole) {
 	EXPECT_NE(kernel.find("Shift.hlsl\""), str::npos);
 	EXPECT_NE(kernel.find("Shift(attributes"), str::npos);
 
-	const str missing = RefusalOf(Block(50, LIFT, {}, R"(,"Shader File":"0123456789abcdef0123456789abcdef")"));
+	const str missing = RefusalOf(Block(50, Lift, {}, R"(,"Shader File":"0123456789abcdef0123456789abcdef")"));
 	EXPECT_NE(missing.find("uses shader file"), str::npos) << missing;
 }
 
@@ -493,7 +493,7 @@ namespace {
 } // anonymous namespace
 
 TEST_F(GraphEffectCustomHLSLReadbackFixture, CustomBlockWriteReadsBack) {
-	const str blocks = Block(50, LIFT, R"("offset":{"value":[1,2,3]},"scale":{"value":[0.25]})") +
+	const str blocks = Block(50, Lift, R"("offset":{"value":[1,2,3]},"scale":{"value":[0.25]})") +
 					   R"(,{"id":51,"def":"Block/SetAttribute","settings":{"Attribute":"size","Composition":"Multiply"},"in":{"Size":{"value":[3]}}},)" +
 					   Block(52, "void Id(inout EffectAttributes attributes)\n{\n  attributes.color = float3(attributes.particleId, 0, 1);\n}") + "," +
 					   Block(53, "void Odd(inout EffectAttributes attributes)\n{\n  if (attributes.particleId % 2 == 1)\n    attributes.alpha = 0.25;\n"
@@ -535,8 +535,8 @@ TEST_F(GraphEffectCustomHLSLReadbackFixture, OperatorsReturnAndOutParameterFeedB
 		std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{}}},"in":{{"a":{{"value":[3]}},"b":{{"value":[1]}}}}}},)"
 					R"({{"id":41,"def":"HLSL/CustomHLSL","settings":{{"HLSL Code":{}}},"in":{{"n":{{"from":[42,"particleId"]}}}}}},)"
 					R"({{"id":42,"def":"Attribute/GetAttribute","settings":{{"Attribute":"particleId"}}}})",
-					Json("float Sum(float a, float b, out float difference)\n{\n  difference = a - b;\n  return a + b;\n}"),
-					Json("uint Twice(uint n) { return n * 2; }"));
+					JSON("float Sum(float a, float b, out float difference)\n{\n  difference = a - b;\n  return a + b;\n}"),
+					JSON("uint Twice(uint n) { return n * 2; }"));
 	const str blocks = R"({"id":50,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[40,"out"]}}},)"
 					   R"({"id":51,"def":"Block/SetAttribute","settings":{"Attribute":"alpha"},"in":{"Alpha":{"from":[40,"difference"]}}},)"
 					   R"({"id":52,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[41,"out"]}}})";

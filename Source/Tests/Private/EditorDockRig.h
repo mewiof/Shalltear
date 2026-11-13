@@ -11,8 +11,8 @@ namespace EditorTest {
 	using namespace Shalltear;
 
 	struct DockedPanelRig {
-		static constexpr StringHash PANEL_TAB = "tab.panel"_hash;
-		static constexpr StringHash OTHER_TAB = "tab.other"_hash;
+		static constexpr StringHash PanelTab = "tab.panel"_hash;
+		static constexpr StringHash OtherTab = "tab.other"_hash;
 
 		UITest::MockFontSystem fonts;
 		UI::Context context;
@@ -24,17 +24,17 @@ namespace EditorTest {
 			EditorTheme::ApplyToContext(context);
 			panel = PanelManager::OpenPanel(TypeRegistry::FindType(StringHash(panelTypeName)));
 			Handle<EditorPanel> built = panel;
-			dock.RegisterPanel(PANEL_TAB, "Panel", [built](UI::Context& c, UI::ElementHandle parent) {
+			dock.RegisterPanel(PanelTab, "Panel", [built](UI::Context& c, UI::ElementHandle parent) {
 				if (EditorPanel* live = built.Get()) {
 					live->BuildContent(c, parent);
 				}
 			});
-			dock.RegisterPanel(OTHER_TAB, "Other", [](UI::Context& c, UI::ElementHandle parent) {
+			dock.RegisterPanel(OtherTab, "Other", [](UI::Context& c, UI::ElementHandle parent) {
 				c.AppendChild(parent, c.CreateElement());
 			});
-			dock.DockPanel(PANEL_TAB, dock.GetRootNode(), UI::DockZone::Center);
-			dock.DockPanel(OTHER_TAB, dock.GetRootNode(), UI::DockZone::Center);
-			dock.ActivatePanel(PANEL_TAB);
+			dock.DockPanel(PanelTab, dock.GetRootNode(), UI::DockZone::Center);
+			dock.DockPanel(OtherTab, dock.GetRootNode(), UI::DockZone::Center);
+			dock.ActivatePanel(PanelTab);
 			Frame();
 			Frame();
 		}
@@ -52,8 +52,8 @@ namespace EditorTest {
 		}
 
 		void SwitchAwayAndBack() {
-			ShowTab(OTHER_TAB);
-			ShowTab(PANEL_TAB);
+			ShowTab(OtherTab);
+			ShowTab(PanelTab);
 			Frame();
 		}
 

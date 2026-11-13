@@ -24,7 +24,7 @@ namespace Shalltear {
 
 	namespace VisualEffectsImpl {
 
-		inline constexpr std::string_view EFFECT_SETTINGS_PATH = "Effects";
+		inline constexpr std::string_view EffectSettingsPath = "Effects";
 
 		struct EffectClockSource {
 			f32 delta = 0.0f;

@@ -10,7 +10,7 @@ namespace Shalltear::Linux {
 		};
 
 		// X11 keysym values, shared by xkbcommon
-		constexpr KeysymEntry KEYSYMS[] = {
+		constexpr KeysymEntry Keysyms[] = {
 			{0xff1b, Key::Escape},
 			{0xff0d, Key::Enter},
 			{0xff09, Key::Tab},
@@ -82,7 +82,7 @@ namespace Shalltear::Linux {
 		};
 
 		// evdev codes of US layout's symbol keys
-		constexpr ScancodeEntry SCANCODES[] = {
+		constexpr ScancodeEntry Scancodes[] = {
 			{16, Key::Q},
 			{17, Key::W},
 			{18, Key::E},
@@ -154,7 +154,7 @@ namespace Shalltear::Linux {
 		if (keysym >= 0xffb0 && keysym <= 0xffb9) {
 			return Offset(Key::Kp0, keysym - 0xffb0);
 		}
-		for (const KeysymEntry& entry : KEYSYMS) {
+		for (const KeysymEntry& entry : Keysyms) {
 			if (entry.keysym == keysym) {
 				return entry.key;
 			}
@@ -169,7 +169,7 @@ namespace Shalltear::Linux {
 		if (evdevScancode >= EVDEV_F13 && evdevScancode <= EVDEV_F24) {
 			return Offset(Key::F13, evdevScancode - EVDEV_F13);
 		}
-		for (const ScancodeEntry& entry : SCANCODES) {
+		for (const ScancodeEntry& entry : Scancodes) {
 			if (entry.scancode == evdevScancode) {
 				return entry.key;
 			}

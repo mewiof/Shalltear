@@ -50,7 +50,7 @@ using namespace UITest;
 
 namespace {
 
-	constexpr std::string_view CATEGORY = "Effect Graphs";
+	constexpr std::string_view Category = "Effect Graphs";
 
 	str Spark(std::string_view tint, std::string_view x) {
 		return str(R"({"_type":"EffectGraph","version":2,"nextId":20,"settings":{},
@@ -184,7 +184,7 @@ TEST_F(VisualEffectsEditorFixture, EditorHalfRegistersEachLoad) {
 	const auto listed = []() {
 		Vector<str> labels{GetMemoryResource(MemTag::Editor)};
 		SceneViewEffects::GetLabels(labels);
-		return std::find(labels.begin(), labels.end(), CATEGORY) != labels.end();
+		return std::find(labels.begin(), labels.end(), Category) != labels.end();
 	};
 	const auto drawn = []() { return PropertyDrawers::FindFieldDrawerFor(StringHash("VisualEffect"), StringHash("properties")) != nullptr; };
 	const TypeInfo* binder = TypeRegistry::FindType(StringHash("VisualEffectPositionBinder"));
@@ -194,7 +194,7 @@ TEST_F(VisualEffectsEditorFixture, EditorHalfRegistersEachLoad) {
 	EXPECT_TRUE(drawn());
 	EXPECT_TRUE(filed());
 	Vector<StringHash> hidden{GetMemoryResource(MemTag::Editor)};
-	SceneViewEffects::GetHiddenRenderers([](std::string_view label) { return label != CATEGORY; }, hidden);
+	SceneViewEffects::GetHiddenRenderers([](std::string_view label) { return label != Category; }, hidden);
 	EXPECT_TRUE(std::find(hidden.begin(), hidden.end(), StringHash("VisualEffect")) != hidden.end());
 
 	EditorExtensions::Unload(_moduleBase);
@@ -303,7 +303,7 @@ TEST_F(VisualEffectsEditorFixture, EditModePlaybackFollowsView) {
 	const auto pick = [&]() {
 		ClickElement(context, FindByClass(context, root, EditorTheme::Class::ToolButton, 9));
 		context.Update();
-		UI::ElementHandle row = FindByText(context, context.GetRoot(), CATEGORY);
+		UI::ElementHandle row = FindByText(context, context.GetRoot(), Category);
 		EXPECT_TRUE(row.IsValid());
 		if (row.IsValid()) {
 			ClickElement(context, row);

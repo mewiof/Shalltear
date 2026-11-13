@@ -70,16 +70,16 @@ namespace {
 	}
 
 	enum : u8 {
-		MONO = 1,
-		FRONT_LEFT = 2,
-		FRONT_RIGHT = 3,
-		FRONT_CENTER = 4,
-		LOW_FREQUENCY = 5,
-		BACK_LEFT = 6,
-		BACK_RIGHT = 7,
-		BACK_CENTER = 8,
-		SIDE_LEFT = 9,
-		SIDE_RIGHT = 10,
+		Mono = 1,
+		FrontLeft = 2,
+		FrontRight = 3,
+		FrontCenter = 4,
+		LowFrequency = 5,
+		BackLeft = 6,
+		BackRight = 7,
+		BackCenter = 8,
+		SideLeft = 9,
+		SideRight = 10,
 	};
 
 	std::vector<f32> ChannelPeaks(const CookedBytes& cooked, u32 channels) {
@@ -118,7 +118,7 @@ namespace {
 #include "AudioClipAccess.h"
 #include "AudioClipData.h"
 #include "AudioImportOps.h"
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 #include "AudioWaveform.h"
 
 #include "Shalltear/Audio/AudioClip.h"
@@ -217,17 +217,17 @@ TEST_F(AudioClipBuildFixture, QoaPlaysDecodeEitherLoadType) {
 	const AudioClipData* playback = AudioClipAccess::GetPlayback(*onLoad);
 	ASSERT_NE(cooked, nullptr);
 	ASSERT_NE(playback, nullptr);
-	EXPECT_EQ(cooked->encoding, AudioClipEncoding::Qoa);
-	EXPECT_EQ(playback->encoding, AudioClipEncoding::Pcm);
+	EXPECT_EQ(cooked->encoding, AudioClipEncoding::QOA);
+	EXPECT_EQ(playback->encoding, AudioClipEncoding::PCM);
 	EXPECT_EQ(onLoad->GetCompressionFormat(), AudioCompressionFormat::QOA);
 
 	std::vector<f32> decoded(static_cast<size_t>(cooked->frames) * cooked->channels);
-	QoaDecodeAll(cooked->qoa, decoded.data());
+	QOADecodeAll(cooked->qoa, decoded.data());
 	EXPECT_EQ(std::memcmp(playback->pcm, decoded.data(), decoded.size() * sizeof(f32)), 0);
 
 	AudioClip* inMemory = Build(source, As(AudioCompressionFormat::QOA, AudioClipLoadType::CompressedInMemory));
 	EXPECT_EQ(AudioClipAccess::GetPlayback(*inMemory), AudioClipAccess::GetCooked(*inMemory));
-	EXPECT_EQ(AudioClipAccess::GetPlayback(*inMemory)->encoding, AudioClipEncoding::Qoa);
+	EXPECT_EQ(AudioClipAccess::GetPlayback(*inMemory)->encoding, AudioClipEncoding::QOA);
 }
 
 TEST_F(AudioClipBuildFixture, OpusIsAlways48kHz) {
@@ -241,8 +241,8 @@ TEST_F(AudioClipBuildFixture, OpusIsAlways48kHz) {
 	EXPECT_EQ(onLoad->GetSamples(), 48000u);
 	EXPECT_EQ(onLoad->GetCompressionFormat(), AudioCompressionFormat::Opus);
 	EXPECT_EQ(cooked->encoding, AudioClipEncoding::Opus);
-	EXPECT_EQ(playback->encoding, AudioClipEncoding::Pcm);
-	const std::unique_ptr<AudioClipData, void (*)(AudioClipData*)> decoded(DecodeToPcm(*cooked), ReleaseClipData);
+	EXPECT_EQ(playback->encoding, AudioClipEncoding::PCM);
+	const std::unique_ptr<AudioClipData, void (*)(AudioClipData*)> decoded(DecodeToPCM(*cooked), ReleaseClipData);
 	ASSERT_TRUE(decoded);
 	EXPECT_EQ(std::memcmp(playback->pcm, decoded->pcm, static_cast<size_t>(playback->frames * 2) * sizeof(f32)), 0);
 
@@ -336,7 +336,7 @@ TEST_F(AudioClipBuildFixture, CookRoundTripIsStable) {
 			const AudioClipData* was = AudioClipAccess::GetPlayback(*built);
 			const AudioClipData* now = AudioClipAccess::GetPlayback(*loaded);
 			ASSERT_EQ(was->encoding, now->encoding);
-			if (was->encoding == AudioClipEncoding::Pcm) {
+			if (was->encoding == AudioClipEncoding::PCM) {
 				EXPECT_EQ(std::memcmp(was->pcm, now->pcm, static_cast<size_t>(was->frames * was->channels) * sizeof(f32)), 0);
 			} else if (was->encoding == AudioClipEncoding::Streamed) {
 				EXPECT_EQ(std::memcmp(was->prime, now->prime, static_cast<size_t>(was->primeFrames * was->channels) * sizeof(f32)), 0);
@@ -778,7 +778,7 @@ namespace {
 		std::filesystem::path _root;
 		SettingsPaths _paths;
 		ModuleHandle _module;
-		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CACHE_EVERYTHING};
 
 		void SetUp() override {
 			static std::atomic<u64> counter{0};
@@ -840,7 +840,7 @@ namespace {
 			return AssetDatabase::LoadAsset(AssetPath(name));
 		}
 
-		static JSONValue PcmSettings() {
+		static JSONValue PCMSettings() {
 			JSONValue settings = JSONValue::MakeObject();
 			settings.AddMember("compressionFormat", JSONValue::MakeString("PCM"));
 			return settings;
@@ -883,7 +883,7 @@ TEST_F(AudioImportFixture, EveryCommonFormatBecomesClipOfShape) {
 		EXPECT_LE(Field<u64>(opus, "_samples"), at48 + (format.slack * 48000 + format.rate - 1) / format.rate + 1) << format.file;
 		AssetDatabase::UnloadAsset(opus);
 
-		Asset* clip = ReimportAs(format.file, PcmSettings());
+		Asset* clip = ReimportAs(format.file, PCMSettings());
 		ASSERT_NE(clip, nullptr) << format.file;
 		EXPECT_EQ(clip->GetType()->name, StringHash("AudioClip")) << format.file;
 		EXPECT_EQ(Field<u32>(clip, "_frequency"), format.rate) << format.file;
@@ -903,9 +903,9 @@ TEST_F(AudioImportFixture, EachContainersSpeakerOrderReachesCookedClip) {
 		f32 tolerance;
 	};
 	const OrderCase cases[] = {
-		{"quad_48000_pcm16.flac", 4, {FRONT_LEFT, FRONT_RIGHT, BACK_LEFT, BACK_RIGHT}, 0.002f},
-		{"three_48000.ogg", 3, {FRONT_LEFT, FRONT_CENTER, FRONT_RIGHT}, 0.03f},
-		{"back51_48000_pcm16.wav", 6, {FRONT_LEFT, FRONT_RIGHT, FRONT_CENTER, LOW_FREQUENCY, BACK_LEFT, BACK_RIGHT}, 0.002f},
+		{"quad_48000_pcm16.flac", 4, {FrontLeft, FrontRight, BackLeft, BackRight}, 0.002f},
+		{"three_48000.ogg", 3, {FrontLeft, FrontCenter, FrontRight}, 0.03f},
+		{"back51_48000_pcm16.wav", 6, {FrontLeft, FrontRight, FrontCenter, LowFrequency, BackLeft, BackRight}, 0.002f},
 	};
 	for (const OrderCase& order : cases) {
 		ASSERT_TRUE(Stage(order.file));
@@ -914,7 +914,7 @@ TEST_F(AudioImportFixture, EachContainersSpeakerOrderReachesCookedClip) {
 		Asset* first = AssetDatabase::LoadAsset(AssetPath(order.file));
 		ASSERT_NE(first, nullptr) << order.file;
 		AssetDatabase::UnloadAsset(first);
-		Asset* clip = ReimportAs(order.file, PcmSettings());
+		Asset* clip = ReimportAs(order.file, PCMSettings());
 		ASSERT_NE(clip, nullptr) << order.file;
 
 		CookedBytes cooked;
@@ -946,7 +946,7 @@ TEST_F(AudioImportFixture, SidecarEditDrivesNextImport) {
 												<< sidecar;
 	}
 
-	JSONValue settings = PcmSettings();
+	JSONValue settings = PCMSettings();
 	settings.AddMember("forceToMono", JSONValue::MakeBool(true));
 	Asset* mono = ReimportAs("stereo_44100_pcm16.wav", settings);
 	ASSERT_NE(mono, nullptr);

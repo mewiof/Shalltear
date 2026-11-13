@@ -20,15 +20,15 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view CONTEXTS[] = {GRAPH_EFFECT_EVENT, GRAPH_EFFECT_GPU_EVENT, GRAPH_EFFECT_OUTPUT_EVENT, GRAPH_EFFECT_SPAWN, GRAPH_EFFECT_INITIALIZE,
-												 GRAPH_EFFECT_UPDATE, GRAPH_EFFECT_OUTPUT, GRAPH_EFFECT_OUTPUT_MESH, GRAPH_EFFECT_OUTPUT_POINT,
-												 GRAPH_EFFECT_OUTPUT_LINE,
-												 GRAPH_EFFECT_OUTPUT_LIT, GRAPH_EFFECT_OUTPUT_LIT_MESH, GRAPH_EFFECT_OUTPUT_NODE_SHADER,
-												 GRAPH_EFFECT_OUTPUT_NODE_SHADER_MESH, GRAPH_EFFECT_OUTPUT_STRIP, GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP};
+		constexpr std::string_view ContextTable[] = {GraphEffectEvent, GraphEffectGPUEvent, GraphEffectOutputEventDefinition, GraphEffectSpawn, GraphEffectInitialize,
+													 GraphEffectUpdate, GraphEffectOutputDefinition, GraphEffectOutputMesh, GraphEffectOutputPoint,
+													 GraphEffectOutputLine,
+													 GraphEffectOutputLit, GraphEffectOutputLitMesh, GraphEffectOutputNodeShader,
+													 GraphEffectOutputNodeShaderMesh, GraphEffectOutputStrip, GraphEffectOutputNodeShaderStrip};
 
-		constexpr std::string_view PROPERTY_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4", "Color", "Boolean"};
+		constexpr std::string_view PropertyTypeTable[] = {"Float", "Vector2", "Vector3", "Vector4", "Color", "Boolean"};
 
-		constexpr std::string_view COMPOSITION_SYNONYMS[] = {"overwrite write", "increase plus sum", "scale times product", "lerp mix"};
+		constexpr std::string_view CompositionSynonyms[] = {"overwrite write", "increase plus sum", "scale times product", "lerp mix"};
 
 		const GraphContext* FindContext(const GraphDocument& document, u32 id) {
 			for (const GraphContext& context : document.contexts) {
@@ -74,11 +74,11 @@ namespace Shalltear {
 
 	namespace EffectGraphEditOps {
 
-		std::span<const std::string_view> Contexts() { return CONTEXTS; }
+		std::span<const std::string_view> Contexts() { return ContextTable; }
 
 		void ContextChoices(Vector<BlockChoice>& out) {
 			out.clear();
-			for (std::string_view def : CONTEXTS) {
+			for (std::string_view def : ContextTable) {
 				const GraphNodeDefinition* definition = GraphNodeLibrary::Find(def);
 				if (!definition) {
 					continue;
@@ -89,13 +89,13 @@ namespace Shalltear {
 				choice.synonyms = str(definition->synonyms);
 				choice.def = str(def);
 				out.push_back(std::move(choice));
-				if (def == GRAPH_EFFECT_INITIALIZE) {
+				if (def == GraphEffectInitialize) {
 					BlockChoice strips;
 					strips.name = "Initialize Particle Strip";
 					strips.category = "Context";
 					strips.synonyms = "strip trail ribbon";
 					strips.def = str(def);
-					strips.settings.push_back(Chosen("Data Type", GRAPH_EFFECT_DATA_TYPES[1]));
+					strips.settings.push_back(Chosen("Data Type", GraphEffectDataTypes[1]));
 					out.push_back(std::move(strips));
 				}
 			}
@@ -126,7 +126,7 @@ namespace Shalltear {
 
 		std::span<const std::string_view> FlowInputs(const GraphDocument& document, u32 context, GraphDefinitions* definitions) {
 			const GraphContext* held = FindContext(document, context);
-			if (held && held->node.def == GRAPH_EFFECT_SYSTEM_SUBGRAPH) {
+			if (held && held->node.def == GraphEffectSystemSubgraph) {
 				const GraphNodeDefinition* built = definitions ? definitions->Find(document, held->node) : nullptr;
 				return built ? built->flowInputs : std::span<const std::string_view>{};
 			}
@@ -169,31 +169,31 @@ namespace Shalltear {
 			}
 			if (GraphEffectRules::DrawsStrips(target->node.def)) {
 				const GraphContext* initialize = source;
-				if (source->node.def == GRAPH_EFFECT_UPDATE) {
+				if (source->node.def == GraphEffectUpdate) {
 					initialize = nullptr;
 					for (const GraphFlow& flow : source->flows) {
 						const GraphContext* feeding = FindContext(document, flow.from);
-						initialize = feeding && feeding->node.def == GRAPH_EFFECT_INITIALIZE ? feeding : initialize;
+						initialize = feeding && feeding->node.def == GraphEffectInitialize ? feeding : initialize;
 					}
 				}
 				if (initialize && !GraphEffectRules::MakesStrips(initialize->node)) {
 					return refuse(str(targetDefinition->name) + " draws strips + this system makes particles (its Initialize's Data Type is Particle)");
 				}
 			}
-			if (target->node.def == GRAPH_EFFECT_INITIALIZE) {
-				const bool gpu = source->node.def == GRAPH_EFFECT_GPU_EVENT;
+			if (target->node.def == GraphEffectInitialize) {
+				const bool gpu = source->node.def == GraphEffectGPUEvent;
 				for (const GraphFlow& flow : target->flows) {
 					const GraphContext* feeding = FindContext(document, flow.from);
-					const bool fedByGPU = feeding && feeding->node.def == GRAPH_EFFECT_GPU_EVENT;
+					const bool fedByGPU = feeding && feeding->node.def == GraphEffectGPUEvent;
 					if (feeding && (gpu || fedByGPU)) {
 						return refuse(gpu && !fedByGPU ? "a Spawn or an Event feeds this Initialize already (a GPU Event can't feed one beside them)"
 													   : "a GPU Event feeds this Initialize already (it spawns from that one alone)");
 					}
 				}
 			}
-			if (target->node.def == GRAPH_EFFECT_UPDATE && source->node.def == GRAPH_EFFECT_INITIALIZE) {
+			if (target->node.def == GraphEffectUpdate && source->node.def == GraphEffectInitialize) {
 				for (const GraphContext& other : document.contexts) {
-					if (other.node.id == to || other.node.def != GRAPH_EFFECT_UPDATE) {
+					if (other.node.id == to || other.node.def != GraphEffectUpdate) {
 						continue;
 					}
 					if (std::any_of(other.flows.begin(), other.flows.end(), [&](const GraphFlow& flow) { return flow.from == from; })) {
@@ -217,7 +217,7 @@ namespace Shalltear {
 		}
 
 		bool CanUseSystemSubgraph(const GraphDocument& document, const Guid& asset, GraphDefinitions& definitions, const Guid& editing) {
-			if (document.type != GRAPH_EFFECT_DOCUMENT_TYPE) {
+			if (document.type != GraphEffectDocumentType) {
 				return false;
 			}
 			const GraphSubgraph* subgraph = asset.IsValid() && asset != editing ? definitions.Subgraph(asset) : nullptr;
@@ -229,10 +229,10 @@ namespace Shalltear {
 			if (!CanUseSystemSubgraph(document, asset, definitions, editing)) {
 				return 0;
 			}
-			const u32 created = AddContext(document, GRAPH_EFFECT_SYSTEM_SUBGRAPH, position);
+			const u32 created = AddContext(document, GraphEffectSystemSubgraph, position);
 			for (GraphContext& context : document.contexts) {
 				if (created != 0 && context.node.id == created) {
-					context.node.settings.push_back({str(GRAPH_SUBGRAPH_ASSET_SETTING), NodeShaderEditOps::Quote(asset.ToString())});
+					context.node.settings.push_back({str(GraphSubgraphAssetSetting), NodeShaderEditOps::Quote(asset.ToString())});
 				}
 			}
 			return created;
@@ -264,29 +264,29 @@ namespace Shalltear {
 
 		static void ChoicesFor(std::string_view def, Vector<BlockChoice>& out) {
 			out.clear();
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_CONSTANT_RATE)) {
-				const GraphNodeDefinition* rate = GraphNodeLibrary::Find(GRAPH_EFFECT_CONSTANT_RATE);
+			if (GraphEffectRules::Holds(def, GraphEffectConstantRate)) {
+				const GraphNodeDefinition* rate = GraphNodeLibrary::Find(GraphEffectConstantRate);
 				BlockChoice constant;
 				constant.name = str(rate->name);
 				constant.category = "Spawn";
 				constant.synonyms = str(rate->synonyms);
-				constant.def = str(GRAPH_EFFECT_CONSTANT_RATE);
+				constant.def = str(GraphEffectConstantRate);
 				out.push_back(std::move(constant));
 				for (std::string_view repeat : {std::string_view("Single"), std::string_view("Periodic")}) {
 					BlockChoice burst;
 					burst.name = str(repeat) + " Burst";
 					burst.category = "Spawn";
 					burst.synonyms = "emission burst";
-					burst.def = str(GRAPH_EFFECT_BURST);
+					burst.def = str(GraphEffectBurst);
 					burst.settings.push_back(Chosen("Repeat", repeat));
 					out.push_back(std::move(burst));
 				}
-				const GraphNodeDefinition* increment = GraphNodeLibrary::Find(GRAPH_EFFECT_INCREMENT_STRIP_INDEX);
+				const GraphNodeDefinition* increment = GraphNodeLibrary::Find(GraphEffectIncrementStripIndex);
 				BlockChoice strip;
 				strip.name = str(increment->name);
 				strip.category = "Spawn/Custom";
 				strip.synonyms = str(increment->synonyms);
-				strip.def = str(GRAPH_EFFECT_INCREMENT_STRIP_INDEX);
+				strip.def = str(GraphEffectIncrementStripIndex);
 				out.push_back(std::move(strip));
 				for (const GraphEffectAttributeInfo& attribute : GraphEffectAttributes::All()) {
 					if (attribute.readOnly) {
@@ -296,40 +296,40 @@ namespace Shalltear {
 					set.name = "Set SpawnEvent " + VariantName("Set", attribute.name, false).substr(4);
 					set.category = "Attribute";
 					set.synonyms = "spawn event attribute " + str(attribute.name);
-					set.def = str(GRAPH_EFFECT_SET_SPAWN_EVENT);
-					set.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, attribute.name));
+					set.def = str(GraphEffectSetSpawnEvent);
+					set.settings.push_back(Chosen(GraphEffectAttributeSetting, attribute.name));
 					out.push_back(std::move(set));
 				}
 			}
-			if (!GraphEffectRules::Holds(def, GRAPH_EFFECT_SET_ATTRIBUTE)) {
+			if (!GraphEffectRules::Holds(def, GraphEffectSetAttribute)) {
 				return;
 			}
-			const bool initialize = def == GRAPH_EFFECT_INITIALIZE;
-			constexpr std::string_view RANDOM_NAMES[] = {"", "Uniform", "Per Component"};
-			constexpr std::string_view RANDOM_OPTIONS[] = {"Off", "Uniform", "PerComponent"};
+			const bool initialize = def == GraphEffectInitialize;
+			constexpr std::string_view RandomNames[] = {"", "Uniform", "Per Component"};
+			constexpr std::string_view RandomOptions[] = {"Off", "Uniform", "PerComponent"};
 			for (const GraphEffectAttributeInfo& attribute : GraphEffectAttributes::All()) {
 				if (attribute.readOnly) {
 					continue;
 				}
-				for (u32 composition = 0; composition < std::size(GRAPH_EFFECT_COMPOSITIONS); ++composition) {
+				for (u32 composition = 0; composition < std::size(GraphEffectCompositions); ++composition) {
 					if (attribute.type == GraphValueType::Bool && composition != 0) {
 						continue;
 					}
-					for (u32 random = 0; random < std::size(RANDOM_NAMES); ++random) {
+					for (u32 random = 0; random < std::size(RandomNames); ++random) {
 						if (random != 0 && (attribute.type == GraphValueType::Bool || (random == 2 && attribute.type != GraphValueType::Float3))) {
 							continue;
 						}
 						BlockChoice choice;
-						choice.name = VariantName(GRAPH_EFFECT_COMPOSITIONS[composition], attribute.name, false, RANDOM_NAMES[random]);
-						choice.category = "Attribute/" + str(GRAPH_EFFECT_COMPOSITIONS[composition]);
-						choice.synonyms = str(COMPOSITION_SYNONYMS[composition]) + " attribute " + str(attribute.name) + (random != 0 ? " random range" : "");
-						choice.def = str(GRAPH_EFFECT_SET_ATTRIBUTE);
-						choice.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, attribute.name));
+						choice.name = VariantName(GraphEffectCompositions[composition], attribute.name, false, RandomNames[random]);
+						choice.category = "Attribute/" + str(GraphEffectCompositions[composition]);
+						choice.synonyms = str(CompositionSynonyms[composition]) + " attribute " + str(attribute.name) + (random != 0 ? " random range" : "");
+						choice.def = str(GraphEffectSetAttribute);
+						choice.settings.push_back(Chosen(GraphEffectAttributeSetting, attribute.name));
 						if (composition != 0) {
-							choice.settings.push_back(Chosen("Composition", GRAPH_EFFECT_COMPOSITIONS[composition]));
+							choice.settings.push_back(Chosen("Composition", GraphEffectCompositions[composition]));
 						}
 						if (random != 0) {
-							choice.settings.push_back(Chosen("Random", RANDOM_OPTIONS[random]));
+							choice.settings.push_back(Chosen("Random", RandomOptions[random]));
 						}
 						SortSettings(choice.settings);
 						out.push_back(std::move(choice));
@@ -340,28 +340,28 @@ namespace Shalltear {
 					inherit.name = VariantName("Set", attribute.name, true);
 					inherit.category = "Attribute/Set from Source";
 					inherit.synonyms = "inherit source attribute " + str(attribute.name);
-					inherit.def = str(GRAPH_EFFECT_SET_ATTRIBUTE);
-					inherit.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, attribute.name));
+					inherit.def = str(GraphEffectSetAttribute);
+					inherit.settings.push_back(Chosen(GraphEffectAttributeSetting, attribute.name));
 					inherit.settings.push_back(Chosen("Source", "Source"));
 					SortSettings(inherit.settings);
 					out.push_back(std::move(inherit));
 				}
 			}
-			if (!GraphEffectRules::Holds(def, GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE)) {
+			if (!GraphEffectRules::Holds(def, GraphEffectAttributeFromCurve)) {
 				return;
 			}
 			const auto fromCurve = [&out](const GraphEffectAttributeInfo& attribute, u32 composition, u32 mode) {
 				BlockChoice choice;
-				choice.name = VariantName(GRAPH_EFFECT_COMPOSITIONS[composition], attribute.name, false) + " " + str(GRAPH_EFFECT_SAMPLE_MODE_NAMES[mode]);
-				choice.category = "Attribute from Curve/" + str(GRAPH_EFFECT_COMPOSITIONS[composition]);
-				choice.synonyms = str(COMPOSITION_SYNONYMS[composition]) + " curve " + str(attribute.name) + (attribute.name == "color" ? " gradient" : "");
-				choice.def = str(GRAPH_EFFECT_ATTRIBUTE_FROM_CURVE);
-				choice.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, attribute.name));
+				choice.name = VariantName(GraphEffectCompositions[composition], attribute.name, false) + " " + str(GraphEffectSampleModeNames[mode]);
+				choice.category = "Attribute from Curve/" + str(GraphEffectCompositions[composition]);
+				choice.synonyms = str(CompositionSynonyms[composition]) + " curve " + str(attribute.name) + (attribute.name == "color" ? " gradient" : "");
+				choice.def = str(GraphEffectAttributeFromCurve);
+				choice.settings.push_back(Chosen(GraphEffectAttributeSetting, attribute.name));
 				if (composition != 0) {
-					choice.settings.push_back(Chosen("Composition", GRAPH_EFFECT_COMPOSITIONS[composition]));
+					choice.settings.push_back(Chosen("Composition", GraphEffectCompositions[composition]));
 				}
 				if (mode != 0) {
-					choice.settings.push_back(Chosen("Sample Mode", GRAPH_EFFECT_SAMPLE_MODES[mode]));
+					choice.settings.push_back(Chosen("Sample Mode", GraphEffectSampleModes[mode]));
 				}
 				SortSettings(choice.settings);
 				out.push_back(std::move(choice));
@@ -375,7 +375,7 @@ namespace Shalltear {
 				const bool age = attribute.name == "age";
 				const u32 first = age ? BY_SPEED : OVER_LIFE;
 				fromCurve(attribute, 0, first);
-				for (u32 composition = 0; composition < std::size(GRAPH_EFFECT_COMPOSITIONS); ++composition) {
+				for (u32 composition = 0; composition < std::size(GraphEffectCompositions); ++composition) {
 					for (u32 mode = 0; mode < 3; ++mode) {
 						if ((composition == 0 && mode == first) || (age && mode == OVER_LIFE) || (attribute.name == "velocity" && mode == BY_SPEED)) {
 							continue;
@@ -386,51 +386,51 @@ namespace Shalltear {
 			}
 
 			namespace B = GraphEffectBlocks;
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_POSITION_SHAPE)) {
-				for (u32 shape = 0; shape < std::size(B::POSITION_SHAPES); ++shape) {
+			if (GraphEffectRules::Holds(def, GraphEffectPositionShape)) {
+				for (u32 shape = 0; shape < std::size(B::PositionShapes); ++shape) {
 					BlockChoice choice;
-					choice.name = "Set Position Shape " + str(B::POSITION_SHAPE_NAMES[shape]);
+					choice.name = "Set Position Shape " + str(B::PositionShapeNames[shape]);
 					choice.category = "Position Shape";
-					choice.synonyms = "spawn emit position shape " + str(B::POSITION_SHAPE_NAMES[shape]);
-					choice.def = str(GRAPH_EFFECT_POSITION_SHAPE);
-					choice.settings.push_back(Chosen("Shape", B::POSITION_SHAPES[shape]));
+					choice.synonyms = "spawn emit position shape " + str(B::PositionShapeNames[shape]);
+					choice.def = str(GraphEffectPositionShape);
+					choice.settings.push_back(Chosen("Shape", B::PositionShapes[shape]));
 					out.push_back(std::move(choice));
 				}
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_POSITION_MESH)) {
-				const GraphNodeDefinition* mesh = GraphNodeLibrary::Find(GRAPH_EFFECT_POSITION_MESH);
+			if (GraphEffectRules::Holds(def, GraphEffectPositionMesh)) {
+				const GraphNodeDefinition* mesh = GraphNodeLibrary::Find(GraphEffectPositionMesh);
 				BlockChoice choice;
 				choice.name = str(mesh->name);
 				choice.category = "Position Shape";
 				choice.synonyms = str(mesh->synonyms);
-				choice.def = str(GRAPH_EFFECT_POSITION_MESH);
+				choice.def = str(GraphEffectPositionMesh);
 				out.push_back(std::move(choice));
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_POSITION_DEPTH)) {
-				const GraphNodeDefinition* depth = GraphNodeLibrary::Find(GRAPH_EFFECT_POSITION_DEPTH);
+			if (GraphEffectRules::Holds(def, GraphEffectPositionDepth)) {
+				const GraphNodeDefinition* depth = GraphNodeLibrary::Find(GraphEffectPositionDepth);
 				BlockChoice choice;
 				choice.name = str(depth->name);
 				choice.category = "Position Shape";
 				choice.synonyms = str(depth->synonyms);
-				choice.def = str(GRAPH_EFFECT_POSITION_DEPTH);
+				choice.def = str(GraphEffectPositionDepth);
 				out.push_back(std::move(choice));
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_POSITION_SEQUENTIAL)) {
+			if (GraphEffectRules::Holds(def, GraphEffectPositionSequential)) {
 				for (const u32 shape : {u32(B::SequentialCircle), u32(B::SequentialLine), u32(B::SequentialThreeDimensional)}) {
 					BlockChoice choice;
-					choice.name = "Set Position Sequential " + str(B::SEQUENTIAL_SHAPES[shape]);
+					choice.name = "Set Position Sequential " + str(B::SequentialShapes[shape]);
 					choice.category = "Position Shape/Sequential";
-					choice.synonyms = "spawn emit sequence sequential order " + str(B::SEQUENTIAL_SHAPES[shape]);
-					choice.def = str(GRAPH_EFFECT_POSITION_SEQUENTIAL);
-					choice.settings.push_back(Chosen("Composition Position", GRAPH_EFFECT_COMPOSITIONS[0]));
-					choice.settings.push_back(Chosen("Shape", B::SEQUENTIAL_SHAPES[shape]));
+					choice.synonyms = "spawn emit sequence sequential order " + str(B::SequentialShapes[shape]);
+					choice.def = str(GraphEffectPositionSequential);
+					choice.settings.push_back(Chosen("Composition Position", GraphEffectCompositions[0]));
+					choice.settings.push_back(Chosen("Shape", B::SequentialShapes[shape]));
 					SortSettings(choice.settings);
 					out.push_back(std::move(choice));
 				}
 			}
-			constexpr std::string_view FORCES[] = {GRAPH_EFFECT_FORCE, GRAPH_EFFECT_GRAVITY, GRAPH_EFFECT_LINEAR_DRAG, GRAPH_EFFECT_TURBULENCE,
-												   GRAPH_EFFECT_CONFORM_TO_SPHERE};
-			for (std::string_view force : FORCES) {
+			constexpr std::string_view Forces[] = {GraphEffectForce, GraphEffectGravity, GraphEffectLinearDrag, GraphEffectTurbulence,
+												   GraphEffectConformToSphere};
+			for (std::string_view force : Forces) {
 				if (!GraphEffectRules::Holds(def, force)) {
 					continue;
 				}
@@ -442,37 +442,37 @@ namespace Shalltear {
 				choice.def = str(force);
 				out.push_back(std::move(choice));
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_FLIPBOOK_PLAYER)) {
-				const GraphNodeDefinition* player = GraphNodeLibrary::Find(GRAPH_EFFECT_FLIPBOOK_PLAYER);
+			if (GraphEffectRules::Holds(def, GraphEffectFlipbookPlayer)) {
+				const GraphNodeDefinition* player = GraphNodeLibrary::Find(GraphEffectFlipbookPlayer);
 				BlockChoice choice;
 				choice.name = str(player->name);
 				choice.category = "FlipBook";
 				choice.synonyms = str(player->synonyms);
-				choice.def = str(GRAPH_EFFECT_FLIPBOOK_PLAYER);
+				choice.def = str(GraphEffectFlipbookPlayer);
 				out.push_back(std::move(choice));
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_ORIENT)) {
+			if (GraphEffectRules::Holds(def, GraphEffectOrient)) {
 				for (const u32 mode : {u32(B::FaceCameraPlane), u32(B::AlongVelocity), u32(B::OrientAdvanced), u32(B::FaceCameraPosition), u32(B::LookAtPosition),
 									   u32(B::LookAtLine), u32(B::FixedAxis), u32(B::CustomZ), u32(B::CustomY)}) {
 					BlockChoice choice;
-					choice.name = "Orient: " + str(B::ORIENT_MODE_NAMES[mode]);
+					choice.name = "Orient: " + str(B::OrientModeNames[mode]);
 					choice.category = "Orientation";
-					choice.synonyms = "orientation billboard facing rotate " + str(B::ORIENT_MODE_NAMES[mode]);
-					choice.def = str(GRAPH_EFFECT_ORIENT);
-					choice.settings.push_back(Chosen("Mode", B::ORIENT_MODES[mode]));
+					choice.synonyms = "orientation billboard facing rotate " + str(B::OrientModeNames[mode]);
+					choice.def = str(GraphEffectOrient);
+					choice.settings.push_back(Chosen("Mode", B::OrientModes[mode]));
 					out.push_back(std::move(choice));
 				}
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_CAMERA_FADE)) {
-				const GraphNodeDefinition* fade = GraphNodeLibrary::Find(GRAPH_EFFECT_CAMERA_FADE);
+			if (GraphEffectRules::Holds(def, GraphEffectCameraFade)) {
+				const GraphNodeDefinition* fade = GraphNodeLibrary::Find(GraphEffectCameraFade);
 				BlockChoice choice;
 				choice.name = str(fade->name);
 				choice.category = "Output";
 				choice.synonyms = str(fade->synonyms);
-				choice.def = str(GRAPH_EFFECT_CAMERA_FADE);
+				choice.def = str(GraphEffectCameraFade);
 				out.push_back(std::move(choice));
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_COLLISION_SHAPE)) {
+			if (GraphEffectRules::Holds(def, GraphEffectCollisionShape)) {
 				struct Family {
 					u32 behavior;
 					u32 first;
@@ -486,8 +486,8 @@ namespace Shalltear {
 				};
 				for (const Family& family : families) {
 					GraphNode probe;
-					probe.def = str(GRAPH_EFFECT_COLLISION_SHAPE);
-					probe.settings.push_back(Chosen("Behavior", B::BEHAVIORS[family.behavior]));
+					probe.def = str(GraphEffectCollisionShape);
+					probe.settings.push_back(Chosen("Behavior", B::Behaviors[family.behavior]));
 					if (!GraphEffectRules::HoldsBlock(def, probe)) {
 						continue;
 					}
@@ -500,18 +500,18 @@ namespace Shalltear {
 					}
 					for (const u32 shape : shapes) {
 						BlockChoice choice;
-						choice.name = str(B::BEHAVIOR_NAMES[family.behavior]) + " Shape " + str(B::COLLISION_SHAPE_NAMES[shape]);
+						choice.name = str(B::BehaviorNames[family.behavior]) + " Shape " + str(B::CollisionShapeNames[shape]);
 						choice.category = str(family.category);
-						choice.synonyms = str(family.synonyms) + str(B::COLLISION_SHAPE_NAMES[shape]);
-						choice.def = str(GRAPH_EFFECT_COLLISION_SHAPE);
-						choice.settings.push_back(Chosen("Behavior", B::BEHAVIORS[family.behavior]));
-						choice.settings.push_back(Chosen("Shape", B::COLLISION_SHAPES[shape]));
+						choice.synonyms = str(family.synonyms) + str(B::CollisionShapeNames[shape]);
+						choice.def = str(GraphEffectCollisionShape);
+						choice.settings.push_back(Chosen("Behavior", B::Behaviors[family.behavior]));
+						choice.settings.push_back(Chosen("Shape", B::CollisionShapes[shape]));
 						SortSettings(choice.settings);
 						out.push_back(std::move(choice));
 					}
 				}
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_COLLISION_DEPTH)) {
+			if (GraphEffectRules::Holds(def, GraphEffectCollisionDepth)) {
 				struct Family {
 					u32 behavior;
 					std::string_view category;
@@ -524,32 +524,32 @@ namespace Shalltear {
 				};
 				for (const Family& family : families) {
 					BlockChoice choice;
-					choice.name = str(B::BEHAVIOR_NAMES[family.behavior]) + " Depth Buffer";
+					choice.name = str(B::BehaviorNames[family.behavior]) + " Depth Buffer";
 					choice.category = str(family.category);
 					choice.synonyms = str(family.synonyms);
-					choice.def = str(GRAPH_EFFECT_COLLISION_DEPTH);
-					choice.settings.push_back(Chosen("Behavior", B::BEHAVIORS[family.behavior]));
+					choice.def = str(GraphEffectCollisionDepth);
+					choice.settings.push_back(Chosen("Behavior", B::Behaviors[family.behavior]));
 					out.push_back(std::move(choice));
 				}
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_TRIGGER_EVENT)) {
-				for (u32 mode = 0; mode < std::size(GRAPH_EFFECT_TRIGGER_MODES); ++mode) {
+			if (GraphEffectRules::Holds(def, GraphEffectTriggerEvent)) {
+				for (u32 mode = 0; mode < std::size(GraphEffectTriggerModes); ++mode) {
 					BlockChoice choice;
-					choice.name = "Trigger Event " + str(B::TRIGGER_MODE_NAMES[mode]);
+					choice.name = "Trigger Event " + str(B::TriggerModeNames[mode]);
 					choice.category = "GPUEvent";
-					choice.synonyms = "gpu event child spawn sub emitter " + str(B::TRIGGER_MODE_NAMES[mode]);
-					choice.def = str(GRAPH_EFFECT_TRIGGER_EVENT);
-					choice.settings.push_back(Chosen("Mode", GRAPH_EFFECT_TRIGGER_MODES[mode]));
+					choice.synonyms = "gpu event child spawn sub emitter " + str(B::TriggerModeNames[mode]);
+					choice.def = str(GraphEffectTriggerEvent);
+					choice.settings.push_back(Chosen("Mode", GraphEffectTriggerModes[mode]));
 					out.push_back(std::move(choice));
 				}
 			}
-			if (GraphEffectRules::Holds(def, GRAPH_EFFECT_CUSTOM_HLSL_BLOCK)) {
-				const GraphNodeDefinition* custom = GraphNodeLibrary::Find(GRAPH_EFFECT_CUSTOM_HLSL_BLOCK);
+			if (GraphEffectRules::Holds(def, GraphEffectCustomHLSLBlock)) {
+				const GraphNodeDefinition* custom = GraphNodeLibrary::Find(GraphEffectCustomHLSLBlock);
 				BlockChoice choice;
 				choice.name = str(custom->name);
 				choice.category = "HLSL";
 				choice.synonyms = str(custom->synonyms);
-				choice.def = str(GRAPH_EFFECT_CUSTOM_HLSL_BLOCK);
+				choice.def = str(GraphEffectCustomHLSLBlock);
 				out.push_back(std::move(choice));
 			}
 		}
@@ -558,7 +558,7 @@ namespace Shalltear {
 			if (!GraphEffectRules::HoldsIn(context.node, block)) {
 				return false;
 			}
-			if (block.def != GRAPH_EFFECT_SUBGRAPH_BLOCK || !definitions) {
+			if (block.def != GraphEffectSubgraphBlock || !definitions) {
 				return true;
 			}
 			const GraphNodeDefinition* definition = definitions->Find(document, block);
@@ -614,12 +614,12 @@ namespace Shalltear {
 
 		bool IsOperator(const GraphNodeDefinition& definition) {
 			if (GraphEffectRules::IsContext(definition.id) || definition.category == "Context" || definition.category == "Block" ||
-				definition.id == GRAPH_PROPERTY_NODE || definition.id == GraphDocumentOps::REDIRECT_DEF || definition.subgraphOnly ||
-				definition.id == GRAPH_CUSTOM_FUNCTION_NODE || definition.id == GRAPH_SUBGRAPH_NODE || definition.outputs.empty()) {
+				definition.id == GraphPropertyNode || definition.id == GraphDocumentOps::RedirectDef || definition.subgraphOnly ||
+				definition.id == GraphCustomFunctionNode || definition.id == GraphSubgraphNode || definition.outputs.empty()) {
 				return false;
 			}
 			GraphDocument probe;
-			probe.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+			probe.type = str(GraphEffectDocumentType);
 			GraphNode node;
 			node.id = 1;
 			node.def = str(definition.id);
@@ -643,23 +643,23 @@ namespace Shalltear {
 
 		void OperatorChoices(Vector<BlockChoice>& out) {
 			out.clear();
-			const GraphNodeDefinition* get = GraphNodeLibrary::Find(GRAPH_EFFECT_GET_ATTRIBUTE);
+			const GraphNodeDefinition* get = GraphNodeLibrary::Find(GraphEffectGetAttribute);
 			for (const GraphEffectAttributeInfo& attribute : GraphEffectAttributes::All()) {
 				BlockChoice choice;
 				choice.name = "Get Attribute: " + str(attribute.name);
 				choice.category = str(get->category);
 				choice.synonyms = str(get->synonyms) + " " + str(attribute.name);
-				choice.def = str(GRAPH_EFFECT_GET_ATTRIBUTE);
-				choice.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, attribute.name));
+				choice.def = str(GraphEffectGetAttribute);
+				choice.settings.push_back(Chosen(GraphEffectAttributeSetting, attribute.name));
 				out.push_back(std::move(choice));
 			}
-			const GraphNodeDefinition* random = GraphNodeLibrary::Find(GRAPH_EFFECT_RANDOM_NUMBER);
+			const GraphNodeDefinition* random = GraphNodeLibrary::Find(GraphEffectRandomNumber);
 			for (std::string_view type : {std::string_view("Float"), std::string_view("Vector2"), std::string_view("Vector3"), std::string_view("Vector4")}) {
 				BlockChoice choice;
 				choice.name = type == "Float" ? str("Random Number") : "Random Number (" + str(type) + ")";
 				choice.category = str(random->category);
 				choice.synonyms = str(random->synonyms);
-				choice.def = str(GRAPH_EFFECT_RANDOM_NUMBER);
+				choice.def = str(GraphEffectRandomNumber);
 				if (type != "Float") {
 					choice.settings.push_back(Chosen("Type", type));
 				}
@@ -668,37 +668,37 @@ namespace Shalltear {
 			const auto noise = [&out](std::string_view def, u32 type, std::string_view dimension, u32 width) {
 				const GraphNodeDefinition* definition = GraphNodeLibrary::Find(def);
 				BlockChoice choice;
-				choice.name = std::format("{} {} {}D", GRAPH_EFFECT_NOISE_TYPES[type], def == GRAPH_EFFECT_CURL_NOISE ? "Curl Noise" : "Noise", width);
+				choice.name = std::format("{} {} {}D", GraphEffectNoiseTypes[type], def == GraphEffectCurlNoise ? "Curl Noise" : "Noise", width);
 				choice.category = str(definition->category);
 				choice.synonyms = str(definition->synonyms);
 				choice.def = str(def);
 				choice.settings.push_back(Chosen("Dimensions", dimension));
-				choice.settings.push_back(Chosen("Type", GRAPH_EFFECT_NOISE_TYPES[type]));
+				choice.settings.push_back(Chosen("Type", GraphEffectNoiseTypes[type]));
 				out.push_back(std::move(choice));
 			};
 			for (const bool curl : {false, true}) {
-				const std::string_view def = curl ? GRAPH_EFFECT_CURL_NOISE : GRAPH_EFFECT_NOISE;
+				const std::string_view def = curl ? GraphEffectCurlNoise : GraphEffectNoiseDefinition;
 				noise(def, 1, "Three", 3);
-				for (u32 type = 0; type < std::size(GRAPH_EFFECT_NOISE_TYPES); ++type) {
+				for (u32 type = 0; type < std::size(GraphEffectNoiseTypes); ++type) {
 					for (u32 width = curl ? 2 : 1; width <= 3; ++width) {
 						if ((type == 1 && width == 3) || (curl && type == 2)) {
 							continue;
 						}
-						noise(def, type, GRAPH_EFFECT_NOISE_DIMENSIONS[width - 1], width);
+						noise(def, type, GraphEffectNoiseDimensions[width - 1], width);
 					}
 				}
 			}
 		}
 
 		bool IsOfferedAsVariants(std::string_view definition) {
-			return definition == GRAPH_EFFECT_GET_ATTRIBUTE || definition == GRAPH_EFFECT_RANDOM_NUMBER || definition == GRAPH_EFFECT_NOISE ||
-				   definition == GRAPH_EFFECT_CURL_NOISE;
+			return definition == GraphEffectGetAttribute || definition == GraphEffectRandomNumber || definition == GraphEffectNoiseDefinition ||
+				   definition == GraphEffectCurlNoise;
 		}
 
 		u32 AddOperator(GraphDocument& document, const BlockChoice& choice, Vec2 graph) {
-			if (choice.def == GRAPH_SUBGRAPH_NODE) {
+			if (choice.def == GraphSubgraphNode) {
 				for (const GraphSetting& setting : choice.settings) {
-					if (setting.key == GRAPH_SUBGRAPH_ASSET_SETTING && setting.value.size() > 2) {
+					if (setting.key == GraphSubgraphAssetSetting && setting.value.size() > 2) {
 						return NodeShaderEditOps::AddSubgraphNode(document, Guid::FromString(std::string_view(setting.value).substr(1, setting.value.size() - 2)), graph);
 					}
 				}
@@ -717,15 +717,15 @@ namespace Shalltear {
 			return created;
 		}
 
-		std::span<const std::string_view> PropertyTypes() { return PROPERTY_TYPES; }
+		std::span<const std::string_view> PropertyTypes() { return PropertyTypeTable; }
 
 		u32 AddOutputProperty(GraphDocument& document, std::string_view type) {
-			if (document.type != GRAPH_EFFECT_OPERATOR_SUBGRAPH_DOCUMENT_TYPE) {
+			if (document.type != GraphEffectOperatorSubgraphDocumentType) {
 				return 0;
 			}
 			const u32 created = NodeShaderEditOps::AddProperty(document, type);
 			if (created != 0) {
-				NodeShaderEditOps::SetPropertySetting(document, created, GRAPH_PROPERTY_OUTPUT_SETTING, "true");
+				NodeShaderEditOps::SetPropertySetting(document, created, GraphPropertyOutputSetting, "true");
 			}
 			return created;
 		}
@@ -734,7 +734,7 @@ namespace Shalltear {
 			out.clear();
 			for (const u32 id : ids) {
 				const GraphContext* context = FindContext(document, id);
-				if (!context || context->node.def != GRAPH_EFFECT_BLOCK_SUBGRAPH_CONTEXT) {
+				if (!context || context->node.def != GraphEffectBlockSubgraphContext) {
 					out.push_back(id);
 				}
 			}
@@ -746,12 +746,12 @@ namespace Shalltear {
 			return GraphDocumentOps::Delete(document, kept);
 		}
 
-		constexpr std::string_view BLOCKS_ONLY_SETTING = "Blocks Only";
-		constexpr std::string_view BLOCK_PASTE_ERROR = "Select one block or one context to paste the blocks into.";
+		constexpr std::string_view BlocksOnlySetting = "Blocks Only";
+		constexpr std::string_view BlockPasteError = "Select one block or one context to paste the blocks into.";
 
 		static bool BlocksOnly(const GraphDocument& fragment) {
 			return std::any_of(fragment.settings.begin(), fragment.settings.end(),
-							   [](const GraphSetting& setting) { return setting.key == BLOCKS_ONLY_SETTING && setting.value == "true"; });
+							   [](const GraphSetting& setting) { return setting.key == BlocksOnlySetting && setting.value == "true"; });
 		}
 
 		str Copy(const GraphDocument& document, std::span<const u32> ids) {
@@ -767,7 +767,7 @@ namespace Shalltear {
 			if (!blocks.empty() && !beside) {
 				GraphDocument fragment;
 				fragment.type = document.type;
-				fragment.settings.push_back({str(BLOCKS_ONLY_SETTING), "true"});
+				fragment.settings.push_back({str(BlocksOnlySetting), "true"});
 				u32 highest = 0;
 				for (const GraphNode* block : blocks) {
 					GraphNode copied = *block;
@@ -789,7 +789,7 @@ namespace Shalltear {
 		bool IsBlockFragment(std::string_view fragment) {
 			GraphDocument read;
 			str error;
-			return GraphDocumentOps::Read(fragment, read, error) && read.type == GRAPH_EFFECT_DOCUMENT_TYPE && BlocksOnly(read);
+			return GraphDocumentOps::Read(fragment, read, error) && read.type == GraphEffectDocumentType && BlocksOnly(read);
 		}
 
 		bool PasteBlocks(GraphDocument& document, std::string_view text, std::span<const u32> selection, Vector<u32>& pasted, str& error,
@@ -826,7 +826,7 @@ namespace Shalltear {
 				after = only->blocks.size();
 			}
 			if (!target) {
-				error = str(BLOCK_PASTE_ERROR);
+				error = str(BlockPasteError);
 				return false;
 			}
 			for (GraphNode& block : fragment.nodes) {
@@ -863,8 +863,8 @@ namespace Shalltear {
 				choice.name = subgraph->name;
 				choice.category = subgraph->category;
 				choice.synonyms = "subgraph";
-				choice.def = str(kind == GraphSubgraphKind::EffectBlock ? GRAPH_EFFECT_SUBGRAPH_BLOCK : GRAPH_SUBGRAPH_NODE);
-				choice.settings.push_back({str(GRAPH_SUBGRAPH_ASSET_SETTING), NodeShaderEditOps::Quote(asset.ToString())});
+				choice.def = str(kind == GraphSubgraphKind::EffectBlock ? GraphEffectSubgraphBlock : GraphSubgraphNode);
+				choice.settings.push_back({str(GraphSubgraphAssetSetting), NodeShaderEditOps::Quote(asset.ToString())});
 				if (held) {
 					GraphNode probe;
 					probe.def = choice.def;
@@ -880,8 +880,8 @@ namespace Shalltear {
 		str OperatorSubgraphTemplate() {
 			namespace Shared = NodeShaderEditOps;
 			GraphDocument document;
-			document.type = str(GRAPH_EFFECT_OPERATOR_SUBGRAPH_DOCUMENT_TYPE);
-			document.settings.push_back({str(GRAPH_SUBGRAPH_CATEGORY_SETTING), Shared::Quote(GRAPH_EFFECT_OPERATOR_SUBGRAPH_CATEGORY)});
+			document.type = str(GraphEffectOperatorSubgraphDocumentType);
+			document.settings.push_back({str(GraphSubgraphCategorySetting), Shared::Quote(GraphEffectOperatorSubgraphCategory)});
 			const u32 range = Shared::AddProperty(document, "Float");
 			Shared::RenameProperty(document, range, "range");
 			const u32 minimum = AddOutputProperty(document, "Float");
@@ -893,19 +893,19 @@ namespace Shalltear {
 			Shared::SetInputValue(document, negate, "B", "-1");
 			GraphDocumentOps::Connect(document, in, "Out", negate, "A");
 			const u32 low = Shared::AddPropertyNode(document, minimum, {1189.0f, -282.0f});
-			GraphDocumentOps::Connect(document, negate, "Out", low, GRAPH_SUBGRAPH_OUTPUT_PORT);
+			GraphDocumentOps::Connect(document, negate, "Out", low, GraphSubgraphOutputPort);
 			const u32 high = Shared::AddPropertyNode(document, maximum, {1191.0f, -380.0f});
-			GraphDocumentOps::Connect(document, in, "Out", high, GRAPH_SUBGRAPH_OUTPUT_PORT);
+			GraphDocumentOps::Connect(document, in, "Out", high, GraphSubgraphOutputPort);
 			return GraphDocumentOps::Write(document);
 		}
 
 		str BlockSubgraphTemplate() {
 			GraphDocument document;
-			document.type = str(GRAPH_EFFECT_BLOCK_SUBGRAPH_DOCUMENT_TYPE);
-			document.settings.push_back({str(GRAPH_SUBGRAPH_CATEGORY_SETTING), NodeShaderEditOps::Quote(GRAPH_EFFECT_BLOCK_SUBGRAPH_CATEGORY)});
+			document.type = str(GraphEffectBlockSubgraphDocumentType);
+			document.settings.push_back({str(GraphSubgraphCategorySetting), NodeShaderEditOps::Quote(GraphEffectBlockSubgraphCategory)});
 			GraphContext context;
 			context.node.id = document.nextId++;
-			context.node.def = str(GRAPH_EFFECT_BLOCK_SUBGRAPH_CONTEXT);
+			context.node.def = str(GraphEffectBlockSubgraphContext);
 			context.node.x = 833;
 			context.node.y = -478;
 			document.contexts.push_back(std::move(context));
@@ -937,7 +937,7 @@ namespace Shalltear {
 
 			GraphDocument EmptyDocument() {
 				GraphDocument document;
-				document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+				document.type = str(GraphEffectDocumentType);
 				return document;
 			}
 
@@ -961,20 +961,20 @@ namespace Shalltear {
 
 			System AddSystem(GraphDocument& document, std::string_view initialize = "Initialize Particle", std::string_view output = "Output Particle Primitive") {
 				System system;
-				system.spawn = AddContext(document, GRAPH_EFFECT_SPAWN, Vec2(0.0f, 0.0f));
+				system.spawn = AddContext(document, GraphEffectSpawn, Vec2(0.0f, 0.0f));
 				system.initialize = AddNamedContext(document, initialize, Vec2(0.0f, 220.0f));
-				system.update = AddContext(document, GRAPH_EFFECT_UPDATE, Vec2(0.0f, 860.0f));
+				system.update = AddContext(document, GraphEffectUpdate, Vec2(0.0f, 860.0f));
 				system.output = AddNamedContext(document, output, Vec2(0.0f, 1080.0f));
-				Link(document, system.spawn, system.initialize, GRAPH_EFFECT_IN);
-				Link(document, system.initialize, system.update, GRAPH_EFFECT_IN);
-				Link(document, system.update, system.output, GRAPH_EFFECT_IN);
+				Link(document, system.spawn, system.initialize, GraphEffectIn);
+				Link(document, system.initialize, system.update, GraphEffectIn);
+				Link(document, system.update, system.output, GraphEffectIn);
 				return system;
 			}
 
-			constexpr std::string_view TEMPLATE_GRADIENT = R"({"alphas":[[1,0],[1,0.8],[0,1]],"colors":[[0.940652,0.233992,0.00016445,0.5000076],)"
-														   R"([0.0382634,0.429261,1,0.5020981]],"mode":"Blend"})";
-			constexpr std::string_view TRAIL_GRADIENT = R"({"alphas":[[1,0],[1,0.8],[0,1]],"colors":[[0.940652,0.233992,0.00016445,0.3288624],)"
-														R"([0.0382634,0.429261,1,0.4140078]],"mode":"Blend"})";
+			constexpr std::string_view TemplateGradient = R"({"alphas":[[1,0],[1,0.8],[0,1]],"colors":[[0.940652,0.233992,0.00016445,0.5000076],)"
+														  R"([0.0382634,0.429261,1,0.5020981]],"mode":"Blend"})";
+			constexpr std::string_view TrailGradient = R"({"alphas":[[1,0],[1,0.8],[0,1]],"colors":[[0.940652,0.233992,0.00016445,0.3288624],)"
+													   R"([0.0382634,0.429261,1,0.4140078]],"mode":"Blend"})";
 
 			Keyframe SizeKey(f32 time, f32 value, f32 inSlope, f32 outSlope, KeyframeTangentMode mode, bool broken) {
 				Keyframe key;
@@ -996,8 +996,8 @@ namespace Shalltear {
 			Turned TurnedVelocity(GraphDocument& document, u32 initialize, f32 blend) {
 				const u32 velocity = AddNamedBlock(document, initialize, "Set Velocity");
 				BlockChoice direction;
-				direction.def = str(GRAPH_EFFECT_GET_ATTRIBUTE);
-				direction.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, "direction"));
+				direction.def = str(GraphEffectGetAttribute);
+				direction.settings.push_back(Chosen(GraphEffectAttributeSetting, "direction"));
 				const u32 normal = AddOperator(document, direction, Vec2(-1100.0f, 300.0f));
 				const u32 turned = NodeShaderEditOps::AddNode(document, "Math/Lerp", Vec2(-820.0f, 260.0f));
 				const u32 unit = NodeShaderEditOps::AddNode(document, "Math/Normalize", Vec2(-540.0f, 260.0f));
@@ -1019,7 +1019,7 @@ namespace Shalltear {
 				Constant(document, AddNamedBlock(document, system.initialize, "Set Position Shape Sphere"), "Radius", {radius});
 				const Turned turned = TurnedVelocity(document, system.initialize, blend);
 				BlockChoice draw;
-				draw.def = str(GRAPH_EFFECT_RANDOM_NUMBER);
+				draw.def = str(GraphEffectRandomNumber);
 				const u32 speed = AddOperator(document, draw, Vec2(-820.0f, 440.0f));
 				Constant(document, speed, "Min", {*speeds.begin()});
 				Constant(document, speed, "Max", {*(speeds.begin() + 1)});
@@ -1029,7 +1029,7 @@ namespace Shalltear {
 				AddNamedBlock(document, system.update, "Linear Drag");
 
 				AddNamedBlock(document, system.output, "Orient: Face Camera Plane");
-				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Color Over Life"), "Color", TEMPLATE_GRADIENT);
+				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Color Over Life"), "Color", TemplateGradient);
 				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Size Over Life"), "Size", GraphCurves::Write(size));
 			}
 
@@ -1090,20 +1090,20 @@ namespace Shalltear {
 				size.keys.push_back(SizeKey(0.0f, 1.0f, 4.3229609f, 4.3229609f, KeyframeTangentMode::Free, false));
 				size.keys.push_back(SizeKey(1.0f, 1.0f, -3.6624568f, -3.6624568f, KeyframeTangentMode::Free, false));
 				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Size Over Life"), "Size", GraphCurves::Write(size));
-				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Color Over Life"), "Color", TRAIL_GRADIENT);
+				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, system.output, "Multiply Color Over Life"), "Color", TrailGradient);
 				return document;
 			}
 
 			GraphDocument HeadAndTrail() {
 				GraphDocument document = EmptyDocument();
 				System heads;
-				heads.spawn = AddContext(document, GRAPH_EFFECT_SPAWN, Vec2(0.0f, 0.0f));
+				heads.spawn = AddContext(document, GraphEffectSpawn, Vec2(0.0f, 0.0f));
 				heads.initialize = AddNamedContext(document, "Initialize Particle", Vec2(0.0f, 220.0f));
-				heads.update = AddContext(document, GRAPH_EFFECT_UPDATE, Vec2(0.0f, 1180.0f));
+				heads.update = AddContext(document, GraphEffectUpdate, Vec2(0.0f, 1180.0f));
 				heads.output = AddNamedContext(document, "Output Particle Primitive", Vec2(0.0f, 1500.0f));
-				Link(document, heads.spawn, heads.initialize, GRAPH_EFFECT_IN);
-				Link(document, heads.initialize, heads.update, GRAPH_EFFECT_IN);
-				Link(document, heads.update, heads.output, GRAPH_EFFECT_IN);
+				Link(document, heads.spawn, heads.initialize, GraphEffectIn);
+				Link(document, heads.initialize, heads.update, GraphEffectIn);
+				Link(document, heads.update, heads.output, GraphEffectIn);
 				Constant(document, AddNamedBlock(document, heads.spawn, "Constant Spawn Rate"), "Rate", {10.0f});
 				NodeShaderEditOps::SetNodeSetting(document, heads.initialize, "Capacity", "13");
 				NodeShaderEditOps::SetNodeSetting(document, heads.initialize, "Space", "\"World\"");
@@ -1124,7 +1124,7 @@ namespace Shalltear {
 				Constant(document, sphere, "Radius", {0.02f});
 				const Turned turned = TurnedVelocity(document, heads.initialize, 0.85f);
 				BlockChoice draw;
-				draw.def = str(GRAPH_EFFECT_RANDOM_NUMBER);
+				draw.def = str(GraphEffectRandomNumber);
 				const u32 speed = AddOperator(document, draw, Vec2(-820.0f, 440.0f));
 				Constant(document, speed, "Min", {6.5f});
 				Constant(document, speed, "Max", {9.5f});
@@ -1139,14 +1139,14 @@ namespace Shalltear {
 				NodeShaderEditOps::SetInputValue(document, AddNamedBlock(document, heads.output, "Multiply Color Over Life"), "Color",
 												 R"({"alphas":[[1,0],[1,0.5079728],[0,1]],"colors":[[1,1,1,0],[1,1,1,1]],"mode":"Blend"})");
 
-				const u32 event = AddContext(document, GRAPH_EFFECT_GPU_EVENT, Vec2(560.0f, 1180.0f));
+				const u32 event = AddContext(document, GraphEffectGPUEvent, Vec2(560.0f, 1180.0f));
 				const u32 strip = AddNamedContext(document, "Initialize Particle Strip", Vec2(560.0f, 1360.0f));
-				const u32 trailUpdate = AddContext(document, GRAPH_EFFECT_UPDATE, Vec2(560.0f, 1980.0f));
+				const u32 trailUpdate = AddContext(document, GraphEffectUpdate, Vec2(560.0f, 1980.0f));
 				const u32 trail = AddNamedContext(document, "Output ParticleStrip Quad", Vec2(560.0f, 2160.0f));
-				GraphDocumentOps::Connect(document, trigger, GRAPH_EFFECT_EVT, event, GRAPH_EFFECT_EVT);
-				Link(document, event, strip, GRAPH_EFFECT_IN);
-				Link(document, strip, trailUpdate, GRAPH_EFFECT_IN);
-				Link(document, trailUpdate, trail, GRAPH_EFFECT_IN);
+				GraphDocumentOps::Connect(document, trigger, GraphEffectEvt, event, GraphEffectEvt);
+				Link(document, event, strip, GraphEffectIn);
+				Link(document, strip, trailUpdate, GraphEffectIn);
+				Link(document, trailUpdate, trail, GraphEffectIn);
 				NodeShaderEditOps::SetNodeSetting(document, strip, "Space", "\"World\"");
 				NodeShaderEditOps::SetNodeSetting(document, strip, "Strip Capacity", "16");
 				NodeShaderEditOps::SetNodeSetting(document, strip, "Particle Per Strip Count", "100");
@@ -1166,10 +1166,10 @@ namespace Shalltear {
 				along.keys.push_back(SizeKey(1.0f, 0.5f, 0.0f, 0.0f, KeyframeTangentMode::Free, false));
 				NodeShaderEditOps::SetInputValue(document, narrowing, "Size", GraphCurves::Write(along));
 				BlockChoice index;
-				index.def = str(GRAPH_EFFECT_GET_ATTRIBUTE);
-				index.settings.push_back(Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, "particleIndexInStrip"));
+				index.def = str(GraphEffectGetAttribute);
+				index.settings.push_back(Chosen(GraphEffectAttributeSetting, "particleIndexInStrip"));
 				BlockChoice count = index;
-				count.settings[0] = Chosen(GRAPH_EFFECT_ATTRIBUTE_SETTING, "particleCountInStrip");
+				count.settings[0] = Chosen(GraphEffectAttributeSetting, "particleCountInStrip");
 				const u32 place = AddOperator(document, index, Vec2(-20.0f, 2240.0f));
 				const u32 places = AddOperator(document, count, Vec2(-600.0f, 2380.0f));
 				const u32 less = NodeShaderEditOps::AddNode(document, "Math/Subtract", Vec2(-300.0f, 2380.0f));
@@ -1185,7 +1185,7 @@ namespace Shalltear {
 				return document;
 			}
 
-			constexpr EffectTemplate TEMPLATES[] = {
+			constexpr EffectTemplate Templates[] = {
 				{"Visual Effects/Empty", &EmptyDocument},
 				{"Visual Effects/Simple Loop", &SimpleLoop},
 				{"Visual Effects/Simple Burst", &SimpleBurst},
@@ -1196,9 +1196,9 @@ namespace Shalltear {
 		} // anonymous namespace
 
 		bool SetUpdateMode(GraphDocument& document, std::string_view key, bool on) {
-			const bool fixed = key == GRAPH_EFFECT_FIXED_DELTA_TIME;
-			const bool exact = key == GRAPH_EFFECT_EXACT_FIXED_TIME;
-			if (!fixed && !exact && key != GRAPH_EFFECT_IGNORE_TIME_SCALE) {
+			const bool fixed = key == GraphEffectFixedDeltaTime;
+			const bool exact = key == GraphEffectExactFixedTime;
+			if (!fixed && !exact && key != GraphEffectIgnoreTimeScale) {
 				return false;
 			}
 			const GraphEffectTiming held = GraphEffectTarget::Timing(document);
@@ -1248,8 +1248,8 @@ namespace Shalltear {
 			if (count == held.prewarmStepCount && each == held.prewarmDeltaTime) {
 				return false;
 			}
-			NodeShaderEditOps::SetGraphSetting(document, GRAPH_EFFECT_PREWARM_STEP_COUNT, count > 0 ? std::format("{}", count) : str());
-			NodeShaderEditOps::SetGraphSetting(document, GRAPH_EFFECT_PREWARM_DELTA_TIME, count > 0 ? std::format("{}", each) : str());
+			NodeShaderEditOps::SetGraphSetting(document, GraphEffectPrewarmStepCount, count > 0 ? std::format("{}", count) : str());
+			NodeShaderEditOps::SetGraphSetting(document, GraphEffectPrewarmDeltaTime, count > 0 ? std::format("{}", each) : str());
 			return true;
 		}
 
@@ -1257,7 +1257,7 @@ namespace Shalltear {
 			if ((flags & ~GRAPH_EFFECT_CULL_DEFAULT) != 0 || GraphEffectTarget::Timing(document).cullingFlags == flags) {
 				return false;
 			}
-			return NodeShaderEditOps::SetGraphSetting(document, GRAPH_EFFECT_CULLING_FLAGS,
+			return NodeShaderEditOps::SetGraphSetting(document, GraphEffectCullingFlags,
 													  flags == GRAPH_EFFECT_CULL_DEFAULT ? str() : std::format("{}", flags));
 		}
 
@@ -1266,7 +1266,7 @@ namespace Shalltear {
 			if (!known || GraphEffectTarget::Instancing(document).mode == mode) {
 				return false;
 			}
-			return NodeShaderEditOps::SetGraphSetting(document, GRAPH_EFFECT_INSTANCING_MODE, mode == GRAPH_EFFECT_INSTANCING_AUTOMATIC ? str() : std::format("{}", mode));
+			return NodeShaderEditOps::SetGraphSetting(document, GraphEffectInstancingMode, mode == GRAPH_EFFECT_INSTANCING_AUTOMATIC ? str() : std::format("{}", mode));
 		}
 
 		bool SetInstancingCapacity(GraphDocument& document, u32 capacity) {
@@ -1274,7 +1274,7 @@ namespace Shalltear {
 			if (GraphEffectTarget::Instancing(document).capacity == capacity) {
 				return false;
 			}
-			return NodeShaderEditOps::SetGraphSetting(document, GRAPH_EFFECT_INSTANCING_CAPACITY,
+			return NodeShaderEditOps::SetGraphSetting(document, GraphEffectInstancingCapacity,
 													  capacity == GRAPH_EFFECT_INSTANCING_DEFAULT_CAPACITY ? str() : std::format("{}", capacity));
 		}
 
@@ -1286,12 +1286,12 @@ namespace Shalltear {
 			str list = "[";
 			for (const GraphSetting& setting : GraphEffectRules::HasIgnoredErrors(*target) ? std::span<const GraphSetting>(target->settings)
 																						   : std::span<const GraphSetting>()) {
-				if (setting.key == GRAPH_IGNORED_ERRORS_SETTING) {
+				if (setting.key == GraphIgnoredErrorsSetting) {
 					list = setting.value.substr(0, setting.value.size() - 1) + ",";
 				}
 			}
 			list += NodeShaderEditOps::Quote(key) + "]";
-			return NodeShaderEditOps::SetNodeSetting(document, node, GRAPH_IGNORED_ERRORS_SETTING, list);
+			return NodeShaderEditOps::SetNodeSetting(document, node, GraphIgnoredErrorsSetting, list);
 		}
 
 		bool ClearIgnoredErrors(GraphDocument& document, u32 node) {
@@ -1299,12 +1299,12 @@ namespace Shalltear {
 			if (!target || !GraphEffectRules::HasIgnoredErrors(*target)) {
 				return false;
 			}
-			return NodeShaderEditOps::SetNodeSetting(document, node, GRAPH_IGNORED_ERRORS_SETTING, "");
+			return NodeShaderEditOps::SetNodeSetting(document, node, GraphIgnoredErrorsSetting, "");
 		}
 
 		BoundsExclusion BoundsExclusionOf(const GraphDocument& document, u32 initialize) {
 			const GraphNode* node = GraphDocumentOps::FindNode(const_cast<GraphDocument&>(document), initialize);
-			if (!node || node->def != GRAPH_EFFECT_INITIALIZE) {
+			if (!node || node->def != GraphEffectInitialize) {
 				return BoundsExclusion::Manual;
 			}
 			switch (GraphEffectRules::BoundsModeOf(*node)) {
@@ -1345,7 +1345,7 @@ namespace Shalltear {
 			}
 			bool worldCenter = false;
 			for (const GraphInput& input : node->inputs) {
-				worldCenter = worldCenter || (input.port == GRAPH_EFFECT_BOUNDS_CENTER && input.space == GRAPH_SPACE_WORLD);
+				worldCenter = worldCenter || (input.port == GraphEffectBoundsCenter && input.space == GraphSpaceWorld);
 			}
 			Vec3 center = box.Center();
 			if (worldSystem && !worldCenter) {
@@ -1360,16 +1360,16 @@ namespace Shalltear {
 			const Vec3 size = box.Size();
 			const f32 centered[3] = {center.x, center.y, center.z};
 			const f32 sized[3] = {size.x, size.y, size.z};
-			NodeShaderEditOps::SetInputConstant(document, initialize, GRAPH_EFFECT_BOUNDS_CENTER, centered);
-			NodeShaderEditOps::SetInputConstant(document, initialize, GRAPH_EFFECT_BOUNDS_SIZE, sized);
+			NodeShaderEditOps::SetInputConstant(document, initialize, GraphEffectBoundsCenter, centered);
+			NodeShaderEditOps::SetInputConstant(document, initialize, GraphEffectBoundsSize, sized);
 			return true;
 		}
 
-		u32 TemplateCount() { return static_cast<u32>(std::size(TEMPLATES)); }
+		u32 TemplateCount() { return static_cast<u32>(std::size(Templates)); }
 
-		std::string_view TemplateLabel(u32 index) { return index < std::size(TEMPLATES) ? TEMPLATES[index].label : std::string_view{}; }
+		std::string_view TemplateLabel(u32 index) { return index < std::size(Templates) ? Templates[index].label : std::string_view{}; }
 
-		str TemplateDocument(u32 index) { return index < std::size(TEMPLATES) ? GraphDocumentOps::Write(TEMPLATES[index].build()) : str(); }
+		str TemplateDocument(u32 index) { return index < std::size(Templates) ? GraphDocumentOps::Write(Templates[index].build()) : str(); }
 
 	} // namespace EffectGraphEditOps
 

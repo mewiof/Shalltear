@@ -356,7 +356,7 @@ TEST(AudioSpatialTest, ZeroBlendMixesAs2D) {
 	for (size_t index = 0; index < samples.size(); ++index) {
 		samples[index] = 0.4f * std::sin(0.013f * static_cast<f32>(index));
 	}
-	ClipBlock clip(MakePcm(samples, 1, 44100));
+	ClipBlock clip(MakePCM(samples, 1, 44100));
 	ASSERT_TRUE(clip);
 
 	OfflineMixer flat;
@@ -385,7 +385,7 @@ TEST(AudioSpatialTest, ZeroBlendMixesAs2D) {
 }
 
 TEST(AudioSpatialTest, Voice3DPlacedFromFirstSample) {
-	ClipBlock clip(MakePcm(std::vector<f32>(48000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(std::vector<f32>(48000, 0.5f), 1, 48000));
 	ASSERT_TRUE(clip);
 
 	OfflineMixer mixer;
@@ -406,7 +406,7 @@ TEST(AudioSpatialTest, Voice3DPlacedFromFirstSample) {
 }
 
 TEST(AudioSpatialTest, PackageAppliesDistancesGainAndDopplersRate) {
-	ClipBlock clip(MakePcm(std::vector<f32>(480000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(std::vector<f32>(480000, 0.5f), 1, 48000));
 	ASSERT_TRUE(clip);
 
 	OfflineMixer mixer;
@@ -426,7 +426,7 @@ TEST(AudioSpatialTest, BuiltInAsPluginMatches) {
 		samples[frame * 2] = 0.3f * std::sin(0.021f * static_cast<f32>(frame));
 		samples[frame * 2 + 1] = 0.2f * std::sin(0.047f * static_cast<f32>(frame));
 	}
-	ClipBlock clip(MakePcm(samples, 2, 48000));
+	ClipBlock clip(MakePCM(samples, 2, 48000));
 	ASSERT_TRUE(clip);
 
 	CountingSpatializer twin;
@@ -487,7 +487,7 @@ TEST(AudioSpatialTest, UnregisterKeepsOtherOwners) {
 }
 
 TEST(AudioSpatialTest, Only3DBlocksSpatialized) {
-	ClipBlock clip(MakePcm(std::vector<f32>(96000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(std::vector<f32>(96000, 0.5f), 1, 48000));
 	ASSERT_TRUE(clip);
 	CountingSpatializer counting;
 	OfflineMixer mixer;
@@ -697,7 +697,7 @@ namespace {
 		f32 seconds;
 	};
 
-	constexpr FramePlan PLAN[] = {{0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}};
+	constexpr FramePlan Plan[] = {{0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {1, 1.0f / 144.0f}, {0, 1.0f / 144.0f}, {0, 1.0f / 144.0f}};
 	constexpr f32 STEP = 0.02f;
 	constexpr f32 SPEED = 10.0f;
 
@@ -720,19 +720,19 @@ TEST_F(AudioSpatialFixture, FixedStepMotionMeasuredInFixedLoop) {
 	FrameStages::Register(FrameStage::FixedUpdate, FrameStagePosition::Normal, &MoveTowardTheListener, &mover, &_mover);
 
 	const f32 expected = SPEED_OF_SOUND / (SPEED_OF_SOUND - SPEED);
-	std::vector<f32> auto_;
-	for (const FramePlan& frame : PLAN) {
+	std::vector<f32> autoDoppler;
+	for (const FramePlan& frame : Plan) {
 		RunFrameWithSteps(frame.steps, STEP, frame.seconds);
-		auto_.push_back(TheVoice()->placement.doppler);
+		autoDoppler.push_back(TheVoice()->placement.doppler);
 	}
-	for (size_t index = 2; index < auto_.size(); ++index) {
-		EXPECT_NEAR(auto_[index], expected, 1e-4f) << "frame " << index;
+	for (size_t index = 2; index < autoDoppler.size(); ++index) {
+		EXPECT_NEAR(autoDoppler[index], expected, 1e-4f) << "frame " << index;
 	}
 
 	source->SetVelocityUpdateMode(AudioVelocityUpdateMode::Dynamic);
 	f32 lowest = 10.0f;
 	f32 highest = 0.0f;
-	for (const FramePlan& frame : PLAN) {
+	for (const FramePlan& frame : Plan) {
 		RunFrameWithSteps(frame.steps, STEP, frame.seconds);
 		lowest = std::min(lowest, TheVoice()->placement.doppler);
 		highest = std::max(highest, TheVoice()->placement.doppler);
@@ -749,8 +749,8 @@ TEST_F(AudioSpatialFixture, FrameMotionMeasuredPerFrame) {
 	FrameStages::Register(FrameStage::Update, FrameStagePosition::Normal, &MoveTowardTheListener, &mover, &_mover);
 
 	const f32 expected = SPEED_OF_SOUND / (SPEED_OF_SOUND - SPEED);
-	for (size_t index = 0; index < std::size(PLAN); ++index) {
-		RunFrameWithSteps(PLAN[index].steps, STEP, PLAN[index].seconds);
+	for (size_t index = 0; index < std::size(Plan); ++index) {
+		RunFrameWithSteps(Plan[index].steps, STEP, Plan[index].seconds);
 		if (index >= 1) {
 			EXPECT_NEAR(TheVoice()->placement.doppler, expected, 1e-4f) << "frame " << index;
 		}

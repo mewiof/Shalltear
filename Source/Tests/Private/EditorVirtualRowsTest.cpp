@@ -499,9 +499,9 @@ TEST(EditorVirtualRowsTest, StripeFollowsTheme) {
 
 	EditorTheme::ThemeDesc bare = EditorTheme::MakeDefaultDesc();
 	bare.Set(EditorTheme::ColorToken::RowStripe, "#00000000");
-	constexpr StringHash BARE("StripelessTest");
-	EditorTheme::Register(BARE, bare);
-	ASSERT_TRUE(EditorTheme::SetActive(BARE));
+	constexpr StringHash Bare("StripelessTest");
+	EditorTheme::Register(Bare, bare);
+	ASSERT_TRUE(EditorTheme::SetActive(Bare));
 	list.Clear();
 	rig.context.BuildRenderList(list);
 	EXPECT_EQ(CountStripes(rig, list), 0u);

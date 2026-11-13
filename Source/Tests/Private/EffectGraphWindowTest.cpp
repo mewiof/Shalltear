@@ -482,7 +482,7 @@ TEST_F(EffectGraphWindowFixture, SpaceOverContextAddsBlock) {
 	const GraphContext* stack = ContextOf(*Document(graph), 7);
 	ASSERT_NE(stack, nullptr);
 	ASSERT_EQ(stack->blocks.size(), 1u);
-	EXPECT_EQ(stack->blocks[0].def, GRAPH_EFFECT_SET_ATTRIBUTE);
+	EXPECT_EQ(stack->blocks[0].def, GraphEffectSetAttribute);
 	str composition;
 	for (const GraphSetting& setting : stack->blocks[0].settings) {
 		composition = setting.key == "Composition" ? setting.value : composition;
@@ -530,14 +530,14 @@ TEST_F(EffectGraphWindowFixture, SpaceButtonIsOneUndo) {
 
 TEST_F(EffectGraphWindowFixture, TemplateContextsDontOverlap) {
 	ASSERT_NE(_moduleBase, nullptr);
-	constexpr std::string_view LABELS[] = {"Spawn", "Initialize Particle", "Update Particle", "Output Particle Primitive"};
-	OpensLegibly(1, LABELS);
+	constexpr std::string_view Labels[] = {"Spawn", "Initialize Particle", "Update Particle", "Output Particle Primitive"};
+	OpensLegibly(1, Labels);
 }
 
 TEST_F(EffectGraphWindowFixture, SimpleTrailContextsDontOverlap) {
 	ASSERT_NE(_moduleBase, nullptr);
-	constexpr std::string_view LABELS[] = {"Spawn", "Initialize Particle Strip", "Update Particle", "Output ParticleStrip Quad"};
-	OpensLegibly(3, LABELS);
+	constexpr std::string_view Labels[] = {"Spawn", "Initialize Particle Strip", "Update Particle", "Output ParticleStrip Quad"};
+	OpensLegibly(3, Labels);
 }
 
 namespace {
@@ -616,10 +616,10 @@ TEST_F(EffectGraphWindowFixture, TriggerEvtDragsToGpuEvent) {
 	Drag(context, Centre(context, evt), Centre(context, input));
 	const GraphNode* wired = GraphDocumentOps::FindNode(*Document(graph), 6);
 	ASSERT_NE(wired, nullptr);
-	const auto fed = std::find_if(wired->inputs.begin(), wired->inputs.end(), [](const GraphInput& held) { return held.port == GRAPH_EFFECT_EVT; });
+	const auto fed = std::find_if(wired->inputs.begin(), wired->inputs.end(), [](const GraphInput& held) { return held.port == GraphEffectEvt; });
 	ASSERT_NE(fed, wired->inputs.end());
 	EXPECT_EQ(fed->fromNode, 20u);
-	EXPECT_EQ(fed->fromPort, GRAPH_EFFECT_EVT);
+	EXPECT_EQ(fed->fromPort, GraphEffectEvt);
 	UndoSystem::Undo();
 	Frame();
 	wired = GraphDocumentOps::FindNode(*Document(graph), 6);
@@ -645,7 +645,7 @@ TEST_F(EffectGraphWindowFixture, FlowPortDraggedOntoAnotherLinksContexts) {
 	const GraphContext* linked = ContextOf(*Document(graph), 7);
 	ASSERT_EQ(linked->flows.size(), 1u);
 	EXPECT_EQ(linked->flows[0].from, 4u);
-	EXPECT_EQ(linked->flows[0].slot, GRAPH_EFFECT_IN);
+	EXPECT_EQ(linked->flows[0].slot, GraphEffectIn);
 	const UI::ElementHandle spawn = NodeShowing(context, "Spawn");
 	Drag(context, Centre(context, FindByClass(context, spawn, EditorTheme::Class::GraphFlowPort, 2)),
 		 Centre(context, FindByClass(context, NodeShowing(context, "Update Particle"), EditorTheme::Class::GraphFlowPort, 0)));
@@ -805,14 +805,14 @@ TEST_F(EffectGraphWindowFixture, EmptySelectionEditsUpdateMode) {
 	ASSERT_TRUE(context.IsAlive(box("Exact Fixed Time")));
 	ClickElement(context, box("Exact Fixed Time"));
 	Frame();
-	EXPECT_EQ(stored(GRAPH_EFFECT_EXACT_FIXED_TIME), "true");
+	EXPECT_EQ(stored(GraphEffectExactFixedTime), "true");
 	ClickElement(context, box("Fixed Delta Time"));
 	Frame();
-	EXPECT_EQ(stored(GRAPH_EFFECT_FIXED_DELTA_TIME), "false");
+	EXPECT_EQ(stored(GraphEffectFixedDeltaTime), "false");
 	ASSERT_TRUE(context.IsAlive(box("Exact Fixed Time")));
 	ClickElement(context, box("Exact Fixed Time"));
 	Frame();
-	EXPECT_EQ(stored(GRAPH_EFFECT_EXACT_FIXED_TIME), "true");
+	EXPECT_EQ(stored(GraphEffectExactFixedTime), "true");
 
 	const UI::ElementHandle total = FindByClass(context, fieldAfter("PreWarm Total Time"), StringHash("slt-number-input"), 0);
 	ASSERT_TRUE(context.IsAlive(total));
@@ -834,7 +834,7 @@ TEST_F(EffectGraphWindowFixture, EmptySelectionEditsUpdateMode) {
 	ASSERT_TRUE(UndoSystem::Undo());
 	Frame();
 	EXPECT_EQ(GraphEffectTarget::Timing(*Document(graph)).prewarmStepCount, 0u);
-	EXPECT_EQ(stored(GRAPH_EFFECT_FIXED_DELTA_TIME), "false");
+	EXPECT_EQ(stored(GraphEffectFixedDeltaTime), "false");
 }
 
 TEST_F(EffectGraphWindowFixture, EmptySelectionEditsCulling) {
@@ -866,7 +866,7 @@ TEST_F(EffectGraphWindowFixture, EmptySelectionEditsCulling) {
 	pick(0);
 	EXPECT_EQ(flags(), GRAPH_EFFECT_CULL_DEFAULT);
 	for (const GraphSetting& setting : Document(graph)->settings) {
-		EXPECT_NE(setting.key, GRAPH_EFFECT_CULLING_FLAGS);
+		EXPECT_NE(setting.key, GraphEffectCullingFlags);
 	}
 	ASSERT_TRUE(UndoSystem::Undo());
 	Frame();
@@ -953,7 +953,7 @@ TEST_F(EffectGraphWindowFixture, AutoBoundsForceAlwaysRecompute) {
 	}
 	Frame();
 	for (const GraphSetting& setting : Document(graph)->settings) {
-		EXPECT_NE(setting.key, GRAPH_EFFECT_CULLING_FLAGS);
+		EXPECT_NE(setting.key, GraphEffectCullingFlags);
 	}
 }
 
@@ -1002,7 +1002,7 @@ TEST_F(EffectGraphWindowFixture, WithNothingSelectedInspectorEditsAssetsInstanci
 	pick(1);
 	EXPECT_EQ(held().mode, GRAPH_EFFECT_INSTANCING_AUTOMATIC);
 	for (const GraphSetting& setting : Document(graph)->settings) {
-		EXPECT_NE(setting.key, GRAPH_EFFECT_INSTANCING_MODE);
+		EXPECT_NE(setting.key, GraphEffectInstancingMode);
 	}
 	ASSERT_TRUE(UndoSystem::Undo());
 	Frame();
@@ -1032,7 +1032,7 @@ TEST_F(EffectGraphWindowFixture, GpuEventHoldsInstancingPopupAtDisabled) {
 	}
 	Frame();
 	for (const GraphSetting& setting : Document(graph)->settings) {
-		EXPECT_NE(setting.key, GRAPH_EFFECT_INSTANCING_MODE);
+		EXPECT_NE(setting.key, GraphEffectInstancingMode);
 	}
 }
 
@@ -1057,12 +1057,12 @@ TEST_F(EffectGraphWindowFixture, NodeShaderPortsFollowSave) {
 	ASSERT_NE(window, nullptr);
 	ASSERT_FALSE(CanvasContexts().empty());
 	UI::Context& context = *CanvasContexts()[0];
-	const auto output_node = [&]() { return NodeShowing(context, "Output Particle NodeShader Primitive"); };
-	ASSERT_TRUE(context.IsAlive(output_node()));
-	EXPECT_TRUE(context.IsAlive(FindByText(context, output_node(), "EffectDefault")));
-	EXPECT_TRUE(context.IsAlive(FindByText(context, output_node(), "_Color")));
+	const auto outputNode = [&]() { return NodeShowing(context, "Output Particle NodeShader Primitive"); };
+	ASSERT_TRUE(context.IsAlive(outputNode()));
+	EXPECT_TRUE(context.IsAlive(FindByText(context, outputNode(), "EffectDefault")));
+	EXPECT_TRUE(context.IsAlive(FindByText(context, outputNode(), "_Color")));
 
-	const UI::ElementHandle label = FindByText(context, output_node(), "Node Shader");
+	const UI::ElementHandle label = FindByText(context, outputNode(), "Node Shader");
 	ASSERT_TRUE(context.IsAlive(label));
 	ClickElement(context, context.MakeHandle(context.GetElement(label)->parent));
 	context.Update();
@@ -1075,11 +1075,11 @@ TEST_F(EffectGraphWindowFixture, NodeShaderPortsFollowSave) {
 	}
 	str stored;
 	for (const GraphSetting& setting : ContextOf(*Document(graph), 8)->node.settings) {
-		stored = setting.key == GRAPH_EFFECT_NODE_SHADER_SETTING ? setting.value : stored;
+		stored = setting.key == GraphEffectNodeShaderSetting ? setting.value : stored;
 	}
 	EXPECT_EQ(stored, "\"" + glowing.ToString() + "\"");
-	EXPECT_TRUE(context.IsAlive(FindByText(context, output_node(), "_Glow")));
-	EXPECT_FALSE(context.IsAlive(FindByText(context, output_node(), "_Color")));
+	EXPECT_TRUE(context.IsAlive(FindByText(context, outputNode(), "_Glow")));
+	EXPECT_FALSE(context.IsAlive(FindByText(context, outputNode(), "_Color")));
 
 	str error;
 	ASSERT_TRUE(NodeShaderDocuments::Open(glowing, nullptr, error)) << error;
@@ -1091,8 +1091,8 @@ TEST_F(EffectGraphWindowFixture, NodeShaderPortsFollowSave) {
 	for (u32 i = 0; i < 3; ++i) {
 		Frame();
 	}
-	EXPECT_TRUE(context.IsAlive(FindByText(context, output_node(), "_Bloom")));
-	EXPECT_FALSE(context.IsAlive(FindByText(context, output_node(), "_Glow")));
+	EXPECT_TRUE(context.IsAlive(FindByText(context, outputNode(), "_Bloom")));
+	EXPECT_FALSE(context.IsAlive(FindByText(context, outputNode(), "_Glow")));
 }
 
 TEST_F(EffectGraphWindowFixture, CurveFieldEditIsOneUndo) {
@@ -1129,7 +1129,7 @@ TEST_F(EffectGraphWindowFixture, CurveFieldEditIsOneUndo) {
 
 	AnimationCurve line;
 	str error;
-	ASSERT_TRUE(GraphCurves::Parse(GraphCurves::DEFAULT_JSON, line, error)) << error;
+	ASSERT_TRUE(GraphCurves::Parse(GraphCurves::DefaultJSON, line, error)) << error;
 	const CurveEditor::View view = CurveEditor::Frame(line);
 	const UI::Rect box = context.GetLayout(plot).borderBox;
 	const Vec2I middle(static_cast<i32>(box.x + (0.5f - view.timeMin) / (view.timeMax - view.timeMin) * box.w),
@@ -1210,7 +1210,7 @@ TEST_F(EffectGraphWindowFixture, CustomHLSLCodeMakesPorts) {
 	str code;
 	for (const GraphNode& held : ContextOf(*Document(graph), 8)->blocks) {
 		for (const GraphSetting& setting : held.settings) {
-			if (held.id == 9 && setting.key == GRAPH_CUSTOM_HLSL_CODE) {
+			if (held.id == 9 && setting.key == GraphCustomHLSLCode) {
 				LinearAllocator arena(setting.value.size() + 64, MemTag::Editor);
 				code = str(JSONParse(setting.value, arena).AsString());
 			}
@@ -1802,8 +1802,8 @@ TEST_F(EffectGraphAttachFixture, BoardRecordsAndAppliesBounds) {
 	};
 	ClickElement(*context, FindByText(*context, Board(*context), "Apply Bounds"));
 	Frame();
-	const Vec3 center = stored(GRAPH_EFFECT_BOUNDS_CENTER);
-	const Vec3 size = stored(GRAPH_EFFECT_BOUNDS_SIZE);
+	const Vec3 center = stored(GraphEffectBoundsCenter);
+	const Vec3 size = stored(GraphEffectBoundsSize);
 	const f32 across = std::sqrt(3.0f);
 	for (u32 axis = 0; axis < 3; ++axis) {
 		EXPECT_NEAR(center[axis], axis == 2 ? 0.5f : 0.0f, 1e-4f) << axis;
@@ -1811,7 +1811,7 @@ TEST_F(EffectGraphAttachFixture, BoardRecordsAndAppliesBounds) {
 	}
 	ASSERT_TRUE(UndoSystem::Undo());
 	Frame();
-	EXPECT_TRUE(std::isnan(stored(GRAPH_EFFECT_BOUNDS_CENTER).x));
+	EXPECT_TRUE(std::isnan(stored(GraphEffectBoundsCenter).x));
 
 	ClickElement(*context, FindByText(*context, Board(*context), "Stop Recording"));
 	Frame();

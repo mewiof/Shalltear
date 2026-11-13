@@ -408,7 +408,7 @@ TEST(VisualEffectsProgramTest, ProgramMeshesCookWhole) {
 }
 
 TEST(VisualEffectsProgramTest, VMsNoisesHoldLaws) {
-	constexpr std::string_view TYPES[] = {"Value", "Perlin", "Cellular"};
+	constexpr std::string_view Types[] = {"Value", "Perlin", "Cellular"};
 	const auto fractal = [](u32 type, u32 dimension, const f32* at, f32 frequency, f32 octaves) {
 		const EffectProgram program = AssembleOrFail(std::format("input {0} c\ninput 3 p\ninput 1 o\nfractalnoise {1} {2} 0 1 2\nroot 3\n", dimension, dimension + 1, type));
 		const EffectValue slots[] = {Value(at[0], at[1], at[2]), Value(frequency, 0.4f, 2.1f), Value(octaves)};
@@ -427,7 +427,7 @@ TEST(VisualEffectsProgramTest, VMsNoisesHoldLaws) {
 	constexpr f32 BASE[3] = {0.37f, 1.61f, 2.29f};
 	for (u32 type = 0; type < 3; ++type) {
 		for (u32 dimension = 1; dimension <= 3; ++dimension) {
-			SCOPED_TRACE(std::format("{} Noise {}D", TYPES[type], dimension));
+			SCOPED_TRACE(std::format("{} Noise {}D", Types[type], dimension));
 			const EffectValue at = fractal(type, dimension, BASE, 1.0f, 1.0f);
 			EXPECT_TRUE(std::isfinite(at.v[0]));
 			for (u32 axis = 0; axis < dimension; ++axis) {
@@ -442,8 +442,8 @@ TEST(VisualEffectsProgramTest, VMsNoisesHoldLaws) {
 		const f32 point[3] = {0.41f, 1.73f, 2.9f};
 		const f32 first = fractal(type, 3, point, 0.7f, 1.0f).v[0];
 		const f32 second = fractal(type, 3, point, 0.7f * 2.1f, 1.0f).v[0];
-		EXPECT_NEAR(fractal(type, 3, point, 0.7f, 2.0f).v[0], (first + 0.4f * second) / 1.4f, 1.0e-5f) << TYPES[type];
-		EXPECT_NE(first, second) << TYPES[type];
+		EXPECT_NEAR(fractal(type, 3, point, 0.7f, 2.0f).v[0], (first + 0.4f * second) / 1.4f, 1.0e-5f) << Types[type];
+		EXPECT_NE(first, second) << Types[type];
 		const auto plane = [&](f32 x, f32 y) {
 			const f32 xy[3] = {x, y, 0.0f};
 			const EffectValue noise = fractal(type, 2, xy, 1.0f, 1.0f);
@@ -452,16 +452,16 @@ TEST(VisualEffectsProgramTest, VMsNoisesHoldLaws) {
 		const f32 at2[3] = {0.53f, 1.27f, 0.0f};
 		const EffectValue curl2 = curl(type, 2, at2);
 		const auto d = plane(at2[0], at2[1]);
-		EXPECT_NEAR(curl2.v[0], d[1], 1.0e-5f) << TYPES[type];
-		EXPECT_NEAR(curl2.v[1], -d[0], 1.0e-5f) << TYPES[type];
+		EXPECT_NEAR(curl2.v[0], d[1], 1.0e-5f) << Types[type];
+		EXPECT_NEAR(curl2.v[1], -d[0], 1.0e-5f) << Types[type];
 		const f32 at3[3] = {0.53f, 1.27f, 2.11f};
 		const EffectValue curl3 = curl(type, 3, at3);
 		const auto a = plane(at3[2], at3[1]);
 		const auto b = plane(at3[0] + 100.0f, at3[2] + 100.0f);
 		const auto c = plane(at3[1] + 200.0f, at3[0] + 200.0f);
-		EXPECT_NEAR(curl3.v[0], c[0] - b[1], 1.0e-5f) << TYPES[type];
-		EXPECT_NEAR(curl3.v[1], a[0] - c[1], 1.0e-5f) << TYPES[type];
-		EXPECT_NEAR(curl3.v[2], b[0] - a[1], 1.0e-5f) << TYPES[type];
+		EXPECT_NEAR(curl3.v[0], c[0] - b[1], 1.0e-5f) << Types[type];
+		EXPECT_NEAR(curl3.v[1], a[0] - c[1], 1.0e-5f) << Types[type];
+		EXPECT_NEAR(curl3.v[2], b[0] - a[1], 1.0e-5f) << Types[type];
 		EXPECT_GT(std::fabs(curl3.v[0]) + std::fabs(curl3.v[1]) + std::fabs(curl3.v[2]), 0.0f);
 	}
 	const f32 point[3] = {0.41f, 1.73f, 2.9f};
@@ -968,7 +968,7 @@ namespace {
 		SettingsPaths _paths;
 		ModuleHandle _module;
 		bool _mounted = false;
-		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CacheEverything};
+		ScopedImportCostThreshold _cacheAll{ScopedImportCostThreshold::CACHE_EVERYTHING};
 
 		void SetUp() override {
 			static std::atomic<u64> counter{0};

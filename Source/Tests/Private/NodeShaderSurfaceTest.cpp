@@ -46,10 +46,10 @@ namespace {
 	GraphBuilder LitStack() {
 		GraphBuilder b;
 		GraphContext& fragment = b.Context(1, "Context/Fragment");
-		constexpr std::string_view BLOCKS[] = {"Block/BaseColor", "Block/NormalTS", "Block/Metallic", "Block/Roughness",
+		constexpr std::string_view Blocks[] = {"Block/BaseColor", "Block/NormalTS", "Block/Metallic", "Block/Roughness",
 											   "Block/Reflectance", "Block/Emission", "Block/Occlusion", "Block/Alpha"};
 		u32 id = 2;
-		for (std::string_view block : BLOCKS) {
+		for (std::string_view block : Blocks) {
 			b.Block(fragment, id++, block);
 		}
 		return b;

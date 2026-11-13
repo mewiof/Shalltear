@@ -189,9 +189,9 @@ namespace Shalltear {
 		}
 
 		const bool normal = !hdr && settings.type == TextureType::NormalMap;
-		const bool srgb = format == RHI::Format::RGBA8SRGB;
+		const bool sRGB = format == RHI::Format::RGBA8SRGB;
 		const RHI::Format target =
-			hdr ? RHI::Format::BC6HUFloat : (normal ? RHI::Format::BC5Unorm : (srgb ? RHI::Format::BC7SRGB : RHI::Format::BC7Unorm));
+			hdr ? RHI::Format::BC6HUFloat : (normal ? RHI::Format::BC5Unorm : (sRGB ? RHI::Format::BC7SRGB : RHI::Format::BC7Unorm));
 		const TextureCodec* codec = TextureCodecs::Find(target);
 		if (!codec) {
 			SLT_LOG_ERROR("Graphics", "TextureAsset: '{}' compresses to {} and no encoders for it registered", sourcePath.ToString(),
@@ -211,7 +211,7 @@ namespace Shalltear {
 			input.slices = slices;
 			input.mipLevels = settings.generateMips ? GraphicsInternal::TextureMipCount(size) : 1;
 		}
-		input.meaning = normal ? TexelMeaning::Normal : (srgb ? TexelMeaning::SRGBColor : TexelMeaning::Linear);
+		input.meaning = normal ? TexelMeaning::Normal : (sRGB ? TexelMeaning::sRGBColor : TexelMeaning::Linear);
 		Vector<u8> blocks{GetMemoryResource(MemTag::Asset)};
 		if (!codec->encode(target, input, blocks)) {
 			SLT_LOG_ERROR("Graphics", "TextureAsset: '{}' couldn't be encoded", sourcePath.ToString());

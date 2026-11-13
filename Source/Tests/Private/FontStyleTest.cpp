@@ -106,7 +106,7 @@ namespace {
 							 std::initializer_list<std::string_view> fallbacks,
 							 SyntheticBoldSpacing boldSpacing = SyntheticBoldSpacing::Widened) {
 			std::deque<str> ids;
-			auto ToList = [&ids](std::initializer_list<std::string_view> names) {
+			auto toList = [&ids](std::initializer_list<std::string_view> names) {
 				JSONValue list = JSONValue::MakeArray();
 				for (std::string_view font : names) {
 					list.Push(JSONValue::MakeString(ids.emplace_back(GuidOf(font).ToString())));
@@ -114,8 +114,8 @@ namespace {
 				return list;
 			};
 			JSONValue settings = JSONValue::MakeObject();
-			settings.AddMember("faces", ToList(faces));
-			settings.AddMember("fallbacks", ToList(fallbacks));
+			settings.AddMember("faces", toList(faces));
+			settings.AddMember("fallbacks", toList(fallbacks));
 			if (boldSpacing == SyntheticBoldSpacing::Regular) {
 				settings.AddMember("syntheticBoldSpacing", JSONValue::MakeString("regular"));
 			}

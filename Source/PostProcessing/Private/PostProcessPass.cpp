@@ -235,7 +235,7 @@ namespace Shalltear {
 		if (!RenderPass::Cook(descriptor, payload)) {
 			return false;
 		}
-		descriptor.NoteAssetRef(PostProcessingImpl::POST_PROCESS_SHADER);
+		descriptor.NoteAssetRef(PostProcessingImpl::PostProcessShader);
 		return true;
 	}
 
@@ -248,7 +248,7 @@ namespace Shalltear {
 
 		if (!_shaderResolved) {
 			_shaderResolved = true;
-			if (Asset* asset = AssetDatabase::LoadAssetByGuid(PostProcessingImpl::POST_PROCESS_SHADER)) {
+			if (Asset* asset = AssetDatabase::LoadAssetByGuid(PostProcessingImpl::PostProcessShader)) {
 				if (asset->GetAssetTypeId() == StringHash("ShaderAsset")) {
 					_shader = Handle<ShaderAsset>(static_cast<ShaderAsset*>(asset));
 				} else {

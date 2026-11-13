@@ -12,8 +12,8 @@ using ShadingTest::ShadingStage;
 
 namespace {
 
-	const u8 RED[4] = {255, 0, 0, 255};
-	const u8 GREEN[4] = {0, 255, 0, 255};
+	const u8 red[4] = {255, 0, 0, 255};
+	const u8 green[4] = {0, 255, 0, 255};
 
 	Guid UnlitShaderGuid() {
 		Asset* shader = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
@@ -25,7 +25,7 @@ namespace {
 class TextureReimportFixture : public MaterialReadbackFixture {};
 
 TEST_F(TextureReimportFixture, HeldTextureTakesRewrittenFileInPlace) {
-	TestImages::WriteTga(_root / "Map.tga", RED);
+	TestImages::WriteTGA(_root / "Map.tga", red);
 	Asset* held = AssetDatabase::LoadAsset(Path("project://Map.tga"));
 	ASSERT_NE(held, nullptr);
 	TextureAsset* texture = static_cast<TextureAsset*>(held);
@@ -34,7 +34,7 @@ TEST_F(TextureReimportFixture, HeldTextureTakesRewrittenFileInPlace) {
 	const u64 instance = texture->GetInstanceId();
 	const u32 versionBefore = texture->version;
 
-	TestImages::WriteTga(_root / "Map.tga", GREEN);
+	TestImages::WriteTGA(_root / "Map.tga", green);
 	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Map.tga")));
 
 	Asset* again = AssetDatabase::LoadAsset(Path("project://Map.tga"));
@@ -48,25 +48,25 @@ TEST_F(TextureReimportFixture, HeldTextureTakesRewrittenFileInPlace) {
 }
 
 TEST_F(TextureReimportFixture, RewriteToSameBytesRefillsNothing) {
-	TestImages::WriteTga(_root / "Map.tga", RED);
+	TestImages::WriteTGA(_root / "Map.tga", red);
 	Asset* held = AssetDatabase::LoadAsset(Path("project://Map.tga"));
 	ASSERT_NE(held, nullptr);
 	TextureAsset* texture = static_cast<TextureAsset*>(held);
 	const u32 versionBefore = texture->version;
 
-	TestImages::WriteTga(_root / "Map.tga", RED);
+	TestImages::WriteTGA(_root / "Map.tga", red);
 	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Map.tga")));
 	EXPECT_EQ(texture->version, versionBefore);
 	EXPECT_EQ(texture->pixels[0], 255);
 
-	TestImages::WriteTga(_root / "Map.tga", GREEN);
+	TestImages::WriteTGA(_root / "Map.tga", green);
 	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Map.tga")));
 	EXPECT_EQ(texture->version, versionBefore + 1);
 	AssetDatabase::UnloadAsset(held);
 }
 
 TEST_F(TextureReimportFixture, UndecodableFileKeepsTexture) {
-	TestImages::WriteTga(_root / "Map.tga", RED);
+	TestImages::WriteTGA(_root / "Map.tga", red);
 	Asset* held = AssetDatabase::LoadAsset(Path("project://Map.tga"));
 	ASSERT_NE(held, nullptr);
 	TextureAsset* texture = static_cast<TextureAsset*>(held);
@@ -87,7 +87,7 @@ TEST_F(TextureReimportFixture, DrawOfHeldTextureShowsRewrittenFile) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	TestImages::WriteTga(_root / "Map.tga", RED);
+	TestImages::WriteTGA(_root / "Map.tga", red);
 	Asset* texture = AssetDatabase::LoadAsset(Path("project://Map.tga"));
 	ASSERT_NE(texture, nullptr);
 	const str textures = "\t\"textures\": { \"baseColorTexture\": \"" + texture->assetId.ToString() + "\" }";
@@ -103,7 +103,7 @@ TEST_F(TextureReimportFixture, DrawOfHeldTextureShowsRewrittenFile) {
 	ASSERT_GT(before.x, 200.0f);
 	ASSERT_LT(before.y, 40.0f);
 
-	TestImages::WriteTga(_root / "Map.tga", GREEN);
+	TestImages::WriteTGA(_root / "Map.tga", green);
 	ASSERT_TRUE(AssetDatabase::ReimportAsset(Path("project://Map.tga")));
 
 	ASSERT_TRUE(RenderStage(stage, pixels, size));

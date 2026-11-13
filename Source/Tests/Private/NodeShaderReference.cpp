@@ -181,116 +181,116 @@ namespace Shalltear::NodeShaderTest {
 
 		using P = Feed;
 
-		constexpr RefShape VECTOR_1[] = {{{P::F4}}, {{P::F1}}};
-		constexpr RefShape VECTOR_2[] = {{{P::F4, P::F4}}, {{P::F1, P::F1}}};
-		constexpr RefShape VECTOR_3[] = {{{P::F4, P::F4, P::F4}}, {{P::F1, P::F1, P::F1}}};
-		constexpr RefShape VECTOR_PAIR[] = {{{P::F4, P::F4}}, {{P::F3, P::F3}}};
-		constexpr RefShape MATRICES[] = {{{P::M2}}, {{P::M3}}, {{P::M4}}};
-		constexpr RefShape MULTIPLY[] = {{{P::F4, P::F4}}, {{P::F1, P::F1}}, {{P::M2, P::M2}}, {{P::M3, P::M3}}, {{P::M4, P::M4}}, {{P::F3, P::M3}}, {{P::M4, P::F4}}};
-		constexpr RefShape REMAP[] = {{{P::F4, P::F2, P::F2}}, {{P::F1, P::F2, P::F2}}};
-		constexpr RefShape RANDOM_RANGE[] = {{{P::F2, P::F1, P::F1}}};
-		constexpr RefShape NOISE_SINE[] = {{{P::F4, P::F2}}, {{P::F1, P::F2}}};
-		constexpr RefShape MATRIX_CONSTRUCTION[] = {{{P::F4, P::F4, P::F4, P::F4}}};
-		constexpr RefShape CROSS[] = {{{P::F3, P::F3}}};
-		constexpr RefShape FRESNEL[] = {{{P::F3, P::F3, P::F1}}};
-		constexpr RefShape REFRACT[] = {{{P::F3, P::F3, P::F1, P::F1}}};
-		constexpr RefShape ROTATE[] = {{{P::F3, P::F3, P::F1}}};
-		constexpr RefShape SPHERE_MASK[] = {{{P::F4, P::F4, P::F1, P::F1}}, {{P::F2, P::F2, P::F1, P::F1}}};
-		constexpr RefShape COMBINE[] = {{{P::F1, P::F1, P::F1, P::F1}}};
-		constexpr RefShape FLIP[] = {{{P::F4}}, {{P::F2}}};
-		constexpr RefShape SPLIT[] = {{{P::F4}}, {{P::F3}}, {{P::F1}}};
-		constexpr RefShape SWIZZLE[] = {{{P::F4}}};
-		constexpr RefShape CHECKERBOARD[] = {{{P::F2, P::F3, P::F3, P::F2}}};
-		constexpr RefShape NOISE[] = {{{P::F2, P::F1}}};
-		constexpr RefShape VORONOI[] = {{{P::F2, P::F1, P::F1}}};
-		constexpr RefShape SHAPE_2[] = {{{P::F2, P::F1, P::F1}}};
-		constexpr RefShape SHAPE_3[] = {{{P::F2, P::F1, P::F1, P::F1}}};
-		constexpr RefShape SHAPE_4[] = {{{P::F2, P::F1, P::F1, P::F1, P::F1}}};
+		constexpr RefShape Vector1[] = {{{P::F4}}, {{P::F1}}};
+		constexpr RefShape Vector2[] = {{{P::F4, P::F4}}, {{P::F1, P::F1}}};
+		constexpr RefShape Vector3[] = {{{P::F4, P::F4, P::F4}}, {{P::F1, P::F1, P::F1}}};
+		constexpr RefShape VectorPair[] = {{{P::F4, P::F4}}, {{P::F3, P::F3}}};
+		constexpr RefShape Matrices[] = {{{P::M2}}, {{P::M3}}, {{P::M4}}};
+		constexpr RefShape MultiplyShapes[] = {{{P::F4, P::F4}}, {{P::F1, P::F1}}, {{P::M2, P::M2}}, {{P::M3, P::M3}}, {{P::M4, P::M4}}, {{P::F3, P::M3}}, {{P::M4, P::F4}}};
+		constexpr RefShape RemapShapes[] = {{{P::F4, P::F2, P::F2}}, {{P::F1, P::F2, P::F2}}};
+		constexpr RefShape RandomRangeShapes[] = {{{P::F2, P::F1, P::F1}}};
+		constexpr RefShape NoiseSine[] = {{{P::F4, P::F2}}, {{P::F1, P::F2}}};
+		constexpr RefShape MatrixConstructionShapes[] = {{{P::F4, P::F4, P::F4, P::F4}}};
+		constexpr RefShape Cross[] = {{{P::F3, P::F3}}};
+		constexpr RefShape Fresnel[] = {{{P::F3, P::F3, P::F1}}};
+		constexpr RefShape RefractShapes[] = {{{P::F3, P::F3, P::F1, P::F1}}};
+		constexpr RefShape RotateShapes[] = {{{P::F3, P::F3, P::F1}}};
+		constexpr RefShape SphereMaskShapes[] = {{{P::F4, P::F4, P::F1, P::F1}}, {{P::F2, P::F2, P::F1, P::F1}}};
+		constexpr RefShape CombineShapes[] = {{{P::F1, P::F1, P::F1, P::F1}}};
+		constexpr RefShape FlipShapes[] = {{{P::F4}}, {{P::F2}}};
+		constexpr RefShape SplitShapes[] = {{{P::F4}}, {{P::F3}}, {{P::F1}}};
+		constexpr RefShape SwizzleShapes[] = {{{P::F4}}};
+		constexpr RefShape CheckerboardShapes[] = {{{P::F2, P::F3, P::F3, P::F2}}};
+		constexpr RefShape Noise[] = {{{P::F2, P::F1}}};
+		constexpr RefShape VoronoiShapes[] = {{{P::F2, P::F1, P::F1}}};
+		constexpr RefShape Shape2[] = {{{P::F2, P::F1, P::F1}}};
+		constexpr RefShape Shape3[] = {{{P::F2, P::F1, P::F1, P::F1}}};
+		constexpr RefShape Shape4[] = {{{P::F2, P::F1, P::F1, P::F1, P::F1}}};
 
-		constexpr RefShape NO_INPUTS[] = {{}};
-		constexpr RefShape ONE_FLOAT[] = {{{P::F1}}};
-		constexpr RefShape TWO_FLOATS[] = {{{P::F1, P::F1}}};
-		constexpr RefShape THREE_FLOATS[] = {{{P::F1, P::F1, P::F1}}};
-		constexpr RefShape FOUR_FLOATS[] = {{{P::F1, P::F1, P::F1, P::F1}}};
+		constexpr RefShape NoInputs[] = {{}};
+		constexpr RefShape OneFloat[] = {{{P::F1}}};
+		constexpr RefShape TwoFloats[] = {{{P::F1, P::F1}}};
+		constexpr RefShape ThreeFloats[] = {{{P::F1, P::F1, P::F1}}};
+		constexpr RefShape FourFloats[] = {{{P::F1, P::F1, P::F1, P::F1}}};
 
-		constexpr RefVariant ONE[] = {{"", 0}};
-		constexpr RefVariant BOOLEANS[] = {{"Value=false", 0}, {"Value=true", 1}};
-		constexpr RefVariant COLORS[] = {{"Color=[0.25,0.5,0.75,1]", 0}, {"Color=[2,0,-1,0.5];Mode=\"HDR\"", 1}};
-		constexpr RefVariant CONSTANTS[] = {{"Constant=\"PI\"", 0}, {"Constant=\"TAU\"", 1}, {"Constant=\"PHI\"", 2}, {"Constant=\"E\"", 3}, {"Constant=\"SQRT2\"", 4}};
-		constexpr RefVariant INTEGERS[] = {{"Value=3", 0}, {"Value=-2.7", 1}};
-		constexpr RefVariant SLIDERS[] = {{"Value=0.25;Min=-1;Max=2", 0}};
-		constexpr RefVariant DIELECTRICS[] = {{"Material=\"Common\";Range=0.25", 0}, {"Material=\"RustedMetal\"", 1}, {"Material=\"Water\"", 2}, {"Material=\"Ice\"", 3}, {"Material=\"Glass\"", 4}, {"Material=\"Custom\";IOR=1.5", 5}};
-		constexpr RefVariant METALS[] = {{"Material=\"Iron\"", 0}, {"Material=\"Gold\"", 1}, {"Material=\"Platinum\"", 2}};
-		constexpr RefVariant EXPONENTIAL[] = {{"Base=\"BaseE\"", 0}, {"Base=\"Base2\"", 1}};
-		constexpr RefVariant LOG[] = {{"Base=\"BaseE\"", 0}, {"Base=\"Base2\"", 1}, {"Base=\"Base10\"", 2}};
-		constexpr RefVariant RECIPROCAL[] = {{"Method=\"Default\"", 0}, {"Method=\"Fast\"", 1}};
-		constexpr RefVariant AXIS[] = {{"Axis=\"Row\"", 0}, {"Axis=\"Column\"", 1}};
-		constexpr RefVariant REFRACT_MODES[] = {{"Mode=\"Safe\"", 1}, {"Mode=\"CriticalAngle\"", 0}};
-		constexpr RefVariant UNITS[] = {{"Unit=\"Radians\"", 0}, {"Unit=\"Degrees\"", 1}};
-		constexpr RefVariant FLIPS[] = {{"Red=false;Green=false;Blue=false;Alpha=false", 0b0000},
+		constexpr RefVariant One[] = {{"", 0}};
+		constexpr RefVariant Booleans[] = {{"Value=false", 0}, {"Value=true", 1}};
+		constexpr RefVariant Colors[] = {{"Color=[0.25,0.5,0.75,1]", 0}, {"Color=[2,0,-1,0.5];Mode=\"HDR\"", 1}};
+		constexpr RefVariant Constants[] = {{"Constant=\"PI\"", 0}, {"Constant=\"TAU\"", 1}, {"Constant=\"PHI\"", 2}, {"Constant=\"E\"", 3}, {"Constant=\"SQRT2\"", 4}};
+		constexpr RefVariant Integers[] = {{"Value=3", 0}, {"Value=-2.7", 1}};
+		constexpr RefVariant Sliders[] = {{"Value=0.25;Min=-1;Max=2", 0}};
+		constexpr RefVariant Dielectrics[] = {{"Material=\"Common\";Range=0.25", 0}, {"Material=\"RustedMetal\"", 1}, {"Material=\"Water\"", 2}, {"Material=\"Ice\"", 3}, {"Material=\"Glass\"", 4}, {"Material=\"Custom\";IOR=1.5", 5}};
+		constexpr RefVariant Metals[] = {{"Material=\"Iron\"", 0}, {"Material=\"Gold\"", 1}, {"Material=\"Platinum\"", 2}};
+		constexpr RefVariant ExponentialVariants[] = {{"Base=\"BaseE\"", 0}, {"Base=\"Base2\"", 1}};
+		constexpr RefVariant LogVariants[] = {{"Base=\"BaseE\"", 0}, {"Base=\"Base2\"", 1}, {"Base=\"Base10\"", 2}};
+		constexpr RefVariant ReciprocalVariants[] = {{"Method=\"Default\"", 0}, {"Method=\"Fast\"", 1}};
+		constexpr RefVariant Axis[] = {{"Axis=\"Row\"", 0}, {"Axis=\"Column\"", 1}};
+		constexpr RefVariant RefractModes[] = {{"Mode=\"Safe\"", 1}, {"Mode=\"CriticalAngle\"", 0}};
+		constexpr RefVariant Units[] = {{"Unit=\"Radians\"", 0}, {"Unit=\"Degrees\"", 1}};
+		constexpr RefVariant Flips[] = {{"Red=false;Green=false;Blue=false;Alpha=false", 0b0000},
 										{"Red=true;Green=false;Blue=true;Alpha=false", 0b0101},
 										{"Red=true;Green=true;Blue=true;Alpha=true", 0b1111}};
-		constexpr RefVariant MASKS[] = {{"Mask=\"wzyx\"", 0}, {"Mask=\"xxyy\"", 1}, {"Mask=\"b\"", 2}, {"Mask=\"rg\"", 3}};
-		constexpr std::string_view MASK_TEXT[] = {"wzyx", "xxyy", "b", "rg"};
-		constexpr RefVariant DETERMINISTIC[] = {{"Hash Type=\"Deterministic\"", 0}};
-		constexpr RefVariant LEGACY_SINE[] = {{"Hash Type=\"LegacySine\"", 1}};
-		constexpr RefVariant LEGACY_MOD[] = {{"Hash Type=\"LegacyMod\"", 2}};
-		constexpr RefVariant CLAMP_TYPES[] = {{"Clamp Type=\"Fastest\"", 0}, {"Clamp Type=\"Nicest\"", 1}};
+		constexpr RefVariant Masks[] = {{"Mask=\"wzyx\"", 0}, {"Mask=\"xxyy\"", 1}, {"Mask=\"b\"", 2}, {"Mask=\"rg\"", 3}};
+		constexpr std::string_view MaskText[] = {"wzyx", "xxyy", "b", "rg"};
+		constexpr RefVariant Deterministic[] = {{"Hash Type=\"Deterministic\"", 0}};
+		constexpr RefVariant LegacySine[] = {{"Hash Type=\"LegacySine\"", 1}};
+		constexpr RefVariant LegacyMod[] = {{"Hash Type=\"LegacyMod\"", 2}};
+		constexpr RefVariant ClampTypes[] = {{"Clamp Type=\"Fastest\"", 0}, {"Clamp Type=\"Nicest\"", 1}};
 
-		constexpr RefShape NONE_THEN_FLOAT[] = {{{P::None, P::F1}}};
-		constexpr RefShape ONE_VECTOR3[] = {{{P::F3}}};
-		constexpr RefShape FLIPBOOK[] = {{{P::F2, P::F1, P::F1, P::F1}}};
-		constexpr RefShape POLAR[] = {{{P::F2, P::F2, P::F1, P::F1}}};
-		constexpr RefShape UV_FOUR_PAIRS[] = {{{P::F2, P::F2, P::F2, P::F2}}};
-		constexpr RefShape UV_ROTATE[] = {{{P::F2, P::F2, P::F1}}};
-		constexpr RefShape UV_TILING[] = {{{P::F2, P::F2, P::F2}}};
-		constexpr RefShape UV_TWIRL[] = {{{P::F2, P::F2, P::F1, P::F2}}};
+		constexpr RefShape NoneThenFloat[] = {{{P::None, P::F1}}};
+		constexpr RefShape OneVector3[] = {{{P::F3}}};
+		constexpr RefShape FlipbookShapes[] = {{{P::F2, P::F1, P::F1, P::F1}}};
+		constexpr RefShape Polar[] = {{{P::F2, P::F2, P::F1, P::F1}}};
+		constexpr RefShape UVFourPairs[] = {{{P::F2, P::F2, P::F2, P::F2}}};
+		constexpr RefShape UVRotate[] = {{{P::F2, P::F2, P::F1}}};
+		constexpr RefShape UVTiling[] = {{{P::F2, P::F2, P::F2}}};
+		constexpr RefShape UVTwirl[] = {{{P::F2, P::F2, P::F1, P::F2}}};
 
-		constexpr RefVariant POSITION_SPACES[] = {
+		constexpr RefVariant PositionSpaces[] = {
 			{"Space=\"Object\"", 0}, {"Space=\"View\"", 1}, {"Space=\"World\"", 2}, {"Space=\"Tangent\"", 3}, {"Space=\"AbsoluteWorld\"", 4}};
-		constexpr std::span<const RefVariant> DIRECTION_SPACES = std::span(POSITION_SPACES).first(4);
-		constexpr RefVariant SCREEN_MODES[] = {{"Mode=\"Default\"", 0}, {"Mode=\"Raw\"", 1}, {"Mode=\"Center\"", 2}, {"Mode=\"Tiled\"", 3}, {"Mode=\"Pixel\"", 4}, {"Mode=\"Clip\"", 5}};
-		constexpr RefVariant TRANSFORMATION_MATRICES[] = {
+		constexpr std::span<const RefVariant> DirectionSpaces = std::span(PositionSpaces).first(4);
+		constexpr RefVariant ScreenModes[] = {{"Mode=\"Default\"", 0}, {"Mode=\"Raw\"", 1}, {"Mode=\"Center\"", 2}, {"Mode=\"Tiled\"", 3}, {"Mode=\"Pixel\"", 4}, {"Mode=\"Clip\"", 5}};
+		constexpr RefVariant TransformationMatrices[] = {
 			{"Matrix=\"Model\"", 0}, {"Matrix=\"InverseModel\"", 1}, {"Matrix=\"View\"", 2}, {"Matrix=\"InverseView\"", 3}, {"Matrix=\"Projection\"", 4}, {"Matrix=\"InverseProjection\"", 5}, {"Matrix=\"ViewProjection\"", 6}, {"Matrix=\"InverseViewProjection\"", 7}};
-		constexpr RefVariant GRADIENT_CASES[] = {{"", 0}, {"", 1}, {"", 2}};
-		constexpr RefVariant MATRIX2_ROWS[] = {{"Row 0=[0.5,-0.5];Row 1=[1.5,-1]", 0}};
-		constexpr RefVariant MATRIX3_ROWS[] = {{"Row 0=[0.5,-0.5,1.5];Row 1=[-1,2.5,-1.5];Row 2=[3.5,-2,4.5]", 0}};
-		constexpr RefVariant MATRIX4_ROWS[] = {{"Row 0=[0.5,-0.5,1.5,-1];Row 1=[2.5,-1.5,3.5,-2];Row 2=[4.5,-2.5,5.5,-3];Row 3=[6.5,-3.5,7.5,-4]", 0}};
-		constexpr RefVariant FLIPBOOK_INVERTS[] = {{"", 0},
-												   {"Invert X=false;Invert Y=false", 0},
-												   {"Invert X=true;Invert Y=false", 1},
-												   {"Invert X=false;Invert Y=true", 2},
-												   {"Invert X=true;Invert Y=true", 3}};
+		constexpr RefVariant GradientCases[] = {{"", 0}, {"", 1}, {"", 2}};
+		constexpr RefVariant Matrix2Rows[] = {{"Row 0=[0.5,-0.5];Row 1=[1.5,-1]", 0}};
+		constexpr RefVariant Matrix3Rows[] = {{"Row 0=[0.5,-0.5,1.5];Row 1=[-1,2.5,-1.5];Row 2=[3.5,-2,4.5]", 0}};
+		constexpr RefVariant Matrix4Rows[] = {{"Row 0=[0.5,-0.5,1.5,-1];Row 1=[2.5,-1.5,3.5,-2];Row 2=[4.5,-2.5,5.5,-3];Row 3=[6.5,-3.5,7.5,-4]", 0}};
+		constexpr RefVariant FlipbookInverts[] = {{"", 0},
+												  {"Invert X=false;Invert Y=false", 0},
+												  {"Invert X=true;Invert Y=false", 1},
+												  {"Invert X=false;Invert Y=true", 2},
+												  {"Invert X=true;Invert Y=true", 3}};
 
-		constexpr RefBinding TIME_BINDINGS[] = {{"TimeParameters", P::F4, 0}};
-		constexpr RefBinding POSITION_BINDINGS[] = {{"ObjectSpacePosition", P::F3, 0},
-													{"ViewSpacePosition", P::F3, 1},
-													{"WorldSpacePosition", P::F3, 2},
-													{"TangentSpacePosition", P::F3, 3},
-													{"AbsoluteWorldSpacePosition", P::F3, 4}};
-		constexpr RefBinding NORMAL_BINDINGS[] = {
+		constexpr RefBinding TimeBindings[] = {{"TimeParameters", P::F4, 0}};
+		constexpr RefBinding PositionBindings[] = {{"ObjectSpacePosition", P::F3, 0},
+												   {"ViewSpacePosition", P::F3, 1},
+												   {"WorldSpacePosition", P::F3, 2},
+												   {"TangentSpacePosition", P::F3, 3},
+												   {"AbsoluteWorldSpacePosition", P::F3, 4}};
+		constexpr RefBinding NormalBindings[] = {
 			{"ObjectSpaceNormal", P::F3, 0}, {"ViewSpaceNormal", P::F3, 1}, {"WorldSpaceNormal", P::F3, 2}, {"TangentSpaceNormal", P::F3, 3}};
-		constexpr RefBinding TANGENT_BINDINGS[] = {
+		constexpr RefBinding TangentBindings[] = {
 			{"ObjectSpaceTangent", P::F3, 0}, {"ViewSpaceTangent", P::F3, 1}, {"WorldSpaceTangent", P::F3, 2}, {"TangentSpaceTangent", P::F3, 3}};
-		constexpr RefBinding BITANGENT_BINDINGS[] = {{"ObjectSpaceBiTangent", P::F3, 0},
-													 {"ViewSpaceBiTangent", P::F3, 1},
-													 {"WorldSpaceBiTangent", P::F3, 2},
-													 {"TangentSpaceBiTangent", P::F3, 3}};
-		constexpr RefBinding VIEW_DIRECTION_BINDINGS[] = {{"ObjectSpaceViewDirection", P::F3, 0},
-														  {"ViewSpaceViewDirection", P::F3, 1},
-														  {"WorldSpaceViewDirection", P::F3, 2},
-														  {"TangentSpaceViewDirection", P::F3, 3}};
-		constexpr RefBinding VIEW_VECTOR_BINDINGS[] = {{"CameraPosition", P::F3, 0}, {"WorldSpacePosition", P::F3, 1}, {"View", P::M4, 2}, {"ProjectionParams", P::F4, 3}, {"ViewSpacePosition", P::F3, 4}, {"WorldToObject", P::M4, 5}, {"WorldSpaceTangent", P::F3, 6}, {"WorldSpaceBiTangent", P::F3, 7}, {"WorldSpaceNormal", P::F3, 8}};
-		constexpr RefBinding SCREEN_POSITION_BINDINGS[] = {
+		constexpr RefBinding BitangentBindings[] = {{"ObjectSpaceBiTangent", P::F3, 0},
+													{"ViewSpaceBiTangent", P::F3, 1},
+													{"WorldSpaceBiTangent", P::F3, 2},
+													{"TangentSpaceBiTangent", P::F3, 3}};
+		constexpr RefBinding ViewDirectionBindings[] = {{"ObjectSpaceViewDirection", P::F3, 0},
+														{"ViewSpaceViewDirection", P::F3, 1},
+														{"WorldSpaceViewDirection", P::F3, 2},
+														{"TangentSpaceViewDirection", P::F3, 3}};
+		constexpr RefBinding ViewVectorBindings[] = {{"CameraPosition", P::F3, 0}, {"WorldSpacePosition", P::F3, 1}, {"View", P::M4, 2}, {"ProjectionParams", P::F4, 3}, {"ViewSpacePosition", P::F3, 4}, {"WorldToObject", P::M4, 5}, {"WorldSpaceTangent", P::F3, 6}, {"WorldSpaceBiTangent", P::F3, 7}, {"WorldSpaceNormal", P::F3, 8}};
+		constexpr RefBinding ScreenPositionBindings[] = {
 			{"ScreenPosition", P::F4, 0}, {"NDCPosition", P::F2, 1}, {"PixelPosition", P::F2, 2}, {"ClipPosition", P::F2, 3}, {"ScreenParams", P::F4, 4}};
-		constexpr RefBinding INSTANCE_BINDINGS[] = {{"InstanceID", P::F1, 0}};
-		constexpr RefBinding EYE_BINDINGS[] = {{"EyeIndex", P::F1, 0}};
-		constexpr RefBinding FACE_BINDINGS[] = {{"IsFrontFace", P::B1, 0}};
-		constexpr RefBinding TRANSFORMATION_BINDINGS[] = {{"ObjectToWorld", P::M4, 0}, {"WorldToObject", P::M4, 1}, {"View", P::M4, 2}, {"InverseView", P::M4, 3}, {"Projection", P::M4, 4}, {"InverseProjection", P::M4, 5}, {"ViewProjection", P::M4, 6}, {"InverseViewProjection", P::M4, 7}};
-		constexpr RefBinding CAMERA_BINDINGS[] = {{"CameraPosition", P::F3, 0}, {"View", P::M4, 1}, {"ProjectionParams", P::F4, 2}, {"ScreenParams", P::F4, 3}};
-		constexpr RefBinding OBJECT_BINDINGS[] = {{"ObjectToWorld", P::M4, 0}};
-		constexpr RefBinding SCREEN_BINDINGS[] = {{"ScreenParams", P::F4, 0}};
-		constexpr RefBinding TRANSFORM_BINDINGS[] = {{"ObjectToWorld", P::M4, 1}, {"WorldToObject", P::M4, 2}, {"View", P::M4, 3}, {"InverseView", P::M4, 4}, {"Projection", P::M4, 5}, {"ViewProjection", P::M4, 6}, {"InverseViewProjection", P::M4, 7}, {"WorldSpaceTangent", P::F3, 8}, {"WorldSpaceBiTangent", P::F3, 9}, {"WorldSpaceNormal", P::F3, 10}, {"WorldSpacePosition", P::F3, 11}};
+		constexpr RefBinding InstanceBindings[] = {{"InstanceID", P::F1, 0}};
+		constexpr RefBinding EyeBindings[] = {{"EyeIndex", P::F1, 0}};
+		constexpr RefBinding FaceBindings[] = {{"IsFrontFace", P::B1, 0}};
+		constexpr RefBinding TransformationBindings[] = {{"ObjectToWorld", P::M4, 0}, {"WorldToObject", P::M4, 1}, {"View", P::M4, 2}, {"InverseView", P::M4, 3}, {"Projection", P::M4, 4}, {"InverseProjection", P::M4, 5}, {"ViewProjection", P::M4, 6}, {"InverseViewProjection", P::M4, 7}};
+		constexpr RefBinding CameraBindings[] = {{"CameraPosition", P::F3, 0}, {"View", P::M4, 1}, {"ProjectionParams", P::F4, 2}, {"ScreenParams", P::F4, 3}};
+		constexpr RefBinding ObjectBindings[] = {{"ObjectToWorld", P::M4, 0}};
+		constexpr RefBinding ScreenBindings[] = {{"ScreenParams", P::F4, 0}};
+		constexpr RefBinding TransformBindings[] = {{"ObjectToWorld", P::M4, 1}, {"WorldToObject", P::M4, 2}, {"View", P::M4, 3}, {"InverseView", P::M4, 4}, {"Projection", P::M4, 5}, {"ViewProjection", P::M4, 6}, {"InverseViewProjection", P::M4, 7}, {"WorldSpaceTangent", P::F3, 8}, {"WorldSpaceBiTangent", P::F3, 9}, {"WorldSpaceNormal", P::F3, 10}, {"WorldSpacePosition", P::F3, 11}};
 
 		GraphNoiseHash HashOf(u32 tag) { return static_cast<GraphNoiseHash>(tag); }
 
@@ -690,7 +690,7 @@ namespace Shalltear::NodeShaderTest {
 			}
 		}
 		SLT_REF(Swizzle) {
-			std::string_view mask = MASK_TEXT[variant];
+			std::string_view mask = MaskText[variant];
 			out[0] = Of(static_cast<u32>(mask.size()));
 			for (u32 i = 0; i < mask.size(); ++i) {
 				size_t index = std::string_view("xyzw").find(mask[i]);
@@ -947,15 +947,15 @@ namespace Shalltear::NodeShaderTest {
 			return {h[0], h[1], h[2]};
 		}
 
-		enum Space : u32 { OBJECT,
-						   VIEW,
-						   WORLD,
-						   TANGENT,
-						   ABSOLUTE_WORLD,
-						   SCREEN };
-		enum Conversion : u32 { POSITION,
-								DIRECTION,
-								NORMAL };
+		enum Space : u32 { ObjectSpace,
+						   ViewSpace,
+						   WorldSpace,
+						   TangentSpace,
+						   AbsoluteWorldSpace,
+						   ScreenSpace };
+		enum Conversion : u32 { PositionVector,
+								DirectionVector,
+								NormalVector };
 
 		struct SpaceInputs {
 			RefValue objectToWorld, worldToObject, view, inverseView, projection, viewProjection, inverseViewProjection;
@@ -981,40 +981,40 @@ namespace Shalltear::NodeShaderTest {
 		V3 ConvertSpace(const SpaceInputs& s, V3 in, Space from, Space to, Conversion type, bool normalize);
 
 		V3 ViaWorld(const SpaceInputs& s, const V3& in, Space from, Space to, Conversion type, bool normalize) {
-			return ConvertSpace(s, ConvertSpace(s, in, from, WORLD, type, false), WORLD, to, type, normalize);
+			return ConvertSpace(s, ConvertSpace(s, in, from, WorldSpace, type, false), WorldSpace, to, type, normalize);
 		}
 
 		V3 ConvertSpace(const SpaceInputs& s, V3 in, Space from, Space to, Conversion type, bool normalize) {
 			if (from == to) {
-				return normalize && type != POSITION ? SafeNormalize3(in) : in;
+				return normalize && type != PositionVector ? SafeNormalize3(in) : in;
 			}
-			const bool position = type == POSITION;
-			if (from == WORLD) {
+			const bool position = type == PositionVector;
+			if (from == WorldSpace) {
 				switch (to) {
-				case OBJECT:
+				case ObjectSpace:
 					if (position) {
 						return TransformPoint3(s.worldToObject, in);
 					}
-					if (type == DIRECTION) {
+					if (type == DirectionVector) {
 						V3 out = MulUpper(s.worldToObject, in);
 						return normalize ? Normalize3(out) : out;
 					} else {
 						V3 out = MulUpperRow(in, s.objectToWorld);
 						return normalize ? SafeNormalize3(out) : out;
 					}
-				case VIEW: {
+				case ViewSpace: {
 					if (position) {
 						return TransformPoint3(s.view, in);
 					}
 					V3 out = MulUpper(s.view, in);
 					return normalize ? Normalize3(out) : out;
 				}
-				case TANGENT: {
+				case TangentSpace: {
 					if (position) {
 						V3 d = Sub3(in, s.position);
 						return {Dot3(s.tangent, d), Dot3(s.bitangent, d), Dot3(s.normal, d)};
 					}
-					if (type == DIRECTION) {
+					if (type == DirectionVector) {
 						V3 out = {Dot3(s.tangent, in), Dot3(s.bitangent, in), Dot3(s.normal, in)};
 						return normalize ? SafeNormalize3(out) : out;
 					}
@@ -1024,9 +1024,9 @@ namespace Shalltear::NodeShaderTest {
 					V3 out = {Dot3(rows[0], in), Dot3(rows[1], in), Dot3(rows[2], in)};
 					return normalize ? SafeNormalize3(Scale3(out, determinant < 0.0f ? -1.0f : 1.0f)) : Scale3(out, 1.0f / determinant);
 				}
-				case ABSOLUTE_WORLD:
+				case AbsoluteWorldSpace:
 					return position || !normalize ? in : SafeNormalize3(in);
-				case SCREEN:
+				case ScreenSpace:
 					if (position) {
 						return ToScreen(MulPoint(s.viewProjection, in, 1.0f));
 					} else {
@@ -1034,40 +1034,40 @@ namespace Shalltear::NodeShaderTest {
 						out = normalize ? Normalize3(out) : out;
 						return ToScreen({out[0], out[1], out[2], 1.0f});
 					}
-				case WORLD:
+				case WorldSpace:
 					break;
 				}
 				return in;
 			}
 			switch (from) {
-			case OBJECT:
-				if (to == WORLD || (to == ABSOLUTE_WORLD && !position)) {
+			case ObjectSpace:
+				if (to == WorldSpace || (to == AbsoluteWorldSpace && !position)) {
 					if (position) {
 						return TransformPoint3(s.objectToWorld, in);
 					}
-					V3 out = type == DIRECTION ? MulUpper(s.objectToWorld, in) : MulUpperRow(in, s.worldToObject);
+					V3 out = type == DirectionVector ? MulUpper(s.objectToWorld, in) : MulUpperRow(in, s.worldToObject);
 					return normalize ? SafeNormalize3(out) : out;
 				}
-				if (to == SCREEN && position) {
+				if (to == ScreenSpace && position) {
 					std::array<f32, 4> world = MulPoint(s.objectToWorld, in, 1.0f);
 					return ToScreen(MulPoint(s.viewProjection, {world[0], world[1], world[2]}, world[3]));
 				}
 				return ViaWorld(s, in, from, to, type, normalize);
-			case VIEW:
-				if (to == WORLD) {
+			case ViewSpace:
+				if (to == WorldSpace) {
 					if (position) {
 						return TransformPoint3(s.inverseView, in);
 					}
 					V3 out = MulUpper(s.inverseView, in);
 					return normalize ? Normalize3(out) : out;
 				}
-				if (to == SCREEN && position) {
+				if (to == ScreenSpace && position) {
 					return ToScreen(MulPoint(s.projection, in, 1.0f));
 				}
 				return ViaWorld(s, in, from, to, type, normalize);
-			case TANGENT:
-				if (to == WORLD) {
-					if (type == NORMAL) {
+			case TangentSpace:
+				if (to == WorldSpace) {
+					if (type == NormalVector) {
 						V3 out = Add3(Add3(Scale3(s.tangent, in[0]), Scale3(s.bitangent, in[1])), Scale3(s.normal, in[2]));
 						return normalize ? SafeNormalize3(out) : out;
 					}
@@ -1081,13 +1081,13 @@ namespace Shalltear::NodeShaderTest {
 					return normalize ? SafeNormalize3(Scale3(out, determinant < 0.0f ? -1.0f : 1.0f)) : Scale3(out, 1.0f / determinant);
 				}
 				return ViaWorld(s, in, from, to, type, normalize);
-			case ABSOLUTE_WORLD:
-				if (to == WORLD) {
+			case AbsoluteWorldSpace:
+				if (to == WorldSpace) {
 					return position || !normalize ? in : SafeNormalize3(in);
 				}
 				return ViaWorld(s, in, from, to, type, normalize);
-			case SCREEN:
-				if (to == WORLD) {
+			case ScreenSpace:
+				if (to == WorldSpace) {
 					std::array<f32, 4> clip = {in[0] * 2.0f - 1.0f, 1.0f - in[1] * 2.0f, in[2], position ? 1.0f : 0.0f};
 					std::array<f32, 4> world = MulPoint(s.inverseViewProjection, {clip[0], clip[1], clip[2]}, clip[3]);
 					return position ? V3{world[0] / world[3], world[1] / world[3], world[2] / world[3]} : V3{world[0], world[1], world[2]};
@@ -1133,7 +1133,7 @@ namespace Shalltear::NodeShaderTest {
 				s.tangent = Three(c.In(6));
 				s.bitangent = Three(c.In(7));
 				s.normal = Three(c.In(8));
-				out[0] = FromThree(Scale3(ConvertSpace(s, world, WORLD, TANGENT, NORMAL, true), Length3(world)));
+				out[0] = FromThree(Scale3(ConvertSpace(s, world, WorldSpace, TangentSpace, NormalVector, true), Length3(world)));
 				return;
 			}
 			out[0] = FromThree(world);
@@ -1233,7 +1233,7 @@ namespace Shalltear::NodeShaderTest {
 			f32 alphaKeys[8][2];
 		};
 
-		constexpr RefGradient GRADIENTS[] = {
+		constexpr RefGradient Gradients[] = {
 			{R"({"mode":"Blend","colors":[[1,0.5,0,0],[0,0.25,1,1]],"alphas":[[1,0],[0.25,1]]})", 0, 2, {{1, 0.5f, 0, 0}, {0, 0.25f, 1, 1}}, 2, {{1, 0}, {0.25f, 1}}},
 			{R"({"mode":"Fixed","colors":[[1,0,0,0.2],[0,1,0,0.5],[0,0,1,0.9]],"alphas":[[0.5,0.3],[1,0.6]]})", 1, 3, {{1, 0, 0, 0.2f}, {0, 1, 0, 0.5f}, {0, 0, 1, 0.9f}}, 2, {{0.5f, 0.3f}, {1, 0.6f}}},
 			{R"({"mode":"PerceptualBlend","colors":[[0.9,0.1,0.2,0.1],[0.2,0.8,0.3,0.6],[0.1,0.2,0.9,0.95]],"alphas":[[1,0],[1,1]]})", 2, 3, {{0.9f, 0.1f, 0.2f, 0.1f}, {0.2f, 0.8f, 0.3f, 0.6f}, {0.1f, 0.2f, 0.9f, 0.95f}}, 2, {{1, 0}, {1, 1}}},
@@ -1243,26 +1243,26 @@ namespace Shalltear::NodeShaderTest {
 			f32 l = 0.4122214708f * rgb[0] + 0.5363325363f * rgb[1] + 0.0514459929f * rgb[2];
 			f32 m = 0.2119034982f * rgb[0] + 0.6806995451f * rgb[1] + 0.1073969566f * rgb[2];
 			f32 s = 0.0883024619f * rgb[0] + 0.2817188376f * rgb[1] + 0.6299787005f * rgb[2];
-			f32 l_ = static_cast<f32>(std::pow(static_cast<double>(l), 0.333333));
-			f32 m_ = static_cast<f32>(std::pow(static_cast<double>(m), 0.333333));
-			f32 s_ = static_cast<f32>(std::pow(static_cast<double>(s), 0.333333));
-			return {0.2104542553f * l_ + 0.7936177850f * m_ - 0.0040720468f * s_, 1.9779984951f * l_ - 2.4285922050f * m_ + 0.4505937099f * s_,
-					0.0259040371f * l_ + 0.7827717662f * m_ - 0.8086757660f * s_};
+			f32 lRoot = static_cast<f32>(std::pow(static_cast<double>(l), 0.333333));
+			f32 mRoot = static_cast<f32>(std::pow(static_cast<double>(m), 0.333333));
+			f32 sRoot = static_cast<f32>(std::pow(static_cast<double>(s), 0.333333));
+			return {0.2104542553f * lRoot + 0.7936177850f * mRoot - 0.0040720468f * sRoot, 1.9779984951f * lRoot - 2.4285922050f * mRoot + 0.4505937099f * sRoot,
+					0.0259040371f * lRoot + 0.7827717662f * mRoot - 0.8086757660f * sRoot};
 		}
 
 		V3 FromOklab(const V3& lab) {
-			f32 l_ = lab[0] + 0.3963377774f * lab[1] + 0.2158037573f * lab[2];
-			f32 m_ = lab[0] - 0.1055613458f * lab[1] - 0.0638541728f * lab[2];
-			f32 s_ = lab[0] - 0.0894841775f * lab[1] - 1.2914855480f * lab[2];
-			f32 l = l_ * l_ * l_;
-			f32 m = m_ * m_ * m_;
-			f32 s = s_ * s_ * s_;
+			f32 lRoot = lab[0] + 0.3963377774f * lab[1] + 0.2158037573f * lab[2];
+			f32 mRoot = lab[0] - 0.1055613458f * lab[1] - 0.0638541728f * lab[2];
+			f32 sRoot = lab[0] - 0.0894841775f * lab[1] - 1.2914855480f * lab[2];
+			f32 l = lRoot * lRoot * lRoot;
+			f32 m = mRoot * mRoot * mRoot;
+			f32 s = sRoot * sRoot * sRoot;
 			return {4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s, -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
 					-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s};
 		}
 
 		SLT_REF(SampleGradient) {
-			const RefGradient& g = GRADIENTS[variant];
+			const RefGradient& g = Gradients[variant];
 			const f32 time = c.In(1).c[0];
 			const bool fixed = g.mode % 2 == 1;
 			const bool perceptual = g.mode == 2;
@@ -1295,7 +1295,7 @@ namespace Shalltear::NodeShaderTest {
 
 		void WireGradient(DocumentBuilder& builder, u32 variant) {
 			GraphNode& gradient = builder.Node(60, "Input/Gradient");
-			DocumentBuilder::Setting(gradient, "Gradient", GRADIENTS[variant].json);
+			DocumentBuilder::Setting(gradient, "Gradient", Gradients[variant].json);
 			builder.Connect(60, "Out", 100, "Gradient");
 		}
 
@@ -1460,15 +1460,15 @@ namespace Shalltear::NodeShaderTest {
 
 		const TransformCases& BuildTransformCases() {
 			static const TransformCases cases = [] {
-				constexpr std::string_view SPACES[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld", "Screen"};
-				constexpr std::string_view TYPES[] = {"Position", "Direction", "Normal"};
+				constexpr std::string_view Spaces[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld", "Screen"};
+				constexpr std::string_view Types[] = {"Position", "Direction", "Normal"};
 				TransformCases out;
 				for (u32 from = 0; from < 6; ++from) {
 					for (u32 to = 0; to < 6; ++to) {
 						for (u32 type = 0; type < 3; ++type) {
 							for (u32 normalize = 0; normalize < (type == 0 ? 1u : 2u); ++normalize) {
-								out.texts.push_back(std::format("From=\"{}\";To=\"{}\";Type=\"{}\";Normalize={}", SPACES[from], SPACES[to],
-																TYPES[type], normalize != 0 ? "true" : "false"));
+								out.texts.push_back(std::format("From=\"{}\";To=\"{}\";Type=\"{}\";Normalize={}", Spaces[from], Spaces[to],
+																Types[type], normalize != 0 ? "true" : "false"));
 								out.variants.push_back({out.texts.back(), ((from * 6 + to) * 3 + type) * 2 + normalize});
 							}
 						}
@@ -1479,7 +1479,7 @@ namespace Shalltear::NodeShaderTest {
 			return cases;
 		}
 
-		V3 Hsv(const V3& in, f32 e, bool epsilonV) {
+		V3 HSV(const V3& in, f32 e, bool epsilonV) {
 			auto step = [](f32 edge, f32 x) { return x >= edge ? 1.0f : 0.0f; };
 			const f32 k[4] = {0.0f, -1.0f / 3.0f, 2.0f / 3.0f, -1.0f};
 			const f32 s1 = step(in[2], in[1]);
@@ -1501,7 +1501,7 @@ namespace Shalltear::NodeShaderTest {
 			return {std::fabs(q[2] + (q[3] - q[1]) / (6.0f * d + e)), d / (q[0] + e), v};
 		}
 
-		V3 Rgb(const V3& hsv) {
+		V3 RGB(const V3& hsv) {
 			V3 out{};
 			const f32 k[4] = {1.0f, 2.0f / 3.0f, 1.0f / 3.0f, 3.0f};
 			for (u32 i = 0; i < 3; ++i) {
@@ -1519,7 +1519,7 @@ namespace Shalltear::NodeShaderTest {
 			return out;
 		}
 
-		V3 ToSrgb(const V3& in) {
+		V3 ToSRGB(const V3& in) {
 			V3 out{};
 			for (u32 i = 0; i < 3; ++i) {
 				out[i] = in[i] <= 0.0031308f ? in[i] * 12.92f : std::pow(std::max(std::fabs(in[i]), 1.192092896e-07f), 1.0f / 2.4f) * 1.055f - 0.055f;
@@ -1539,10 +1539,10 @@ namespace Shalltear::NodeShaderTest {
 		}
 
 		SLT_REF(Hue) {
-			V3 hsv = Hsv(Three(c.In(0)), 1e-4f, true);
+			V3 hsv = HSV(Three(c.In(0)), 1e-4f, true);
 			const f32 hue = hsv[0] + (variant == 1 ? c.In(1).c[0] : c.In(1).c[0] / 360.0f);
 			hsv[0] = hue < 0.0f ? hue + 1.0f : (hue > 1.0f ? hue - 1.0f : hue);
-			out[0] = FromThree(Rgb(hsv));
+			out[0] = FromThree(RGB(hsv));
 		}
 
 		SLT_REF(InvertColors) {
@@ -1804,51 +1804,51 @@ namespace Shalltear::NodeShaderTest {
 			if (from == 0 && to == 1) {
 				result = ToLinear(in);
 			} else if (from == 0 && to == 2) {
-				result = Hsv(in, 1e-10f, true);
+				result = HSV(in, 1e-10f, true);
 			} else if (from == 1 && to == 0) {
-				result = ToSrgb(in);
+				result = ToSRGB(in);
 			} else if (from == 1 && to == 2) {
-				result = Hsv(ToSrgb(in), 1e-10f, false);
+				result = HSV(ToSRGB(in), 1e-10f, false);
 			} else if (from == 2 && to == 0) {
-				result = Rgb(in);
+				result = RGB(in);
 			} else if (from == 2 && to == 1) {
-				result = ToLinear(Rgb(in));
+				result = ToLinear(RGB(in));
 			}
 			out[0] = FromThree(result);
 		}
 
-		constexpr RefShape ARTISTIC_3[] = {{{P::F3}}};
-		constexpr RefShape ARTISTIC_3_1[] = {{{P::F3, P::F1}}};
-		constexpr RefShape ARTISTIC_3_1_1[] = {{{P::F3, P::F1, P::F1}}};
-		constexpr RefShape REPLACE_COLOR[] = {{{P::F3, P::F3, P::F3, P::F1, P::F1}}};
-		constexpr RefShape COLOR_MASK[] = {{{P::F3, P::F3, P::F1, P::F1}}};
-		constexpr RefShape BLEND_SHAPES[] = {{{P::F4, P::F4, P::F1}}, {{P::F1, P::F1, P::F1}}};
-		constexpr RefShape DITHER_SHAPES[] = {{{P::F4, P::F2}}, {{P::F1, P::F2}}};
-		constexpr RefShape FADE_SHAPES[] = {{{P::F1, P::F1, P::F1}}};
-		constexpr RefShape VECTOR_WIDTHS[] = {{{P::F4}}, {{P::F3}}, {{P::F2}}, {{P::F1}}};
-		constexpr RefShape NORMAL_PAIR[] = {{{P::F3, P::F3}}};
-		constexpr RefShape NORMAL_FROM_HEIGHT[] = {{{P::F1, P::F1}}};
-		constexpr RefShape ONE_VECTOR2[] = {{{P::F2}}};
-		constexpr RefShape ONE_VECTOR4[] = {{{P::F4}}};
+		constexpr RefShape Artistic3[] = {{{P::F3}}};
+		constexpr RefShape Artistic31[] = {{{P::F3, P::F1}}};
+		constexpr RefShape Artistic311[] = {{{P::F3, P::F1, P::F1}}};
+		constexpr RefShape ReplaceColorShapes[] = {{{P::F3, P::F3, P::F3, P::F1, P::F1}}};
+		constexpr RefShape ColorMaskShapes[] = {{{P::F3, P::F3, P::F1, P::F1}}};
+		constexpr RefShape BlendShapes[] = {{{P::F4, P::F4, P::F1}}, {{P::F1, P::F1, P::F1}}};
+		constexpr RefShape DitherShapes[] = {{{P::F4, P::F2}}, {{P::F1, P::F2}}};
+		constexpr RefShape FadeShapes[] = {{{P::F1, P::F1, P::F1}}};
+		constexpr RefShape VectorWidths[] = {{{P::F4}}, {{P::F3}}, {{P::F2}}, {{P::F1}}};
+		constexpr RefShape NormalPair[] = {{{P::F3, P::F3}}};
+		constexpr RefShape NormalFromHeightShapes[] = {{{P::F1, P::F1}}};
+		constexpr RefShape OneVector2[] = {{{P::F2}}};
+		constexpr RefShape OneVector4[] = {{{P::F4}}};
 
-		constexpr RefVariant CHANNEL_MIXES[] = {{"", 0}, {"Red=[0.5,0.25,-0.5,0];Green=[0,2,0.5,0];Blue=[-1,0.25,1.5,0]", 1}};
-		constexpr RefVariant HUE_RANGES[] = {{"Range=\"Degrees\"", 0}, {"Range=\"Normalized\"", 1}};
-		constexpr RefVariant INVERTS[] = {{"", 0b0000}, {"Red=true;Blue=true", 0b0101}, {"Red=true;Green=true;Blue=true;Alpha=true", 0b1111}};
-		constexpr RefVariant BLEND_CASES[] = {
+		constexpr RefVariant ChannelMixes[] = {{"", 0}, {"Red=[0.5,0.25,-0.5,0];Green=[0,2,0.5,0];Blue=[-1,0.25,1.5,0]", 1}};
+		constexpr RefVariant HueRanges[] = {{"Range=\"Degrees\"", 0}, {"Range=\"Normalized\"", 1}};
+		constexpr RefVariant Inverts[] = {{"", 0b0000}, {"Red=true;Blue=true", 0b0101}, {"Red=true;Green=true;Blue=true;Alpha=true", 0b1111}};
+		constexpr RefVariant BlendCases[] = {
 			{"Mode=\"Burn\"", 0}, {"Mode=\"Darken\"", 1}, {"Mode=\"Difference\"", 2}, {"Mode=\"Dodge\"", 3}, {"Mode=\"Divide\"", 4}, {"Mode=\"Exclusion\"", 5}, {"Mode=\"HardLight\"", 6}, {"Mode=\"HardMix\"", 7}, {"Mode=\"Lighten\"", 8}, {"Mode=\"LinearBurn\"", 9}, {"Mode=\"LinearDodge\"", 10}, {"Mode=\"LinearLight\"", 11}, {"Mode=\"LinearLightAddSub\"", 12}, {"Mode=\"Multiply\"", 13}, {"Mode=\"Negation\"", 14}, {"", 15}, {"Mode=\"PinLight\"", 16}, {"Mode=\"Screen\"", 17}, {"Mode=\"SoftLight\"", 18}, {"Mode=\"Subtract\"", 19}, {"Mode=\"VividLight\"", 20}, {"Mode=\"Overwrite\"", 21}};
-		constexpr RefVariant CHANNEL_MASKS[] = {{"", 0xf},
-												{"Red=false;Green=false;Blue=false;Alpha=false", 0},
-												{"Green=false;Alpha=false", 0b0101},
-												{"Red=false;Green=false;Alpha=false", 0b0100},
-												{"Blue=false;Alpha=false", 0b0011}};
-		constexpr RefVariant NORMAL_BLEND_MODES[] = {{"Mode=\"Default\"", 0}, {"Mode=\"Reoriented\"", 1}};
-		constexpr RefVariant OUTPUT_SPACES[] = {{"Output Space=\"Tangent\"", 0}, {"Output Space=\"World\"", 1}};
-		constexpr RefVariant UNPACK_SPACES[] = {{"Space=\"Tangent\"", 0}, {"Space=\"Object\"", 1}};
-		constexpr RefVariant COLORSPACE_CASES[] = {
+		constexpr RefVariant ChannelMasks[] = {{"", 0xf},
+											   {"Red=false;Green=false;Blue=false;Alpha=false", 0},
+											   {"Green=false;Alpha=false", 0b0101},
+											   {"Red=false;Green=false;Alpha=false", 0b0100},
+											   {"Blue=false;Alpha=false", 0b0011}};
+		constexpr RefVariant NormalBlendModes[] = {{"Mode=\"Default\"", 0}, {"Mode=\"Reoriented\"", 1}};
+		constexpr RefVariant OutputSpaces[] = {{"Output Space=\"Tangent\"", 0}, {"Output Space=\"World\"", 1}};
+		constexpr RefVariant UnpackSpaces[] = {{"Space=\"Tangent\"", 0}, {"Space=\"Object\"", 1}};
+		constexpr RefVariant ColorspaceCases[] = {
 			{"From=\"RGB\";To=\"RGB\"", 0}, {"From=\"RGB\";To=\"Linear\"", 1}, {"From=\"RGB\";To=\"HSV\"", 2}, {"From=\"Linear\";To=\"RGB\"", 3}, {"From=\"Linear\";To=\"Linear\"", 4}, {"From=\"Linear\";To=\"HSV\"", 5}, {"From=\"HSV\";To=\"RGB\"", 6}, {"From=\"HSV\";To=\"Linear\"", 7}, {"From=\"HSV\";To=\"HSV\"", 8}};
 
-		constexpr RefBinding DITHER_BINDINGS[] = {{"ScreenParams", P::F4, 2}};
-		constexpr RefBinding NORMAL_FROM_HEIGHT_BINDINGS[] = {
+		constexpr RefBinding DitherBindings[] = {{"ScreenParams", P::F4, 2}};
+		constexpr RefBinding NormalFromHeightBindings[] = {
 			{"WorldSpacePosition", P::F3, 2}, {"WorldSpaceNormal", P::F3, 3}, {"WorldSpaceTangent", P::F3, 4}, {"WorldSpaceBiTangent", P::F3, 5}};
 
 		f32 Truth(bool value) { return value ? 1.0f : 0.0f; }
@@ -1906,193 +1906,193 @@ namespace Shalltear::NodeShaderTest {
 			}
 		}
 
-		constexpr RefShape ONE_BOOL[] = {{{P::B1}}};
-		constexpr RefShape TWO_BOOLS[] = {{{P::B1, P::B1}}};
-		constexpr RefShape BRANCH[] = {{{P::B1, P::F4, P::F4}}, {{P::B1, P::F1, P::F1}}};
-		constexpr RefVariant COMPARISONS[] = {{"Comparison Type=\"Equal\"", 0}, {"Comparison Type=\"NotEqual\"", 1}, {"Comparison Type=\"Less\"", 2}, {"Comparison Type=\"LessOrEqual\"", 3}, {"Comparison Type=\"Greater\"", 4}, {"Comparison Type=\"GreaterOrEqual\"", 5}};
+		constexpr RefShape OneBool[] = {{{P::B1}}};
+		constexpr RefShape TwoBools[] = {{{P::B1, P::B1}}};
+		constexpr RefShape Branch[] = {{{P::B1, P::F4, P::F4}}, {{P::B1, P::F1, P::F1}}};
+		constexpr RefVariant Comparisons[] = {{"Comparison Type=\"Equal\"", 0}, {"Comparison Type=\"NotEqual\"", 1}, {"Comparison Type=\"Less\"", 2}, {"Comparison Type=\"LessOrEqual\"", 3}, {"Comparison Type=\"Greater\"", 4}, {"Comparison Type=\"GreaterOrEqual\"", 5}};
 
 #undef SLT_REF
 
 		using D = std::array<f32, 2>;
-		constexpr D ANY = {-4.0f, 4.0f};
-		constexpr D POSITIVE = {0.1f, 8.0f};
-		constexpr D UNIT = {-0.95f, 0.95f};
-		constexpr D ANGLE = {-3.1f, 3.1f};
-		constexpr D NONZERO = {0.5f, 4.0f};
+		constexpr D Any = {-4.0f, 4.0f};
+		constexpr D Positive = {0.1f, 8.0f};
+		constexpr D Unit = {-0.95f, 0.95f};
+		constexpr D Angle = {-3.1f, 3.1f};
+		constexpr D Nonzero = {0.5f, 4.0f};
 		constexpr D UV = {0.05f, 0.95f};
 
 		constexpr f32 SIN_ABSOLUTE = 1.0f / 2048.0f;
-		constexpr f32 ULP_4096 = 4096.0f / 8388608.0f;
+		constexpr f32 ULP4096 = 4096.0f / 8388608.0f;
 
-		const RefEntry ENTRIES[] = {
-			{"Math/Add", Add, VECTOR_2, ONE, {ANY, ANY}},
-			{"Math/Subtract", Subtract, VECTOR_2, ONE, {ANY, ANY}},
-			{"Math/Multiply", Multiply, MULTIPLY, ONE, {ANY, ANY}, 1e-5f, 1e-5f},
-			{"Math/Divide", Divide, VECTOR_2, ONE, {ANY, NONZERO}, 1e-6f, 1e-6f},
-			{"Math/Power", Power, VECTOR_2, ONE, {POSITIVE, D{-2.0f, 2.0f}}, 1e-5f, 1e-4f},
-			{"Math/SquareRoot", SquareRoot, VECTOR_1, ONE, {POSITIVE}, 1e-6f, 1e-6f},
+		const RefEntry entries[] = {
+			{"Math/Add", Add, Vector2, One, {Any, Any}},
+			{"Math/Subtract", Subtract, Vector2, One, {Any, Any}},
+			{"Math/Multiply", Multiply, MultiplyShapes, One, {Any, Any}, 1e-5f, 1e-5f},
+			{"Math/Divide", Divide, Vector2, One, {Any, Nonzero}, 1e-6f, 1e-6f},
+			{"Math/Power", Power, Vector2, One, {Positive, D{-2.0f, 2.0f}}, 1e-5f, 1e-4f},
+			{"Math/SquareRoot", SquareRoot, Vector1, One, {Positive}, 1e-6f, 1e-6f},
 
-			{"Math/Absolute", Absolute, VECTOR_1, ONE, {ANY}},
-			{"Math/Exponential", Exponential, VECTOR_1, EXPONENTIAL, {ANY}, 1e-6f, 2e-6f},
-			{"Math/Length", Length, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f},
-			{"Math/Log", Log, VECTOR_1, LOG, {POSITIVE}, 2e-6f, 2e-6f},
-			{"Math/Modulo", Modulo, VECTOR_2, ONE, {D{-8.0f, 8.0f}, NONZERO}, 1e-5f, 1e-6f},
-			{"Math/Negate", Negate, VECTOR_1, ONE, {ANY}},
-			{"Math/Normalize", NormalizeNode, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f},
-			{"Math/Posterize", Posterize, VECTOR_2, ONE, {D{0.0f, 1.0f}, D{1.0f, 8.0f}}, 1e-5f, 1e-6f},
-			{"Math/Reciprocal", Reciprocal, VECTOR_1, RECIPROCAL, {NONZERO}, 1e-6f, 1e-6f},
-			{"Math/ReciprocalSquareRoot", ReciprocalSquareRoot, VECTOR_1, ONE, {POSITIVE}, 1e-6f, 1e-6f},
+			{"Math/Absolute", Absolute, Vector1, One, {Any}},
+			{"Math/Exponential", Exponential, Vector1, ExponentialVariants, {Any}, 1e-6f, 2e-6f},
+			{"Math/Length", Length, Vector1, One, {Any}, 1e-6f, 1e-6f},
+			{"Math/Log", Log, Vector1, LogVariants, {Positive}, 2e-6f, 2e-6f},
+			{"Math/Modulo", Modulo, Vector2, One, {D{-8.0f, 8.0f}, Nonzero}, 1e-5f, 1e-6f},
+			{"Math/Negate", Negate, Vector1, One, {Any}},
+			{"Math/Normalize", NormalizeNode, Vector1, One, {Any}, 1e-6f, 1e-6f},
+			{"Math/Posterize", Posterize, Vector2, One, {D{0.0f, 1.0f}, D{1.0f, 8.0f}}, 1e-5f, 1e-6f},
+			{"Math/Reciprocal", Reciprocal, Vector1, ReciprocalVariants, {Nonzero}, 1e-6f, 1e-6f},
+			{"Math/ReciprocalSquareRoot", ReciprocalSquareRoot, Vector1, One, {Positive}, 1e-6f, 1e-6f},
 
-			{"Math/Ceiling", Ceiling, VECTOR_1, ONE, {ANY}},
-			{"Math/Floor", Floor, VECTOR_1, ONE, {ANY}},
-			{"Math/Round", Round, VECTOR_1, ONE, {ANY}},
-			{"Math/Sign", Sign, VECTOR_1, ONE, {ANY}},
-			{"Math/Step", Step, VECTOR_2, ONE, {ANY, ANY}},
-			{"Math/Truncate", Truncate, VECTOR_1, ONE, {ANY}},
+			{"Math/Ceiling", Ceiling, Vector1, One, {Any}},
+			{"Math/Floor", Floor, Vector1, One, {Any}},
+			{"Math/Round", Round, Vector1, One, {Any}},
+			{"Math/Sign", Sign, Vector1, One, {Any}},
+			{"Math/Step", Step, Vector2, One, {Any, Any}},
+			{"Math/Truncate", Truncate, Vector1, One, {Any}},
 
-			{"Math/InverseLerp", InverseLerp, VECTOR_3, ONE, {D{-2.0f, -0.5f}, D{0.5f, 2.0f}, D{-3.0f, 3.0f}}, 1e-6f, 1e-5f},
-			{"Math/Lerp", LerpNode, VECTOR_3, ONE, {ANY, ANY, D{-0.5f, 1.5f}}, 2e-6f, 1e-6f},
-			{"Math/Smoothstep", Smoothstep, VECTOR_3, ONE, {D{-1.0f, -0.2f}, D{0.2f, 1.0f}, D{-1.5f, 1.5f}}, 2e-6f, 1e-6f},
+			{"Math/InverseLerp", InverseLerp, Vector3, One, {D{-2.0f, -0.5f}, D{0.5f, 2.0f}, D{-3.0f, 3.0f}}, 1e-6f, 1e-5f},
+			{"Math/Lerp", LerpNode, Vector3, One, {Any, Any, D{-0.5f, 1.5f}}, 2e-6f, 1e-6f},
+			{"Math/Smoothstep", Smoothstep, Vector3, One, {D{-1.0f, -0.2f}, D{0.2f, 1.0f}, D{-1.5f, 1.5f}}, 2e-6f, 1e-6f},
 
-			{"Math/Clamp", Clamp, VECTOR_3, ONE, {ANY, D{-1.0f, 0.0f}, D{0.1f, 1.0f}}},
-			{"Math/Fraction", Fraction, VECTOR_1, ONE, {ANY}},
-			{"Math/Maximum", Maximum, VECTOR_2, ONE, {ANY, ANY}},
-			{"Math/Minimum", Minimum, VECTOR_2, ONE, {ANY, ANY}},
-			{"Math/OneMinus", OneMinus, VECTOR_1, ONE, {ANY}},
-			{"Math/RandomRange", RandomRange, RANDOM_RANGE, ONE, {ANY, D{-2.0f, 0.0f}, D{0.5f, 3.0f}}, 0, 0, false, RefCheck::Range, RandomRangeBounds},
-			{"Math/Remap", Remap, REMAP, ONE, {ANY, D{-1.0f, 1.0f}, ANY}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, RemapPrepare},
-			{"Math/Saturate", SaturateNode, VECTOR_1, ONE, {D{-2.0f, 2.0f}}},
+			{"Math/Clamp", Clamp, Vector3, One, {Any, D{-1.0f, 0.0f}, D{0.1f, 1.0f}}},
+			{"Math/Fraction", Fraction, Vector1, One, {Any}},
+			{"Math/Maximum", Maximum, Vector2, One, {Any, Any}},
+			{"Math/Minimum", Minimum, Vector2, One, {Any, Any}},
+			{"Math/OneMinus", OneMinus, Vector1, One, {Any}},
+			{"Math/RandomRange", RandomRange, RandomRangeShapes, One, {Any, D{-2.0f, 0.0f}, D{0.5f, 3.0f}}, 0, 0, false, RefCheck::Range, RandomRangeBounds},
+			{"Math/Remap", Remap, RemapShapes, One, {Any, D{-1.0f, 1.0f}, Any}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, RemapPrepare},
+			{"Math/Saturate", SaturateNode, Vector1, One, {D{-2.0f, 2.0f}}},
 
-			{"Math/Arccosine", Arccosine, VECTOR_1, ONE, {UNIT}, 1e-6f, ULP_4096},
-			{"Math/Arcsine", Arcsine, VECTOR_1, ONE, {UNIT}, 1e-6f, ULP_4096},
-			{"Math/Arctangent", Arctangent, VECTOR_1, ONE, {ANY}, 1e-6f, ULP_4096},
-			{"Math/Arctangent2", Arctangent2, VECTOR_2, ONE, {ANY, ANY}, 1e-6f, ULP_4096},
-			{"Math/Cosine", Cosine, VECTOR_1, ONE, {ANGLE}, SIN_ABSOLUTE, 0},
-			{"Math/DegreesToRadians", DegreesToRadians, VECTOR_1, ONE, {D{-360.0f, 360.0f}}},
-			{"Math/HyperbolicCosine", HyperbolicCosine, VECTOR_1, ONE, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
-			{"Math/HyperbolicSine", HyperbolicSine, VECTOR_1, ONE, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
-			{"Math/HyperbolicTangent", HyperbolicTangent, VECTOR_1, ONE, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
-			{"Math/RadiansToDegrees", RadiansToDegrees, VECTOR_1, ONE, {ANGLE}, 1e-6f, 1e-6f},
-			{"Math/Sine", Sine, VECTOR_1, ONE, {ANGLE}, SIN_ABSOLUTE, 0},
-			{"Math/Tangent", Tangent, VECTOR_1, ONE, {D{-1.2f, 1.2f}}, 8.0f * SIN_ABSOLUTE, 0},
+			{"Math/Arccosine", Arccosine, Vector1, One, {Unit}, 1e-6f, ULP4096},
+			{"Math/Arcsine", Arcsine, Vector1, One, {Unit}, 1e-6f, ULP4096},
+			{"Math/Arctangent", Arctangent, Vector1, One, {Any}, 1e-6f, ULP4096},
+			{"Math/Arctangent2", Arctangent2, Vector2, One, {Any, Any}, 1e-6f, ULP4096},
+			{"Math/Cosine", Cosine, Vector1, One, {Angle}, SIN_ABSOLUTE, 0},
+			{"Math/DegreesToRadians", DegreesToRadians, Vector1, One, {D{-360.0f, 360.0f}}},
+			{"Math/HyperbolicCosine", HyperbolicCosine, Vector1, One, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
+			{"Math/HyperbolicSine", HyperbolicSine, Vector1, One, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
+			{"Math/HyperbolicTangent", HyperbolicTangent, Vector1, One, {D{-3.0f, 3.0f}}, 1e-5f, 1e-5f},
+			{"Math/RadiansToDegrees", RadiansToDegrees, Vector1, One, {Angle}, 1e-6f, 1e-6f},
+			{"Math/Sine", Sine, Vector1, One, {Angle}, SIN_ABSOLUTE, 0},
+			{"Math/Tangent", Tangent, Vector1, One, {D{-1.2f, 1.2f}}, 8.0f * SIN_ABSOLUTE, 0},
 
-			{"Math/NoiseSineWave", NoiseSineWave, NOISE_SINE, ONE, {ANGLE, D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Range, NoiseSineWaveBounds},
-			{"Math/SawtoothWave", SawtoothWave, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f},
-			{"Math/SquareWave", SquareWave, VECTOR_1, ONE, {ANY}},
-			{"Math/TriangleWave", TriangleWave, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f},
+			{"Math/NoiseSineWave", NoiseSineWave, NoiseSine, One, {Angle, D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Range, NoiseSineWaveBounds},
+			{"Math/SawtoothWave", SawtoothWave, Vector1, One, {Any}, 1e-6f, 1e-6f},
+			{"Math/SquareWave", SquareWave, Vector1, One, {Any}},
+			{"Math/TriangleWave", TriangleWave, Vector1, One, {Any}, 1e-6f, 1e-6f},
 
-			{"Math/DDX", Ddx, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f, true},
-			{"Math/DDXY", Ddxy, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f, true},
-			{"Math/DDY", Ddy, VECTOR_1, ONE, {ANY}, 1e-6f, 1e-6f, true},
+			{"Math/DDX", Ddx, Vector1, One, {Any}, 1e-6f, 1e-6f, true},
+			{"Math/DDXY", Ddxy, Vector1, One, {Any}, 1e-6f, 1e-6f, true},
+			{"Math/DDY", Ddy, Vector1, One, {Any}, 1e-6f, 1e-6f, true},
 
-			{"Math/MatrixConstruction", MatrixConstruction, MATRIX_CONSTRUCTION, AXIS, {ANY, ANY, ANY, ANY}},
-			{"Math/MatrixDeterminant", MatrixDeterminant, MATRICES, ONE, {D{-2.0f, 2.0f}}, 1e-4f, 1e-5f},
-			{"Math/MatrixSplit", MatrixSplit, MATRICES, AXIS, {ANY}},
-			{"Math/MatrixTranspose", MatrixTranspose, MATRICES, ONE, {ANY}},
+			{"Math/MatrixConstruction", MatrixConstruction, MatrixConstructionShapes, Axis, {Any, Any, Any, Any}},
+			{"Math/MatrixDeterminant", MatrixDeterminant, Matrices, One, {D{-2.0f, 2.0f}}, 1e-4f, 1e-5f},
+			{"Math/MatrixSplit", MatrixSplit, Matrices, Axis, {Any}},
+			{"Math/MatrixTranspose", MatrixTranspose, Matrices, One, {Any}},
 
-			{"Math/CrossProduct", CrossProduct, CROSS, ONE, {ANY, ANY}, 1e-5f, 1e-6f},
-			{"Math/Distance", Distance, VECTOR_PAIR, ONE, {ANY, ANY}, 1e-6f, 1e-6f},
-			{"Math/DotProduct", DotProduct, VECTOR_PAIR, ONE, {ANY, ANY}, 1e-5f, 1e-6f},
-			{"Math/FresnelEffect", FresnelEffect, FRESNEL, ONE, {NONZERO, UNIT, D{0.5f, 4.0f}}, 1e-5f, 1e-4f},
-			{"Math/Projection", ProjectionNode, VECTOR_PAIR, ONE, {ANY, NONZERO}, 1e-5f, 1e-5f},
-			{"Math/Reflection", Reflection, VECTOR_PAIR, ONE, {ANY, ANY}, 1e-5f, 1e-5f},
-			{"Math/Refract", Refract, REFRACT, REFRACT_MODES, {UNIT, UNIT, D{0.8f, 2.0f}, D{0.8f, 2.0f}}, 1e-4f, 1e-4f},
-			{"Math/Rejection", Rejection, VECTOR_PAIR, ONE, {ANY, NONZERO}, 1e-5f, 1e-5f},
-			{"Math/RotateAboutAxis", RotateAboutAxis, ROTATE, UNITS, {ANY, NONZERO, ANGLE}, 16.0f * SIN_ABSOLUTE, 0},
-			{"Math/SphereMask", SphereMask, SPHERE_MASK, ONE, {ANY, ANY, D{0.5f, 3.0f}, D{0.0f, 0.9f}}, 1e-5f, 1e-5f},
+			{"Math/CrossProduct", CrossProduct, Cross, One, {Any, Any}, 1e-5f, 1e-6f},
+			{"Math/Distance", Distance, VectorPair, One, {Any, Any}, 1e-6f, 1e-6f},
+			{"Math/DotProduct", DotProduct, VectorPair, One, {Any, Any}, 1e-5f, 1e-6f},
+			{"Math/FresnelEffect", FresnelEffect, Fresnel, One, {Nonzero, Unit, D{0.5f, 4.0f}}, 1e-5f, 1e-4f},
+			{"Math/Projection", ProjectionNode, VectorPair, One, {Any, Nonzero}, 1e-5f, 1e-5f},
+			{"Math/Reflection", Reflection, VectorPair, One, {Any, Any}, 1e-5f, 1e-5f},
+			{"Math/Refract", Refract, RefractShapes, RefractModes, {Unit, Unit, D{0.8f, 2.0f}, D{0.8f, 2.0f}}, 1e-4f, 1e-4f},
+			{"Math/Rejection", Rejection, VectorPair, One, {Any, Nonzero}, 1e-5f, 1e-5f},
+			{"Math/RotateAboutAxis", RotateAboutAxis, RotateShapes, Units, {Any, Nonzero, Angle}, 16.0f * SIN_ABSOLUTE, 0},
+			{"Math/SphereMask", SphereMask, SphereMaskShapes, One, {Any, Any, D{0.5f, 3.0f}, D{0.0f, 0.9f}}, 1e-5f, 1e-5f},
 
-			{"Channel/Combine", Combine, COMBINE, ONE, {ANY, ANY, ANY, ANY}},
-			{"Channel/Flip", Flip, FLIP, FLIPS, {ANY}},
-			{"Channel/Split", Split, SPLIT, ONE, {ANY}},
-			{"Channel/Swizzle", Swizzle, SWIZZLE, MASKS, {ANY}},
+			{"Channel/Combine", Combine, CombineShapes, One, {Any, Any, Any, Any}},
+			{"Channel/Flip", Flip, FlipShapes, Flips, {Any}},
+			{"Channel/Split", Split, SplitShapes, One, {Any}},
+			{"Channel/Swizzle", Swizzle, SwizzleShapes, Masks, {Any}},
 
-			{"Procedural/Checkerboard", Checkerboard, CHECKERBOARD, ONE, {UV, D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{1.0f, 4.0f}}, 1e-3f, 1e-3f, true},
-			{"Procedural/SimpleNoise", SimpleNoise, NOISE, DETERMINISTIC, {UV, D{2.0f, 60.0f}}, 1e-5f, 1e-5f},
-			{"Procedural/SimpleNoise", SimpleNoise, NOISE, LEGACY_SINE, {UV, D{2.0f, 60.0f}}, 0, 0, false, RefCheck::Range, SimpleNoiseBounds},
-			{"Procedural/GradientNoise", GradientNoiseNode, NOISE, DETERMINISTIC, {UV, D{2.0f, 30.0f}}, 1e-4f, 1e-4f},
-			{"Procedural/GradientNoise", GradientNoiseNode, NOISE, LEGACY_MOD, {UV, D{2.0f, 30.0f}}, 1e-4f, 1e-4f},
-			{"Procedural/Voronoi", VoronoiNode, VORONOI, DETERMINISTIC, {UV, D{0.5f, 3.0f}, D{2.0f, 8.0f}}, 8.0f * SIN_ABSOLUTE, 0, false, RefCheck::Value, nullptr, VoronoiDecidable},
-			{"Procedural/Voronoi", VoronoiNode, VORONOI, LEGACY_SINE, {UV, D{0.5f, 3.0f}, D{2.0f, 8.0f}}, 0, 0, false, RefCheck::Range, VoronoiBounds},
-			{"Procedural/Ellipse", Ellipse, SHAPE_2, ONE, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 1e-3f, 1e-3f, true},
-			{"Procedural/Polygon", Polygon, SHAPE_3, ONE, {UV, D{3.0f, 8.0f}, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 64.0f * SIN_ABSOLUTE, 0, true},
-			{"Procedural/Rectangle", Rectangle, SHAPE_2, CLAMP_TYPES, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 1e-3f, 1e-3f, true},
-			{"Procedural/RoundedPolygon", RoundedPolygon, SHAPE_4, ONE, {UV, D{0.3f, 0.9f}, D{0.3f, 0.9f}, D{3.0f, 8.0f}, D{0.1f, 0.9f}}, 64.0f * SIN_ABSOLUTE, 0, true},
-			{"Procedural/RoundedRectangle", RoundedRectangle, SHAPE_3, ONE, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}, D{0.05f, 0.4f}}, 1e-3f, 1e-3f, true},
+			{"Procedural/Checkerboard", Checkerboard, CheckerboardShapes, One, {UV, D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{1.0f, 4.0f}}, 1e-3f, 1e-3f, true},
+			{"Procedural/SimpleNoise", SimpleNoise, Noise, Deterministic, {UV, D{2.0f, 60.0f}}, 1e-5f, 1e-5f},
+			{"Procedural/SimpleNoise", SimpleNoise, Noise, LegacySine, {UV, D{2.0f, 60.0f}}, 0, 0, false, RefCheck::Range, SimpleNoiseBounds},
+			{"Procedural/GradientNoise", GradientNoiseNode, Noise, Deterministic, {UV, D{2.0f, 30.0f}}, 1e-4f, 1e-4f},
+			{"Procedural/GradientNoise", GradientNoiseNode, Noise, LegacyMod, {UV, D{2.0f, 30.0f}}, 1e-4f, 1e-4f},
+			{"Procedural/Voronoi", VoronoiNode, VoronoiShapes, Deterministic, {UV, D{0.5f, 3.0f}, D{2.0f, 8.0f}}, 8.0f * SIN_ABSOLUTE, 0, false, RefCheck::Value, nullptr, VoronoiDecidable},
+			{"Procedural/Voronoi", VoronoiNode, VoronoiShapes, LegacySine, {UV, D{0.5f, 3.0f}, D{2.0f, 8.0f}}, 0, 0, false, RefCheck::Range, VoronoiBounds},
+			{"Procedural/Ellipse", Ellipse, Shape2, One, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 1e-3f, 1e-3f, true},
+			{"Procedural/Polygon", Polygon, Shape3, One, {UV, D{3.0f, 8.0f}, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 64.0f * SIN_ABSOLUTE, 0, true},
+			{"Procedural/Rectangle", Rectangle, Shape2, ClampTypes, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}}, 1e-3f, 1e-3f, true},
+			{"Procedural/RoundedPolygon", RoundedPolygon, Shape4, One, {UV, D{0.3f, 0.9f}, D{0.3f, 0.9f}, D{3.0f, 8.0f}, D{0.1f, 0.9f}}, 64.0f * SIN_ABSOLUTE, 0, true},
+			{"Procedural/RoundedRectangle", RoundedRectangle, Shape3, One, {UV, D{0.2f, 0.9f}, D{0.2f, 0.9f}, D{0.05f, 0.4f}}, 1e-3f, 1e-3f, true},
 
-			{"Input/Boolean", BooleanNode, NO_INPUTS, BOOLEANS},
-			{"Input/Color", ColorNode, NO_INPUTS, COLORS},
-			{"Input/Constant", ConstantNode, NO_INPUTS, CONSTANTS},
-			{"Input/Integer", IntegerNode, NO_INPUTS, INTEGERS},
-			{"Input/Float", FloatNode, ONE_FLOAT, ONE, {ANY}},
-			{"Input/Slider", SliderNode, NO_INPUTS, SLIDERS},
-			{"Input/Vector2", VectorNode<2>, TWO_FLOATS, ONE, {ANY, ANY}},
-			{"Input/Vector3", VectorNode<3>, THREE_FLOATS, ONE, {ANY, ANY, ANY}},
-			{"Input/Vector4", VectorNode<4>, FOUR_FLOATS, ONE, {ANY, ANY, ANY, ANY}},
-			{"Input/DielectricSpecular", DielectricSpecular, NO_INPUTS, DIELECTRICS, {}, 1e-6f, 1e-5f},
-			{"Input/MetalReflectance", MetalReflectance, NO_INPUTS, METALS},
+			{"Input/Boolean", BooleanNode, NoInputs, Booleans},
+			{"Input/Color", ColorNode, NoInputs, Colors},
+			{"Input/Constant", ConstantNode, NoInputs, Constants},
+			{"Input/Integer", IntegerNode, NoInputs, Integers},
+			{"Input/Float", FloatNode, OneFloat, One, {Any}},
+			{"Input/Slider", SliderNode, NoInputs, Sliders},
+			{"Input/Vector2", VectorNode<2>, TwoFloats, One, {Any, Any}},
+			{"Input/Vector3", VectorNode<3>, ThreeFloats, One, {Any, Any, Any}},
+			{"Input/Vector4", VectorNode<4>, FourFloats, One, {Any, Any, Any, Any}},
+			{"Input/DielectricSpecular", DielectricSpecular, NoInputs, Dielectrics, {}, 1e-6f, 1e-5f},
+			{"Input/MetalReflectance", MetalReflectance, NoInputs, Metals},
 
-			{"Input/Time", TimeNode, NO_INPUTS, ONE, {ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TIME_BINDINGS, 1u << 4},
-			{"Input/Position", ReadsBinding, NO_INPUTS, POSITION_SPACES, {ANY, ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, POSITION_BINDINGS},
-			{"Input/NormalVector", ReadsBinding, NO_INPUTS, DIRECTION_SPACES, {ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, NORMAL_BINDINGS},
-			{"Input/TangentVector", ReadsBinding, NO_INPUTS, DIRECTION_SPACES, {ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TANGENT_BINDINGS},
-			{"Input/BitangentVector", ReadsBinding, NO_INPUTS, DIRECTION_SPACES, {ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, BITANGENT_BINDINGS},
-			{"Input/ViewDirection", ReadsBinding, NO_INPUTS, DIRECTION_SPACES, {ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, VIEW_DIRECTION_BINDINGS},
-			{"Input/ViewVector", ViewVectorNode, NO_INPUTS, DIRECTION_SPACES, {ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, ViewVectorPrepare, VIEW_VECTOR_BINDINGS},
-			{"Input/ScreenPosition", ScreenPositionNode, NO_INPUTS, SCREEN_MODES, {ANY, UV, ANY, ANY, ANY}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, ScreenPrepare, SCREEN_POSITION_BINDINGS},
-			{"Input/InstanceID", ReadsOneBinding, NO_INPUTS, ONE, {ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, INSTANCE_BINDINGS},
-			{"Input/Blackbody", Blackbody, ONE_FLOAT, ONE, {D{800.0f, 12000.0f}}, 1e-4f, 1e-4f},
-			{"Input/SampleGradient", SampleGradient, NONE_THEN_FLOAT, GRADIENT_CASES, {ANY, D{-0.2f, 1.2f}}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, nullptr, {}, 0, WireGradient},
-			{"Input/Matrix2x2", MatrixNode<2>, NO_INPUTS, MATRIX2_ROWS},
-			{"Input/Matrix3x3", MatrixNode<3>, NO_INPUTS, MATRIX3_ROWS},
-			{"Input/Matrix4x4", MatrixNode<4>, NO_INPUTS, MATRIX4_ROWS},
-			{"Input/TransformationMatrix", ReadsBinding, NO_INPUTS, TRANSFORMATION_MATRICES, {ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TRANSFORMATION_BINDINGS},
-			{"Input/Camera", CameraNode, NO_INPUTS, ONE, {ANY, ANY, ANY, ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, CAMERA_BINDINGS},
-			{"Input/Fog", FogNode, ONE_VECTOR3, ONE, {ANY}},
-			{"Input/Object", ObjectNode, NO_INPUTS, ONE, {ANY}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, nullptr, OBJECT_BINDINGS, (1u << 2) | (1u << 3) | (1u << 4)},
-			{"Input/Screen", ScreenNode, NO_INPUTS, ONE, {ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, SCREEN_BINDINGS},
-			{"Input/EyeIndex", ReadsOneBinding, NO_INPUTS, ONE, {ANY}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, EYE_BINDINGS},
+			{"Input/Time", TimeNode, NoInputs, One, {Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TimeBindings, 1u << 4},
+			{"Input/Position", ReadsBinding, NoInputs, PositionSpaces, {Any, Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, PositionBindings},
+			{"Input/NormalVector", ReadsBinding, NoInputs, DirectionSpaces, {Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, NormalBindings},
+			{"Input/TangentVector", ReadsBinding, NoInputs, DirectionSpaces, {Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TangentBindings},
+			{"Input/BitangentVector", ReadsBinding, NoInputs, DirectionSpaces, {Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, BitangentBindings},
+			{"Input/ViewDirection", ReadsBinding, NoInputs, DirectionSpaces, {Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, ViewDirectionBindings},
+			{"Input/ViewVector", ViewVectorNode, NoInputs, DirectionSpaces, {Any, Any, Any, Any, Any, Any, Any, Any, Any}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, ViewVectorPrepare, ViewVectorBindings},
+			{"Input/ScreenPosition", ScreenPositionNode, NoInputs, ScreenModes, {Any, UV, Any, Any, Any}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, ScreenPrepare, ScreenPositionBindings},
+			{"Input/InstanceID", ReadsOneBinding, NoInputs, One, {Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, InstanceBindings},
+			{"Input/Blackbody", Blackbody, OneFloat, One, {D{800.0f, 12000.0f}}, 1e-4f, 1e-4f},
+			{"Input/SampleGradient", SampleGradient, NoneThenFloat, GradientCases, {Any, D{-0.2f, 1.2f}}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, nullptr, {}, 0, WireGradient},
+			{"Input/Matrix2x2", MatrixNode<2>, NoInputs, Matrix2Rows},
+			{"Input/Matrix3x3", MatrixNode<3>, NoInputs, Matrix3Rows},
+			{"Input/Matrix4x4", MatrixNode<4>, NoInputs, Matrix4Rows},
+			{"Input/TransformationMatrix", ReadsBinding, NoInputs, TransformationMatrices, {Any, Any, Any, Any, Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, TransformationBindings},
+			{"Input/Camera", CameraNode, NoInputs, One, {Any, Any, Any, Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, CameraBindings},
+			{"Input/Fog", FogNode, OneVector3, One, {Any}},
+			{"Input/Object", ObjectNode, NoInputs, One, {Any}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, nullptr, ObjectBindings, (1u << 2) | (1u << 3) | (1u << 4)},
+			{"Input/Screen", ScreenNode, NoInputs, One, {Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, ScreenBindings},
+			{"Input/EyeIndex", ReadsOneBinding, NoInputs, One, {Any}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, EyeBindings},
 
-			{"Math/Transform", TransformNode, ONE_VECTOR3, std::span<const RefVariant>(BuildTransformCases().variants.data(), BuildTransformCases().variants.size()), {UV, ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY, ANY, D{-0.5f, 0.5f}}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, TransformPrepare, TRANSFORM_BINDINGS},
+			{"Math/Transform", TransformNode, OneVector3, std::span<const RefVariant>(BuildTransformCases().variants.data(), BuildTransformCases().variants.size()), {UV, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, D{-0.5f, 0.5f}}, 1e-4f, 1e-4f, false, RefCheck::Value, nullptr, nullptr, TransformPrepare, TransformBindings},
 
-			{"UV/Flipbook", Flipbook, FLIPBOOK, FLIPBOOK_INVERTS, {UV, D{1.0f, 8.0f}, D{1.0f, 8.0f}, D{0.0f, 64.0f}}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, FlipbookPrepare},
-			{"UV/PolarCoordinates", PolarCoordinates, POLAR, ONE, {UV, UV, D{0.5f, 2.0f}, D{0.5f, 2.0f}}, 1e-5f, ULP_4096},
-			{"UV/RadialShear", RadialShear, UV_FOUR_PAIRS, ONE, {UV, UV, ANY, ANY}, 1e-5f, 1e-5f},
-			{"UV/Rotate", Rotate, UV_ROTATE, UNITS, {UV, UV, ANGLE}, 2.0f * SIN_ABSOLUTE, 0},
-			{"UV/Spherize", Spherize, UV_FOUR_PAIRS, ONE, {UV, UV, ANY, ANY}, 1e-5f, 1e-5f},
-			{"UV/TilingAndOffset", TilingAndOffset, UV_TILING, ONE, {UV, ANY, ANY}, 1e-6f, 1e-6f},
-			{"UV/Twirl", Twirl, UV_TWIRL, ONE, {UV, UV, D{-4.0f, 4.0f}, ANY}, 4.0f * SIN_ABSOLUTE, 0},
+			{"UV/Flipbook", Flipbook, FlipbookShapes, FlipbookInverts, {UV, D{1.0f, 8.0f}, D{1.0f, 8.0f}, D{0.0f, 64.0f}}, 1e-5f, 1e-5f, false, RefCheck::Value, nullptr, nullptr, FlipbookPrepare},
+			{"UV/PolarCoordinates", PolarCoordinates, Polar, One, {UV, UV, D{0.5f, 2.0f}, D{0.5f, 2.0f}}, 1e-5f, ULP4096},
+			{"UV/RadialShear", RadialShear, UVFourPairs, One, {UV, UV, Any, Any}, 1e-5f, 1e-5f},
+			{"UV/Rotate", Rotate, UVRotate, Units, {UV, UV, Angle}, 2.0f * SIN_ABSOLUTE, 0},
+			{"UV/Spherize", Spherize, UVFourPairs, One, {UV, UV, Any, Any}, 1e-5f, 1e-5f},
+			{"UV/TilingAndOffset", TilingAndOffset, UVTiling, One, {UV, Any, Any}, 1e-6f, 1e-6f},
+			{"UV/Twirl", Twirl, UVTwirl, One, {UV, UV, D{-4.0f, 4.0f}, Any}, 4.0f * SIN_ABSOLUTE, 0},
 
-			{"Artistic/ChannelMixer", ChannelMixer, ARTISTIC_3, CHANNEL_MIXES, {ANY}, 1e-5f, 1e-5f},
-			{"Artistic/Contrast", Contrast, ARTISTIC_3_1, ONE, {D{0.0f, 1.0f}, D{0.0f, 3.0f}}, 1e-5f, 1e-5f},
-			{"Artistic/Hue", Hue, ARTISTIC_3_1, HUE_RANGES, {D{0.0f, 1.0f}, D{-0.75f, 0.75f}}, 1e-4f, 1e-4f},
-			{"Artistic/InvertColors", InvertColors, VECTOR_WIDTHS, INVERTS, {D{0.0f, 1.0f}}},
-			{"Artistic/ReplaceColor", ReplaceColor, REPLACE_COLOR, ONE, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 0.5f}, D{0.01f, 0.5f}}, 1e-5f, 1e-5f},
-			{"Artistic/Saturation", Saturation, ARTISTIC_3_1, ONE, {D{0.0f, 1.0f}, D{0.0f, 2.0f}}, 1e-5f, 1e-5f},
-			{"Artistic/WhiteBalance", WhiteBalance, ARTISTIC_3_1_1, ONE, {D{0.0f, 1.0f}, D{-1.0f, 1.0f}, D{-1.0f, 1.0f}}, 1e-4f, 1e-4f},
-			{"Artistic/Blend", BlendNode, BLEND_SHAPES, BLEND_CASES, {D{0.05f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 1.0f}}, 1e-5f, 1e-5f},
-			{"Artistic/Dither", Dither, DITHER_SHAPES, ONE, {ANY, UV, D{64.0f, 512.0f}}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, DITHER_BINDINGS},
-			{"Artistic/FadeTransition", FadeTransition, FADE_SHAPES, ONE, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 4.0f}}, 1e-6f, 1e-6f},
-			{"Artistic/ChannelMask", ChannelMask, VECTOR_WIDTHS, CHANNEL_MASKS, {ANY}},
-			{"Artistic/ColorMask", ColorMask, COLOR_MASK, ONE, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 0.5f}, D{0.01f, 0.5f}}, 1e-5f, 1e-5f},
-			{"Artistic/NormalBlend", NormalBlend, NORMAL_PAIR, NORMAL_BLEND_MODES, {UNIT, UNIT}, 1e-5f, 1e-5f},
-			{"Artistic/NormalFromHeight", NormalFromHeight, NORMAL_FROM_HEIGHT, OUTPUT_SPACES, {ANY, D{0.0f, 0.5f}, ANY, NONZERO, ANY, ANY}, 1e-4f, 1e-4f, true, RefCheck::Value, nullptr, nullptr, NormalFromHeightPrepare, NORMAL_FROM_HEIGHT_BINDINGS},
-			{"Artistic/NormalReconstructZ", NormalReconstructZ, ONE_VECTOR2, ONE, {UNIT}, 1e-5f, 1e-5f},
-			{"Artistic/NormalStrength", NormalStrength, ARTISTIC_3_1, ONE, {UNIT, D{-1.0f, 3.0f}}, 1e-6f, 1e-6f},
-			{"Artistic/NormalUnpack", NormalUnpack, ONE_VECTOR4, UNPACK_SPACES, {D{0.0f, 1.0f}}, 1e-5f, 1e-5f},
-			{"Artistic/ColorspaceConversion", ColorspaceConversion, ARTISTIC_3, COLORSPACE_CASES, {D{0.0f, 1.0f}}, 1e-4f, 1e-4f},
+			{"Artistic/ChannelMixer", ChannelMixer, Artistic3, ChannelMixes, {Any}, 1e-5f, 1e-5f},
+			{"Artistic/Contrast", Contrast, Artistic31, One, {D{0.0f, 1.0f}, D{0.0f, 3.0f}}, 1e-5f, 1e-5f},
+			{"Artistic/Hue", Hue, Artistic31, HueRanges, {D{0.0f, 1.0f}, D{-0.75f, 0.75f}}, 1e-4f, 1e-4f},
+			{"Artistic/InvertColors", InvertColors, VectorWidths, Inverts, {D{0.0f, 1.0f}}},
+			{"Artistic/ReplaceColor", ReplaceColor, ReplaceColorShapes, One, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 0.5f}, D{0.01f, 0.5f}}, 1e-5f, 1e-5f},
+			{"Artistic/Saturation", Saturation, Artistic31, One, {D{0.0f, 1.0f}, D{0.0f, 2.0f}}, 1e-5f, 1e-5f},
+			{"Artistic/WhiteBalance", WhiteBalance, Artistic311, One, {D{0.0f, 1.0f}, D{-1.0f, 1.0f}, D{-1.0f, 1.0f}}, 1e-4f, 1e-4f},
+			{"Artistic/Blend", BlendNode, BlendShapes, BlendCases, {D{0.05f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 1.0f}}, 1e-5f, 1e-5f},
+			{"Artistic/Dither", Dither, DitherShapes, One, {Any, UV, D{64.0f, 512.0f}}, 1e-6f, 1e-6f, false, RefCheck::Value, nullptr, nullptr, nullptr, DitherBindings},
+			{"Artistic/FadeTransition", FadeTransition, FadeShapes, One, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 4.0f}}, 1e-6f, 1e-6f},
+			{"Artistic/ChannelMask", ChannelMask, VectorWidths, ChannelMasks, {Any}},
+			{"Artistic/ColorMask", ColorMask, ColorMaskShapes, One, {D{0.0f, 1.0f}, D{0.0f, 1.0f}, D{0.0f, 0.5f}, D{0.01f, 0.5f}}, 1e-5f, 1e-5f},
+			{"Artistic/NormalBlend", NormalBlend, NormalPair, NormalBlendModes, {Unit, Unit}, 1e-5f, 1e-5f},
+			{"Artistic/NormalFromHeight", NormalFromHeight, NormalFromHeightShapes, OutputSpaces, {Any, D{0.0f, 0.5f}, Any, Nonzero, Any, Any}, 1e-4f, 1e-4f, true, RefCheck::Value, nullptr, nullptr, NormalFromHeightPrepare, NormalFromHeightBindings},
+			{"Artistic/NormalReconstructZ", NormalReconstructZ, OneVector2, One, {Unit}, 1e-5f, 1e-5f},
+			{"Artistic/NormalStrength", NormalStrength, Artistic31, One, {Unit, D{-1.0f, 3.0f}}, 1e-6f, 1e-6f},
+			{"Artistic/NormalUnpack", NormalUnpack, OneVector4, UnpackSpaces, {D{0.0f, 1.0f}}, 1e-5f, 1e-5f},
+			{"Artistic/ColorspaceConversion", ColorspaceConversion, Artistic3, ColorspaceCases, {D{0.0f, 1.0f}}, 1e-4f, 1e-4f},
 
-			{"Utility/All", AllNode, VECTOR_1, ONE, {D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ZeroPrepare},
-			{"Utility/And", AndNode, TWO_BOOLS, ONE, {}, 0, 0},
-			{"Utility/Any", AnyNode, VECTOR_1, ONE, {D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ZeroPrepare},
-			{"Utility/Branch", BranchNode, BRANCH, ONE, {ANY, ANY, ANY}, 0, 0},
-			{"Utility/Comparison", ComparisonNode, TWO_FLOATS, COMPARISONS, {D{-1.0f, 1.0f}, D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ComparisonPrepare},
-			{"Utility/IsFrontFace", ReadsOneBinding, NO_INPUTS, ONE, {}, 0, 0, false, RefCheck::Value, nullptr, nullptr, nullptr, FACE_BINDINGS},
-			{"Utility/IsInfinite", IsInfiniteNode, ONE_FLOAT, ONE, {D{0.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, SpecialPrepare},
-			{"Utility/IsNaN", IsNaNNode, ONE_FLOAT, ONE, {D{0.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, SpecialPrepare},
-			{"Utility/Nand", NandNode, TWO_BOOLS, ONE, {}, 0, 0},
-			{"Utility/Not", NotNode, ONE_BOOL, ONE, {}, 0, 0},
-			{"Utility/Or", OrNode, TWO_BOOLS, ONE, {}, 0, 0},
-			{"Utility/Preview", PreviewNode, VECTOR_1, ONE, {ANY}, 0, 0},
+			{"Utility/All", AllNode, Vector1, One, {D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ZeroPrepare},
+			{"Utility/And", AndNode, TwoBools, One, {}, 0, 0},
+			{"Utility/Any", AnyNode, Vector1, One, {D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ZeroPrepare},
+			{"Utility/Branch", BranchNode, Branch, One, {Any, Any, Any}, 0, 0},
+			{"Utility/Comparison", ComparisonNode, TwoFloats, Comparisons, {D{-1.0f, 1.0f}, D{-1.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, ComparisonPrepare},
+			{"Utility/IsFrontFace", ReadsOneBinding, NoInputs, One, {}, 0, 0, false, RefCheck::Value, nullptr, nullptr, nullptr, FaceBindings},
+			{"Utility/IsInfinite", IsInfiniteNode, OneFloat, One, {D{0.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, SpecialPrepare},
+			{"Utility/IsNaN", IsNaNNode, OneFloat, One, {D{0.0f, 1.0f}}, 0, 0, false, RefCheck::Value, nullptr, nullptr, SpecialPrepare},
+			{"Utility/Nand", NandNode, TwoBools, One, {}, 0, 0},
+			{"Utility/Not", NotNode, OneBool, One, {}, 0, 0},
+			{"Utility/Or", OrNode, TwoBools, One, {}, 0, 0},
+			{"Utility/Preview", PreviewNode, Vector1, One, {Any}, 0, 0},
 		};
 
 	} // anonymous namespace
@@ -2121,6 +2121,6 @@ namespace Shalltear::NodeShaderTest {
 		return 0;
 	}
 
-	std::span<const RefEntry> ReferenceTable() { return ENTRIES; }
+	std::span<const RefEntry> ReferenceTable() { return entries; }
 
 } // namespace Shalltear::NodeShaderTest

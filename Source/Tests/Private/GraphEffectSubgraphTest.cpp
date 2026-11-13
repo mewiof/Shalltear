@@ -34,7 +34,7 @@ namespace {
 		return document;
 	}
 
-	constexpr std::string_view DOUBLER = R"({"_type":"VisualEffectSubgraphOperator","version":1,"nextId":20,"settings":{"category":"Mine"},
+	constexpr std::string_view Doubler = R"({"_type":"VisualEffectSubgraphOperator","version":1,"nextId":20,"settings":{"category":"Mine"},
 "properties":[{"id":1,"name":"In","reference":"In","type":"Float","default":[0.25]},
 {"id":2,"name":"Out","reference":"Out","type":"Float","default":[0],"settings":{"output":true}}],
 "nodes":[{"id":10,"def":"Input/Property","x":0,"y":0,"settings":{"property":1}},
@@ -119,9 +119,9 @@ namespace {
 } // anonymous namespace
 
 TEST_F(GraphEffectSubgraphFixture, OperatorSubgraphPortsFromProperties) {
-	const Guid doubler = Add("Doubler.sleffectop", DOUBLER);
+	const Guid doubler = Add("Doubler.sleffectop", Doubler);
 	ASSERT_TRUE(doubler.IsValid());
-	const GraphDocument graph = Parse(Effect({}, Uses(GRAPH_SUBGRAPH_NODE, 50, doubler)));
+	const GraphDocument graph = Parse(Effect({}, Uses(GraphSubgraphNode, 50, doubler)));
 	GraphDefinitions definitions;
 	str error;
 	const GraphNodeDefinition* definition = definitions.Find(graph, graph.nodes[0], &error);
@@ -141,22 +141,22 @@ TEST_F(GraphEffectSubgraphFixture, OperatorSubgraphPortsFromProperties) {
 }
 
 TEST_F(GraphEffectSubgraphFixture, OperatorSubgraphInlinesAndNests) {
-	const Guid doubler = Add("Doubler.sleffectop", DOUBLER);
+	const Guid doubler = Add("Doubler.sleffectop", Doubler);
 	ASSERT_TRUE(doubler.IsValid());
 	const str twice = std::format(R"({{"_type":"VisualEffectSubgraphOperator","version":1,"nextId":20,
 "properties":[{{"id":1,"name":"X","reference":"X","type":"Float","default":[0]}},{{"id":2,"name":"Y","reference":"Y","type":"Float","default":[0],"settings":{{"output":true}}}}],
 "nodes":[{{"id":10,"def":"Input/Property","x":0,"y":0,"settings":{{"property":1}}}},{},{},
 {{"id":13,"def":"Input/Property","x":0,"y":0,"settings":{{"property":2}},"in":{{"Value":{{"from":[12,"2"]}}}}}}],
 "contexts":[],"groups":[],"notes":[]}})",
-								  Uses(GRAPH_SUBGRAPH_NODE, 11, doubler, R"(,"in":{"1":{"from":[10,"Out"]}})"),
-								  Uses(GRAPH_SUBGRAPH_NODE, 12, doubler, R"(,"in":{"1":{"from":[11,"2"]}})"));
+								  Uses(GraphSubgraphNode, 11, doubler, R"(,"in":{"1":{"from":[10,"Out"]}})"),
+								  Uses(GraphSubgraphNode, 12, doubler, R"(,"in":{"1":{"from":[11,"2"]}})"));
 	const Guid nested = Add("Twice.sleffectop", twice);
 	ASSERT_TRUE(nested.IsValid());
 
 	const GraphDocument graph = Parse(Effect({}, R"({"id":40,"def":"Input/Float","x":0,"y":0,"in":{"X":{"value":[3]}}},)" +
-													 Uses(GRAPH_SUBGRAPH_NODE, 41, doubler, R"(,"in":{"1":{"from":[40,"Out"]}})") + "," +
-													 Uses(GRAPH_SUBGRAPH_NODE, 42, nested, R"(,"in":{"1":{"from":[40,"Out"]}})") + "," +
-													 Uses(GRAPH_SUBGRAPH_NODE, 43, doubler)));
+													 Uses(GraphSubgraphNode, 41, doubler, R"(,"in":{"1":{"from":[40,"Out"]}})") + "," +
+													 Uses(GraphSubgraphNode, 42, nested, R"(,"in":{"1":{"from":[40,"Out"]}})") + "," +
+													 Uses(GraphSubgraphNode, 43, doubler)));
 	const GraphCompileRoot roots[] = {{41, "2", GraphStageVertex}, {42, "2", GraphStageVertex}, {43, "2", GraphStageVertex}};
 	GraphProgram program;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -177,7 +177,7 @@ TEST_F(GraphEffectSubgraphFixture, OutputFeedRules) {
 "properties":[{"id":1,"name":"Seven","reference":"Seven","type":"Float","default":[7],"settings":{"output":true}}],
 "nodes":[],"contexts":[],"groups":[],"notes":[]})");
 	ASSERT_TRUE(bare.IsValid());
-	const GraphDocument graph = Parse(Effect({}, Uses(GRAPH_SUBGRAPH_NODE, 50, bare)));
+	const GraphDocument graph = Parse(Effect({}, Uses(GraphSubgraphNode, 50, bare)));
 	const GraphCompileRoot root{50, "1", GraphStageVertex};
 	GraphProgram program;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -193,7 +193,7 @@ TEST_F(GraphEffectSubgraphFixture, OutputFeedRules) {
 {"id":12,"def":"Input/Property","x":0,"y":0,"settings":{"property":1},"in":{"Value":{"from":[10,"Out"]}}}],
 "contexts":[],"groups":[],"notes":[]})");
 	ASSERT_TRUE(twice.IsValid());
-	const GraphDocument fed = Parse(Effect({}, Uses(GRAPH_SUBGRAPH_NODE, 50, twice)));
+	const GraphDocument fed = Parse(Effect({}, Uses(GraphSubgraphNode, 50, twice)));
 	GraphDefinitions definitions;
 	str error;
 	EXPECT_EQ(definitions.Find(fed, fed.nodes[0], &error), nullptr);
@@ -208,7 +208,7 @@ TEST_F(GraphEffectSubgraphFixture, NewSubgraphsAreItsTemplates) {
 	str error;
 	const GraphSubgraph* made = definitions.Subgraph(range, &error);
 	ASSERT_NE(made, nullptr) << error;
-	EXPECT_EQ(made->category, GRAPH_EFFECT_OPERATOR_SUBGRAPH_CATEGORY);
+	EXPECT_EQ(made->category, GraphEffectOperatorSubgraphCategory);
 	ASSERT_EQ(made->inputs.size(), 1u);
 	EXPECT_EQ(made->inputs[0].label, "range");
 	ASSERT_EQ(made->outputs.size(), 2u);
@@ -218,7 +218,7 @@ TEST_F(GraphEffectSubgraphFixture, NewSubgraphsAreItsTemplates) {
 	const str min(made->outputs[0].name);
 	const str max(made->outputs[1].name);
 	const GraphDocument graph = Parse(Effect({}, R"({"id":40,"def":"Input/Float","x":0,"y":0,"in":{"X":{"value":[3]}}},)" +
-													 Uses(GRAPH_SUBGRAPH_NODE, 41, range, std::format(R"(,"in":{{"{}":{{"from":[40,"Out"]}}}})", made->inputs[0].name))));
+													 Uses(GraphSubgraphNode, 41, range, std::format(R"(,"in":{{"{}":{{"from":[40,"Out"]}}}})", made->inputs[0].name))));
 	const GraphCompileRoot roots[] = {{41, min, GraphStageVertex}, {41, max, GraphStageVertex}};
 	GraphProgram program;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
@@ -231,16 +231,16 @@ TEST_F(GraphEffectSubgraphFixture, NewSubgraphsAreItsTemplates) {
 	const GraphSubgraph* block = definitions.Subgraph(empty, &error);
 	ASSERT_NE(block, nullptr) << error;
 	EXPECT_EQ(block->kind, GraphSubgraphKind::EffectBlock);
-	EXPECT_EQ(block->category, GRAPH_EFFECT_BLOCK_SUBGRAPH_CATEGORY);
+	EXPECT_EQ(block->category, GraphEffectBlockSubgraphCategory);
 	EXPECT_NE(block->blockContext, 0u);
 	EXPECT_EQ(block->suitable, GRAPH_EFFECT_DEFAULT_SUITABLE_CONTEXTS);
-	EXPECT_TRUE(GraphEffectRules::Suits(block->suitable, GRAPH_EFFECT_INITIALIZE));
-	EXPECT_TRUE(GraphEffectRules::Suits(block->suitable, GRAPH_EFFECT_OUTPUT));
-	EXPECT_FALSE(GraphEffectRules::Suits(block->suitable, GRAPH_EFFECT_SPAWN));
+	EXPECT_TRUE(GraphEffectRules::Suits(block->suitable, GraphEffectInitialize));
+	EXPECT_TRUE(GraphEffectRules::Suits(block->suitable, GraphEffectOutputDefinition));
+	EXPECT_FALSE(GraphEffectRules::Suits(block->suitable, GraphEffectSpawn));
 }
 
 TEST_F(GraphEffectSubgraphFixture, ForeignSubgraphRefused) {
-	const Guid doubler = Add("Doubler.sleffectop", DOUBLER);
+	const Guid doubler = Add("Doubler.sleffectop", Doubler);
 	const Guid block = Add("Sized.sleffectblock", BlockSubgraph(R"({"id":4,"def":"Block/SetAttribute","settings":{"Attribute":"size"}})"));
 	ASSERT_TRUE(doubler.IsValid() && block.IsValid());
 	GraphDefinitions definitions;
@@ -250,32 +250,32 @@ TEST_F(GraphEffectSubgraphFixture, ForeignSubgraphRefused) {
 	shader.type = "NodeShader";
 	GraphNode node;
 	node.id = 5;
-	node.def = str(GRAPH_SUBGRAPH_NODE);
-	node.settings.push_back({str(GRAPH_SUBGRAPH_ASSET_SETTING), NodeShaderEditOps::Quote(doubler.ToString())});
+	node.def = str(GraphSubgraphNode);
+	node.settings.push_back({str(GraphSubgraphAssetSetting), NodeShaderEditOps::Quote(doubler.ToString())});
 	EXPECT_EQ(definitions.Find(shader, node, &error), nullptr);
 	EXPECT_NE(error.find("an effect operator"), str::npos) << error;
 
-	const GraphDocument effect = Parse(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, doubler), Uses(GRAPH_SUBGRAPH_NODE, 50, block)));
+	const GraphDocument effect = Parse(Effect(Uses(GraphEffectSubgraphBlock, 60, doubler), Uses(GraphSubgraphNode, 50, block)));
 	EXPECT_EQ(definitions.Find(effect, effect.nodes[0], &error), nullptr);
 	EXPECT_NE(error.find("is an effect block, where it takes an effect operator"), str::npos) << error;
 	EXPECT_EQ(definitions.Find(effect, effect.contexts[0].blocks[0], &error), nullptr);
 }
 
 TEST_F(GraphEffectSubgraphFixture, CycleThroughSubgraphsIsRefusedNamingChain) {
-	const Guid a = Add("A.sleffectop", DOUBLER);
-	const Guid b = Add("B.sleffectop", DOUBLER);
+	const Guid a = Add("A.sleffectop", Doubler);
+	const Guid b = Add("B.sleffectop", Doubler);
 	ASSERT_TRUE(a.IsValid() && b.IsValid());
-	const auto using_ = [](const Guid& other) {
+	const auto operatorUsing = [](const Guid& other) {
 		return std::format(R"({{"_type":"VisualEffectSubgraphOperator","version":1,"nextId":20,
 "properties":[{{"id":2,"name":"Out","reference":"Out","type":"Float","default":[0],"settings":{{"output":true}}}}],
 "nodes":[{},{{"id":12,"def":"Input/Property","x":0,"y":0,"settings":{{"property":2}},"in":{{"Value":{{"from":[11,"2"]}}}}}}],
 "contexts":[],"groups":[],"notes":[]}})",
 						   std::format(R"({{"id":11,"def":"Utility/Subgraph","settings":{{"asset":"{}"}}}})", other.ToString()));
 	};
-	Add("A.sleffectop", using_(b));
-	Add("B.sleffectop", using_(a));
+	Add("A.sleffectop", operatorUsing(b));
+	Add("B.sleffectop", operatorUsing(a));
 	const GraphDocument graph = Parse(Effect(R"({"id":4,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[50,"2"]}}})",
-											 Uses(GRAPH_SUBGRAPH_NODE, 50, a)));
+											 Uses(GraphSubgraphNode, 50, a)));
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	GraphDefinitions definitions;
@@ -284,11 +284,11 @@ TEST_F(GraphEffectSubgraphFixture, CycleThroughSubgraphsIsRefusedNamingChain) {
 
 	const Guid x = Add("X.sleffectblock", BlockSubgraph({}));
 	const Guid y = Add("Y.sleffectblock", BlockSubgraph({}));
-	Add("X.sleffectblock", BlockSubgraph(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 4, y)));
-	Add("Y.sleffectblock", BlockSubgraph(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 4, x)));
+	Add("X.sleffectblock", BlockSubgraph(Uses(GraphEffectSubgraphBlock, 4, y)));
+	Add("Y.sleffectblock", BlockSubgraph(Uses(GraphEffectSubgraphBlock, 4, x)));
 	diagnostics.clear();
 	GraphDefinitions fresh;
-	EXPECT_FALSE(GraphEffectTarget::Compile(Parse(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, x))), "Cycle", effect, diagnostics, &fresh));
+	EXPECT_FALSE(GraphEffectTarget::Compile(Parse(Effect(Uses(GraphEffectSubgraphBlock, 60, x))), "Cycle", effect, diagnostics, &fresh));
 	ASSERT_FALSE(diagnostics.empty());
 	EXPECT_EQ(diagnostics[0].node, 60u);
 	EXPECT_NE(Said(diagnostics).find("which uses itself: 'X' -> 'Y' -> 'X'"), str::npos) << Said(diagnostics);
@@ -299,17 +299,17 @@ TEST_F(GraphEffectSubgraphFixture, BlockSubgraphRespectsContexts) {
 	ASSERT_TRUE(drag.IsValid());
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	EXPECT_FALSE(Compile(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, drag)), effect, diagnostics));
+	EXPECT_FALSE(Compile(Effect(Uses(GraphEffectSubgraphBlock, 60, drag)), effect, diagnostics));
 	EXPECT_NE(Said(diagnostics).find("uses 'Drag' (its Suitable Contexts are Update, Initialize Particle context 1 isn't one)"), str::npos)
 		<< Said(diagnostics);
 	diagnostics.clear();
-	EXPECT_TRUE(Compile(Effect({}, {}, Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, drag)), effect, diagnostics)) << Said(diagnostics);
+	EXPECT_TRUE(Compile(Effect({}, {}, Uses(GraphEffectSubgraphBlock, 60, drag)), effect, diagnostics)) << Said(diagnostics);
 
 	GraphDocument document = Parse(Effect({}));
 	GraphDefinitions definitions;
 	EffectGraphEditOps::BlockChoice choice;
-	choice.def = str(GRAPH_EFFECT_SUBGRAPH_BLOCK);
-	choice.settings.push_back({str(GRAPH_SUBGRAPH_ASSET_SETTING), NodeShaderEditOps::Quote(drag.ToString())});
+	choice.def = str(GraphEffectSubgraphBlock);
+	choice.settings.push_back({str(GraphSubgraphAssetSetting), NodeShaderEditOps::Quote(drag.ToString())});
 	EXPECT_EQ(EffectGraphEditOps::AddBlock(document, 1, 0, choice, &definitions), 0u);
 	EXPECT_NE(EffectGraphEditOps::AddBlock(document, 2, 0, choice, &definitions), 0u);
 	const u32 moved = document.contexts[1].blocks[0].id;
@@ -322,18 +322,18 @@ TEST_F(GraphEffectSubgraphFixture, InnerBlockRefusalNamesSubgraph) {
 	ASSERT_TRUE(orient.IsValid() && trigger.IsValid());
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	EXPECT_FALSE(Compile(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, orient)), effect, diagnostics));
+	EXPECT_FALSE(Compile(Effect(Uses(GraphEffectSubgraphBlock, 60, orient)), effect, diagnostics));
 	ASSERT_FALSE(diagnostics.empty());
 	EXPECT_EQ(diagnostics[0].node, 60u);
 	EXPECT_NE(diagnostics[0].message.find("in subgraph 'Turn', block 4 is a"), str::npos) << Said(diagnostics);
 	EXPECT_NE(diagnostics[0].message.find("which Initialize Particle context 1 cannot hold"), str::npos) << Said(diagnostics);
 
 	diagnostics.clear();
-	EXPECT_FALSE(Compile(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, trigger)), effect, diagnostics));
+	EXPECT_FALSE(Compile(Effect(Uses(GraphEffectSubgraphBlock, 60, trigger)), effect, diagnostics));
 	EXPECT_NE(Said(diagnostics).find("is a Trigger Event. No GPU Event"), str::npos) << Said(diagnostics);
 
 	diagnostics.clear();
-	EXPECT_TRUE(Compile(Effect(Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, orient, R"(,"enabled":false)")), effect, diagnostics)) << Said(diagnostics);
+	EXPECT_TRUE(Compile(Effect(Uses(GraphEffectSubgraphBlock, 60, orient, R"(,"enabled":false)")), effect, diagnostics)) << Said(diagnostics);
 }
 
 TEST_F(GraphEffectSubgraphFixture, SpawnerSubgraphRunsSpawnBlocks) {
@@ -343,7 +343,7 @@ TEST_F(GraphEffectSubgraphFixture, SpawnerSubgraphRunsSpawnBlocks) {
 {{"id":5,"def":"Context/Spawn","blocks":[{}]}},
 {{"id":1,"def":"Context/Initialize","settings":{{"Capacity":64}},"flow":[[5,"In"]],"blocks":[]}},
 {{"id":3,"def":"Context/OutputParticlePrimitive","flow":[[1,"In"]],"blocks":[]}}]}})",
-								  Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, rate, R"(,"in":{"1":{"value":[7]}})"));
+								  Uses(GraphEffectSubgraphBlock, 60, rate, R"(,"in":{"1":{"value":[7]}})"));
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	ASSERT_TRUE(Compile(graph, effect, diagnostics)) << Said(diagnostics);
@@ -367,7 +367,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphRandomPerUse) {
 {"id":13,"def":"Input/Property","x":0,"y":0,"settings":{"property":2},"in":{"Value":{"from":[11,"r"]}}}],
 "contexts":[],"groups":[],"notes":[]})");
 	ASSERT_TRUE(dice.IsValid());
-	const GraphDocument graph = Parse(Effect({}, Uses(GRAPH_SUBGRAPH_NODE, 50, dice) + "," + Uses(GRAPH_SUBGRAPH_NODE, 51, dice) +
+	const GraphDocument graph = Parse(Effect({}, Uses(GraphSubgraphNode, 50, dice) + "," + Uses(GraphSubgraphNode, 51, dice) +
 													 R"(,{"id":52,"def":"Random/RandomNumber","x":0,"y":0,"settings":{"Constant":false}})"));
 	const GraphCompileRoot roots[] = {{50, "1", GraphStageVertex}, {50, "2", GraphStageVertex}, {51, "1", GraphStageVertex}, {52, "r", GraphStageVertex}};
 	GraphProgram program;
@@ -393,7 +393,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphTexturePerUse) {
 {"id":12,"def":"Input/Property","x":0,"y":0,"settings":{"property":1},"in":{"Value":{"from":[10,"s"]}}}],
 "contexts":[],"groups":[],"notes":[]})");
 	ASSERT_TRUE(sampler.IsValid());
-	const GraphDocument graph = Parse(Effect({}, Uses(GRAPH_SUBGRAPH_NODE, 50, sampler) + "," + Uses(GRAPH_SUBGRAPH_NODE, 51, sampler)));
+	const GraphDocument graph = Parse(Effect({}, Uses(GraphSubgraphNode, 50, sampler) + "," + Uses(GraphSubgraphNode, 51, sampler)));
 	GraphDefinitions definitions;
 	Vector<GraphBinding> bindings{GetMemoryResource(MemTag::Editor)};
 	GraphEffectTarget::PortTextureBindings(graph, definitions, bindings);
@@ -407,7 +407,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphTexturePerUse) {
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	ASSERT_TRUE(Compile(Effect(R"({"id":4,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[50,"1"]}}},
 {"id":5,"def":"Block/SetAttribute","settings":{"Attribute":"alpha"},"in":{"Alpha":{"from":[51,"1"]}}})",
-							   Uses(GRAPH_SUBGRAPH_NODE, 50, sampler) + "," + Uses(GRAPH_SUBGRAPH_NODE, 51, sampler)),
+							   Uses(GraphSubgraphNode, 50, sampler) + "," + Uses(GraphSubgraphNode, 51, sampler)),
 						effect, diagnostics))
 		<< Said(diagnostics);
 	EXPECT_EQ(effect.systems[0].initializeTextures.size(), 2u);
@@ -440,7 +440,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphCheckBadgesRefusals) {
 	EXPECT_NE(diagnostics[0].message.find("its Suitable Contexts list Initialize Particle (can't hold one)"), str::npos) << Said(diagnostics);
 
 	diagnostics.clear();
-	str broken(DOUBLER);
+	str broken(Doubler);
 	broken.replace(broken.find(R"("B":{"value":[2]})"), 17, R"("B":{"value":"two"})");
 	EXPECT_FALSE(GraphEffectTarget::CheckSubgraph(Parse(broken), {}, diagnostics));
 	ASSERT_FALSE(diagnostics.empty());
@@ -452,7 +452,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphWarningShownToUser) {
 	ASSERT_TRUE(idle.IsValid());
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compile(Effect({}, {}, Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, idle)), effect, diagnostics)) << Said(diagnostics);
+	ASSERT_TRUE(Compile(Effect({}, {}, Uses(GraphEffectSubgraphBlock, 60, idle)), effect, diagnostics)) << Said(diagnostics);
 	ASSERT_EQ(diagnostics.size(), 1u) << Said(diagnostics);
 	EXPECT_EQ(diagnostics[0].severity, GraphDiagnosticSeverity::Warning);
 	EXPECT_EQ(diagnostics[0].node, 60u);
@@ -476,24 +476,24 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphContextOffersCommonBlocks) {
 	const auto offers = [&choices](std::string_view def) {
 		return std::any_of(choices.begin(), choices.end(), [def](const EffectGraphEditOps::BlockChoice& choice) { return choice.def == def; });
 	};
-	EXPECT_TRUE(offers(GRAPH_EFFECT_SET_ATTRIBUTE));
-	EXPECT_FALSE(offers(GRAPH_EFFECT_GRAVITY));
-	EXPECT_FALSE(offers(GRAPH_EFFECT_ORIENT));
-	EXPECT_FALSE(offers(GRAPH_EFFECT_CONSTANT_RATE));
+	EXPECT_TRUE(offers(GraphEffectSetAttribute));
+	EXPECT_FALSE(offers(GraphEffectGravity));
+	EXPECT_FALSE(offers(GraphEffectOrient));
+	EXPECT_FALSE(offers(GraphEffectConstantRate));
 
-	NodeShaderEditOps::SetNodeSetting(document, context, GRAPH_EFFECT_SUITABLE_CONTEXTS_SETTING, NodeShaderEditOps::Quote("Update"));
+	NodeShaderEditOps::SetNodeSetting(document, context, GraphEffectSuitableContextsSetting, NodeShaderEditOps::Quote("Update"));
 	EffectGraphEditOps::BlockChoices(document, context, choices);
-	EXPECT_TRUE(offers(GRAPH_EFFECT_GRAVITY));
-	EXPECT_FALSE(offers(GRAPH_EFFECT_ORIENT));
+	EXPECT_TRUE(offers(GraphEffectGravity));
+	EXPECT_FALSE(offers(GraphEffectOrient));
 	ASSERT_FALSE(choices.empty());
 	EXPECT_NE(EffectGraphEditOps::AddBlock(document, context, 0, choices[0]), 0u);
 }
 
 TEST_F(GraphEffectSubgraphFixture, SearchersOfferProjectsSubgraphsButNeverCycle) {
-	const Guid doubler = Add("Doubler.sleffectop", DOUBLER);
+	const Guid doubler = Add("Doubler.sleffectop", Doubler);
 	const Guid user = Add("User.sleffectop", std::format(R"({{"_type":"VisualEffectSubgraphOperator","version":1,"nextId":20,
 "properties":[],"nodes":[{}],"contexts":[],"groups":[],"notes":[]}})",
-														 Uses(GRAPH_SUBGRAPH_NODE, 11, doubler)));
+														 Uses(GraphSubgraphNode, 11, doubler)));
 	const Guid sized = Add("Sized.sleffectblock", BlockSubgraph(R"({"id":4,"def":"Block/SetAttribute","settings":{"Attribute":"size"}})"));
 	ASSERT_TRUE(doubler.IsValid() && user.IsValid() && sized.IsValid());
 	GraphDefinitions definitions;
@@ -503,14 +503,14 @@ TEST_F(GraphEffectSubgraphFixture, SearchersOfferProjectsSubgraphsButNeverCycle)
 	ASSERT_EQ(choices.size(), 2u);
 	EXPECT_EQ(choices[0].name, "Doubler");
 	EXPECT_EQ(choices[0].category, "Mine");
-	EXPECT_EQ(choices[0].def, GRAPH_SUBGRAPH_NODE);
+	EXPECT_EQ(choices[0].def, GraphSubgraphNode);
 
-	EffectGraphEditOps::SubgraphChoices(Parse(DOUBLER), doubler, 0, definitions, choices);
+	EffectGraphEditOps::SubgraphChoices(Parse(Doubler), doubler, 0, definitions, choices);
 	EXPECT_TRUE(choices.empty());
 
 	EffectGraphEditOps::SubgraphChoices(graph, {}, 1, definitions, choices);
 	ASSERT_EQ(choices.size(), 1u);
-	EXPECT_EQ(choices[0].def, GRAPH_EFFECT_SUBGRAPH_BLOCK);
+	EXPECT_EQ(choices[0].def, GraphEffectSubgraphBlock);
 	EffectGraphEditOps::SubgraphChoices(graph, {}, 3, definitions, choices);
 	EXPECT_EQ(choices.size(), 1u);
 	GraphDocument edited = graph;
@@ -528,7 +528,7 @@ TEST_F(GraphEffectSubgraphFixture, SubgraphContextStays) {
 	EXPECT_EQ(EffectGraphEditOps::Copy(block, {&context, 1}).find("BlockSubgraph"), str::npos);
 	EXPECT_EQ(EffectGraphEditOps::AddOutputProperty(block, "Float"), 0u);
 
-	GraphDocument operators = Parse(DOUBLER);
+	GraphDocument operators = Parse(Doubler);
 	const u32 output = EffectGraphEditOps::AddOutputProperty(operators, "Vector3");
 	ASSERT_NE(output, 0u);
 	EXPECT_TRUE(GraphSubgraphs::IsOutput(operators.properties.back()));
@@ -557,7 +557,7 @@ namespace {
 } // anonymous namespace
 
 TEST_F(GraphEffectSubgraphReadbackFixture, SubgraphWriteReadsBack) {
-	const Guid doubler = Add("Doubler.sleffectop", DOUBLER);
+	const Guid doubler = Add("Doubler.sleffectop", Doubler);
 	ASSERT_TRUE(doubler.IsValid());
 	const Guid sized = Add("Sized.sleffectblock", BlockSubgraph(R"({"id":4,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[5,"2"]}}})",
 																"InitAndUpdateAndOutput",
@@ -565,7 +565,7 @@ TEST_F(GraphEffectSubgraphReadbackFixture, SubgraphWriteReadsBack) {
 																			doubler.ToString())));
 	ASSERT_TRUE(sized.IsValid());
 	const str text = EffectKernelHarness::EffectWith(
-		{}, Uses(GRAPH_EFFECT_SUBGRAPH_BLOCK, 60, sized, R"(,"in":{"1":{"value":[0.25]}})") + R"(,{"id":61,"def":"Block/SetAttribute","settings":{"Attribute":"size","Composition":"Multiply"},"in":{"Size":{"value":[3]}}})",
+		{}, Uses(GraphEffectSubgraphBlock, 60, sized, R"(,"in":{"1":{"value":[0.25]}})") + R"(,{"id":61,"def":"Block/SetAttribute","settings":{"Attribute":"size","Composition":"Multiply"},"in":{"Size":{"value":[3]}}})",
 		{});
 	EffectKernelHarness::BlockRun run;
 	if (!Begin(run, text, "SubgraphSize")) {

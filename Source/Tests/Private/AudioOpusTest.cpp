@@ -124,7 +124,7 @@ TEST(AudioOpusTest, DecodeLinesUpWithSourceToFrame) {
 		EXPECT_EQ(cooked.Get()->frames, audio.GetFrames());
 		EXPECT_EQ(cooked.Get()->sampleRate, OPUS_RATE);
 		EXPECT_EQ(cooked.Get()->opus.packets, OpusPacketCount(audio.GetFrames()));
-		ClipBlock decoded(DecodeToPcm(*cooked.Get()));
+		ClipBlock decoded(DecodeToPCM(*cooked.Get()));
 		ASSERT_TRUE(decoded);
 		const u64 frames = decoded.Get()->frames;
 		const f64 aligned = SnrAtLag(audio, decoded.Get()->pcm, frames, 0);

@@ -73,7 +73,7 @@ namespace Shalltear {
 				}
 			}
 
-			void ReadFrame(AudioVoiceState& voice, QoaCursor& cursor, i64 index, f32* out) [[clang::nonblocking]] {
+			void ReadFrame(AudioVoiceState& voice, QOACursor& cursor, i64 index, f32* out) [[clang::nonblocking]] {
 				const AudioClipData& clip = *voice.clip;
 				if (clip.encoding == AudioClipEncoding::Generator) {
 					ReadGeneratorFrame(clip, index, out);
@@ -99,7 +99,7 @@ namespace Shalltear {
 					}
 					return;
 				}
-				if (clip.encoding == AudioClipEncoding::Pcm) {
+				if (clip.encoding == AudioClipEncoding::PCM) {
 					const f32* frame = clip.pcm + static_cast<size_t>(index) * clip.channels;
 					for (u32 channel = 0; channel < clip.channels; ++channel) {
 						out[channel] = frame[channel];
@@ -121,8 +121,8 @@ namespace Shalltear {
 					}
 					return;
 				}
-				if (clip.encoding == AudioClipEncoding::Qoa) {
-					QoaRead(clip.qoa, cursor, static_cast<u64>(index), out);
+				if (clip.encoding == AudioClipEncoding::QOA) {
+					QOARead(clip.qoa, cursor, static_cast<u64>(index), out);
 					return;
 				}
 				for (u32 channel = 0; channel < clip.channels; ++channel) {

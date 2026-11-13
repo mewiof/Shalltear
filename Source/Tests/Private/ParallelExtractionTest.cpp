@@ -323,7 +323,7 @@ TEST_F(ParallelExtractionFixture, LaneMissesResolvedOnMainThread) {
 			texel[3] = 255;
 		}
 	}
-	TestImages::WriteTga(_root / "Checker.tga", CHECKER, CHECKER, rgba.data());
+	TestImages::WriteTGA(_root / "Checker.tga", CHECKER, CHECKER, rgba.data());
 	const Guid checker = AssetDatabase::EnsureAssetIdentity(Path("project://Checker.tga"));
 	JSONValue settings = JSONValue::MakeObject();
 	settings.AddMember("sRGB", JSONValue::MakeBool(false));

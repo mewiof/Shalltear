@@ -22,8 +22,8 @@ namespace Shalltear {
 
 		const u8 _FRAME_STAGE_OWNER = 0;
 
-		constexpr std::string_view PLAYER_CATEGORY = "Player";
-		constexpr std::string_view SCREEN_CATEGORY = "Screen";
+		constexpr std::string_view PlayerCategory = "Player";
+		constexpr std::string_view ScreenCategory = "Screen";
 
 		std::string_view ModeName(FullScreenMode mode) {
 			switch (mode) {
@@ -47,7 +47,7 @@ namespace Shalltear {
 		}
 
 		PlayerSettings* Project() {
-			return Settings::DeclareCategory<PlayerSettings>(PLAYER_CATEGORY, SettingScope::Project);
+			return Settings::DeclareCategory<PlayerSettings>(PlayerCategory, SettingScope::Project);
 		}
 
 		bool ApplyDisplayMode(u64 monitorId, Vec2I sizePx, f32 refreshRate) {
@@ -60,7 +60,7 @@ namespace Shalltear {
 		}
 
 		ScreenSettings* Saved() {
-			return Settings::DeclareCategory<ScreenSettings>(SCREEN_CATEGORY, SettingScope::UserProject);
+			return Settings::DeclareCategory<ScreenSettings>(ScreenCategory, SettingScope::UserProject);
 		}
 
 		class ScreenRuntime : public Object {

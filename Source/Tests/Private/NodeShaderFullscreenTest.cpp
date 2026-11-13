@@ -165,13 +165,13 @@ TEST(NodeShaderFullscreenTest, ScenesImagesAreFullScreenDraws) {
 		std::string_view value;
 		std::string_view image;
 	};
-	const Reader READERS[] = {
+	const Reader readers[] = {
 		{"Input/SceneColor", "Out", "", "", "Texture2D sltSceneColor"},
 		{"Input/SceneDepth", "Out", "Sampling Mode", "\"Raw\"", "Texture2D sltSceneDepth"},
 		{"Input/SampleBuffer", "Output", "Source Buffer", "\"NormalWorldSpace\"", "Texture2D sltSceneNormals"},
 		{"Input/SampleBuffer", "Output", "Source Buffer", "\"BlitSource\"", "Texture2D sltSceneColor"},
 	};
-	const std::string_view IMAGES[] = {"Texture2D sltSceneColor", "Texture2D sltSceneDepth", "Texture2D sltSceneNormals"};
+	const std::string_view images[] = {"Texture2D sltSceneColor", "Texture2D sltSceneDepth", "Texture2D sltSceneNormals"};
 	auto read = [](GraphBuilder& b, const Reader& reader) {
 		GraphNode& node = b.Node(20, reader.def);
 		if (!reader.key.empty()) {
@@ -179,12 +179,12 @@ TEST(NodeShaderFullscreenTest, ScenesImagesAreFullScreenDraws) {
 		}
 		Paint(b, 20, reader.port);
 	};
-	for (const Reader& reader : READERS) {
+	for (const Reader& reader : readers) {
 		FullscreenBuilder screen;
 		read(screen, reader);
 		const Generated drawn = GenerateFullscreen(screen.document);
 		ASSERT_TRUE(drawn.ok) << reader.def << " " << reader.value << ": " << drawn.First();
-		for (std::string_view image : IMAGES) {
+		for (std::string_view image : images) {
 			EXPECT_EQ(drawn.Says(image), image == reader.image) << reader.def << " " << reader.value << " and " << image;
 		}
 		EXPECT_TRUE(drawn.Says("SamplerState sltSceneSampler")) << reader.def;
@@ -221,12 +221,12 @@ TEST(NodeShaderFullscreenTest, TransparentSurfaceDeclaresSceneReads) {
 		const char* value;
 		const char* image;
 	};
-	const Reader READERS[] = {
+	const Reader readers[] = {
 		{"Input/SceneColor", "Out", "", "", "Texture2D sltSceneColor"},
 		{"Input/SceneDepth", "Out", "Sampling Mode", "\"Raw\"", "Texture2D sltSceneDepth"},
 		{"Input/SceneDepth", "Out", "Sampling Mode", "\"Eye\"", "Texture2D sltSceneDepth"},
 	};
-	for (const Reader& reader : READERS) {
+	for (const Reader& reader : readers) {
 		UnlitBuilder surface;
 		surface.Graph("blend", "\"alpha\"");
 		GraphNode& node = surface.Node(20, reader.def);
@@ -261,9 +261,9 @@ TEST(NodeShaderFullscreenTest, TransparentSurfaceDeclaresSceneReads) {
 }
 
 TEST(NodeShaderFullscreenTest, SampleBufferIsAsWideAsBuffer) {
-	const std::pair<std::string_view, GraphValueType> BUFFERS[] = {{"\"NormalWorldSpace\"", GraphValueType::Float3},
+	const std::pair<std::string_view, GraphValueType> buffers[] = {{"\"NormalWorldSpace\"", GraphValueType::Float3},
 																   {"\"BlitSource\"", GraphValueType::Float4}};
-	for (const auto& [buffer, type] : BUFFERS) {
+	for (const auto& [buffer, type] : buffers) {
 		DocumentBuilder b;
 		DocumentBuilder::Setting(b.Node(20, "Input/SampleBuffer"), "Source Buffer", buffer);
 		const Compiled compiled = Compile(b.document, {{20, "Output"}}, GraphStageFragment, GraphSurface::FullscreenBindings());
@@ -447,9 +447,9 @@ TEST_F(NodeShaderFullscreenFixture, AFullscreenGraphRowReadsSceneColor) {
 		const char* graph;
 		const char* material;
 	};
-	const Reader READERS[] = {{"Input/SceneColor", "Out", nullptr, "SceneColor.slshader", "SceneColor.mat"},
+	const Reader readers[] = {{"Input/SceneColor", "Out", nullptr, "SceneColor.slshader", "SceneColor.mat"},
 							  {"Input/SampleBuffer", "Output", "\"BlitSource\"", "BlitSource.slshader", "BlitSource.mat"}};
-	for (const Reader& reader : READERS) {
+	for (const Reader& reader : readers) {
 		FullscreenBuilder b;
 		GraphNode& read = b.Node(20, reader.def);
 		if (reader.buffer) {

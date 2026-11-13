@@ -1,7 +1,7 @@
 #pragma once
 
 #include "EffectDescription.h"
-#include "ParticleCpuSystem.h"
+#include "ParticleCPUSystem.h"
 #include "ParticleSimulation.h"
 
 #include "Shalltear/Core/Containers.h"
@@ -23,7 +23,7 @@ namespace Shalltear {
 
 		struct EffectSent {
 			u32 system = 0;
-			ParticleCpuEvent event;
+			ParticleCPUEvent event;
 		};
 
 		struct EffectFlowSent {
@@ -82,11 +82,11 @@ namespace Shalltear {
 			void TakeFlowSent(Vector<EffectFlowSent>& events);
 			const Handle<VisualEffectAsset>& GetAsset() const { return _asset; }
 
-			const ParticleCpuSystem* FindCpuSystem(std::string_view name, const EffectSystem*& described) const;
+			const ParticleCPUSystem* FindCPUSystem(std::string_view name, const EffectSystem*& described) const;
 
 			u32 GetSystemCount() const { return static_cast<u32>(_systems.size()); }
 			const ParticleSystem& GetSystem(u32 index) const { return *_systems[index]; }
-			const ParticleCpuSystem* GetCpuSystem(u32 index) const { return index < _cpu.size() ? _cpu[index] : nullptr; }
+			const ParticleCPUSystem* GetCPUSystem(u32 index) const { return index < _cpu.size() ? _cpu[index] : nullptr; }
 			f32 GetTime() const { return _time; }
 		private:
 			struct PendingEvent {
@@ -119,7 +119,7 @@ namespace Shalltear {
 			Handle<VisualEffectAsset> _asset;
 			u32 _generation = 0;
 			Vector<ParticleSystem*> _systems{GetMemoryResource(MemTag::Graphics)};
-			Vector<ParticleCpuSystem*> _cpu{GetMemoryResource(MemTag::Graphics)};
+			Vector<ParticleCPUSystem*> _cpu{GetMemoryResource(MemTag::Graphics)};
 			Vector<EffectSpawnerState> _spawners{GetMemoryResource(MemTag::Graphics)};
 			Vector<VisualEffectEventAttributes> _spawnerAttributes{GetMemoryResource(MemTag::Graphics)};
 			Vector<AABB> _bounds{GetMemoryResource(MemTag::Graphics)};

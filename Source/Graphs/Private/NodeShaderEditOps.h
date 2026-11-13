@@ -20,8 +20,8 @@ namespace Shalltear {
 
 	namespace NodeShaderEditOps {
 
-		inline constexpr std::string_view PROPERTY_SETTING = GRAPH_PROPERTY_SETTING;
-		inline constexpr std::string_view PROPERTY_NODE = GRAPH_PROPERTY_NODE;
+		inline constexpr std::string_view PropertySetting = GraphPropertySetting;
+		inline constexpr std::string_view PropertyNode = GraphPropertyNode;
 
 		SHALLTEAR_GRAPHS_API EditorTheme::ColorToken PortColor(GraphPortType type);
 

@@ -23,8 +23,8 @@ namespace Shalltear {
 
 	namespace GraphSpaces {
 
-		inline constexpr std::string_view NAMES[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld", "Screen"};
-		inline constexpr std::string_view CONVERSIONS[] = {"Position", "Direction", "Normal"};
+		inline constexpr std::string_view Names[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld", "Screen"};
+		inline constexpr std::string_view Conversions[] = {"Position", "Direction", "Normal"};
 
 		GraphValueId Transform(GraphBodyContext& context, GraphValueId in, GraphSpace from, GraphSpace to, GraphConversion type,
 							   bool normalize);

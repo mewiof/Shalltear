@@ -139,15 +139,15 @@ namespace Shalltear::GraphWindowParts {
 		case GraphPortType::Curve: {
 			value.kind = GraphInlineKind::Curve;
 			const GraphInput* stored = FindInput(node, port.name);
-			std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJson;
+			std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJSON;
 			str error;
-			GraphCurves::Parse(json.empty() ? GraphCurves::DEFAULT_JSON : json, value.curve, error);
+			GraphCurves::Parse(json.empty() ? GraphCurves::DefaultJSON : json, value.curve, error);
 			return value;
 		}
 		case GraphPortType::Gradient: {
 			value.kind = GraphInlineKind::Gradient;
 			const GraphInput* stored = FindInput(node, port.name);
-			const std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJson;
+			const std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJSON;
 			std::array<f32, GRAPH_GRADIENT_COMPONENTS> gradient{};
 			GraphGradients::Default(gradient);
 			str error;
@@ -448,7 +448,7 @@ namespace Shalltear::GraphWindowParts {
 				continue;
 			}
 			AddText(context, parent, ColorToken::Text, MetricToken::FontRow, GraphPortLabel(input));
-			const str json = held && !held->value.empty() ? held->value : str(input.defaultJson);
+			const str json = held && !held->value.empty() ? held->value : str(input.defaultJSON);
 			BuildGradientEditor(context, parent, json, [editor, id, port = str(input.name)](const str& gradient) {
 				editor.edit("Gradient", [&](GraphDocument& edited) { return NodeShaderEditOps::SetInputValue(edited, id, port, gradient); });
 			});
@@ -462,10 +462,10 @@ namespace Shalltear::GraphWindowParts {
 			return;
 		}
 		const GraphInput* stored = FindInput(*held, port.name);
-		std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJson;
+		std::string_view json = stored && !stored->value.empty() ? std::string_view(stored->value) : port.defaultJSON;
 		AnimationCurve curve(GetMemoryResource(MemTag::Editor));
 		str error;
-		if (!GraphCurves::Parse(json.empty() ? GraphCurves::DEFAULT_JSON : json, curve, error)) {
+		if (!GraphCurves::Parse(json.empty() ? GraphCurves::DefaultJSON : json, curve, error)) {
 			return;
 		}
 		CurveEditor::Open(
@@ -529,17 +529,17 @@ namespace Shalltear::GraphWindowParts {
 			out += "],\"mode\":" + Ops::Quote(gradient->mode) + "}";
 			commit(out);
 		};
-		static constexpr std::string_view MODES[] = {"Blend", "Fixed", "PerceptualBlend"};
+		static constexpr std::string_view Modes[] = {"Blend", "Fixed", "PerceptualBlend"};
 		UI::ElementHandle modeRow = AddField(context, parent, "Mode");
 		UI::Widgets::DropdownDesc mode;
-		mode.items = MODES;
-		for (u32 i = 0; i < std::size(MODES); ++i) {
-			mode.selected = MODES[i] == gradient->mode ? i : mode.selected;
+		mode.items = Modes;
+		for (u32 i = 0; i < std::size(Modes); ++i) {
+			mode.selected = Modes[i] == gradient->mode ? i : mode.selected;
 		}
 		mode.font = UISystem::GetDefaultFont();
 		mode.fontSizePx = FontRow();
 		mode.onSelect = [gradient, write](u32 index) {
-			gradient->mode = str(MODES[index % std::size(MODES)]);
+			gradient->mode = str(Modes[index % std::size(Modes)]);
 			write();
 		};
 		UI::Widgets::Dropdown(context, modeRow, mode);

@@ -83,9 +83,9 @@ namespace {
 		return {};
 	}
 
-	constexpr Color RED{1.0f, 0.0f, 0.0f, 1.0f};
-	constexpr Color BLUE{0.0f, 0.0f, 1.0f, 1.0f};
-	constexpr Color GREEN{0.0f, 1.0f, 0.0f, 1.0f};
+	constexpr Color Red{1.0f, 0.0f, 0.0f, 1.0f};
+	constexpr Color Blue{0.0f, 0.0f, 1.0f, 1.0f};
+	constexpr Color Green{0.0f, 1.0f, 0.0f, 1.0f};
 
 	class CameraViewportFixture : public ::testing::Test {
 	protected:
@@ -203,14 +203,14 @@ namespace {
 		void AddGreenSky() {
 			Handle<Environment> environment = SceneSystem::CreateObject("Environment", _scene)->AddComponent<Environment>();
 			environment->SetSkyMode(SkyMode::Color);
-			environment->SetSkyColor(GREEN);
+			environment->SetSkyColor(Green);
 		}
 
 		void ExpectSplitScreen() {
 			Handle<Window> window = HiddenWindow({256, 128});
 			ASSERT_TRUE(window.IsValid());
-			AddCamera("Left", RED, RectF(0.0f, 0.0f, 0.5f, 1.0f));
-			AddCamera("Right", BLUE, RectF(0.5f, 0.0f, 0.5f, 1.0f));
+			AddCamera("Left", Red, RectF(0.0f, 0.0f, 0.5f, 1.0f));
+			AddCamera("Right", Blue, RectF(0.5f, 0.0f, 0.5f, 1.0f));
 			RenderFrames();
 
 			const Radiance image = ReadWindow(window);
@@ -242,7 +242,7 @@ TEST_F(CameraViewportFixture, WindowCameraFitsCascadesToVisibleDepth) {
 	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
 	wall->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
 	SceneSystem::CreateObject("Sun", _scene)->AddComponent<Light>()->SetIntensity(2.0f);
-	Handle<Camera> camera = AddCamera("Camera", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	Handle<Camera> camera = AddCamera("Camera", Blue, RectF(0.0f, 0.0f, 1.0f, 1.0f));
 	camera->GetOwner()->SetLocalPosition(Vec3(0.0f, 2.0f, 0.0f));
 	camera->GetOwner()->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, 0.0f, 1.0f)));
 	Handle<Window> window = HiddenWindow({64, 64});
@@ -269,8 +269,8 @@ TEST_F(CameraViewportFixture, StoppedCameraDepthFitIsDropped) {
 	wall->SetLocalScale(Vec3(400.0f, 40.0f, 1.0f));
 	wall->AddComponent<MeshRenderer>()->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(meshAsset)));
 	SceneSystem::CreateObject("Sun", _scene)->AddComponent<Light>()->SetIntensity(2.0f);
-	Handle<Camera> stopped = AddCamera("Stopped", BLUE, RectF(0.0f, 0.0f, 0.5f, 1.0f));
-	Handle<Camera> running = AddCamera("Running", RED, RectF(0.5f, 0.0f, 0.5f, 1.0f));
+	Handle<Camera> stopped = AddCamera("Stopped", Blue, RectF(0.0f, 0.0f, 0.5f, 1.0f));
+	Handle<Camera> running = AddCamera("Running", Red, RectF(0.5f, 0.0f, 0.5f, 1.0f));
 	for (const Handle<Camera>& camera : {stopped, running}) {
 		camera->GetOwner()->SetLocalPosition(Vec3(0.0f, 2.0f, 0.0f));
 		camera->GetOwner()->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, 0.0f, 1.0f)));
@@ -315,7 +315,7 @@ TEST_F(CameraViewportFixture, AreaOutsideEveryRectIsBlack) {
 	}
 	Handle<Window> window = HiddenWindow({200, 100});
 	ASSERT_TRUE(window.IsValid());
-	Handle<Camera> camera = AddCamera("Preview", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	Handle<Camera> camera = AddCamera("Preview", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f));
 	RenderFrames();
 	ASSERT_TRUE(IsRed(ReadWindow(window).At(0, 50)));
 
@@ -336,8 +336,8 @@ TEST_F(CameraViewportFixture, HigherPriorityInsetReplacesItsRect) {
 	}
 	Handle<Window> window = HiddenWindow({200, 100});
 	ASSERT_TRUE(window.IsValid());
-	AddCamera("Inset", BLUE, RectF(0.5f, 0.5f, 0.5f, 0.5f), 1);
-	AddCamera("Main", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
+	AddCamera("Inset", Blue, RectF(0.5f, 0.5f, 0.5f, 0.5f), 1);
+	AddCamera("Main", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
 	RenderFrames();
 
 	const Radiance image = ReadWindow(window);
@@ -356,7 +356,7 @@ TEST_F(CameraViewportFixture, PartialRectCostsOneDraw) {
 	}
 	Handle<Window> window = HiddenWindow({128, 128});
 	ASSERT_TRUE(window.IsValid());
-	Handle<Camera> camera = AddCamera("Camera", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	Handle<Camera> camera = AddCamera("Camera", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f));
 	RenderFrames();
 	const u32 fullDraws = RenderSystem::GetStats().drawCalls;
 	ASSERT_GT(fullDraws, 0u);
@@ -377,7 +377,7 @@ TEST_F(CameraViewportFixture, EmptyRectDrawsNothing) {
 	}
 	Handle<Window> window = HiddenWindow({128, 128});
 	ASSERT_TRUE(window.IsValid());
-	AddCamera("Camera", RED, RectF(0.5f, 0.0f, 0.0f, 1.0f));
+	AddCamera("Camera", Red, RectF(0.5f, 0.0f, 0.0f, 1.0f));
 	RenderFrames();
 	EXPECT_EQ(RenderSystem::GetStats().drawCalls, 0u);
 }
@@ -450,8 +450,8 @@ TEST_F(CameraViewportFixture, SubmittedCamerasComposeIntoTarget) {
 	const ViewTargetId target = RenderSystem::CreateViewTarget({128, 64});
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
 	const Handle<Camera> cameras[] = {
-		AddCamera("Right", BLUE, RectF(0.5f, 0.0f, 0.5f, 1.0f), 1),
-		AddCamera("Left", RED, RectF(0.0f, 0.0f, 0.5f, 1.0f), 0),
+		AddCamera("Right", Blue, RectF(0.5f, 0.0f, 0.5f, 1.0f), 1),
+		AddCamera("Left", Red, RectF(0.0f, 0.0f, 0.5f, 1.0f), 0),
 	};
 	for (int frame = 0; frame < 3; ++frame) {
 		SceneSystem::EndFrame();
@@ -484,8 +484,8 @@ TEST_F(CameraViewportFixture, LatestSubmissionPerTargetRenders) {
 	RenderSystem::SetSceneCamerasRenderToWindows(false);
 	const ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
-	const Handle<Camera> red[] = {AddCamera("Red", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
-	const Handle<Camera> blue[] = {AddCamera("Blue", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
+	const Handle<Camera> red[] = {AddCamera("Red", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
+	const Handle<Camera> blue[] = {AddCamera("Blue", Blue, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
 	for (int frame = 0; frame < 3; ++frame) {
 		SceneSystem::EndFrame();
 		RenderSystem::SubmitCameras(target, blue);
@@ -520,7 +520,7 @@ TEST_F(CameraViewportFixture, SubmittedCameraDyingClearsTarget) {
 	RenderSystem::SetSceneCamerasRenderToWindows(false);
 	const ViewTargetId target = RenderSystem::CreateViewTarget({64, 64});
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
-	const Handle<Camera> cameras[] = {AddCamera("Doomed", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
+	const Handle<Camera> cameras[] = {AddCamera("Doomed", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f))};
 	auto renderFrames = [&]() {
 		for (int frame = 0; frame < 3; ++frame) {
 			SceneSystem::EndFrame();
@@ -554,7 +554,7 @@ TEST_F(CameraViewportFixture, SolidColorReplacesSky) {
 	Handle<Window> window = HiddenWindow({128, 64});
 	ASSERT_TRUE(window.IsValid());
 	AddGreenSky();
-	Handle<Camera> camera = AddCamera("Camera", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f));
+	Handle<Camera> camera = AddCamera("Camera", Blue, RectF(0.0f, 0.0f, 1.0f, 1.0f));
 	RenderFrames();
 	EXPECT_TRUE(IsGreen(ReadWindow(window).At(64, 32)));
 
@@ -575,9 +575,9 @@ TEST_F(CameraViewportFixture, StackedCameraDrawsNoBackground) {
 	Handle<Window> window = HiddenWindow({128, 64});
 	ASSERT_TRUE(window.IsValid());
 	AddGreenSky();
-	Handle<Camera> base = AddCamera("Base", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
+	Handle<Camera> base = AddCamera("Base", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
 	base->SetBackgroundType(BackgroundType::SolidColor);
-	AddCamera("Stacked", BLUE, RectF(0.0f, 0.0f, 1.0f, 1.0f), 1);
+	AddCamera("Stacked", Blue, RectF(0.0f, 0.0f, 1.0f, 1.0f), 1);
 	RenderFrames();
 	Radiance image = ReadWindow(window);
 	EXPECT_TRUE(IsRed(image.At(64, 32)));
@@ -597,9 +597,9 @@ TEST_F(CameraViewportFixture, InsetClearsByItsBackgroundType) {
 	Handle<Window> window = HiddenWindow({256, 128});
 	ASSERT_TRUE(window.IsValid());
 	AddGreenSky();
-	Handle<Camera> base = AddCamera("Base", RED, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
+	Handle<Camera> base = AddCamera("Base", Red, RectF(0.0f, 0.0f, 1.0f, 1.0f), 0);
 	base->SetBackgroundType(BackgroundType::SolidColor);
-	Handle<Camera> inset = AddCamera("Inset", BLUE, RectF(0.5f, 0.5f, 0.5f, 0.5f), 1);
+	Handle<Camera> inset = AddCamera("Inset", Blue, RectF(0.5f, 0.5f, 0.5f, 0.5f), 1);
 	RenderFrames();
 	Radiance image = ReadWindow(window);
 	EXPECT_TRUE(IsGreen(image.At(192, 32)));

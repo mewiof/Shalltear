@@ -8,7 +8,7 @@
 
 #include "AudioChannels.h"
 #include "AudioOpus.h"
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 namespace Shalltear {
 
@@ -17,8 +17,8 @@ namespace Shalltear {
 	namespace AudioImpl {
 
 		enum class AudioClipEncoding : u8 {
-			Pcm = 0,
-			Qoa,
+			PCM = 0,
+			QOA,
 			Generator,
 			Streamed,
 			Opus,
@@ -50,18 +50,18 @@ namespace Shalltear {
 		inline constexpr u32 CLIP_HEAD_FRAMES = 4;
 
 		struct AudioClipData {
-			AudioClipEncoding encoding = AudioClipEncoding::Pcm;
+			AudioClipEncoding encoding = AudioClipEncoding::PCM;
 			u32 sampleRate = 0;
 			u32 channels = 0;
 			u64 frames = 0;
 			ChannelLayout layout;
 
 			const f32* pcm = nullptr;
-			QoaStream qoa;
+			QOAStream qoa;
 			f32 head[CLIP_HEAD_FRAMES * MAX_AUDIO_CHANNELS]{};
 			AudioGeneratorStream* stream = nullptr;
 
-			AudioClipEncoding codec = AudioClipEncoding::Pcm;
+			AudioClipEncoding codec = AudioClipEncoding::PCM;
 			const f32* prime = nullptr;
 			u64 primeFrames = 0;
 			u32 chunkFrames = 0;
@@ -72,13 +72,13 @@ namespace Shalltear {
 			u64 payloadBytes = 0;
 		};
 
-		AudioClipData* CreatePcmClipData(const void* interleaved, u64 frames, const ChannelLayout& layout, u32 sampleRate);
+		AudioClipData* CreatePCMClipData(const void* interleaved, u64 frames, const ChannelLayout& layout, u32 sampleRate);
 
-		AudioClipData* CreateQoaClipData(const u8* bytes, u64 size, const ChannelLayout& layout);
+		AudioClipData* CreateQOAClipData(const u8* bytes, u64 size, const ChannelLayout& layout);
 
 		AudioClipData* CreateOpusClipData(const u8* bytes, u64 size, const ChannelLayout& layout, u64 frames);
 
-		AudioClipData* DecodeToPcm(const AudioClipData& source);
+		AudioClipData* DecodeToPCM(const AudioClipData& source);
 
 		AudioClipData* CreateStreamedClipData(AudioClipEncoding codec, const u8* bytes, u64 size, const ChannelLayout& layout, u32 sampleRate,
 											  u64 frames, u32 primeFrames);

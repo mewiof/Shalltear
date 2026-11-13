@@ -1257,7 +1257,7 @@ TEST_F(ShaderDropdownFixture, TextureSlotTakesOnlyTextureOfDimension) {
 		GTEST_SKIP() << "shader didn't compile (no dxcompiler.dll?)";
 	}
 	const u8 red[4] = {255, 0, 0, 255};
-	TestImages::WriteTga(_project / "Assets" / "Flat.tga", red);
+	TestImages::WriteTGA(_project / "Assets" / "Flat.tga", red);
 	TestImages::WriteFlipbook(_project / "Assets" / "Flip.tga");
 	const Guid flat = AssetDatabase::EnsureAssetIdentity(Path("project://Assets/Flat.tga"));
 	const Guid flip = AssetDatabase::EnsureAssetIdentity(Path("project://Assets/Flip.tga"));
@@ -1337,7 +1337,7 @@ TEST_F(ShaderDropdownFixture, DroppedTextureIsHeld) {
 		GTEST_SKIP() << "shader didn't compile (no dxcompiler.dll?)";
 	}
 	const u8 red[4] = {255, 0, 0, 255};
-	TestImages::WriteTga(_project / "Assets" / "Red.tga", red);
+	TestImages::WriteTGA(_project / "Assets" / "Red.tga", red);
 	const Guid texture = AssetDatabase::EnsureAssetIdentity(Path("project://Assets/Red.tga"));
 	ASSERT_TRUE(texture.IsValid());
 	FileSystem::WriteTextFile(FileSystem::Resolve(Path("project://Assets/Flat.mat")),
@@ -1402,7 +1402,7 @@ TEST_F(ShaderDropdownFixture, DroppedTextureIsHeld) {
 
 namespace {
 
-	constexpr std::string_view NORMAL_WARNING = "Texture not imported as a normal map";
+	constexpr std::string_view NormalWarning = "Texture not imported as a normal map";
 
 	UI::ElementHandle ParentOf(UI::Context& context, UI::ElementHandle element) {
 		const UI::Element* found = context.GetElement(element);
@@ -1410,7 +1410,7 @@ namespace {
 	}
 
 	bool NormalWarningShown(UI::Context& context, UI::ElementHandle root) {
-		const UI::ElementHandle row = ParentOf(context, UITest::FindByText(context, root, NORMAL_WARNING));
+		const UI::ElementHandle row = ParentOf(context, UITest::FindByText(context, root, NormalWarning));
 		return context.IsAlive(row) && context.GetStyle(row).display != UI::Display::None;
 	}
 
@@ -1427,7 +1427,7 @@ namespace {
 				return;
 			}
 			const u8 red[4] = {255, 0, 0, 255};
-			TestImages::WriteTga(_project / "Assets" / "Bumps.tga", red);
+			TestImages::WriteTGA(_project / "Assets" / "Bumps.tga", red);
 			_texture = AssetDatabase::EnsureAssetIdentity(_texturePath);
 			ASSERT_TRUE(_texture.IsValid());
 			JSONValue settings = JSONValue::MakeObject();
@@ -1538,7 +1538,7 @@ TEST_F(NormalMapFixFixture, NormalWarningOnlyUnderNormalSlot) {
 	BuildInspector(plainContext, plainRoot, Material());
 	PropertyDrawers::RefreshRows(plainContext);
 	EXPECT_TRUE(plainContext.IsAlive(UITest::FindByText(plainContext, plainRoot, "Bumps.tga")));
-	EXPECT_FALSE(plainContext.IsAlive(UITest::FindByText(plainContext, plainRoot, NORMAL_WARNING)));
+	EXPECT_FALSE(plainContext.IsAlive(UITest::FindByText(plainContext, plainRoot, NormalWarning)));
 
 	Material().shader = Handle<ShaderAsset>(&_shader);
 	UI::Context context(desc, UISystem::GetFontSystem());

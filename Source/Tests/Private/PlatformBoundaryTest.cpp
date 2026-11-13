@@ -12,7 +12,7 @@
 
 namespace {
 
-	constexpr std::string_view PLATFORM_TOKENS[] = {
+	constexpr std::string_view PlatformTokens[] = {
 		"_WIN32",
 		"_WIN64",
 		"__linux__",
@@ -22,7 +22,7 @@ namespace {
 		"SLT_PLATFORM_",
 	};
 
-	constexpr std::string_view SYSTEM_HEADERS[] = {
+	constexpr std::string_view SystemHeaders[] = {
 		"<windows.h>",
 		"<Windows.h>",
 		"<windowsx.h>",
@@ -41,7 +41,7 @@ namespace {
 		"<xkbcommon/",
 	};
 
-	constexpr std::string_view DECLARING_FILES[] = {
+	constexpr std::string_view DeclaringFiles[] = {
 		"Core/Public/Shalltear/Core/Platform.h",
 		"Core/Public/Shalltear/Core/Export.h",
 		"Core/Public/Shalltear/Core/Module/ModuleAPI.h",
@@ -54,14 +54,14 @@ namespace {
 	}
 
 	bool NamesPlatform(std::string_view text) {
-		for (std::string_view token : PLATFORM_TOKENS) {
+		for (std::string_view token : PlatformTokens) {
 			for (size_t at = text.find(token); at != std::string_view::npos; at = text.find(token, at + 1)) {
 				if (at == 0 || !IsIdentifierChar(text[at - 1])) {
 					return true;
 				}
 			}
 		}
-		for (std::string_view header : SYSTEM_HEADERS) {
+		for (std::string_view header : SystemHeaders) {
 			if (text.find(header) != std::string_view::npos) {
 				return true;
 			}
@@ -70,9 +70,9 @@ namespace {
 	}
 
 	bool IsPlatformFamilyFile(std::string_view relative) {
-		constexpr std::string_view MARKER = "/Private/Platform/";
-		const size_t at = relative.find(MARKER);
-		return at != std::string_view::npos && relative.find('/', at + MARKER.size()) != std::string_view::npos;
+		constexpr std::string_view Marker = "/Private/Platform/";
+		const size_t at = relative.find(Marker);
+		return at != std::string_view::npos && relative.find('/', at + Marker.size()) != std::string_view::npos;
 	}
 
 	bool IsExempt(std::string_view relative) {
@@ -80,7 +80,7 @@ namespace {
 			relative.ends_with("/stb_image.h") || IsPlatformFamilyFile(relative)) {
 			return true;
 		}
-		for (std::string_view file : DECLARING_FILES) {
+		for (std::string_view file : DeclaringFiles) {
 			if (relative == file) {
 				return true;
 			}
@@ -228,12 +228,12 @@ TEST(PlatformBoundaryTest, SharedSourcesNameNoPlatform) {
 }
 
 TEST(PlatformBoundaryTest, CastTargetReaderFindsKeyFunction) {
-	constexpr std::string_view KEYED = "\tclass SHALLTEAR_CORE_API Probe : public Base {\n"
+	constexpr std::string_view Keyed = "\tclass SHALLTEAR_CORE_API Probe : public Base {\n"
 									   "\tpublic:\n"
 									   "\t\tvoid Plain();\n"
 									   "\t\t~Probe() override;\n"
 									   "\t};\n";
-	constexpr std::string_view INLINE = "\tclass Probe {\n"
+	constexpr std::string_view Inline = "\tclass Probe {\n"
 										"\tpublic:\n"
 										"\t\tvirtual ~Probe() = default;\n"
 										"\t\tvirtual void On() { }\n"
@@ -243,28 +243,28 @@ TEST(PlatformBoundaryTest, CastTargetReaderFindsKeyFunction) {
 										"\t\tvirtual ~Other();\n"
 										"\t};\n";
 
-	const CastTarget keyed = ReadCastTarget(KEYED, "Probe");
+	const CastTarget keyed = ReadCastTarget(Keyed, "Probe");
 	EXPECT_TRUE(keyed.declared);
 	EXPECT_TRUE(keyed.exported);
 	EXPECT_TRUE(keyed.keyed);
 
-	const CastTarget inlined = ReadCastTarget(INLINE, "Probe");
+	const CastTarget inlined = ReadCastTarget(Inline, "Probe");
 	EXPECT_TRUE(inlined.declared);
 	EXPECT_FALSE(inlined.exported);
 	EXPECT_FALSE(inlined.keyed);
 
-	EXPECT_FALSE(ReadCastTarget(KEYED, "Prob").declared);
+	EXPECT_FALSE(ReadCastTarget(Keyed, "Prob").declared);
 	EXPECT_FALSE(ReadCastTarget("\tclass Probe;\n", "Probe").declared);
 
-	constexpr std::string_view CAST = "dynamic_cast<const Shalltear::Probe*>(component)";
-	EXPECT_EQ(CastTargetName(CAST, CAST.find('<') + 1), "Probe");
+	constexpr std::string_view Cast = "dynamic_cast<const Shalltear::Probe*>(component)";
+	EXPECT_EQ(CastTargetName(Cast, Cast.find('<') + 1), "Probe");
 }
 
 TEST(PlatformBoundaryTest, PublicCastTargetsHaveKeyFunction) {
 	const std::filesystem::path source = Checkout::Find("Source");
 	ASSERT_FALSE(source.empty());
 
-	constexpr std::string_view CAST = "dynamic_cast<";
+	constexpr std::string_view Cast = "dynamic_cast<";
 	std::vector<std::string> publicHeaders;
 	std::set<std::string> names;
 	std::error_code ec;
@@ -277,8 +277,8 @@ TEST(PlatformBoundaryTest, PublicCastTargetsHaveKeyFunction) {
 			continue;
 		}
 		std::string text = ReadAll(entry.path());
-		for (size_t at = text.find(CAST); at != std::string::npos; at = text.find(CAST, at + 1)) {
-			names.emplace(CastTargetName(text, at + CAST.size()));
+		for (size_t at = text.find(Cast); at != std::string::npos; at = text.find(Cast, at + 1)) {
+			names.emplace(CastTargetName(text, at + Cast.size()));
 		}
 		if (relative.find("/Public/") != std::string::npos) {
 			publicHeaders.push_back(std::move(text));

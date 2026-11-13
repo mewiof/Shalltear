@@ -51,7 +51,7 @@ namespace Shalltear::AudioEditor {
 			ColorToken color;
 			f32 top;
 		};
-		constexpr std::array<CurveFacts, CURVE_COUNT> CURVES{{
+		constexpr std::array<CurveFacts, CURVE_COUNT> Curves{{
 			{"Volume", ColorToken::AudioCurveVolume, 1.0f},
 			{"Spatial Blend", ColorToken::AudioCurveSpatialBlend, 1.0f},
 			{"Spread", ColorToken::AudioCurveSpread, 1.0f},
@@ -431,7 +431,7 @@ namespace Shalltear::AudioEditor {
 			const f32 stride = 2.0f * plot.scale;
 			const auto drawCurve = [&](u32 index) {
 				const AnimationCurve& curve = graph.shown[index];
-				const Color color = EditorTheme::GetColor(CURVES[index].color);
+				const Color color = EditorTheme::GetColor(Curves[index].color);
 				Vec2 previous(plot.x, plot.Y(curve.Evaluate(0.0f)));
 				for (f32 x = plot.x + stride; x <= plot.x + plot.w + 0.5f * stride; x += stride) {
 					const f32 clamped = Math::Min(x, plot.x + plot.w);
@@ -660,7 +660,7 @@ namespace Shalltear::AudioEditor {
 				}
 				UI::Style swatch = context.GetStyle(graph.swatches[index]);
 				const bool off = (graph.hidden & (1u << index)) != 0;
-				const Color fill = EditorTheme::GetColor(off ? ColorToken::GridLine : CURVES[index].color);
+				const Color fill = EditorTheme::GetColor(off ? ColorToken::GridLine : Curves[index].color);
 				if (swatch.background.type != UI::BrushType::Solid || !(swatch.background.solid == fill)) {
 					swatch.background = UI::Brush::SolidColor(fill);
 					context.SetStyle(graph.swatches[index], swatch);
@@ -764,7 +764,7 @@ namespace Shalltear::AudioEditor {
 				const u32 index = static_cast<u32>(graph->curve);
 				if (graph->grab == Grab::Key) {
 					const f32 share = Math::Clamp(area.Share(point.x), 0.0f, 1.0f);
-					const f32 value = Math::Clamp(area.Value(point.y), 0.0f, CURVES[index].top);
+					const f32 value = Math::Clamp(area.Value(point.y), 0.0f, Curves[index].top);
 					graph->key = AnimationCurveOps::MoveKey(graph->working, graph->key, share, value);
 				} else {
 					if (graph->key < 0 || static_cast<size_t>(graph->key) >= graph->working.keys.size()) {
@@ -835,10 +835,10 @@ namespace Shalltear::AudioEditor {
 				swatchStyle.height = UI::Length::Pixel(KEY_SIZE + 2.0f);
 				swatchStyle.alignSelf = UI::Align::Center;
 				swatchStyle.margin = {0.0f, 0.0f, 0.0f, 3.0f};
-				swatchStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(CURVES[index].color));
+				swatchStyle.background = UI::Brush::SolidColor(EditorTheme::GetColor(Curves[index].color));
 				context.SetStyle(swatch, swatchStyle);
 				context.SetHoverable(swatch, false);
-				UI::ElementHandle name = AddText(context, entry, CURVES[index].label, ColorToken::Text);
+				UI::ElementHandle name = AddText(context, entry, Curves[index].label, ColorToken::Text);
 				UI::Style nameStyle;
 				nameStyle.textAlign = UI::Align::Center;
 				context.SetStyle(name, nameStyle);

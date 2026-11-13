@@ -257,12 +257,12 @@ namespace Shalltear {
 		shading.onSelect = [this](u32 index) { shadingMode = static_cast<i32>(index); };
 		PinSize(context, UI::Widgets::Dropdown(context, bar, shading).root);
 
-		static constexpr std::string_view CASCADE_FIT_ROWS[] = {
+		static constexpr std::string_view CascadeFitRows[] = {
 			"Cascade Fit: Off", "Cascade Fit: All",
 			"Cascade Fit: 0", "Cascade Fit: 1", "Cascade Fit: 2", "Cascade Fit: 3"};
-		static_assert(std::size(CASCADE_FIT_ROWS) == MAX_SHADOW_CASCADES + 2, "off, all, 1 row per cascade");
+		static_assert(std::size(CascadeFitRows) == MAX_SHADOW_CASCADES + 2, "off, all, 1 row per cascade");
 		UI::Widgets::DropdownDesc cascadeFit;
-		cascadeFit.items = {CASCADE_FIT_ROWS, std::size(CASCADE_FIT_ROWS)};
+		cascadeFit.items = {CascadeFitRows, std::size(CascadeFitRows)};
 		cascadeFit.selected = CascadeFitRow();
 		cascadeFit.font = font;
 		cascadeFit.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
@@ -272,12 +272,12 @@ namespace Shalltear {
 		};
 		PinSize(context, UI::Widgets::Dropdown(context, bar, cascadeFit).root);
 
-		static constexpr std::string_view ATLAS_OVERLAY_ROWS[] = {
+		static constexpr std::string_view AtlasOverlayRows[] = {
 			"Atlas: Off", "Atlas: Directional", "Atlas: Punctual"};
-		static_assert(std::size(ATLAS_OVERLAY_ROWS) == static_cast<size_t>(DebugOverlay::PunctualAtlas) + 1,
+		static_assert(std::size(AtlasOverlayRows) == static_cast<size_t>(DebugOverlay::PunctualAtlas) + 1,
 					  "1 row per DebugOverlay value, in its order");
 		UI::Widgets::DropdownDesc atlas;
-		atlas.items = {ATLAS_OVERLAY_ROWS, std::size(ATLAS_OVERLAY_ROWS)};
+		atlas.items = {AtlasOverlayRows, std::size(AtlasOverlayRows)};
 		atlas.selected = static_cast<u32>(ClampedAtlasOverlay());
 		atlas.font = font;
 		atlas.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);
@@ -588,7 +588,7 @@ namespace Shalltear {
 		context.SetTooltip(_orientationCanvas,
 						   "Click an axis to look along it, right-click for the views, Shift+click to return to the default angle");
 
-		static constexpr std::string_view LETTERS[3] = {"X", "Y", "Z"};
+		static constexpr std::string_view Letters[3] = {"X", "Y", "Z"};
 		for (u32 i = 0; i < 3; ++i) {
 			UI::ElementHandle label = context.CreateElement();
 			context.AppendChild(_orientationCanvas, label);
@@ -600,7 +600,7 @@ namespace Shalltear {
 			context.SetStyle(label, labelStyle);
 			context.SetHoverable(label, false);
 			context.SetText(label, font, EditorTheme::GetMetric(MetricToken::FontTiny),
-							EditorTheme::GetColor(ColorToken::TextStrong), LETTERS[i]);
+							EditorTheme::GetColor(ColorToken::TextStrong), Letters[i]);
 			_orientationLabels[i] = label;
 		}
 
@@ -760,7 +760,7 @@ namespace Shalltear {
 			std::string_view label;
 			Vec3 axis;
 		};
-		static constexpr View VIEWS[] = {
+		static constexpr View Views[] = {
 			{"Top", Vec3(0.0f, 1.0f, 0.0f)},
 			{"Bottom", Vec3(0.0f, -1.0f, 0.0f)},
 			{"Left", Vec3(-1.0f, 0.0f, 0.0f)},
@@ -773,10 +773,10 @@ namespace Shalltear {
 		free.label = "Free";
 		free.onSelect = [this]() { ResetViewAngle(); };
 		items.push_back(std::move(free));
-		for (const View& view : VIEWS) {
+		for (const View& view : Views) {
 			UI::Widgets::MenuItem item;
 			item.label = view.label;
-			item.separatorBefore = &view == &VIEWS[0];
+			item.separatorBefore = &view == &Views[0];
 			item.onSelect = [this, axis = view.axis]() { SnapViewToAxis(axis); };
 			items.push_back(std::move(item));
 		}

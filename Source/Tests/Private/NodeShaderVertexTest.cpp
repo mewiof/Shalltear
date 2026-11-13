@@ -74,7 +74,7 @@ namespace {
 	}
 
 	GraphNode& Reader(GraphBuilder& b, u32 id, std::string_view name, std::string_view type = "Vector4") {
-		GraphNode& node = b.Node(id, Stack::INTERPOLATOR_NODE);
+		GraphNode& node = b.Node(id, Stack::InterpolatorNode);
 		DocumentBuilder::Setting(node, "Interpolator", Ops::Quote(name));
 		DocumentBuilder::Setting(node, "Type", Ops::Quote(type));
 		return node;
@@ -281,15 +281,15 @@ TEST(NodeShaderVertexTest, VertexStackOrderAndNames) {
 	Stack::MissingBlocks(b.document, 1, missing);
 	ASSERT_EQ(missing.size(), 2u);
 	EXPECT_EQ(missing[0], "Block/Normal");
-	EXPECT_EQ(missing[1], GraphSurface::INTERPOLATOR_BLOCK);
+	EXPECT_EQ(missing[1], GraphSurface::InterpolatorBlock);
 
 	const u32 normal = Stack::AddBlock(b.document, 1, "Block/Normal");
 	ASSERT_NE(normal, 0u);
 	ASSERT_EQ(VertexOf(b).blocks.size(), 3u);
 	EXPECT_EQ(VertexOf(b).blocks[1].id, normal);
 
-	const u32 first = Stack::AddBlock(b.document, 1, GraphSurface::INTERPOLATOR_BLOCK);
-	const u32 second = Stack::AddBlock(b.document, 1, GraphSurface::INTERPOLATOR_BLOCK);
+	const u32 first = Stack::AddBlock(b.document, 1, GraphSurface::InterpolatorBlock);
+	const u32 second = Stack::AddBlock(b.document, 1, GraphSurface::InterpolatorBlock);
 	ASSERT_NE(first, 0u);
 	ASSERT_NE(second, 0u);
 	EXPECT_EQ(VertexOf(b).blocks.back().id, second);
@@ -300,7 +300,7 @@ TEST(NodeShaderVertexTest, VertexStackOrderAndNames) {
 	const u32 other = Stack::AddInterpolatorNode(b.document, second, {0.0f, 0.0f});
 	EXPECT_EQ(Stack::InterpolatorOf(b.document, reader), first);
 	EXPECT_EQ(Stack::InterpolatorOf(b.document, other), second);
-	EXPECT_EQ(Stack::AddBlock(b.document, 10, GraphSurface::INTERPOLATOR_BLOCK), 0u);
+	EXPECT_EQ(Stack::AddBlock(b.document, 10, GraphSurface::InterpolatorBlock), 0u);
 }
 
 TEST(NodeShaderVertexTest, InterpolatorsReadersFollowRenameAndWidth) {

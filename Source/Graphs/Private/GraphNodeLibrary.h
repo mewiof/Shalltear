@@ -43,14 +43,14 @@ namespace Shalltear {
 		Matrix
 	};
 
-	inline constexpr std::string_view GRAPH_FOREIGN_SPACE_ROWS[] = {"Space/Foreign/X", "Space/Foreign/Y", "Space/Foreign/Z"};
-	inline constexpr std::string_view GRAPH_SPACE_WORLD = "World";
+	inline constexpr std::string_view GraphForeignSpaceRows[] = {"Space/Foreign/X", "Space/Foreign/Y", "Space/Foreign/Z"};
+	inline constexpr std::string_view GraphSpaceWorld = "World";
 
-	inline constexpr std::string_view GRAPH_INTERPOLATOR_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4"};
-	inline constexpr std::string_view GRAPH_INTERPOLATOR_MODES[] = {"Linear", "NoPerspective", "NoInterpolation"};
+	inline constexpr std::string_view GraphInterpolatorTypes[] = {"Float", "Vector2", "Vector3", "Vector4"};
+	inline constexpr std::string_view GraphInterpolatorModes[] = {"Linear", "NoPerspective", "NoInterpolation"};
 
-	inline constexpr std::string_view GRAPH_PROPERTY_NODE = "Input/Property";
-	inline constexpr std::string_view GRAPH_PROPERTY_SETTING = "property";
+	inline constexpr std::string_view GraphPropertyNode = "Input/Property";
+	inline constexpr std::string_view GraphPropertySetting = "property";
 
 	struct GraphPortDefinition {
 		std::string_view name;
@@ -66,7 +66,7 @@ namespace Shalltear {
 		std::string_view label;
 		std::string_view customBinding;
 		std::string_view keyword;
-		std::string_view defaultJson;
+		std::string_view defaultJSON;
 		GraphPortSpace space = GraphPortSpace::None;
 	};
 

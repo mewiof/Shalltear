@@ -26,10 +26,10 @@ namespace Shalltear {
 
 namespace Shalltear::AudioEditor {
 
-	inline constexpr std::string_view PREFERENCES = "Editor/Audio";
+	inline constexpr std::string_view PreferencesCategory = "Editor/Audio";
 
 	inline AudioEditorPreferences* Preferences() {
-		return Settings::DeclareCategory<AudioEditorPreferences>(PREFERENCES, SettingScope::User);
+		return Settings::DeclareCategory<AudioEditorPreferences>(PreferencesCategory, SettingScope::User);
 	}
 
 } // namespace Shalltear::AudioEditor

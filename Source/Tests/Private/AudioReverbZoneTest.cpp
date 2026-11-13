@@ -115,7 +115,7 @@ TEST(AudioReverbZoneMathTest, ZoneMixLinearThen10DbMore) {
 TEST(AudioVoiceSendTest, SendAddsSoundAtLevel) {
 	OfflineMixer mixer;
 	const OfflineBus returned = mixer.Bus(1);
-	ClipBlock clip(MakePcm(std::vector<f32>(48000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(std::vector<f32>(48000, 0.5f), 1, 48000));
 	const auto level = [&mixer]() {
 		mixer.Render(OfflineMixer::BLOCK);
 		return At(mixer.Render(OfflineMixer::BLOCK), mixer.GetChannels(), OfflineMixer::BLOCK - 1);

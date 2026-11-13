@@ -4,7 +4,7 @@
 
 #include "AudioOfflineMixer.h"
 
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 #include "ThirdParty/qoa.h"
 
@@ -14,7 +14,7 @@
 
 using namespace AudioTesting;
 
-extern "C" void SltAudioQoaFree(void* block);
+extern "C" void SltAudioQOAFree(void* block);
 
 namespace {
 
@@ -45,7 +45,7 @@ namespace {
 TEST(AudioMixTest, UnpitchedVoiceIsBitExact) {
 	OfflineMixer mixer;
 	const std::vector<f32> samples = StereoNoise(500, 11);
-	ClipBlock clip(MakePcm(samples, 2, 48000));
+	ClipBlock clip(MakePCM(samples, 2, 48000));
 	ASSERT_TRUE(clip);
 
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, clip.Get())));
@@ -69,7 +69,7 @@ TEST(AudioMixTest, UnpitchedVoiceIsBitExact) {
 TEST(AudioMixTest, MonoIsMinus3DbEachSide) {
 	OfflineMixer mixer;
 	const std::vector<f32> samples = Counter(256);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, clip.Get())));
 	const std::vector<f32> out = mixer.Render(BLOCK);
 	const f32 fold = std::sqrt(0.5f);
@@ -85,7 +85,7 @@ TEST(AudioMixTest, OtherRateKeepsPitchAndDuration) {
 	for (u32 frame = 0; frame < 2400; ++frame) {
 		samples[frame] = 0.5f * static_cast<f32>(std::sin(2.0 * 3.14159265358979 * 1000.0 * static_cast<f64>(frame) / 24000.0));
 	}
-	ClipBlock clip(MakePcm(samples, 1, 24000));
+	ClipBlock clip(MakePCM(samples, 1, 24000));
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, clip.Get())));
 	const std::vector<f32> out = mixer.Render(20 * BLOCK);
 
@@ -106,7 +106,7 @@ TEST(AudioMixTest, OtherRateKeepsPitchAndDuration) {
 TEST(AudioMixTest, ALoopingVoiceWrapsSeamlessly) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(100);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(play));
@@ -120,7 +120,7 @@ TEST(AudioMixTest, ALoopingVoiceWrapsSeamlessly) {
 TEST(AudioMixTest, PauseAndResumeFade) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(5000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	const AudioCommand play = mixer.Play(0, clip.Get());
 	ASSERT_TRUE(mixer.Push(play));
 	mixer.Render(BLOCK);
@@ -151,7 +151,7 @@ TEST(AudioMixTest, PauseAndResumeFade) {
 
 TEST(AudioMixTest, StopFadesOverOneBlock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(1000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(1000, 0.5f), 1, 48000));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(play));
@@ -172,7 +172,7 @@ TEST(AudioMixTest, StopFadesOverOneBlock) {
 
 TEST(AudioMixTest, VolumeRampsAcrossBlock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(1000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(1000, 0.5f), 1, 48000));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(play));
@@ -191,8 +191,8 @@ TEST(AudioMixTest, VolumeRampsAcrossBlock) {
 
 TEST(AudioMixTest, ListenerGateSilencesKeepsTime) {
 	OfflineMixer mixer(1, 48000, false);
-	ClipBlock loop(MakePcm(Constant(1000, 0.5f), 1, 48000));
-	ClipBlock shortClip(MakePcm(Constant(300, 0.25f), 1, 48000));
+	ClipBlock loop(MakePCM(Constant(1000, 0.5f), 1, 48000));
+	ClipBlock shortClip(MakePCM(Constant(300, 0.25f), 1, 48000));
 	AudioCommand looping = mixer.Play(0, loop.Get());
 	looping.loop = true;
 	ASSERT_TRUE(mixer.Push(looping));
@@ -218,8 +218,8 @@ TEST(AudioMixTest, ListenerGateSilencesKeepsTime) {
 TEST(AudioMixTest, TwoVoicesSum) {
 	const std::vector<f32> a = StereoNoise(700, 1);
 	const std::vector<f32> b = StereoNoise(900, 2);
-	ClipBlock clipA(MakePcm(a, 2, 48000));
-	ClipBlock clipB(MakePcm(b, 2, 48000));
+	ClipBlock clipA(MakePCM(a, 2, 48000));
+	ClipBlock clipB(MakePCM(b, 2, 48000));
 
 	auto render = [](std::initializer_list<const AudioClipData*> clips) {
 		OfflineMixer mixer;
@@ -252,10 +252,10 @@ TEST(AudioMixTest, CompressedVoiceMatchesDecode) {
 	unsigned int size = 0;
 	void* bytes = qoa_encode(signal.data(), &description, &size);
 	ASSERT_NE(bytes, nullptr);
-	ClipBlock compressed(CreateQoaClipData(static_cast<const u8*>(bytes), size, MakeStandardLayout(2)));
-	SltAudioQoaFree(bytes);
+	ClipBlock compressed(CreateQOAClipData(static_cast<const u8*>(bytes), size, MakeStandardLayout(2)));
+	SltAudioQOAFree(bytes);
 	ASSERT_TRUE(compressed);
-	ClipBlock decoded(DecodeToPcm(*compressed.Get()));
+	ClipBlock decoded(DecodeToPCM(*compressed.Get()));
 	ASSERT_TRUE(decoded);
 
 	for (f32 pitch : {1.0f, 0.73f, 1.91f}) {
@@ -283,7 +283,7 @@ TEST(AudioMixTest, CompressedVoiceMatchesDecode) {
 TEST(AudioMixTest, ASeekContinuesFromTheFrameAsked) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(8000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	const AudioCommand play = mixer.Play(0, clip.Get());
 	ASSERT_TRUE(mixer.Push(play));
 	mixer.Render(BLOCK);
@@ -299,8 +299,8 @@ TEST(AudioMixTest, ASeekContinuesFromTheFrameAsked) {
 
 TEST(AudioMixTest, EndedVoiceCommandSkipsNextOccupant) {
 	OfflineMixer mixer(1);
-	ClipBlock first(MakePcm(Constant(100, 0.25f), 1, 48000));
-	ClipBlock second(MakePcm(Constant(1000, 0.5f), 1, 48000));
+	ClipBlock first(MakePCM(Constant(100, 0.25f), 1, 48000));
+	ClipBlock second(MakePCM(Constant(1000, 0.5f), 1, 48000));
 	const AudioCommand playFirst = mixer.Play(0, first.Get());
 	ASSERT_TRUE(mixer.Push(playFirst));
 	mixer.Render(BLOCK);
@@ -320,7 +320,7 @@ TEST(AudioMixTest, EndedVoiceCommandSkipsNextOccupant) {
 TEST(AudioMixTest, ANegativePitchPlaysTheClipBackwards) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(600);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	AudioCommand play = mixer.Play(0, clip.Get(), 0, 599);
 	play.pitch = -1.0f;
 	ASSERT_TRUE(mixer.Push(play));
@@ -335,7 +335,7 @@ TEST(AudioMixTest, ANegativePitchPlaysTheClipBackwards) {
 TEST(AudioMixTest, ReopenedDeviceContinuesVoices) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(4000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	ASSERT_TRUE(mixer.Push(mixer.Play(0, clip.Get())));
 	mixer.Render(BLOCK);
 
@@ -351,7 +351,7 @@ TEST(AudioMixTest, ReopenedDeviceContinuesVoices) {
 TEST(AudioMixTest, GainOneBusesAreBitExact) {
 	OfflineMixer mixer;
 	const std::vector<f32> samples = StereoNoise(700, 5);
-	ClipBlock clip(MakePcm(samples, 2, 48000));
+	ClipBlock clip(MakePCM(samples, 2, 48000));
 	const OfflineBus outer = mixer.Bus(3);
 	const OfflineBus inner = mixer.Bus(7, outer);
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, clip.Get()), inner)));
@@ -363,7 +363,7 @@ TEST(AudioMixTest, GainOneBusesAreBitExact) {
 
 TEST(AudioMixTest, BusFaderRampsOneBlock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4000, 0.5f), 1, 48000));
 	const OfflineBus bus = mixer.Bus(1);
 	AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), bus);
 	play.loop = true;
@@ -386,9 +386,9 @@ TEST(AudioMixTest, BusesSumFadersMultiply) {
 	const std::vector<f32> a = StereoNoise(900, 21);
 	const std::vector<f32> b = StereoNoise(900, 22);
 	const std::vector<f32> c = StereoNoise(900, 23);
-	ClipBlock clipA(MakePcm(a, 2, 48000));
-	ClipBlock clipB(MakePcm(b, 2, 48000));
-	ClipBlock clipC(MakePcm(c, 2, 48000));
+	ClipBlock clipA(MakePCM(a, 2, 48000));
+	ClipBlock clipB(MakePCM(b, 2, 48000));
+	ClipBlock clipC(MakePCM(c, 2, 48000));
 	const OfflineBus left = mixer.Bus(1, {}, 0.5f);
 	const OfflineBus right = mixer.Bus(2, {}, 0.25f);
 	const OfflineBus inside = mixer.Bus(3, left, 0.5f);
@@ -407,7 +407,7 @@ TEST(AudioMixTest, BusesSumFadersMultiply) {
 TEST(AudioMixTest, PostFaderSendCarriesFader) {
 	for (const bool preFader : {false, true}) {
 		OfflineMixer mixer(1);
-		ClipBlock clip(MakePcm(Constant(2000, 0.5f), 1, 48000));
+		ClipBlock clip(MakePCM(Constant(2000, 0.5f), 1, 48000));
 		const OfflineBus reverb = mixer.Bus(2);
 		const OfflineBus dry = mixer.Bus(1, {}, 0.5f);
 		ASSERT_TRUE(mixer.Send(dry, reverb, preFader, 0.5f));
@@ -422,7 +422,7 @@ TEST(AudioMixTest, PostFaderSendCarriesFader) {
 
 TEST(AudioMixTest, SendToLowerSlotHeard) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(2000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(2000, 0.5f), 1, 48000));
 	const OfflineBus target = mixer.Bus(1, {}, 1.0f);
 	const OfflineBus sender = mixer.Bus(200, {}, 0.0f);
 	ASSERT_TRUE(mixer.Send(sender, target, true, 1.0f));
@@ -434,7 +434,7 @@ TEST(AudioMixTest, SendToLowerSlotHeard) {
 
 TEST(AudioMixTest, MuteSilencesBusAndSends) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(4000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(4000, 0.5f), 1, 48000));
 	const OfflineBus reverb = mixer.Bus(2);
 	const OfflineBus dry = mixer.Bus(1);
 	ASSERT_TRUE(mixer.Send(dry, reverb, false, 1.0f));
@@ -455,9 +455,9 @@ TEST(AudioMixTest, MuteSilencesBusAndSends) {
 
 TEST(AudioMixTest, SoloHearsOnlySoloed) {
 	OfflineMixer mixer(1);
-	ClipBlock soloed(MakePcm(Constant(4000, 0.25f), 1, 48000));
-	ClipBlock other(MakePcm(Constant(4000, 0.125f), 1, 48000));
-	ClipBlock loose(MakePcm(Constant(4000, 0.0625f), 1, 48000));
+	ClipBlock soloed(MakePCM(Constant(4000, 0.25f), 1, 48000));
+	ClipBlock other(MakePCM(Constant(4000, 0.125f), 1, 48000));
+	ClipBlock loose(MakePCM(Constant(4000, 0.0625f), 1, 48000));
 	const OfflineBus reverb = mixer.Bus(3);
 	const OfflineBus a = mixer.Bus(1);
 	const OfflineBus b = mixer.Bus(2);
@@ -490,7 +490,7 @@ TEST(AudioMixTest, SoloHearsOnlySoloed) {
 TEST(AudioMixTest, BusPitchMultipliesRate) {
 	OfflineMixer mixer(1);
 	const std::vector<f32> samples = Counter(4000);
-	ClipBlock clip(MakePcm(samples, 1, 48000));
+	ClipBlock clip(MakePCM(samples, 1, 48000));
 	const OfflineBus doubled = mixer.Bus(1, {}, 1.0f, 2.0f);
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, clip.Get()), doubled)));
 	const std::vector<f32> fast = mixer.Render(BLOCK);
@@ -510,7 +510,7 @@ TEST(AudioMixTest, BusPitchMultipliesRate) {
 
 TEST(AudioMixTest, DestroyedBusRoutesThroughParent) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(8000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(8000, 0.5f), 1, 48000));
 	const OfflineBus parent = mixer.Bus(1, {}, 0.5f);
 	const OfflineBus middle = mixer.Bus(2, parent, 0.5f);
 	const OfflineBus child = mixer.Bus(3, middle, 1.0f);
@@ -538,7 +538,7 @@ TEST(AudioMixTest, DestroyedBusRoutesThroughParent) {
 
 TEST(AudioMixTest, MovedVoiceMixesNextBlock) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(8000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(8000, 0.5f), 1, 48000));
 	const OfflineBus quiet = mixer.Bus(1, {}, 0.5f);
 	const OfflineBus quieter = mixer.Bus(2, {}, 0.25f);
 	const AudioCommand play = OfflineMixer::Into(mixer.Play(0, clip.Get()), quiet);
@@ -557,7 +557,7 @@ TEST(AudioMixTest, MovedVoiceMixesNextBlock) {
 
 TEST(AudioMixTest, GlobalVolumeScalesListenerInput) {
 	OfflineMixer mixer(1);
-	ClipBlock clip(MakePcm(Constant(8000, 0.5f), 1, 48000));
+	ClipBlock clip(MakePCM(Constant(8000, 0.5f), 1, 48000));
 	AudioCommand play = mixer.Play(0, clip.Get());
 	play.loop = true;
 	ASSERT_TRUE(mixer.Push(play));

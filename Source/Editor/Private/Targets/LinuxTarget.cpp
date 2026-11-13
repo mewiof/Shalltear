@@ -10,7 +10,7 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view EXECUTABLE_SUFFIX = ".x86_64";
+		constexpr std::string_view ExecutableSuffix = ".x86_64";
 
 		void AddIssue(Vector<BuildIssue>& out, BuildIssueSeverity severity, const str& profile, const char* key,
 					  str message) {
@@ -25,8 +25,8 @@ namespace Shalltear {
 			if (!probe.fix.empty()) {
 				return probe.fix;
 			}
-			constexpr std::string_view BUILD = "`cmake --preset linux-static-release` -> `cmake --build --preset linux-static-release`.";
-			return (IsHost() ? "Run " : "Run `python Scripts/fetch_prebuilt.py --linux` -> ") + str(BUILD);
+			constexpr std::string_view Build = "`cmake --preset linux-static-release` -> `cmake --build --preset linux-static-release`.";
+			return (IsHost() ? "Run " : "Run `python Scripts/fetch_prebuilt.py --linux` -> ") + str(Build);
 		}
 
 		void DescribeSymbols(Vector<BuildSettingDesc>& out) {
@@ -48,7 +48,7 @@ namespace Shalltear {
 			return true;
 		}
 		BuildProfileOps::StaticSDKProbe probe;
-		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
+		BuildProfileOps::FindStaticSDKRoot(probe, Triple);
 		if (probe.root.empty()) {
 			outReason = "no STATIC SDK built for Linux was found. " + MissingSDK(probe);
 			return false;
@@ -63,7 +63,7 @@ namespace Shalltear {
 
 	void LinuxTarget::Validate(const str& projectPath, const ResolvedProfile& profile, Vector<BuildIssue>& out) const {
 		BuildProfileOps::StaticSDKProbe probe;
-		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
+		BuildProfileOps::FindStaticSDKRoot(probe, Triple);
 		if (probe.root.empty()) {
 			AddIssue(out, BuildIssueSeverity::Error, profile.name, "",
 					 "a Shalltear player links the game statically + no STATIC SDK built for Linux was found. " + MissingSDK(probe));
@@ -73,7 +73,7 @@ namespace Shalltear {
 
 	void LinuxTarget::ConfigurePipeline(BuildContext& context) const {
 		BuildProfileOps::StaticSDKProbe probe;
-		BuildProfileOps::FindStaticSDKRoot(probe, TRIPLE);
+		BuildProfileOps::FindStaticSDKRoot(probe, Triple);
 		context.sdkRoot = probe.root;
 		if (!probe.root.empty()) {
 			context.Log("static SDK: " + probe.root + " (" + probe.source + ")");
@@ -96,7 +96,7 @@ namespace Shalltear {
 		if (context.stagingDir.empty() || context.executableName.empty() || !IsHost()) {
 			return {};
 		}
-		return QuoteCommandArgument(context.stagingDir + "/" + context.executableName + str(EXECUTABLE_SUFFIX));
+		return QuoteCommandArgument(context.stagingDir + "/" + context.executableName + str(ExecutableSuffix));
 	}
 
 	void LinuxServerTarget::DescribeSettings(Vector<BuildSettingDesc>& out) const {

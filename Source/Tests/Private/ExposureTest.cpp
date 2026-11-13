@@ -27,8 +27,8 @@ namespace {
 
 	f32 ExposureAt(f32 ev100) { return 1.0f / (1.2f * std::exp2(ev100)); }
 
-	const Vec3 SURFACE{0.20f, 0.10f, 0.05f};
-	const Vec3 SKY{0.06f, 0.12f, 0.24f};
+	const Vec3 Surface{0.20f, 0.10f, 0.05f};
+	const Vec3 Sky{0.06f, 0.12f, 0.24f};
 
 	constexpr f32 TEXEL_TOLERANCE = 1.5f;
 
@@ -204,13 +204,13 @@ TEST_F(ExposureReadbackFixture, CompensationScalesEveryWriterAndNotLines) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
 	Handle<Environment> environment = AddEnvironment(stage);
 	environment->SetSkyMode(SkyMode::Color);
-	environment->SetSkyColor(Color(SKY.x, SKY.y, SKY.z, 1.0f));
+	environment->SetSkyColor(Color(Sky.x, Sky.y, Sky.z, 1.0f));
 
 	const DebugLine line{Vec3(-2.0f, 1.2f, 0.0f), Vec3(2.0f, 1.2f, 0.0f), Color32(250, 30, 30, 255)};
 	ViewDesc desc = QuadView();
@@ -239,8 +239,8 @@ TEST_F(ExposureReadbackFixture, CompensationScalesEveryWriterAndNotLines) {
 		environment->SetExposureCompensation(arm.stops);
 		ASSERT_TRUE(Render(stage, desc, pixels, size));
 		const f32 scale = std::exp2(arm.stops);
-		ExpectTexelNear(CenterTexel(pixels, size), ExpectedTexel(SURFACE * scale), "the unlit surface");
-		ExpectTexelNear(Texel(pixels, size, 2, size.y - 3), ExpectedTexel(SKY * scale), "the sky");
+		ExpectTexelNear(CenterTexel(pixels, size), ExpectedTexel(Surface * scale), "the unlit surface");
+		ExpectTexelNear(Texel(pixels, size, 2, size.y - 3), ExpectedTexel(Sky * scale), "the sky");
 		i32 row = -1;
 		brightestRedRow(pixels, size, row);
 		ASSERT_GE(row, 0);
@@ -295,7 +295,7 @@ TEST_F(ExposureReadbackFixture, ValueViewsNotExposed) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -303,12 +303,12 @@ TEST_F(ExposureReadbackFixture, ValueViewsNotExposed) {
 
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE * 2.0f), "the ordinary view is a stop over");
+	ExpectTexelNear(texel, ExpectedTexel(Surface * 2.0f), "the ordinary view is a stop over");
 
 	ViewDesc values = QuadView();
 	values.tonemap = false;
 	ASSERT_TRUE(RenderCenter(stage, values, texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE), "a view of values was exposed");
+	ExpectTexelNear(texel, ExpectedTexel(Surface), "a view of values was exposed");
 
 	ViewDesc capture = QuadView();
 	capture.radianceCapture = true;
@@ -318,9 +318,9 @@ TEST_F(ExposureReadbackFixture, ValueViewsNotExposed) {
 	Vec2I size{};
 	ASSERT_TRUE(RenderSystem::ReadbackViewTargetRadiance(stage.target, radiance, size));
 	const Vec3 captured = RadianceTexel(radiance, size, size.x / 2, size.y / 2);
-	EXPECT_NEAR(captured.x, SURFACE.x, 1e-3f);
-	EXPECT_NEAR(captured.y, SURFACE.y, 1e-3f);
-	EXPECT_NEAR(captured.z, SURFACE.z, 1e-3f);
+	EXPECT_NEAR(captured.x, Surface.x, 1e-3f);
+	EXPECT_NEAR(captured.y, Surface.y, 1e-3f);
+	EXPECT_NEAR(captured.z, Surface.z, 1e-3f);
 
 	TearDownStage(stage);
 }
@@ -329,7 +329,7 @@ TEST_F(ExposureReadbackFixture, TwoLayersBlendInStops) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -339,12 +339,12 @@ TEST_F(ExposureReadbackFixture, TwoLayersBlendInStops) {
 
 	Vec3 texel;
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE * 2.0f), "half a share two stops over");
-	EXPECT_GT(std::fabs(texel.x - ExpectedTexel(SURFACE * 2.5f).x), 6.0f);
+	ExpectTexelNear(texel, ExpectedTexel(Surface * 2.0f), "half a share two stops over");
+	EXPECT_GT(std::fabs(texel.x - ExpectedTexel(Surface * 2.5f).x), 6.0f);
 
 	upper->SetWeight(1.0f);
 	ASSERT_TRUE(RenderCenter(stage, QuadView(), texel));
-	ExpectTexelNear(texel, ExpectedTexel(SURFACE * 4.0f), "the whole share");
+	ExpectTexelNear(texel, ExpectedTexel(Surface * 4.0f), "the whole share");
 
 	TearDownStage(stage);
 }
@@ -353,7 +353,7 @@ TEST_F(ExposureReadbackFixture, CameraExposedByItsEnvironment) {
 	if (!RenderSystem::IsRenderingAvailable() || !CompilerAvailable()) {
 		GTEST_SKIP() << "no Vulkan device or no shader compiler";
 	}
-	MaterialAsset* material = LoadUnlit("Surface.mat", SURFACE);
+	MaterialAsset* material = LoadUnlit("Surface.mat", Surface);
 	ASSERT_NE(material, nullptr);
 	ShadingStage stage;
 	ASSERT_TRUE(BuildStage(material, stage));
@@ -380,8 +380,8 @@ TEST_F(ExposureReadbackFixture, CameraExposedByItsEnvironment) {
 	Vec2I size{};
 	ASSERT_TRUE(RenderSystem::ReadbackWindowSceneColor(window, pixels, size));
 	const Vec3 centre = RadianceTexel(pixels, size, size.x / 2, size.y / 2);
-	EXPECT_NEAR(centre.x, SURFACE.x * 0.5f, 1e-3f);
-	EXPECT_NEAR(centre.y, SURFACE.y * 0.5f, 1e-3f);
+	EXPECT_NEAR(centre.x, Surface.x * 0.5f, 1e-3f);
+	EXPECT_NEAR(centre.y, Surface.y * 0.5f, 1e-3f);
 
 	TearDownStage(stage);
 }

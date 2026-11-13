@@ -24,8 +24,8 @@ namespace Shalltear {
 			}
 
 			AudioClipEncoding EncodingOf(u8 format) {
-				return format == static_cast<u8>(AudioCompressionFormat::PCM)	? AudioClipEncoding::Pcm
-					   : format == static_cast<u8>(AudioCompressionFormat::QOA) ? AudioClipEncoding::Qoa
+				return format == static_cast<u8>(AudioCompressionFormat::PCM)	? AudioClipEncoding::PCM
+					   : format == static_cast<u8>(AudioCompressionFormat::QOA) ? AudioClipEncoding::QOA
 																				: AudioClipEncoding::Opus;
 			}
 
@@ -58,9 +58,9 @@ namespace Shalltear {
 				cooked = streamed;
 			}
 			AudioClipData* playback = cooked;
-			if ((cooked->encoding == AudioClipEncoding::Qoa || cooked->encoding == AudioClipEncoding::Opus) &&
+			if ((cooked->encoding == AudioClipEncoding::QOA || cooked->encoding == AudioClipEncoding::Opus) &&
 				loadType == AudioClipLoadType::DecompressOnLoad) {
-				playback = DecodeToPcm(*cooked);
+				playback = DecodeToPCM(*cooked);
 				if (!playback) {
 					ReleaseClipData(cooked);
 					return false;
@@ -74,7 +74,7 @@ namespace Shalltear {
 			clip._channels = cooked->channels;
 			clip._samples = cooked->frames;
 			clip._loadType = loadType;
-			clip._compressionFormat = cookedCodec == AudioClipEncoding::Qoa	   ? AudioCompressionFormat::QOA
+			clip._compressionFormat = cookedCodec == AudioClipEncoding::QOA	   ? AudioCompressionFormat::QOA
 									  : cookedCodec == AudioClipEncoding::Opus ? AudioCompressionFormat::Opus
 																			   : AudioCompressionFormat::PCM;
 			return true;
@@ -190,11 +190,11 @@ namespace Shalltear {
 			if (size % frameBytes != 0 || size / frameBytes != frames) {
 				return false;
 			}
-			cooked = CreatePcmClipData(bytes, frames, layout, frequency);
+			cooked = CreatePCMClipData(bytes, frames, layout, frequency);
 		} else if (codec == AudioClipEncoding::Opus) {
 			cooked = frequency == OPUS_RATE ? CreateOpusClipData(bytes, size, layout, frames) : nullptr;
 		} else {
-			cooked = CreateQoaClipData(bytes, size, layout);
+			cooked = CreateQOAClipData(bytes, size, layout);
 			if (cooked && (cooked->sampleRate != frequency || cooked->frames != frames)) {
 				ReleaseClipData(cooked);
 				cooked = nullptr;

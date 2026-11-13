@@ -25,8 +25,8 @@ namespace Shalltear {
 			static const StringHash hU16("u16");
 			static const StringHash hU32("u32");
 			static const StringHash hU64("u64");
-			static const StringHash hF32("f32");
-			static const StringHash hF64("f64");
+			static const StringHash hf32("f32");
+			static const StringHash hf64("f64");
 
 			const StringHash n = type->name;
 			if (n == hBool)
@@ -47,9 +47,9 @@ namespace Shalltear {
 				return PrimKind::U32;
 			if (n == hU64)
 				return PrimKind::U64;
-			if (n == hF32)
+			if (n == hf32)
 				return PrimKind::F32;
-			if (n == hF64)
+			if (n == hf64)
 				return PrimKind::F64;
 			return PrimKind::None;
 		}

@@ -578,14 +578,14 @@ namespace Shalltear {
 		}
 
 		enum ImageRole : u8 {
-			IMAGE_COLOR = 1 << 0, // base color + emissive, sRGB
-			IMAGE_LINEAR = 1 << 1,
-			IMAGE_NORMAL = 1 << 2
+			ImageColor = 1 << 0, // base color + emissive, sRGB
+			ImageLinear = 1 << 1,
+			ImageNormal = 1 << 2
 		};
 
 		void SeedImageRole(const Path& image, u8 roles, bool minted) {
-			const bool color = (roles & IMAGE_COLOR) != 0;
-			const bool data = (roles & (IMAGE_LINEAR | IMAGE_NORMAL)) != 0;
+			const bool color = (roles & ImageColor) != 0;
+			const bool data = (roles & (ImageLinear | ImageNormal)) != 0;
 			if (!data) {
 				return;
 			}
@@ -602,7 +602,7 @@ namespace Shalltear {
 			if (!minted && existing.IsObject() && existing.HasKey("textureType")) {
 				return;
 			}
-			const bool normalMap = (roles & IMAGE_NORMAL) != 0 && (roles & IMAGE_LINEAR) == 0;
+			const bool normalMap = (roles & ImageNormal) != 0 && (roles & ImageLinear) == 0;
 			JSONValue settings = JSONValue::MakeObject();
 			for (size_t member = 0; existing.IsObject() && member < existing.MemberCount(); ++member) {
 				const std::string_view key = existing.KeyAt(member);
@@ -648,11 +648,11 @@ namespace Shalltear {
 			}
 		};
 		for (const ModelMaterial& material : parsed.materials) {
-			bindsAs(material.baseColorImage, IMAGE_COLOR);
-			bindsAs(material.emissiveImage, IMAGE_COLOR);
-			bindsAs(material.metallicRoughnessImage, IMAGE_LINEAR);
-			bindsAs(material.occlusionImage, IMAGE_LINEAR);
-			bindsAs(material.normalImage, IMAGE_NORMAL);
+			bindsAs(material.baseColorImage, ImageColor);
+			bindsAs(material.emissiveImage, ImageColor);
+			bindsAs(material.metallicRoughnessImage, ImageLinear);
+			bindsAs(material.occlusionImage, ImageLinear);
+			bindsAs(material.normalImage, ImageNormal);
 		}
 
 		Vector<Guid> imageGuids{GetMemoryResource(MemTag::Asset)};

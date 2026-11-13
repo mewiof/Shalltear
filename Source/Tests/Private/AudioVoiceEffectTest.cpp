@@ -59,9 +59,9 @@ namespace {
 
 	class CountedGainDefinition final : public IAudioEffectDefinition {
 	public:
-		static constexpr AudioParameterDefinition PARAMETERS[] = {{"Gain", "x", 0.0f, 4.0f, 1.0f}};
+		static constexpr AudioParameterDefinition Parameters[] = {{"Gain", "x", 0.0f, 4.0f, 1.0f}};
 
-		std::span<const AudioParameterDefinition> GetParameters() const override { return PARAMETERS; }
+		std::span<const AudioParameterDefinition> GetParameters() const override { return Parameters; }
 
 		IAudioEffect* CreateEffect(const AudioEffectContext& context) override {
 			_lastChannels.store(context.channels);

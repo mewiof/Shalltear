@@ -2822,7 +2822,7 @@ TEST_F(ShadowViewFixture, OldProfileKeepsNearFieldSharp) {
 
 namespace {
 
-	f32 SRGBToLinear(u8 value) {
+	f32 sRGBToLinear(u8 value) {
 		const f32 c = static_cast<f32>(value) / 255.0f;
 		return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
 	}
@@ -2941,9 +2941,9 @@ namespace {
 				f32 light = 0.0f;
 				f32 received = 0.0f;
 				for (size_t c = 0; c < 3; ++c) {
-					const f32 ambient = SRGBToLinear(_ambient[i * 4 + c]);
-					light += SRGBToLinear(_unshadowed[i * 4 + c]) - ambient;
-					received += SRGBToLinear(shadowed[i * 4 + c]) - ambient;
+					const f32 ambient = sRGBToLinear(_ambient[i * 4 + c]);
+					light += sRGBToLinear(_unshadowed[i * 4 + c]) - ambient;
+					received += sRGBToLinear(shadowed[i * 4 + c]) - ambient;
 				}
 				out[i] = light > 1e-3f ? received / light : 1.0f;
 			}
@@ -4856,9 +4856,9 @@ TEST_F(ShadowViewFixture, FrozenFitStaysPut) {
 	ViewTargetId target = RenderSystem::CreateViewTarget({96, 96});
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
 
-	const Vec3 FIT_EYE(-6.0f, 11.0f, -15.0f);
+	const Vec3 fitEye(-6.0f, 11.0f, -15.0f);
 	Mat4 frozenFirst;
-	SubmitFrozen(target, FIT_EYE, FIT_EYE);
+	SubmitFrozen(target, fitEye, fitEye);
 	RenderSystem::RenderAll();
 	if (FitOf(target, frozenFirst) == 0u) {
 		RenderSystem::DestroyViewTarget(target);
@@ -4867,7 +4867,7 @@ TEST_F(ShadowViewFixture, FrozenFitStaysPut) {
 	}
 
 	Mat4 frozenAfterFlight;
-	SubmitFrozen(target, Vec3(70.0f, 40.0f, 90.0f), FIT_EYE);
+	SubmitFrozen(target, Vec3(70.0f, 40.0f, 90.0f), fitEye);
 	RenderSystem::RenderAll();
 	ASSERT_EQ(FitOf(target, frozenAfterFlight), 4u);
 	EXPECT_EQ(frozenFirst, frozenAfterFlight);
@@ -4879,7 +4879,7 @@ TEST_F(ShadowViewFixture, FrozenFitStaysPut) {
 	EXPECT_NE(unfrozen, frozenFirst);
 
 	Mat4 again;
-	SubmitFrozen(target, Vec3(70.0f, 40.0f, 90.0f), FIT_EYE);
+	SubmitFrozen(target, Vec3(70.0f, 40.0f, 90.0f), fitEye);
 	RenderSystem::RenderAll();
 	ASSERT_EQ(FitOf(target, again), 4u);
 	EXPECT_EQ(again, frozenFirst);
@@ -4907,11 +4907,11 @@ TEST_F(ShadowViewFixture, FreezeIsPerView) {
 	ASSERT_NE(frozen, INVALID_VIEW_TARGET);
 	ASSERT_NE(live, INVALID_VIEW_TARGET);
 
-	const Vec3 PINNED(-6.0f, 11.0f, -15.0f);
-	const Vec3 FLOWN(70.0f, 40.0f, 90.0f);
+	const Vec3 pinned(-6.0f, 11.0f, -15.0f);
+	const Vec3 flown(70.0f, 40.0f, 90.0f);
 
-	SubmitFrozen(frozen, FLOWN, PINNED);
-	SubmitFrom(live, FLOWN, true);
+	SubmitFrozen(frozen, flown, pinned);
+	SubmitFrom(live, flown, true);
 	RenderSystem::RenderAll();
 	Mat4 frozenFit;
 	Mat4 liveFit;
@@ -4925,7 +4925,7 @@ TEST_F(ShadowViewFixture, FreezeIsPerView) {
 	EXPECT_NE(frozenFit, liveFit);
 
 	Mat4 aloneFit;
-	SubmitFrom(live, FLOWN, true);
+	SubmitFrom(live, flown, true);
 	RenderSystem::RenderAll();
 	ASSERT_EQ(FitOf(live, aloneFit), 4u);
 	EXPECT_EQ(aloneFit, liveFit);
@@ -4952,9 +4952,9 @@ TEST_F(ShadowViewFixture, HalfFitPairRefused) {
 	ViewTargetId target = RenderSystem::CreateViewTarget({96, 96});
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
 
-	const Vec3 FLOWN(70.0f, 40.0f, 90.0f);
+	const Vec3 flown(70.0f, 40.0f, 90.0f);
 	Mat4 unfrozen;
-	SubmitFrom(target, FLOWN, true);
+	SubmitFrom(target, flown, true);
 	RenderSystem::RenderAll();
 	if (FitOf(target, unfrozen) == 0u) {
 		RenderSystem::DestroyViewTarget(target);
@@ -4964,9 +4964,9 @@ TEST_F(ShadowViewFixture, HalfFitPairRefused) {
 
 	const Mat4 halfView = Mat4::LookAt(Vec3(-6.0f, 11.0f, -15.0f), Vec3::Zero());
 	ViewDesc desc;
-	desc.view = Mat4::LookAt(FLOWN, Vec3::Zero());
+	desc.view = Mat4::LookAt(flown, Vec3::Zero());
 	desc.projection = Mat4::PerspectiveReverseZ(55.0f, 1.0f, 0.1f, 500.0f);
-	desc.cameraPosition = FLOWN;
+	desc.cameraPosition = flown;
 	desc.clearColor = Color::Black();
 	desc.retainCascadeFit = true;
 	desc.shadowFitView = &halfView;

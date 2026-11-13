@@ -82,15 +82,15 @@ namespace Shalltear {
 			}
 			const Guid guid = payload.data.As<AssetDragData>().guid;
 			const str extension = StringUtil::ToLower(std::filesystem::path(AssetDatabase::LookupPath(guid).ToString()).extension().generic_string());
-			if (std::find(std::begin(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), extension) ==
-				std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS)) {
+			if (std::find(std::begin(GraphCustomFunctionExtensions), std::end(GraphCustomFunctionExtensions), extension) ==
+				std::end(GraphCustomFunctionExtensions)) {
 				return false;
 			}
 			out = guid;
 			return out.IsValid();
 		}
 
-		constexpr std::string_view STACK_FRAGMENT = "Context/Fragment";
+		constexpr std::string_view StackFragment = "Context/Fragment";
 
 		bool EndsWith(std::string_view path, std::string_view extension) {
 			if (path.size() < extension.size()) {
@@ -102,7 +102,7 @@ namespace Shalltear {
 			});
 		}
 
-		bool IsNodeShaderPath(std::string_view path) { return EndsWith(path, ".slshader") || EndsWith(path, GRAPH_SUBGRAPH_EXTENSION); }
+		bool IsNodeShaderPath(std::string_view path) { return EndsWith(path, ".slshader") || EndsWith(path, GraphSubgraphExtension); }
 
 		bool MeshOf(const UI::DragPayload& payload, Guid& out) {
 			if (payload.type != "Asset"_hash || !payload.data.Is<AssetDragData>()) {
@@ -133,7 +133,7 @@ namespace Shalltear {
 		}
 
 		std::span<const GraphSettingDefinition> InterpolatorSettings() {
-			const GraphNodeDefinition* definition = GraphNodeLibrary::Find(GraphSurface::INTERPOLATOR_BLOCK);
+			const GraphNodeDefinition* definition = GraphNodeLibrary::Find(GraphSurface::InterpolatorBlock);
 			return definition ? definition->settings : std::span<const GraphSettingDefinition>{};
 		}
 
@@ -257,12 +257,12 @@ namespace Shalltear {
 				const GraphNodeDefinition* blockDefinition = Definition(block);
 				GraphPortDesc port;
 				port.label = blockDefinition ? str(blockDefinition->name) : block.def;
-				if (block.def == GraphSurface::INTERPOLATOR_BLOCK) {
+				if (block.def == GraphSurface::InterpolatorBlock) {
 					port.label = InterpolatorName(block);
-				} else if (block.def == GRAPH_SUBGRAPH_OUTPUT_BLOCK) {
+				} else if (block.def == GraphSubgraphOutputBlock) {
 					port.label = GraphSubgraphs::OutputNameOf(block);
 				}
-				port.dim = block.def != GRAPH_SUBGRAPH_OUTPUT_BLOCK && !Stack::IsBlockActive(*document, block.def);
+				port.dim = block.def != GraphSubgraphOutputBlock && !Stack::IsBlockActive(*document, block.def);
 				if (blockDefinition && !blockDefinition->inputs.empty()) {
 					const GraphPortDefinition& value = blockDefinition->inputs[0];
 					port.color = Ops::PortColor(value.type);
@@ -281,18 +281,18 @@ namespace Shalltear {
 			desc.size = {NODE_WIDTH, 0.0f};
 			const GraphNodeDefinition* definition = Definition(node);
 			if (!definition) {
-				desc.label = node.def == GRAPH_SUBGRAPH_NODE ? GraphSubgraphs::NameOf(GraphSubgraphs::AssetOf(node)) + " (missing)" : node.def + " (unknown)";
+				desc.label = node.def == GraphSubgraphNode ? GraphSubgraphs::NameOf(GraphSubgraphs::AssetOf(node)) + " (missing)" : node.def + " (unknown)";
 				out.push_back(std::move(desc));
 				continue;
 			}
 			desc.label = str(definition->name);
-			if (node.def == GraphDocumentOps::REDIRECT_DEF) {
+			if (node.def == GraphDocumentOps::RedirectDef) {
 				desc.compact = true;
 			}
 			if (const GraphProperty* property = FindProperty(*document, Ops::PropertyOf(*document, node.id))) {
 				desc.label = property->name;
 			}
-			if (node.def == Stack::INTERPOLATOR_NODE) {
+			if (node.def == Stack::InterpolatorNode) {
 				desc.label = InterpolatorName(node, "Interpolator") + " (Custom Interpolator)";
 			}
 			const u32 width = Ops::DynamicWidth(*document, node.id, &_window._definitions);
@@ -312,7 +312,7 @@ namespace Shalltear {
 			}
 			for (const GraphPortDefinition& output : definition->outputs) {
 				GraphPortDesc port;
-				port.label = desc.compact || node.def == Ops::PROPERTY_NODE ? str() : str(GraphPortLabel(output));
+				port.label = desc.compact || node.def == Ops::PropertyNode ? str() : str(GraphPortLabel(output));
 				port.color = Ops::PortColor(output.type);
 				desc.outputs.push_back(std::move(port));
 			}
@@ -456,7 +456,7 @@ namespace Shalltear {
 		const u32 id = static_cast<u32>(node);
 		NodeShaderWindow* window = &_window;
 		Vector<UI::Widgets::MenuItem> items{GetMemoryResource(MemTag::UI)};
-		if (const GraphContext* stack = FindContext(*document, id); stack && stack->node.def == GRAPH_SUBGRAPH_OUTPUT_CONTEXT) {
+		if (const GraphContext* stack = FindContext(*document, id); stack && stack->node.def == GraphSubgraphOutputContext) {
 			AddOutputMenu(items, *stack);
 			OpenMenu(context, items);
 			return;
@@ -478,7 +478,7 @@ namespace Shalltear {
 			add.enabled = !add.children.empty();
 			items.push_back(std::move(add));
 			for (const GraphNode& block : stack->blocks) {
-				if (block.def != GraphSurface::INTERPOLATOR_BLOCK) {
+				if (block.def != GraphSurface::InterpolatorBlock) {
 					continue;
 				}
 				UI::Widgets::MenuItem settings;
@@ -520,7 +520,7 @@ namespace Shalltear {
 				const GraphNodeDefinition* definition = GraphNodeLibrary::Find(block.def);
 				UI::Widgets::MenuItem item;
 				item.label = definition ? str(definition->name) : block.def;
-				if (block.def == GraphSurface::INTERPOLATOR_BLOCK) {
+				if (block.def == GraphSurface::InterpolatorBlock) {
 					item.label = InterpolatorName(block);
 				}
 				item.onSelect = [window, blockId = block.id]() {
@@ -550,7 +550,7 @@ namespace Shalltear {
 		const u32 id = stack.node.id;
 		UI::Widgets::MenuItem add;
 		add.label = "Add Output";
-		for (std::string_view type : GRAPH_SUBGRAPH_OUTPUT_TYPES) {
+		for (std::string_view type : GraphSubgraphOutputTypes) {
 			add.children.push_back({str(type), "", true, false, [window, id, type = str(type)]() {
 										window->Edit("Add Output", [&](GraphDocument& edited) { return Ops::AddSubgraphOutput(edited, id, type) != 0; });
 									}});
@@ -576,11 +576,11 @@ namespace Shalltear {
 			UI::Widgets::MenuItem retype;
 			retype.label = "Type";
 			const u32 current = GraphSubgraphs::OutputTypeOf(block);
-			for (u32 i = 0; i < std::size(GRAPH_SUBGRAPH_OUTPUT_TYPES); ++i) {
+			for (u32 i = 0; i < std::size(GraphSubgraphOutputTypes); ++i) {
 				UI::Widgets::MenuItem option;
-				option.label = str(GRAPH_SUBGRAPH_OUTPUT_TYPES[i]);
+				option.label = str(GraphSubgraphOutputTypes[i]);
 				option.checked = i == current;
-				option.onSelect = [window, blockId = block.id, type = str(GRAPH_SUBGRAPH_OUTPUT_TYPES[i])]() {
+				option.onSelect = [window, blockId = block.id, type = str(GraphSubgraphOutputTypes[i])]() {
 					window->Edit("Output Type", [&](GraphDocument& edited) { return Ops::SetSubgraphOutputType(edited, blockId, type); });
 				};
 				retype.children.push_back(std::move(option));
@@ -684,12 +684,12 @@ namespace Shalltear {
 		if (from && !fromOutput && !fromInput) {
 			return;
 		}
-		const bool subgraphDocument = document->type == GRAPH_SUBGRAPH_DOCUMENT_TYPE;
+		const bool subgraphDocument = document->type == GraphSubgraphDocumentType;
 		GraphWindowParts::LibraryEntries(
 			*document, _window._definitions,
 			[subgraphDocument](const GraphNodeDefinition& definition) {
-				return definition.category != "Context" && definition.category != "Block" && definition.id != Ops::PROPERTY_NODE &&
-					   definition.id != Stack::INTERPOLATOR_NODE && definition.id != GraphDocumentOps::REDIRECT_DEF &&
+				return definition.category != "Context" && definition.category != "Block" && definition.id != Ops::PropertyNode &&
+					   definition.id != Stack::InterpolatorNode && definition.id != GraphDocumentOps::RedirectDef &&
 					   (!definition.subgraphOnly || subgraphDocument) && !GraphEffectRules::IsEffectOnly(definition.id);
 			},
 			fromOutput, fromInput, fromNode, fromPort, out);
@@ -1059,7 +1059,7 @@ namespace Shalltear {
 		if (text.empty()) {
 			return false;
 		}
-		const Path library = FileSystem::Resolve(Path(str(GRAPH_GENERATED_DIRECTORY)));
+		const Path library = FileSystem::Resolve(Path(str(GraphGeneratedDirectory)));
 		const Path file(library.ToString() + "/" + GetTitleBase() + ".generated.hlsl");
 		FileSystem::CreateDirectory(library);
 		if (!FileSystem::WriteTextFile(file, text)) {
@@ -1073,17 +1073,17 @@ namespace Shalltear {
 		if (!document) {
 			return;
 		}
-		const str stored = Ops::GraphSettingText(*document, NodeShaderPreviews::MESH_SETTING);
+		const str stored = Ops::GraphSettingText(*document, NodeShaderPreviews::MeshSetting);
 		struct Named {
 			std::string_view name;
 			NodeShaderPreviewMesh mesh;
 		};
-		constexpr Named NAMES[] = {{"sphere", NodeShaderPreviewMesh::Sphere},
+		constexpr Named Names[] = {{"sphere", NodeShaderPreviewMesh::Sphere},
 								   {"capsule", NodeShaderPreviewMesh::Capsule},
 								   {"cylinder", NodeShaderPreviewMesh::Cylinder},
 								   {"cube", NodeShaderPreviewMesh::Cube},
 								   {"quad", NodeShaderPreviewMesh::Quad}};
-		for (const Named& named : NAMES) {
+		for (const Named& named : Names) {
 			if (stored == named.name) {
 				_previews.SetMesh(named.mesh, Guid{});
 				return;
@@ -1311,14 +1311,14 @@ namespace Shalltear {
 	}
 
 	void NodeShaderWindow::SetMeshSetting(std::string_view value) {
-		Edit("Change Preview Mesh", [&](GraphDocument& document) { return Ops::SetGraphSetting(document, NodeShaderPreviews::MESH_SETTING, Ops::Quote(value)); });
+		Edit("Change Preview Mesh", [&](GraphDocument& document) { return Ops::SetGraphSetting(document, NodeShaderPreviews::MeshSetting, Ops::Quote(value)); });
 		ApplyMeshSetting();
 	}
 
 	void NodeShaderWindow::OpenMeshMenu(UI::Context& context) {
 		Vector<UI::Widgets::MenuItem> items{GetMemoryResource(MemTag::UI)};
-		constexpr std::string_view PRIMITIVES[][2] = {{"Sphere", "sphere"}, {"Capsule", "capsule"}, {"Cylinder", "cylinder"}, {"Cube", "cube"}, {"Quad", "quad"}};
-		for (const auto& primitive : PRIMITIVES) {
+		constexpr std::string_view Primitives[][2] = {{"Sphere", "sphere"}, {"Capsule", "capsule"}, {"Cylinder", "cylinder"}, {"Cube", "cube"}, {"Quad", "quad"}};
+		for (const auto& primitive : Primitives) {
 			items.push_back({str(primitive[0]), "", true, false, [this, value = str(primitive[1])]() { SetMeshSetting(value); }});
 		}
 		UI::Widgets::MenuItem custom{"Custom Mesh"};
@@ -1363,17 +1363,17 @@ namespace Shalltear {
 	void NodeShaderWindow::BuildGraphSettings(UI::Context& context, UI::ElementHandle parent) {
 		const GraphDocument* document = GetDocument();
 		AddText(context, parent, ColorToken::TextStrong, MetricToken::FontBody, "Graph Settings");
-		if (document->type == GRAPH_SUBGRAPH_DOCUMENT_TYPE) {
+		if (document->type == GraphSubgraphDocumentType) {
 			UI::ElementHandle row = AddField(context, parent, "Category");
-			const str stored = Ops::GraphSettingText(*document, GRAPH_SUBGRAPH_CATEGORY_SETTING);
-			const str shown = stored.empty() ? str(GRAPH_SUBGRAPH_DEFAULT_CATEGORY) : stored;
+			const str stored = Ops::GraphSettingText(*document, GraphSubgraphCategorySetting);
+			const str shown = stored.empty() ? str(GraphSubgraphDefaultCategory) : stored;
 			UI::Widgets::TextFieldDesc desc;
 			desc.text = shown;
 			desc.font = UISystem::GetDefaultFont();
 			desc.fontSizePx = FontRow();
 			desc.onCommit = [this](std::string_view text) {
 				Edit("Graph Settings", [&](GraphDocument& edited) {
-					return Ops::SetGraphSetting(edited, GRAPH_SUBGRAPH_CATEGORY_SETTING, text.empty() ? str() : Ops::Quote(text));
+					return Ops::SetGraphSetting(edited, GraphSubgraphCategorySetting, text.empty() ? str() : Ops::Quote(text));
 				});
 			};
 			UI::Widgets::TextField(context, row, desc);
@@ -1385,26 +1385,26 @@ namespace Shalltear {
 			std::span<const std::string_view> shown;
 			std::span<const std::string_view> stored;
 		};
-		static constexpr std::string_view TARGET_SHOWN[] = {"Lit", "Unlit", "Custom Lighting", "Fullscreen", "Sky"};
-		static constexpr std::string_view TARGET_STORED[] = {"lit", "unlit", "customLighting", "fullscreen", "sky"};
-		static constexpr std::string_view BLEND_SHOWN[] = {"Opaque", "Alpha", "Premultiply", "Additive", "Multiply"};
-		static constexpr std::string_view BLEND_STORED[] = {"opaque", "alpha", "premultiplied", "additive", "multiply"};
-		static constexpr std::string_view FACE_SHOWN[] = {"Front", "Back", "Both"};
-		static constexpr std::string_view FACE_STORED[] = {"back", "front", "off"};
-		static constexpr std::string_view DEPTH_SHOWN[] = {"Test And Write", "Test Only", "Off"};
-		static constexpr std::string_view DEPTH_STORED[] = {"test_write", "test_only", "off"};
-		static constexpr std::string_view NORMAL_SHOWN[] = {"Tangent", "World", "Object"};
-		static constexpr std::string_view NORMAL_STORED[] = {"tangent", "world", "object"};
-		const Choice CHOICES[] = {
-			{"Material", "target", TARGET_SHOWN, TARGET_STORED},
-			{"Blending Mode", "blend", BLEND_SHOWN, BLEND_STORED},
-			{"Render Face", "cull", FACE_SHOWN, FACE_STORED},
-			{"Depth", "depth", DEPTH_SHOWN, DEPTH_STORED},
-			{"Fragment Normal Space", "normalSpace", NORMAL_SHOWN, NORMAL_STORED},
+		static constexpr std::string_view TargetShown[] = {"Lit", "Unlit", "Custom Lighting", "Fullscreen", "Sky"};
+		static constexpr std::string_view TargetStored[] = {"lit", "unlit", "customLighting", "fullscreen", "sky"};
+		static constexpr std::string_view BlendShown[] = {"Opaque", "Alpha", "Premultiply", "Additive", "Multiply"};
+		static constexpr std::string_view BlendStored[] = {"opaque", "alpha", "premultiplied", "additive", "multiply"};
+		static constexpr std::string_view FaceShown[] = {"Front", "Back", "Both"};
+		static constexpr std::string_view FaceStored[] = {"back", "front", "off"};
+		static constexpr std::string_view DepthShown[] = {"Test And Write", "Test Only", "Off"};
+		static constexpr std::string_view DepthStored[] = {"test_write", "test_only", "off"};
+		static constexpr std::string_view NormalShown[] = {"Tangent", "World", "Object"};
+		static constexpr std::string_view NormalStored[] = {"tangent", "world", "object"};
+		const Choice choices[] = {
+			{"Material", "target", TargetShown, TargetStored},
+			{"Blending Mode", "blend", BlendShown, BlendStored},
+			{"Render Face", "cull", FaceShown, FaceStored},
+			{"Depth", "depth", DepthShown, DepthStored},
+			{"Fragment Normal Space", "normalSpace", NormalShown, NormalStored},
 		};
 		const bool fullscreen = GraphSurface::IsFullscreen(*document);
 		const bool sky = GraphSurface::IsSky(*document);
-		for (const Choice& choice : CHOICES) {
+		for (const Choice& choice : choices) {
 			if ((fullscreen && choice.key != "target" && choice.key != "blend") || (sky && choice.key != "target")) {
 				continue;
 			}
@@ -1487,7 +1487,7 @@ namespace Shalltear {
 				UI::Widgets::Button(context, AddRow(context, parent), open);
 			}
 		}
-		if (node->def == GRAPH_CUSTOM_FUNCTION_NODE) {
+		if (node->def == GraphCustomFunctionNode) {
 			BuildCustomFunctionSettings(context, parent, node->id);
 			return;
 		}
@@ -1573,7 +1573,7 @@ namespace Shalltear {
 		});
 		const bool keyword = GraphProperties::IsKeyword(info.kind);
 		const bool enumKeyword = property->type == "EnumKeyword";
-		const bool materialRows = document->type != GRAPH_SUBGRAPH_DOCUMENT_TYPE;
+		const bool materialRows = document->type != GraphSubgraphDocumentType;
 		if (materialRows || keyword) {
 			text("Reference", property->reference, [this, id](std::string_view reference) {
 				Edit("Property Reference", [&](GraphDocument& edited) { return Ops::SetPropertyReference(edited, id, reference); });
@@ -1623,9 +1623,9 @@ namespace Shalltear {
 			UI::Widgets::Dropdown(context, modeRow, desc);
 		};
 		if (property->type == "Float") {
-			static constexpr std::string_view SHOWN[] = {"Default", "Slider", "Integer"};
-			static constexpr std::string_view STORED[] = {"default", "slider", "integer"};
-			modeChoice(SHOWN, STORED);
+			static constexpr std::string_view Shown[] = {"Default", "Slider", "Integer"};
+			static constexpr std::string_view Stored[] = {"default", "slider", "integer"};
+			modeChoice(Shown, Stored);
 			if (info.slider) {
 				UI::ElementHandle range = AddField(context, parent, "Min / Max");
 				for (u32 end = 0; end < 2; ++end) {
@@ -1641,13 +1641,13 @@ namespace Shalltear {
 				}
 			}
 		} else if (property->type == "Color" && materialRows) {
-			static constexpr std::string_view SHOWN[] = {"Default", "HDR"};
-			static constexpr std::string_view STORED[] = {"default", "hdr"};
-			modeChoice(SHOWN, STORED);
+			static constexpr std::string_view Shown[] = {"Default", "HDR"};
+			static constexpr std::string_view Stored[] = {"default", "hdr"};
+			modeChoice(Shown, Stored);
 		} else if (property->type == "Texture2D" && materialRows) {
-			static constexpr std::string_view SHOWN[] = {"White", "Black", "Normal", "Transparent", "Grey"};
-			static constexpr std::string_view STORED[] = {"white", "black", "normal", "transparent", "gray"};
-			modeChoice(SHOWN, STORED);
+			static constexpr std::string_view Shown[] = {"White", "Black", "Normal", "Transparent", "Grey"};
+			static constexpr std::string_view Stored[] = {"white", "black", "normal", "transparent", "gray"};
+			modeChoice(Shown, Stored);
 		}
 		if (!materialRows && !keyword && !GraphProperties::IsTexture(info.kind)) {
 			UI::ElementHandle binding = AddField(context, parent, "Use Custom Binding");
@@ -1742,20 +1742,20 @@ namespace Shalltear {
 		Vector<GraphCustomFunctionPort> inputs{GetMemoryResource(MemTag::Editor)};
 		Vector<GraphCustomFunctionPort> outputs{GetMemoryResource(MemTag::Editor)};
 		str unread;
-		GraphCustomFunctions::ReadPorts(*node, GRAPH_CUSTOM_FUNCTION_INPUTS, inputs, unread);
-		GraphCustomFunctions::ReadPorts(*node, GRAPH_CUSTOM_FUNCTION_OUTPUTS, outputs, unread);
+		GraphCustomFunctions::ReadPorts(*node, GraphCustomFunctionInputs, inputs, unread);
+		GraphCustomFunctions::ReadPorts(*node, GraphCustomFunctionOutputs, outputs, unread);
 
 		auto list = [&](GraphBlackboard& board, bool output, const Vector<GraphCustomFunctionPort>& ports, std::string_view title) {
 			GraphBlackboardDesc desc;
 			desc.title = str(title);
-			for (std::string_view type : GRAPH_CUSTOM_FUNCTION_PORT_TYPES) {
+			for (std::string_view type : GraphCustomFunctionPortTypes) {
 				desc.kinds.push_back(str(type));
 			}
 			desc.onAdd = [this, id, output](u32 kind) -> u64 {
 				u32 made = 0;
 				Edit("Add Port", [&](GraphDocument& edited) {
-					made = kind < std::size(GRAPH_CUSTOM_FUNCTION_PORT_TYPES)
-							   ? Ops::AddCustomFunctionPort(edited, id, output, GRAPH_CUSTOM_FUNCTION_PORT_TYPES[kind])
+					made = kind < std::size(GraphCustomFunctionPortTypes)
+							   ? Ops::AddCustomFunctionPort(edited, id, output, GraphCustomFunctionPortTypes[kind])
 							   : 0;
 					return made != 0;
 				});
@@ -1786,14 +1786,14 @@ namespace Shalltear {
 				item.name = port.name;
 				item.onBuildControls = [this, id, port = port.id, type = port.type](UI::Context& context, UI::ElementHandle row) {
 					UI::Widgets::DropdownDesc desc;
-					desc.items = GRAPH_CUSTOM_FUNCTION_PORT_TYPES;
+					desc.items = GraphCustomFunctionPortTypes;
 					desc.selected = type;
 					desc.font = UISystem::GetDefaultFont();
 					desc.fontSizePx = FontRow();
 					desc.onSelect = [this, id, port](u32 index) {
-						if (index < std::size(GRAPH_CUSTOM_FUNCTION_PORT_TYPES)) {
+						if (index < std::size(GraphCustomFunctionPortTypes)) {
 							Edit("Port Type", [&](GraphDocument& edited) {
-								return Ops::SetCustomFunctionPortType(edited, id, port, GRAPH_CUSTOM_FUNCTION_PORT_TYPES[index]);
+								return Ops::SetCustomFunctionPortType(edited, id, port, GraphCustomFunctionPortTypes[index]);
 							});
 						}
 					};
@@ -1814,30 +1814,30 @@ namespace Shalltear {
 			return held ? ReadString(held->value) : str();
 		};
 
-		const str type = stored(GRAPH_CUSTOM_FUNCTION_TYPE);
-		const bool file = type != GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES[1];
+		const str type = stored(GraphCustomFunctionType);
+		const bool file = type != GraphCustomFunctionSourceTypes[1];
 		UI::Widgets::DropdownDesc types;
-		types.items = GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES;
+		types.items = GraphCustomFunctionSourceTypes;
 		types.selected = file ? 0u : 1u;
 		types.font = UISystem::GetDefaultFont();
 		types.fontSizePx = FontRow();
 		types.onSelect = [setting](u32 index) {
-			if (index < std::size(GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES)) {
-				setting(GRAPH_CUSTOM_FUNCTION_TYPE, Ops::Quote(GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES[index]));
+			if (index < std::size(GraphCustomFunctionSourceTypes)) {
+				setting(GraphCustomFunctionType, Ops::Quote(GraphCustomFunctionSourceTypes[index]));
 			}
 		};
 		UI::Widgets::Dropdown(context, AddField(context, parent, "Type"), types);
 
-		const str name = stored(GRAPH_CUSTOM_FUNCTION_NAME);
+		const str name = stored(GraphCustomFunctionName);
 		UI::Widgets::TextFieldDesc named;
 		named.text = name;
 		named.font = UISystem::GetDefaultFont();
 		named.fontSizePx = FontRow();
-		named.onCommit = [setting](std::string_view text) { setting(GRAPH_CUSTOM_FUNCTION_NAME, Ops::Quote(text)); };
+		named.onCommit = [setting](std::string_view text) { setting(GraphCustomFunctionName, Ops::Quote(text)); };
 		UI::Widgets::TextField(context, AddField(context, parent, "Name"), named);
 
 		if (file) {
-			const Guid source = Guid::FromString(stored(GRAPH_CUSTOM_FUNCTION_SOURCE));
+			const Guid source = Guid::FromString(stored(GraphCustomFunctionSource));
 			const Path path = source.IsValid() ? AssetDatabase::LookupPath(source) : Path();
 			const str caption = path.ToString().empty() ? str("None") : std::filesystem::path(path.ToString()).filename().generic_string();
 			ObjectField::Desc field;
@@ -1849,7 +1849,7 @@ namespace Shalltear {
 			field.onDrop = [setting](const UI::DragPayload& payload, Vec2) {
 				Guid dropped;
 				if (FunctionFileOf(payload, dropped)) {
-					setting(GRAPH_CUSTOM_FUNCTION_SOURCE, Ops::Quote(dropped.ToString()));
+					setting(GraphCustomFunctionSource, Ops::Quote(dropped.ToString()));
 				}
 			};
 			field.onPick = [this, setting]() {
@@ -1863,10 +1863,10 @@ namespace Shalltear {
 				for (const AssetBrowserOps::AssignableAsset& candidate : shaders) {
 					const str extension =
 						StringUtil::ToLower(std::filesystem::path(AssetDatabase::LookupPath(candidate.guid).ToString()).extension().generic_string());
-					if (std::find(std::begin(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), extension) !=
-						std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS)) {
+					if (std::find(std::begin(GraphCustomFunctionExtensions), std::end(GraphCustomFunctionExtensions), extension) !=
+						std::end(GraphCustomFunctionExtensions)) {
 						items.push_back({candidate.display, "", true, false,
-										 [setting, guid = candidate.guid]() { setting(GRAPH_CUSTOM_FUNCTION_SOURCE, Ops::Quote(guid.ToString())); }});
+										 [setting, guid = candidate.guid]() { setting(GraphCustomFunctionSource, Ops::Quote(guid.ToString())); }});
 					}
 				}
 				if (!items.empty()) {
@@ -1875,13 +1875,13 @@ namespace Shalltear {
 			};
 			ObjectField::Build(context, AddField(context, parent, "Source"), field);
 		} else {
-			const str body = stored(GRAPH_CUSTOM_FUNCTION_BODY);
+			const str body = stored(GraphCustomFunctionBody);
 			UI::Widgets::TextFieldDesc text;
 			text.text = body;
 			text.font = UISystem::GetDefaultFont();
 			text.fontSizePx = FontRow();
 			text.multiline = true;
-			text.onCommit = [setting](std::string_view lines) { setting(GRAPH_CUSTOM_FUNCTION_BODY, Ops::Quote(lines)); };
+			text.onCommit = [setting](std::string_view lines) { setting(GraphCustomFunctionBody, Ops::Quote(lines)); };
 			UI::Widgets::TextField(context, AddField(context, parent, "Body"), text);
 		}
 	}
@@ -2153,7 +2153,7 @@ namespace Shalltear {
 
 		void RegisterOpener(const void* owner) {
 			AssetOpeners::Register(".slshader", [](const Guid& asset) { Open(asset); }, owner);
-			AssetOpeners::Register(GRAPH_SUBGRAPH_EXTENSION, [](const Guid& asset) { Open(asset); }, owner);
+			AssetOpeners::Register(GraphSubgraphExtension, [](const Guid& asset) { Open(asset); }, owner);
 		}
 
 	} // namespace NodeShaderWindowRegistry

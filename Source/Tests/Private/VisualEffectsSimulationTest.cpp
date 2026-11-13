@@ -127,11 +127,11 @@ TEST(VisualEffectsKernelTest, CommittedSidecarsCarryGuidsPackageResolvesBy) {
 		EXPECT_EQ(Guid::FromString(root["assetId"].AsString()), Guid::FromString(kernel.guid)) << kernel.path;
 	}
 #ifndef SHALLTEAR_SHARED
-	EXPECT_EQ(VisualEffectsImpl::PARTICLE_RESET_KERNEL, Guid::FromString(kernels[0].guid));
-	EXPECT_EQ(VisualEffectsImpl::PARTICLE_ARGUMENTS_KERNEL, Guid::FromString(kernels[1].guid));
-	EXPECT_EQ(VisualEffectsImpl::PARTICLE_SORT_LOCAL_KERNEL, Guid::FromString(kernels[2].guid));
-	EXPECT_EQ(VisualEffectsImpl::PARTICLE_SORT_MERGE_KERNEL, Guid::FromString(kernels[3].guid));
-	EXPECT_EQ(VisualEffectsImpl::PARTICLE_STRIPS_KERNEL, Guid::FromString(kernels[4].guid));
+	EXPECT_EQ(VisualEffectsImpl::ParticleResetKernel, Guid::FromString(kernels[0].guid));
+	EXPECT_EQ(VisualEffectsImpl::ParticleArgumentsKernel, Guid::FromString(kernels[1].guid));
+	EXPECT_EQ(VisualEffectsImpl::ParticleSortLocalKernel, Guid::FromString(kernels[2].guid));
+	EXPECT_EQ(VisualEffectsImpl::ParticleSortMergeKernel, Guid::FromString(kernels[3].guid));
+	EXPECT_EQ(VisualEffectsImpl::ParticleStripsKernel, Guid::FromString(kernels[4].guid));
 #endif
 }
 
@@ -360,7 +360,7 @@ namespace {
 
 	using VisualEffectsImpl::ParticleBatchKey;
 
-	constexpr ParticleBatchKey SPARKS{1, 1, 0};
+	constexpr ParticleBatchKey Sparks{1, 1, 0};
 
 	u32 FrameDispatches() { return VisualEffectsImpl::GetSimulation().GetFrameCounts().dispatches; }
 	u32 FrameBatches() { return VisualEffectsImpl::GetSimulation().GetFrameCounts().batches; }
@@ -406,7 +406,7 @@ TEST_F(ParticleSimulationFixture, SameKeySharesBatch) {
 
 	ParticleSystem systems[9];
 	for (u32 i = 0; i < 8; ++i) {
-		ASSERT_TRUE(Create(systems[i], 64, 2.5f, SPARKS, 8));
+		ASSERT_TRUE(Create(systems[i], 64, 2.5f, Sparks, 8));
 		ASSERT_EQ(systems[i].GetBatch(), systems[0].GetBatch()) << "system " << i;
 		EXPECT_EQ(systems[i].GetSlot(), i);
 	}
@@ -436,7 +436,7 @@ TEST_F(ParticleSimulationFixture, SameKeySharesBatch) {
 	EXPECT_EQ(dispatch[1], 8u);
 	EXPECT_EQ(dispatch[2], 1u);
 
-	ASSERT_TRUE(Create(systems[8], 64, 2.5f, SPARKS, 8));
+	ASSERT_TRUE(Create(systems[8], 64, 2.5f, Sparks, 8));
 	EXPECT_NE(systems[8].GetBatch(), systems[0].GetBatch());
 	EXPECT_EQ(systems[8].GetSlot(), 0u);
 	for (u32 i = 0; i < 9; ++i) {
@@ -451,9 +451,9 @@ TEST_F(ParticleSimulationFixture, SameKeySharesBatch) {
 
 TEST_F(ParticleSimulationFixture, EachSlotOfBatchRunsUpdates) {
 	ParticleSystem twice, once, paused;
-	ASSERT_TRUE(Create(twice, 256, 100.0f, SPARKS, 4));
-	ASSERT_TRUE(Create(once, 256, 100.0f, SPARKS, 4));
-	ASSERT_TRUE(Create(paused, 256, 100.0f, SPARKS, 4));
+	ASSERT_TRUE(Create(twice, 256, 100.0f, Sparks, 4));
+	ASSERT_TRUE(Create(once, 256, 100.0f, Sparks, 4));
+	ASSERT_TRUE(Create(paused, 256, 100.0f, Sparks, 4));
 	ASSERT_EQ(paused.GetBatch(), twice.GetBatch());
 	twice.Advance(1.0f, 150);
 	once.Advance(1.0f, 4);
@@ -497,12 +497,12 @@ TEST_F(ParticleSimulationFixture, EachSlotOfBatchRunsUpdates) {
 
 TEST_F(ParticleSimulationFixture, SlotLeftIsResetForNextSystem) {
 	ParticleSystem first, last;
-	ASSERT_TRUE(Create(first, 32, 100.0f, SPARKS, 4));
+	ASSERT_TRUE(Create(first, 32, 100.0f, Sparks, 4));
 	u32 slot = 0;
 	{
 		ParticleSystem middle;
-		ASSERT_TRUE(Create(middle, 32, 100.0f, SPARKS, 4));
-		ASSERT_TRUE(Create(last, 32, 100.0f, SPARKS, 4));
+		ASSERT_TRUE(Create(middle, 32, 100.0f, Sparks, 4));
+		ASSERT_TRUE(Create(last, 32, 100.0f, Sparks, 4));
 		first.Advance(1.0f, 5);
 		middle.Advance(1.0f, 40);
 		last.Advance(1.0f, 7);
@@ -511,7 +511,7 @@ TEST_F(ParticleSimulationFixture, SlotLeftIsResetForNextSystem) {
 		slot = middle.GetSlot();
 	}
 	ParticleSystem next;
-	ASSERT_TRUE(Create(next, 32, 100.0f, SPARKS, 4));
+	ASSERT_TRUE(Create(next, 32, 100.0f, Sparks, 4));
 	EXPECT_EQ(next.GetBatch(), first.GetBatch());
 	EXPECT_EQ(next.GetSlot(), slot);
 	first.Advance(1.0f, 1);
@@ -543,7 +543,7 @@ TEST_F(ParticleSimulationFixture, EmptyBatchFreedAfterLifetime) {
 	const u32 before = RenderSystem::GetStats().liveBuffers;
 	{
 		ParticleSystem system;
-		ASSERT_TRUE(Create(system, 64, 100.0f, SPARKS, 4));
+		ASSERT_TRUE(Create(system, 64, 100.0f, Sparks, 4));
 		EXPECT_EQ(RenderSystem::GetStats().liveBuffers, before + 3);
 		Frame(system, 1.0f, 10);
 	}
@@ -551,7 +551,7 @@ TEST_F(ParticleSimulationFixture, EmptyBatchFreedAfterLifetime) {
 	EXPECT_EQ(simulation.GetBatchCount(), 1u);
 	{
 		ParticleSystem again;
-		ASSERT_TRUE(Create(again, 64, 100.0f, SPARKS, 4));
+		ASSERT_TRUE(Create(again, 64, 100.0f, Sparks, 4));
 		EXPECT_EQ(RenderSystem::GetStats().liveBuffers, before + 3);
 		Frame(again, 1.0f, 2);
 		EXPECT_EQ(Alive(again), 2u);
@@ -570,10 +570,10 @@ TEST_F(ParticleSimulationFixture, EmptyBatchFreedAfterLifetime) {
 
 TEST_F(ParticleSimulationFixture, SharingNeedsLayoutNoGpuEvent) {
 	ParticleSystem a, b, plain, wider, eventful;
-	ASSERT_TRUE(Create(a, 64, 100.0f, SPARKS, 4));
-	ASSERT_TRUE(Create(b, 64, 100.0f, SPARKS, 4));
+	ASSERT_TRUE(Create(a, 64, 100.0f, Sparks, 4));
+	ASSERT_TRUE(Create(b, 64, 100.0f, Sparks, 4));
 	ASSERT_TRUE(Create(plain, 64, 100.0f));
-	ASSERT_TRUE(Create(wider, 128, 100.0f, SPARKS, 4));
+	ASSERT_TRUE(Create(wider, 128, 100.0f, Sparks, 4));
 	EXPECT_EQ(a.GetBatch(), b.GetBatch());
 	EXPECT_NE(plain.GetBatch(), a.GetBatch());
 	EXPECT_NE(wider.GetBatch(), a.GetBatch());
@@ -582,7 +582,7 @@ TEST_F(ParticleSimulationFixture, SharingNeedsLayoutNoGpuEvent) {
 	desc.attributeCount = 2;
 	desc.initialize = Handle<ShaderAsset>(&_initialize);
 	desc.update = Handle<ShaderAsset>(&_update);
-	desc.batch = SPARKS;
+	desc.batch = Sparks;
 	desc.batchSlots = 4;
 	desc.updateEvents.push_back({&plain, 4, 5});
 	ASSERT_TRUE(eventful.Create(desc));

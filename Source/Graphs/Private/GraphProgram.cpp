@@ -200,7 +200,7 @@ namespace Shalltear {
 			bool fragmentOnly;
 		};
 
-		constexpr std::array<OpInfo, static_cast<size_t>(GraphOp::Count)> OP_INFO = {{
+		constexpr std::array<OpInfo, static_cast<size_t>(GraphOp::Count)> OpInfoTable = {{
 			{"constant", true, false},
 			{"external", false, false},
 			{"-", true, false},
@@ -291,16 +291,16 @@ namespace Shalltear {
 			{"mesh index", false, false},
 			{"mesh vertex", false, false},
 		}};
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::SampleTextureGrad)].name == "SampleGrad", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::Keyword)].name == "keyword", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::IsInfinite)].name == "isinf", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::CallResult)].name == "result", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::Random)].name == "random", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::CurlNoise)].name == "curl noise", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::LoadTexture)].name == "Load", "OP_INFO is out of step with GraphOp");
-		static_assert(OP_INFO[static_cast<size_t>(GraphOp::MeshVertex)].name == "mesh vertex", "OP_INFO is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::SampleTextureGrad)].name == "SampleGrad", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::Keyword)].name == "keyword", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::IsInfinite)].name == "isinf", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::CallResult)].name == "result", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::Random)].name == "random", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::CurlNoise)].name == "curl noise", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::LoadTexture)].name == "Load", "OpInfoTable is out of step with GraphOp");
+		static_assert(OpInfoTable[static_cast<size_t>(GraphOp::MeshVertex)].name == "mesh vertex", "OpInfoTable is out of step with GraphOp");
 
-		const OpInfo& Info(GraphOp op) { return OP_INFO[static_cast<size_t>(op)]; }
+		const OpInfo& Info(GraphOp op) { return OpInfoTable[static_cast<size_t>(op)]; }
 
 		bool IsVector(GraphValueType type) { return GraphTypes::VectorWidth(type) != 0; }
 
@@ -907,13 +907,13 @@ namespace Shalltear {
 		u32 fromWidth = GraphTypes::VectorWidth(from);
 		u32 toWidth = GraphTypes::VectorWidth(to);
 		if (fromWidth != 0) {
-			constexpr std::string_view LEADING = "xyzw";
+			constexpr std::string_view Leading = "xyzw";
 			if (toWidth < fromWidth) {
-				return Swizzle(value, LEADING.substr(0, toWidth));
+				return Swizzle(value, Leading.substr(0, toWidth));
 			}
 			if (fromWidth == 1) {
-				constexpr std::string_view SPLAT = "xxxx";
-				return Swizzle(value, SPLAT.substr(0, toWidth));
+				constexpr std::string_view Splat = "xxxx";
+				return Swizzle(value, Splat.substr(0, toWidth));
 			}
 			// widening fills from 0 0 0 1
 			GraphValueId parts[GRAPH_MAX_OPERANDS] = {value};

@@ -34,7 +34,7 @@ namespace Shalltear {
 
 	void RegisterNodeShader(const void* owner) {
 		AssetImporterRegistry::RegisterExtension(".slshader", &GetImporter(), owner);
-		AssetImporterRegistry::Register(GetSubgraphImporter().GetAssetType(), &GetSubgraphImporter(), {GRAPH_SUBGRAPH_EXTENSION}, owner);
+		AssetImporterRegistry::Register(GetSubgraphImporter().GetAssetType(), &GetSubgraphImporter(), {GraphSubgraphExtension}, owner);
 		EditorPreviews::AssetBadges::Register(GetSubgraphImporter().GetAssetType(), EditorIcons::Glyph::AssetShaderSubgraph,
 											  EditorTheme::ColorToken::AssetShader, owner);
 		MaterialInspectorOps::RegisterShaderSource(".slshader", &GraphSurface::IsMaterialShaderSource, owner);
@@ -43,7 +43,7 @@ namespace Shalltear {
 		GraphShadingTarget target;
 		target.canShadeEffects = &GraphSurface::CanShadeEffects;
 		target.generateFunctions = &GraphSurface::GenerateFunctions;
-		if (GraphShadingTargets::Register(GRAPH_SHADER_DOCUMENT_TYPE, target, owner)) {
+		if (GraphShadingTargets::Register(GraphShaderDocumentType, target, owner)) {
 			_owner = owner;
 		}
 	}

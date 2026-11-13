@@ -29,8 +29,8 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view BAKE_SUFFIX = "-reflectionHDR";
-		constexpr std::string_view BAKE_EXTENSION = ".hdr";
+		constexpr std::string_view BakeSuffix = "-reflectionHDR";
+		constexpr std::string_view BakeExtension = ".hdr";
 
 		str FileSafe(std::string_view name) {
 			str out(name);
@@ -236,17 +236,17 @@ namespace Shalltear {
 				const Path currentPath = AssetDatabase::LookupPath(current->assetId);
 				const str& currentKey = currentPath.ToString();
 				const bool inFolder = currentPath.GetDirectory() == folder;
-				const bool isBake = currentKey.ends_with(str(BAKE_SUFFIX) + str(BAKE_EXTENSION)) ||
-									currentKey.find(str(BAKE_SUFFIX) + " ") != str::npos;
+				const bool isBake = currentKey.ends_with(str(BakeSuffix) + str(BakeExtension)) ||
+									currentKey.find(str(BakeSuffix) + " ") != str::npos;
 				if (inFolder && isBake && !AnotherProbeUses(*probe, current->GetInstanceId())) {
 					return currentPath;
 				}
 			}
 
-			const str stem = folder + "/" + FileSafe(owner->name) + str(BAKE_SUFFIX);
-			str candidate = stem + str(BAKE_EXTENSION);
+			const str stem = folder + "/" + FileSafe(owner->name) + str(BakeSuffix);
+			str candidate = stem + str(BakeExtension);
 			for (u32 n = 1; FileSystem::Exists(Path(candidate)); ++n) {
-				candidate = std::format("{} {}{}", stem, n, BAKE_EXTENSION);
+				candidate = std::format("{} {}{}", stem, n, BakeExtension);
 			}
 			return Path(candidate);
 		}

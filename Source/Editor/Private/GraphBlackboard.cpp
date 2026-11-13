@@ -16,12 +16,12 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr StringHash PAYLOAD = "GraphBlackboardItem"_hash;
+		constexpr StringHash Payload = "GraphBlackboardItem"_hash;
 
-		u64 g_nextBoard = 0;
+		u64 _nextBoard = 0;
 
 		bool PayloadItem(const UI::DragPayload& payload, u64 board, u64& outItem) {
-			if (payload.type != PAYLOAD || !payload.data.Is<GraphBlackboardDragData>()) {
+			if (payload.type != Payload || !payload.data.Is<GraphBlackboardDragData>()) {
 				return false;
 			}
 			const GraphBlackboardDragData& data = payload.data.As<GraphBlackboardDragData>();
@@ -33,7 +33,7 @@ namespace Shalltear {
 
 	void GraphBlackboard::Build(EditorPanel* owner, UI::Context& context, UI::ElementHandle parent, GraphBlackboardDesc desc) {
 		if (_boardId == 0) {
-			_boardId = ++g_nextBoard;
+			_boardId = ++_nextBoard;
 		}
 		_desc = std::move(desc);
 		_context = &context;
@@ -203,7 +203,7 @@ namespace Shalltear {
 						return;
 					}
 					UI::DragPayload payload;
-					payload.type = PAYLOAD;
+					payload.type = Payload;
 					payload.data = Variant(GraphBlackboardDragData{_boardId, id});
 					payload.display = name;
 					UISystem::BeginDragPayload(payload);

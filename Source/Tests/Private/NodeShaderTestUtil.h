@@ -77,13 +77,13 @@ namespace Shalltear::NodeShaderTest {
 
 		void Graph(std::string_view key, std::string_view json) { document.settings.push_back({str(key), str(json)}); }
 
-		GraphProperty& Blackboard(u32 id, std::string_view name, std::string_view reference, std::string_view type, std::string_view defaultJson = {}) {
+		GraphProperty& Blackboard(u32 id, std::string_view name, std::string_view reference, std::string_view type, std::string_view defaultJSON = {}) {
 			GraphProperty property;
 			property.id = id;
 			property.name.assign(name);
 			property.reference.assign(reference);
 			property.type.assign(type);
-			property.defaultValue.assign(defaultJson);
+			property.defaultValue.assign(defaultJSON);
 			document.properties.push_back(std::move(property));
 			return document.properties.back();
 		}

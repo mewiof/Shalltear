@@ -25,7 +25,7 @@ namespace Shalltear::AudioEditor {
 				return;
 			}
 			preferences->muteAudio = muted;
-			Settings::NotifyChanged(PREFERENCES, "muteAudio");
+			Settings::NotifyChanged(PreferencesCategory, "muteAudio");
 			Settings::Save();
 			AudioImpl::SetGameMuted(muted);
 		}
@@ -46,7 +46,7 @@ namespace Shalltear::AudioEditor {
 		words.label = "Mute Audio";
 		words.tooltip = "Silences the game's sound. Clip previews still play. Also on the Runtime View toolbar.";
 		words.keywords = "mute silence game sound";
-		SettingsPresentation::RegisterField(PREFERENCES, "muteAudio", std::move(words), owner);
+		SettingsPresentation::RegisterField(PreferencesCategory, "muteAudio", std::move(words), owner);
 		UpdateGameMute();
 	}
 

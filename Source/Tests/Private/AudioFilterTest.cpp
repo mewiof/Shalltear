@@ -138,8 +138,8 @@ TEST_F(AudioFilterFixture, EveryFilterFieldLandsOnParameter) {
 	reverb->SetReflectionsDelay(0.08f);
 	reverb->SetReverbLevel(-9.0f);
 	reverb->SetReverbDelay(0.01f);
-	reverb->SetHfReference(1100.0f);
-	reverb->SetLfReference(120.0f);
+	reverb->SetHFReference(1100.0f);
+	reverb->SetLFReference(120.0f);
 	reverb->SetDiffusion(13.0f);
 	reverb->SetDensity(14.0f);
 	const std::vector<f32> reverbValues = {-1.0f, -2.0f, -3.0f, 5.0f, 0.6f, -7.0f, 0.08f, -9.0f, 0.01f, 13.0f, 14.0f, 1100.0f, -4.0f, 120.0f};
@@ -287,15 +287,15 @@ namespace {
 		bool _silences;
 	};
 
-	constexpr std::string_view SLOW_SILENCE = "TestSlowSilence";
-	constexpr std::string_view SLOW_PASS = "TestSlowPass";
+	constexpr std::string_view SlowSilence = "TestSlowSilence";
+	constexpr std::string_view SlowPass = "TestSlowPass";
 
 	class SlowFilter : public AudioFilter {
 	public:
 		SLT_REFLECT_COMPONENT(SlowFilter, AudioFilter)
 		SLT_END_REFLECT()
 
-		std::string_view effect = SLOW_SILENCE;
+		std::string_view effect = SlowSilence;
 	private:
 		std::string_view Describe(f32* values, u32& count) const override {
 			(void)values;
@@ -312,8 +312,8 @@ namespace {
 
 		void SetUp() override {
 			AudioFilterFixture::SetUp();
-			ASSERT_TRUE(AudioEffects::Register(SLOW_SILENCE, &_silence, &_effectsToken));
-			ASSERT_TRUE(AudioEffects::Register(SLOW_PASS, &_pass, &_effectsToken));
+			ASSERT_TRUE(AudioEffects::Register(SlowSilence, &_silence, &_effectsToken));
+			ASSERT_TRUE(AudioEffects::Register(SlowPass, &_pass, &_effectsToken));
 			_source->SetPlayOnAwake(false);
 		}
 
@@ -335,7 +335,7 @@ namespace {
 } // namespace
 
 TEST_F(AudioStartFixture, MidPassVoiceFilteredFromStart) {
-	AddSlow(SLOW_SILENCE);
+	AddSlow(SlowSilence);
 	LoopLevel(0.25f);
 	RunFrame();
 	ASSERT_EQ(Peak(), 0.0f);
@@ -348,14 +348,14 @@ TEST_F(AudioStartFixture, MidPassVoiceFilteredFromStart) {
 TEST_F(AudioStartFixture, SameFrameFilterHeardFromStart) {
 	LoopLevel(0.25f);
 	RunFrame();
-	AddSlow(SLOW_SILENCE);
+	AddSlow(SlowSilence);
 	_source->Play();
 	ASSERT_TRUE(WaitForBlocks(4));
 	EXPECT_EQ(Peak(), 0.0f);
 }
 
 TEST_F(AudioStartFixture, OneShotFilteredFromStart) {
-	AddSlow(SLOW_SILENCE);
+	AddSlow(SlowSilence);
 	RunFrame();
 	_source->PlayOneShot(ResourceOf(MakeClip(96000, 1, 0.25f)));
 	ASSERT_TRUE(WaitForBlocks(4));
@@ -365,7 +365,7 @@ TEST_F(AudioStartFixture, OneShotFilteredFromStart) {
 
 TEST_F(AudioStartFixture, BypassListenerEffectsFromStart) {
 	_listener->AddComponent<AudioDistortionFilter>();
-	AddSlow(SLOW_PASS);
+	AddSlow(SlowPass);
 	LoopLevel(0.25f);
 	_source->SetBypassListenerEffects(true);
 	RunFrame();
@@ -375,7 +375,7 @@ TEST_F(AudioStartFixture, BypassListenerEffectsFromStart) {
 }
 
 TEST_F(AudioStartFixture, BypassEffectsSkipsFiltersFromStart) {
-	AddSlow(SLOW_SILENCE);
+	AddSlow(SlowSilence);
 	LoopLevel(0.25f);
 	_source->SetBypassEffects(true);
 	RunFrame();
@@ -386,7 +386,7 @@ TEST_F(AudioStartFixture, BypassEffectsSkipsFiltersFromStart) {
 
 TEST_F(AudioStartFixture, BypassEffectsSkipsListenerFromStart) {
 	_listener->AddComponent<AudioDistortionFilter>();
-	AddSlow(SLOW_PASS);
+	AddSlow(SlowPass);
 	LoopLevel(0.25f);
 	_source->SetBypassEffects(true);
 	RunFrame();

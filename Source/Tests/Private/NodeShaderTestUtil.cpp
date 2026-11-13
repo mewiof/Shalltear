@@ -30,7 +30,7 @@ namespace Shalltear::NodeShaderTest {
 	}
 
 	std::span<const GraphBinding> TestBindings() {
-		static const std::vector<GraphBinding> BINDINGS = [] {
+		static const std::vector<GraphBinding> bindings = [] {
 			std::vector<GraphBinding> out;
 			std::vector<GraphBinding> every(GraphSurface::Bindings().begin(), GraphSurface::Bindings().end());
 			every.insert(every.end(), GraphSurface::LightingBindings().begin(), GraphSurface::LightingBindings().end());
@@ -42,7 +42,7 @@ namespace Shalltear::NodeShaderTest {
 			}
 			return out;
 		}();
-		return {BINDINGS.data(), BINDINGS.size()};
+		return {bindings.data(), bindings.size()};
 	}
 
 	std::string_view TestBindingExpression(std::string_view name) {

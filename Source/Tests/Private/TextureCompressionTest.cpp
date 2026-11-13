@@ -138,7 +138,7 @@ TEST(TextureCompressionTest, SRGBChainAveragesLinear) {
 	Vector<u8> image{GetMemoryResource(MemTag::Asset)};
 	image = {0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 255};
 	Vector<u8> chain{GetMemoryResource(MemTag::Asset)};
-	TextureCompressionOps::BuildChain(image, {2, 2}, 2, TexelMeaning::SRGBColor, chain);
+	TextureCompressionOps::BuildChain(image, {2, 2}, 2, TexelMeaning::sRGBColor, chain);
 	ASSERT_EQ(chain.size(), 16u + 4u);
 	EXPECT_NEAR(chain[16], 188, 1);
 	EXPECT_EQ(chain[19], 255);
@@ -249,7 +249,7 @@ TEST(TextureCompressionTest, ArraySlicesSideBySide) {
 	input.size = size;
 	input.slices = 2;
 	input.mipLevels = 4;
-	input.meaning = TexelMeaning::SRGBColor;
+	input.meaning = TexelMeaning::sRGBColor;
 	Vector<u8> blocks{GetMemoryResource(MemTag::Asset)};
 	ASSERT_TRUE(CodecFor(RHI::Format::BC7SRGB).encode(RHI::Format::BC7SRGB, input, blocks));
 	EXPECT_EQ(blocks.size(), static_cast<size_t>((4 + 1 + 1 + 1) * 2 * 16));
@@ -274,7 +274,7 @@ TEST(TextureCompressionTest, EncodingIgnoresWorkerCount) {
 		RHI::Format texelFormat;
 		TexelMeaning meaning;
 	};
-	const Case cases[] = {{RHI::Format::BC7SRGB, image, RHI::Format::RGBA8Unorm, TexelMeaning::SRGBColor},
+	const Case cases[] = {{RHI::Format::BC7SRGB, image, RHI::Format::RGBA8Unorm, TexelMeaning::sRGBColor},
 						  {RHI::Format::BC6HUFloat, hdr, RHI::Format::RGBA16Float, TexelMeaning::Linear}};
 	for (const Case& c : cases) {
 		TextureEncodeInput input;
@@ -283,9 +283,9 @@ TEST(TextureCompressionTest, EncodingIgnoresWorkerCount) {
 		input.size = size;
 		input.mipLevels = 1;
 		input.meaning = c.meaning;
-		Vector<u8> inline_{GetMemoryResource(MemTag::Asset)};
+		Vector<u8> serial{GetMemoryResource(MemTag::Asset)};
 		ASSERT_EQ(JobSystem::GetWorkerCount(), 0u);
-		ASSERT_TRUE(CodecFor(c.format).encode(c.format, input, inline_));
+		ASSERT_TRUE(CodecFor(c.format).encode(c.format, input, serial));
 
 		JobSystem::Initialize();
 		const u32 workers = JobSystem::GetWorkerCount();
@@ -296,7 +296,7 @@ TEST(TextureCompressionTest, EncodingIgnoresWorkerCount) {
 		ASSERT_GT(workers, 0u);
 		ASSERT_TRUE(encoded);
 		EXPECT_EQ(spread.size(), static_cast<size_t>(64 * 64 * 16));
-		EXPECT_TRUE(spread == inline_) << "format " << static_cast<u32>(c.format);
+		EXPECT_TRUE(spread == serial) << "format " << static_cast<u32>(c.format);
 	}
 }
 
@@ -406,7 +406,7 @@ TEST(TextureCompressionTest, HdrMismatchRefused) {
 
 	input.texels = hdr;
 	input.texelFormat = RHI::Format::RGBA16Float;
-	input.meaning = TexelMeaning::SRGBColor;
+	input.meaning = TexelMeaning::sRGBColor;
 	EXPECT_FALSE(CodecFor(RHI::Format::BC6HUFloat).encode(RHI::Format::BC6HUFloat, input, blocks));
 	input.meaning = TexelMeaning::Linear;
 

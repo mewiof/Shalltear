@@ -85,13 +85,13 @@ namespace {
 		StreamingMixer(const StreamingMixer&) = delete;
 		StreamingMixer& operator=(const StreamingMixer&) = delete;
 
-		AudioCommand Start(u32 slot, AudioClipData* clip, f32 pitch = 1.0f, bool loop = false, u64 at = 0, u64 frame = 0, bool virtual_ = false) {
+		AudioCommand Start(u32 slot, AudioClipData* clip, f32 pitch = 1.0f, bool loop = false, u64 at = 0, u64 frame = 0, bool isVirtual = false) {
 			AudioCommand play = _mixer.Play(slot, clip, at, frame);
 			play.pitch = pitch;
 			play.loop = loop;
-			play.flag = virtual_;
+			play.flag = isVirtual;
 			EXPECT_TRUE(_mixer.Push(play));
-			if (!virtual_) {
+			if (!isVirtual) {
 				Attach(play);
 			}
 			return play;
@@ -313,7 +313,7 @@ namespace {
 		ClipBlock decoded;
 
 		explicit OpusClip(const DecodedAudio& audio)
-			: cooked(Resident(audio, AudioCompressionFormat::Opus)), decoded(cooked ? DecodeToPcm(*cooked.Get()) : nullptr) {}
+			: cooked(Resident(audio, AudioCompressionFormat::Opus)), decoded(cooked ? DecodeToPCM(*cooked.Get()) : nullptr) {}
 
 		explicit operator bool() const { return cooked && decoded; }
 		AudioClipData* Decoded() const { return const_cast<AudioClipData*>(decoded.Get()); }
@@ -598,7 +598,7 @@ namespace {
 		std::memset(file.data, 0x5A, static_cast<size_t>(offset));
 		std::memcpy(file.data + offset, bytes, static_cast<size_t>(size));
 		if (corrupt) {
-			file.data[offset + QoaFrameOffset(clip.channels, 6)] ^= 0x01;
+			file.data[offset + QOAFrameOffset(clip.channels, 6)] ^= 0x01;
 		}
 		const std::filesystem::path path = std::filesystem::temp_directory_path() / name;
 		EXPECT_TRUE(FileSystem::WriteFile(Path(path.generic_string()), file));
@@ -658,7 +658,7 @@ TEST(AudioStreamTest, CorruptFramePlaysSilence) {
 	u64 size = 0;
 	GetPayload(*resident.Get(), bytes, size);
 	{
-		ClipBlock located(LocateInFile(AudioClipEncoding::Qoa, path, 0, size, resident.Get()->layout, 48000, resident.Get()->frames));
+		ClipBlock located(LocateInFile(AudioClipEncoding::QOA, path, 0, size, resident.Get()->layout, 48000, resident.Get()->frames));
 		ASSERT_TRUE(located);
 		StreamingMixer heard;
 		StreamingMixer held;
@@ -751,14 +751,14 @@ TEST(AudioStreamTest, MismatchedPayloadRefused) {
 	u64 size = 0;
 	GetPayload(clip, bytes, size);
 	auto locate = [&](u64 offset, u64 bytesAt, u64 frames, const std::filesystem::path& where) {
-		AudioClipData* data = LocateInFile(AudioClipEncoding::Qoa, where, offset, bytesAt, clip.layout, 48000, frames);
+		AudioClipData* data = LocateInFile(AudioClipEncoding::QOA, where, offset, bytesAt, clip.layout, 48000, frames);
 		const bool made = data != nullptr;
 		ReleaseClipData(data);
 		return made;
 	};
 	EXPECT_TRUE(locate(64, size, clip.frames, path));
 	EXPECT_FALSE(locate(64, size - 1, clip.frames, path));
-	ASSERT_EQ(QoaFileSize(1, clip.frames - 1), size);
+	ASSERT_EQ(QOAFileSize(1, clip.frames - 1), size);
 	EXPECT_FALSE(locate(64, size, clip.frames - 1, path));
 	EXPECT_FALSE(locate(65, size, clip.frames, path));
 	EXPECT_FALSE(locate(0, size, clip.frames, path));
@@ -878,10 +878,10 @@ namespace {
 			u64 size = 0;
 			GetPayload(*cooked, bytes, size);
 			if (cooked->codec != AudioClipEncoding::Opus) {
-				return CreateQoaClipData(bytes, size, cooked->layout);
+				return CreateQOAClipData(bytes, size, cooked->layout);
 			}
 			AudioClipData* packets = CreateOpusClipData(bytes, size, cooked->layout, cooked->frames);
-			AudioClipData* decoded = packets ? DecodeToPcm(*packets) : nullptr;
+			AudioClipData* decoded = packets ? DecodeToPCM(*packets) : nullptr;
 			ReleaseClipData(packets);
 			return decoded;
 		}

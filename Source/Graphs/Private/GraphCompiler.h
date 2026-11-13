@@ -71,7 +71,7 @@ namespace Shalltear {
 		return first < diagnostics.size() && CountDiagnostics(diagnostics.subspan(first), GraphDiagnosticSeverity::Error) > 0;
 	}
 
-	inline constexpr std::string_view GRAPH_IGNORED_ERRORS_SETTING = "Ignored Errors";
+	inline constexpr std::string_view GraphIgnoredErrorsSetting = "Ignored Errors";
 
 	namespace GraphCompiler {
 

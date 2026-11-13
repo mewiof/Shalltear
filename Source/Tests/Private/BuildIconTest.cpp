@@ -26,8 +26,8 @@ namespace {
 
 	using Texel = std::array<u8, 4>;
 
-	constexpr Texel RED{255, 0, 0, 255};
-	constexpr Texel CLEAR{0, 0, 0, 0};
+	constexpr Texel Red{255, 0, 0, 255};
+	constexpr Texel Clear{0, 0, 0, 0};
 
 	struct IcoEntry {
 		u32 size = 0;
@@ -152,7 +152,7 @@ namespace {
 			return str(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 		}
 
-		void WriteTga(const str& relative, u32 width, u32 height, const std::function<Texel(u32, u32)>& texel) const {
+		void WriteTGA(const str& relative, u32 width, u32 height, const std::function<Texel(u32, u32)>& texel) const {
 			str bytes(18, '\0');
 			bytes[2] = 2;
 			bytes[12] = static_cast<char>(width & 0xFF);
@@ -226,7 +226,7 @@ namespace {
 			return images;
 		}
 
-		bool DecodePng(const str& png, TextureAsset& out) const {
+		bool DecodePNG(const str& png, TextureAsset& out) const {
 			const fs::path file = _root / "Decoded.png";
 			WriteBytes(file, png);
 			out.settings.generateMips = false;
@@ -274,7 +274,7 @@ TEST_F(BuildIconFixture, NoIconMakesNothing) {
 	EXPECT_TRUE(_context->executableIconFile.empty());
 	EXPECT_TRUE(_context->windowIconDocument.empty());
 
-	WriteTga("Assets/Icon.tga", 32, 32, Solid(RED));
+	WriteTGA("Assets/Icon.tga", 32, 32, Solid(Red));
 	EXPECT_EQ(RunStep("Assets/Icon.tga", {}, {}), BuildStepStatus::Succeeded);
 	EXPECT_TRUE(_context->executableIconFile.empty());
 	EXPECT_TRUE(_context->windowIconDocument.empty());
@@ -282,7 +282,7 @@ TEST_F(BuildIconFixture, NoIconMakesNothing) {
 }
 
 TEST_F(BuildIconFixture, IcoHoldsEachRequestedSize) {
-	WriteTga("Assets/Icon.tga", 512, 512, Solid(RED));
+	WriteTGA("Assets/Icon.tga", 512, 512, Solid(Red));
 	ASSERT_EQ(RunStep("Assets/Icon.tga", {16, 32, 256}, {}), BuildStepStatus::Succeeded);
 	EXPECT_TRUE(_context->windowIconDocument.empty());
 
@@ -297,8 +297,8 @@ TEST_F(BuildIconFixture, IcoHoldsEachRequestedSize) {
 		EXPECT_EQ(Read32(entry.payload, 4), entry.size);
 		EXPECT_EQ(Read32(entry.payload, 8), entry.size * 2);
 		EXPECT_EQ(Read16(entry.payload, 14), 32u);
-		EXPECT_EQ(DibTexel(entry, 0, 0), RED);
-		EXPECT_EQ(DibTexel(entry, entry.size - 1, entry.size - 1), RED);
+		EXPECT_EQ(DibTexel(entry, 0, 0), Red);
+		EXPECT_EQ(DibTexel(entry, entry.size - 1, entry.size - 1), Red);
 		EXPECT_FALSE(DibMasked(entry, 0, 0));
 	}
 	EXPECT_EQ(entries[2].size, 256u);
@@ -317,18 +317,18 @@ TEST_F(BuildIconFixture, PngEntryMatchesSource) {
 			texel[3] = 0;
 		}
 	}
-	WriteTga("Assets/Noise.tga", 256, 256, [&](u32 x, u32 y) { return source[y * 256 + x]; });
+	WriteTGA("Assets/Noise.tga", 256, 256, [&](u32 x, u32 y) { return source[y * 256 + x]; });
 	ASSERT_EQ(RunStep("Assets/Noise.tga", {256}, {}), BuildStepStatus::Succeeded);
 
 	const std::vector<IcoEntry> entries = ExecutableIcon();
 	ASSERT_EQ(entries.size(), 1u);
 	TextureAsset decoded;
-	ASSERT_TRUE(DecodePng(entries[0].payload, decoded));
+	ASSERT_TRUE(DecodePNG(entries[0].payload, decoded));
 	ASSERT_EQ(decoded.size, Vec2I(256, 256));
 	ASSERT_EQ(decoded.pixels.size(), source.size() * 4);
 	u32 mismatches = 0;
 	for (size_t i = 0; i < source.size(); ++i) {
-		const Texel expected = source[i][3] == 0 ? CLEAR : source[i];
+		const Texel expected = source[i][3] == 0 ? Clear : source[i];
 		for (u32 channel = 0; channel < 4; ++channel) {
 			mismatches += decoded.pixels[i * 4 + channel] != expected[channel] ? 1 : 0;
 		}
@@ -337,21 +337,21 @@ TEST_F(BuildIconFixture, PngEntryMatchesSource) {
 }
 
 TEST_F(BuildIconFixture, FlatPngCompresses) {
-	WriteTga("Assets/Flat.tga", 256, 256, Solid({30, 60, 200, 255}));
+	WriteTGA("Assets/Flat.tga", 256, 256, Solid({30, 60, 200, 255}));
 	ASSERT_EQ(RunStep("Assets/Flat.tga", {256}, {}), BuildStepStatus::Succeeded);
 
 	const std::vector<IcoEntry> entries = ExecutableIcon();
 	ASSERT_EQ(entries.size(), 1u);
 	EXPECT_LT(entries[0].payload.size(), 256u * 256u * 4u / 50u);
 	TextureAsset decoded;
-	ASSERT_TRUE(DecodePng(entries[0].payload, decoded));
+	ASSERT_TRUE(DecodePNG(entries[0].payload, decoded));
 	ASSERT_EQ(decoded.pixels.size(), 256u * 256u * 4u);
 	EXPECT_EQ(decoded.pixels[0], 30);
 	EXPECT_EQ(decoded.pixels[decoded.pixels.size() - 2], 200);
 }
 
 TEST_F(BuildIconFixture, CheckerAveragesInLinearLight) {
-	WriteTga("Assets/Checker.tga", 64, 64, [](u32 x, u32 y) {
+	WriteTGA("Assets/Checker.tga", 64, 64, [](u32 x, u32 y) {
 		return (x + y) % 2 == 0 ? Texel{0, 0, 0, 255} : Texel{255, 255, 255, 255};
 	});
 	ASSERT_EQ(RunStep("Assets/Checker.tga", {}, {16}), BuildStepStatus::Succeeded);
@@ -368,30 +368,30 @@ TEST_F(BuildIconFixture, CheckerAveragesInLinearLight) {
 }
 
 TEST_F(BuildIconFixture, TransparencyDoesNotDarkenEdges) {
-	WriteTga("Assets/Half.tga", 64, 64, [](u32 x, u32) { return x < 30 ? RED : CLEAR; });
+	WriteTGA("Assets/Half.tga", 64, 64, [](u32 x, u32) { return x < 30 ? Red : Clear; });
 	ASSERT_EQ(RunStep("Assets/Half.tga", {}, {16}), BuildStepStatus::Succeeded);
 
 	const std::vector<DocumentImage> images = WindowIcon();
 	ASSERT_EQ(images.size(), 1u);
-	EXPECT_EQ(DocumentTexel(images[0], 6, 8), RED);
+	EXPECT_EQ(DocumentTexel(images[0], 6, 8), Red);
 	EXPECT_EQ(DocumentTexel(images[0], 7, 8), (Texel{255, 0, 0, 128}));
-	EXPECT_EQ(DocumentTexel(images[0], 8, 8), CLEAR);
+	EXPECT_EQ(DocumentTexel(images[0], 8, 8), Clear);
 }
 
 TEST_F(BuildIconFixture, NonSquareSourceIsCentered) {
 	const Texel green{20, 220, 40, 255};
-	WriteTga("Assets/Wide.tga", 64, 32, Solid(green));
+	WriteTGA("Assets/Wide.tga", 64, 32, Solid(green));
 	ASSERT_EQ(RunStep("Assets/Wide.tga", {16}, {16}), BuildStepStatus::Succeeded);
 
 	const std::vector<DocumentImage> images = WindowIcon();
 	ASSERT_EQ(images.size(), 1u);
 	for (u32 y = 0; y < 16; ++y) {
-		EXPECT_EQ(DocumentTexel(images[0], 8, y), y >= 4 && y < 12 ? green : CLEAR) << y;
+		EXPECT_EQ(DocumentTexel(images[0], 8, y), y >= 4 && y < 12 ? green : Clear) << y;
 	}
 
 	const std::vector<IcoEntry> entries = ExecutableIcon();
 	ASSERT_EQ(entries.size(), 1u);
-	EXPECT_EQ(DibTexel(entries[0], 8, 2), CLEAR);
+	EXPECT_EQ(DibTexel(entries[0], 8, 2), Clear);
 	EXPECT_TRUE(DibMasked(entries[0], 8, 2));
 	EXPECT_EQ(DibTexel(entries[0], 8, 8), green);
 	EXPECT_FALSE(DibMasked(entries[0], 8, 8));
@@ -399,7 +399,7 @@ TEST_F(BuildIconFixture, NonSquareSourceIsCentered) {
 
 TEST_F(BuildIconFixture, WindowDocumentHoldsEachSize) {
 	const Texel color{10, 200, 30, 255};
-	WriteTga("Assets/Icon.tga", 96, 96, Solid(color));
+	WriteTGA("Assets/Icon.tga", 96, 96, Solid(color));
 	ASSERT_EQ(RunStep("Assets/Icon.tga", {}, {16, 48}), BuildStepStatus::Succeeded);
 	EXPECT_TRUE(_context->executableIconFile.empty());
 
@@ -416,7 +416,7 @@ TEST_F(BuildIconFixture, WindowDocumentHoldsEachSize) {
 }
 
 TEST_F(BuildIconFixture, SmallSourceWarns) {
-	WriteTga("Assets/Small.tga", 32, 32, Solid(RED));
+	WriteTGA("Assets/Small.tga", 32, 32, Solid(Red));
 	ASSERT_EQ(RunStep("Assets/Small.tga", {16, 256}, {}), BuildStepStatus::Succeeded);
 	EXPECT_TRUE(HasIssue(BuildIssueSeverity::Warning));
 	EXPECT_EQ(ExecutableIcon().size(), 2u);
@@ -442,7 +442,7 @@ TEST_F(BuildIconFixture, UnreadableSourceFails) {
 }
 
 TEST_F(BuildIconFixture, ValidationFlagsMissingAndAbsolute) {
-	WriteTga("Assets/Icon.tga", 16, 16, Solid(RED));
+	WriteTGA("Assets/Icon.tga", 16, 16, Solid(Red));
 	WriteProfile("Missing", "Windows", "Assets/Gone.png");
 	WriteProfile("Absolute", "Linux", (_root / "Assets" / "Icon.tga").generic_string());
 	WriteProfile("Present", "Windows", "Assets/Icon.tga");

@@ -25,7 +25,7 @@ namespace Shalltear {
 
 	namespace {
 
-		constexpr std::string_view LIBRARY = GRAPH_GENERATED_DIRECTORY;
+		constexpr std::string_view Library = GraphGeneratedDirectory;
 
 		PrimitiveShape ShapeOf(NodeShaderPreviewMesh mesh) {
 			switch (mesh) {
@@ -76,7 +76,7 @@ namespace Shalltear {
 	void NodeShaderPreviews::Bind(const Guid& asset, std::string_view graphName, u32 serial) {
 		_asset = asset;
 		_graphName = str(graphName);
-		const Path library = FileSystem::Resolve(Path(str(LIBRARY)));
+		const Path library = FileSystem::Resolve(Path(str(Library)));
 		_nodesFile = Path(std::format("{}/{}.nodes{}.hlsl", library.ToString(), asset.ToString(), serial));
 		_surfaceFile = Path(std::format("{}/{}.preview{}.hlsl", library.ToString(), asset.ToString(), serial));
 		_stale = true;
@@ -149,7 +149,7 @@ namespace Shalltear {
 		if (text.empty() || text == job.adopted) {
 			return false;
 		}
-		FileSystem::CreateDirectory(FileSystem::Resolve(Path(str(LIBRARY))));
+		FileSystem::CreateDirectory(FileSystem::Resolve(Path(str(Library))));
 		if (!FileSystem::WriteTextFile(file, text)) {
 			SLT_LOG_ERROR("NodeShader", "couldn't write a preview's shader to '{}'", file.ToString());
 			return false;
@@ -181,7 +181,7 @@ namespace Shalltear {
 		Vector<u32> surfaceLines{GetMemoryResource(MemTag::Editor)};
 		Vector<GraphDiagnostic> surfaceDiagnostics{GetMemoryResource(MemTag::Editor)};
 		const bool generated =
-			document.type == GRAPH_SUBGRAPH_DOCUMENT_TYPE
+			document.type == GraphSubgraphDocumentType
 				? GraphSurface::GenerateSubgraphPreview(document, _graphName, surface, surfaceDiagnostics, &_definitions, _asset, &surfaceLines)
 				: GraphSurface::Generate(document, _graphName, surface, surfaceDiagnostics, &_definitions, &surfaceLines);
 		if (generated) {

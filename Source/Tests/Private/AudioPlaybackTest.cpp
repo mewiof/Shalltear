@@ -289,7 +289,7 @@ TEST_F(AudioPlaybackFixture, NoListenerMeansSilence) {
 }
 
 TEST_F(AudioLogFixture, GatedSoundReportedUnheard) {
-	constexpr std::string_view UNHEARD = "no Audio Listener is enabled";
+	constexpr std::string_view Unheard = "no Audio Listener is enabled";
 	AudioClip* clip = MakeClip(4800, 1, 0.5f);
 	AudioPlayParams params = Looping();
 	params.output = GetDeviceOutput();
@@ -298,13 +298,13 @@ TEST_F(AudioLogFixture, GatedSoundReportedUnheard) {
 	ASSERT_TRUE(preview.IsValid());
 	ASSERT_TRUE(WaitFor([]() { return LastBlockPeak() > 0.0f; }));
 	ASSERT_TRUE(Settle("audio-log-after-the-preview"));
-	EXPECT_EQ(Saying(UNHEARD), 0u);
+	EXPECT_EQ(Saying(Unheard), 0u);
 
 	Audio::Stop(preview);
 	ASSERT_TRUE(Audio::Play(ResourceOf(clip), Looping()).IsValid());
 	ASSERT_TRUE(Audio::Play(ResourceOf(clip), Looping()).IsValid());
 	ASSERT_TRUE(Settle("audio-log-after-the-game"));
-	EXPECT_EQ(Saying(UNHEARD), 1u);
+	EXPECT_EQ(Saying(Unheard), 1u);
 }
 
 TEST_F(AudioPlaybackFixture, ClockCountsAtOutputRate) {

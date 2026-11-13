@@ -28,7 +28,7 @@ namespace Shalltear::CurveEditor {
 		constexpr f32 CURVE_PICK = 6.0f;
 		constexpr u32 FRAME_SAMPLES = 64;
 		constexpr f32 FRAME_PADDING = 0.1f;
-		constexpr std::string_view WRAP_MODES[] = {"Clamp", "Loop", "Ping Pong"};
+		constexpr std::string_view WrapModes[] = {"Clamp", "Loop", "Ping Pong"};
 
 		enum class Grab : u8 {
 			None,
@@ -443,7 +443,7 @@ namespace Shalltear::CurveEditor {
 			context.SetStyle(side, sideStyle);
 			AddLabel(context, side, post ? "Post Wrap" : "Pre Wrap");
 			UI::Widgets::DropdownDesc desc;
-			desc.items = WRAP_MODES;
+			desc.items = WrapModes;
 			desc.selected = static_cast<u32>(post ? curve.postWrapMode : curve.preWrapMode);
 			desc.font = UISystem::GetDefaultFont();
 			desc.fontSizePx = EditorTheme::GetMetric(MetricToken::FontSmall);

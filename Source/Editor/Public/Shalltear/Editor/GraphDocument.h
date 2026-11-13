@@ -102,9 +102,9 @@ namespace Shalltear {
 
 		inline constexpr u32 FORMAT_VERSION = 4;
 
-		inline constexpr std::string_view REDIRECT_DEF = "Utility/Redirect";
-		inline constexpr std::string_view REDIRECT_IN = "In";
-		inline constexpr std::string_view REDIRECT_OUT = "Out";
+		inline constexpr std::string_view RedirectDef = "Utility/Redirect";
+		inline constexpr std::string_view RedirectIn = "In";
+		inline constexpr std::string_view RedirectOut = "Out";
 
 		SHALLTEAR_EDITOR_API bool Read(std::string_view text, GraphDocument& out, str& error);
 		SHALLTEAR_EDITOR_API str Write(const GraphDocument& document);

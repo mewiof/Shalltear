@@ -82,9 +82,9 @@ namespace Shalltear {
 			return out;
 		}
 
-		constexpr std::string_view EFFECT_ATTRIBUTES = "EffectAttributes";
+		constexpr std::string_view EffectAttributes = "EffectAttributes";
 
-		constexpr std::string_view KNOWN_TYPES[] = {
+		constexpr std::string_view KnownTypes[] = {
 			"void", "float", "float2", "float3",
 			"float4", "float4x4", "EffectSampler2D", "EffectSampler3D",
 			"EffectSampler2DArray", "EffectSamplerCube", "EffectGradient", "EffectCurve",
@@ -96,7 +96,7 @@ namespace Shalltear {
 			"RWTexture2D", "RWTexture3D", "RWTextureCube", "RWTexture1DArray",
 			"RWTexture2DArray", "RWTextureCubeArray"};
 
-		bool IsKnown(std::string_view type) { return std::find(std::begin(KNOWN_TYPES), std::end(KNOWN_TYPES), type) != std::end(KNOWN_TYPES); }
+		bool IsKnown(std::string_view type) { return std::find(std::begin(KnownTypes), std::end(KnownTypes), type) != std::end(KnownTypes); }
 
 		T ValueOf(std::string_view type) {
 			if (type == "float" || type == "int" || type == "uint") {
@@ -141,12 +141,12 @@ namespace Shalltear {
 			return type == "int" || type == "uint" ? "(" + str(type) + ")" + str(value) : str(value);
 		}
 
-		constexpr std::string_view VARIADIC[] = {"angle", "angularVelocity", "pivot", "scale"};
-		constexpr std::string_view UNSIGNED[] = {"particleId", "spawnIndex", "collisionEventCount", "stripIndex", "particleIndexInStrip",
+		constexpr std::string_view Variadic[] = {"angle", "angularVelocity", "pivot", "scale"};
+		constexpr std::string_view Unsigned[] = {"particleId", "spawnIndex", "collisionEventCount", "stripIndex", "particleIndexInStrip",
 												 "particleCountInStrip", "spawnIndexInStrip"};
-		constexpr std::string_view AXES = "XYZ";
+		constexpr std::string_view Axes = "XYZ";
 
-		bool IsVariadic(std::string_view attribute) { return std::find(std::begin(VARIADIC), std::end(VARIADIC), attribute) != std::end(VARIADIC); }
+		bool IsVariadic(std::string_view attribute) { return std::find(std::begin(Variadic), std::end(Variadic), attribute) != std::end(Variadic); }
 
 		struct Field {
 			str name;
@@ -160,11 +160,11 @@ namespace Shalltear {
 			for (const GraphEffectAttributeInfo& attribute : GraphEffectAttributes::All()) {
 				if (IsVariadic(attribute.name)) {
 					for (i32 c = 0; c < 3; ++c) {
-						out.push_back({str(attribute.name) + AXES[static_cast<size_t>(c)], &attribute, c, "float"});
+						out.push_back({str(attribute.name) + Axes[static_cast<size_t>(c)], &attribute, c, "float"});
 					}
 					continue;
 				}
-				const bool unsignedField = std::find(std::begin(UNSIGNED), std::end(UNSIGNED), attribute.name) != std::end(UNSIGNED);
+				const bool unsignedField = std::find(std::begin(Unsigned), std::end(Unsigned), attribute.name) != std::end(Unsigned);
 				out.push_back({str(attribute.name), &attribute, -1, unsignedField ? std::string_view("uint") : GraphTypes::HLSLName(attribute.type)});
 			}
 		}
@@ -254,7 +254,7 @@ float SltEffectFixedRandom(uint state)
 			return {};
 		}
 
-		bool IsBlock(std::string_view def) { return def == GRAPH_EFFECT_CUSTOM_HLSL_BLOCK; }
+		bool IsBlock(std::string_view def) { return def == GraphEffectCustomHLSLBlock; }
 
 		T PortValue(P type) {
 			switch (type) {
@@ -276,8 +276,8 @@ float SltEffectFixedRandom(uint state)
 		str Hex(u64 value) { return std::format("{:016X}", value); }
 
 		str Declared(const Parameter& parameter) {
-			constexpr std::string_view ACCESS[] = {"", "in ", "out ", "inout "};
-			return str(ACCESS[static_cast<size_t>(parameter.access)]) + parameter.type + (parameter.templateType.empty() ? "" : "<" + parameter.templateType + ">") +
+			constexpr std::string_view Access[] = {"", "in ", "out ", "inout "};
+			return str(Access[static_cast<size_t>(parameter.access)]) + parameter.type + (parameter.templateType.empty() ? "" : "<" + parameter.templateType + ">") +
 				   " " + parameter.name;
 		}
 
@@ -316,10 +316,10 @@ float SltEffectFixedRandom(uint state)
 				inputs.push_back(c.Binding(GraphEffectAttributes::CurrentBinding(attribute)));
 			}
 			if (built->random) {
-				inputs.push_back(b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE), b.Scalar(0.0f), b.Identity() * 8u));
+				inputs.push_back(b.Random(c.Binding(GraphEffectRandomParticle), b.Scalar(0.0f), b.Identity() * 8u));
 			}
 			if (built->fixedRandom) {
-				inputs.push_back(b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE_CONSTANT), b.Scalar(0.0f), 0u));
+				inputs.push_back(b.Random(c.Binding(GraphEffectRandomParticleConstant), b.Scalar(0.0f), 0u));
 			}
 			if (!c.error.empty()) {
 				return;
@@ -498,16 +498,16 @@ float SltEffectFixedRandom(uint state)
 
 		void Includes(std::string_view code, Vector<str>& out) {
 			out.clear();
-			constexpr std::string_view DIRECTIVE = "#include \"";
+			constexpr std::string_view Directive = "#include \"";
 			size_t at = 0;
 			while (at < code.size()) {
 				size_t end = code.find('\n', at);
 				end = end == std::string_view::npos ? code.size() : end + 1;
 				const std::string_view line = code.substr(at, end - at);
-				if (line.starts_with(DIRECTIVE)) {
-					const size_t close = line.find('"', DIRECTIVE.size());
+				if (line.starts_with(Directive)) {
+					const size_t close = line.find('"', Directive.size());
 					if (close != std::string_view::npos) {
-						const str path(line.substr(DIRECTIVE.size(), close - DIRECTIVE.size()));
+						const str path(line.substr(Directive.size(), close - Directive.size()));
 						if (std::find(out.begin(), out.end(), path) == out.end()) {
 							out.push_back(path);
 						}
@@ -538,7 +538,7 @@ float SltEffectFixedRandom(uint state)
 					built.warnings.push_back(warning);
 				}
 			}
-			const str chosen = SettingText(node, GRAPH_CUSTOM_HLSL_FUNCTION);
+			const str chosen = SettingText(node, GraphCustomHLSLFunction);
 			u32 selected = 0;
 			for (u32 i = 0; i < offered.size(); ++i) {
 				selected = offered[i]->name == chosen ? i : selected;
@@ -551,7 +551,7 @@ float SltEffectFixedRandom(uint state)
 				names.push_back(out.strings.emplace_back(function->name));
 			}
 			GraphSettingDefinition available;
-			available.key = GRAPH_CUSTOM_HLSL_FUNCTION;
+			available.key = GraphCustomHLSLFunction;
 			available.kind = S::Choice;
 			available.options = names;
 			available.defaultIndex = selected;
@@ -561,7 +561,7 @@ float SltEffectFixedRandom(uint state)
 
 			GraphNodeDefinition& definition = out.definition;
 			definition = table;
-			const std::string_view nameKey = block ? GRAPH_CUSTOM_HLSL_BLOCK_NAME : GRAPH_CUSTOM_HLSL_OPERATOR_NAME;
+			const std::string_view nameKey = block ? GraphCustomHLSLBlockName : GraphCustomHLSLOperatorName;
 			const str title = SettingText(node, nameKey);
 			definition.name = out.strings.emplace_back(title.empty() ? str("Custom HLSL") : title);
 			definition.settings = out.settings;
@@ -590,7 +590,7 @@ float SltEffectFixedRandom(uint state)
 					refuse(called + "It has a parameter it can't read");
 					continue;
 				}
-				if (parameter.type == EFFECT_ATTRIBUTES) {
+				if (parameter.type == EffectAttributes) {
 					if (!block) {
 						refuse(called + "It takes EffectAttributes (an operator reads no attribute, a Custom HLSL block does)");
 					} else if (attributes) {

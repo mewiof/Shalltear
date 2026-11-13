@@ -4,7 +4,7 @@
 
 namespace Shalltear::VisualEffectsEditor {
 
-	inline constexpr std::string_view EFFECTS_CATEGORY = "Effect Graphs";
+	inline constexpr std::string_view EffectsCategory = "Effect Graphs";
 
 	void RegisterImporter(const void* owner);
 	void RegisterVectorFieldImporter(const void* owner);

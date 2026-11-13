@@ -278,15 +278,15 @@ namespace Shalltear::RHI {
 	}
 
 	bool DeviceImpl::WaitForPresent(SwapChainImpl& swapChain, u64 presentId, f64 refreshSeconds) {
-		const u64 timeoutNs = static_cast<u64>(PresentWaitTimeout(refreshSeconds) * 1.0e9);
+		const u64 timeoutNanoseconds = static_cast<u64>(PresentWaitTimeout(refreshSeconds) * 1.0e9);
 		VkResult result = VK_SUCCESS;
 		if (presentWait == PresentWait::V2) {
 			VkPresentWait2InfoKHR info{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
 			info.presentId = presentId;
-			info.timeout = timeoutNs;
+			info.timeout = timeoutNanoseconds;
 			result = fd.vkWaitForPresent2KHR(device, swapChain.swapchain, &info);
 		} else {
-			result = fd.vkWaitForPresentKHR(device, swapChain.swapchain, presentId, timeoutNs);
+			result = fd.vkWaitForPresentKHR(device, swapChain.swapchain, presentId, timeoutNanoseconds);
 		}
 		if (result == VK_SUCCESS) {
 			swapChain.presentWaitRetrySeconds = PRESENT_WAIT_RETRY_SECONDS;

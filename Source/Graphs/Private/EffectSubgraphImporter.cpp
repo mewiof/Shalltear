@@ -69,8 +69,8 @@ namespace Shalltear {
 		void Register(const void* owner) {
 			static EffectSubgraphImporter operators(GraphSubgraphKind::EffectOperator);
 			static EffectSubgraphImporter blocks(GraphSubgraphKind::EffectBlock);
-			AssetImporterRegistry::Register(operators.GetAssetType(), &operators, {GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION}, owner);
-			AssetImporterRegistry::Register(blocks.GetAssetType(), &blocks, {GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION}, owner);
+			AssetImporterRegistry::Register(operators.GetAssetType(), &operators, {GraphEffectOperatorSubgraphExtension}, owner);
+			AssetImporterRegistry::Register(blocks.GetAssetType(), &blocks, {GraphEffectBlockSubgraphExtension}, owner);
 			EditorPreviews::AssetBadges::Register(operators.GetAssetType(), EditorIcons::Glyph::AssetEffectOperator,
 												  EditorTheme::ColorToken::AssetEffect, owner);
 			EditorPreviews::AssetBadges::Register(blocks.GetAssetType(), EditorIcons::Glyph::AssetEffectBlock,

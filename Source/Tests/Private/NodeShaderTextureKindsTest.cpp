@@ -49,7 +49,7 @@ namespace {
 				const u8 texel[4] = {static_cast<u8>(upper ? 255 : 0), 0, static_cast<u8>(upper ? 0 : 255), 255};
 				std::memcpy(&image[i * 4], texel, 4);
 			}
-			TestImages::WriteTga(_root / "Sky.tga", 8, 4, image);
+			TestImages::WriteTGA(_root / "Sky.tga", 8, 4, image);
 			JSONValue settings = JSONValue::MakeObject();
 			settings.AddMember("shape", JSONValue::MakeString("cube"));
 			settings.AddMember("convolveIBL", JSONValue::MakeBool(false));

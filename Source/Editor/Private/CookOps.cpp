@@ -565,11 +565,11 @@ namespace Shalltear {
 		}
 
 		bool IsEditorOnlyEngineReference(std::string_view virtualPath) {
-			constexpr std::string_view PREFIX = "engine://";
-			if (!virtualPath.starts_with(PREFIX)) {
+			constexpr std::string_view Prefix = "engine://";
+			if (!virtualPath.starts_with(Prefix)) {
 				return false;
 			}
-			return BuildPipeline::IsEditorOnlyEngineAsset(virtualPath.substr(PREFIX.size()));
+			return BuildPipeline::IsEditorOnlyEngineAsset(virtualPath.substr(Prefix.size()));
 		}
 
 		bool IsConstructibleAsAnAsset(const Asset& asset, str& outWhy) {

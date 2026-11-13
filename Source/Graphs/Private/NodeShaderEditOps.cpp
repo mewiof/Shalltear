@@ -65,7 +65,7 @@ namespace Shalltear {
 			return definition.category == "Context" || definition.category == "Block";
 		}
 
-		constexpr std::string_view TEXTURE_TYPES[] = {"Texture2D", "Texture2DArray", "Texture3D", "Cubemap"};
+		constexpr std::string_view TextureTypes[] = {"Texture2D", "Texture2DArray", "Texture3D", "Cubemap"};
 
 		enum class PortClass : u8 {
 			Vector,
@@ -134,8 +134,8 @@ namespace Shalltear {
 
 		PortShape PropertyShape(const GraphProperty& property) {
 			PortShape shape = property.type == "Boolean" ? PortShape{PortClass::Boolean, 0} : PortShape{PortClass::Vector, 0};
-			for (u32 kind = 0; kind < std::size(TEXTURE_TYPES); ++kind) {
-				if (property.type == TEXTURE_TYPES[kind]) {
+			for (u32 kind = 0; kind < std::size(TextureTypes); ++kind) {
+				if (property.type == TextureTypes[kind]) {
 					shape = {PortClass::Texture, kind + 1};
 				}
 			}
@@ -155,7 +155,7 @@ namespace Shalltear {
 			if (index < 0) {
 				return {PortClass::Any, 0};
 			}
-			if (definition->id == NodeShaderEditOps::PROPERTY_NODE) {
+			if (definition->id == NodeShaderEditOps::PropertyNode) {
 				const u32 property = NodeShaderEditOps::PropertyOf(document, node);
 				for (const GraphProperty& held : document.properties) {
 					if (held.id == property) {
@@ -278,7 +278,7 @@ namespace Shalltear {
 			if (index < 0 || depth > 64) {
 				return 4;
 			}
-			if (definition->id == NodeShaderEditOps::PROPERTY_NODE) {
+			if (definition->id == NodeShaderEditOps::PropertyNode) {
 				const u32 property = NodeShaderEditOps::PropertyOf(document, node);
 				for (const GraphProperty& candidate : document.properties) {
 					if (candidate.id == property) {
@@ -353,15 +353,15 @@ namespace Shalltear {
 			return nullptr;
 		}
 
-		constexpr std::string_view PROPERTY_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4", "Color",
-													   "Boolean", "Texture2D", "Texture2DArray", "Texture3D", "Cubemap",
-													   "BooleanKeyword", "EnumKeyword"};
-		constexpr std::string_view KEYWORD_TYPE = "BooleanKeyword";
-		constexpr std::string_view ENUM_KEYWORD_TYPE = "EnumKeyword";
-		constexpr std::string_view KEYWORD_NODE = "Utility/Keyword";
-		constexpr std::string_view ENTRIES_SETTING = "entries";
+		constexpr std::string_view PropertyTypeTable[] = {"Float", "Vector2", "Vector3", "Vector4", "Color",
+														  "Boolean", "Texture2D", "Texture2DArray", "Texture3D", "Cubemap",
+														  "BooleanKeyword", "EnumKeyword"};
+		constexpr std::string_view KeywordType = "BooleanKeyword";
+		constexpr std::string_view EnumKeywordType = "EnumKeyword";
+		constexpr std::string_view KeywordNode = "Utility/Keyword";
+		constexpr std::string_view EntriesSetting = "entries";
 
-		bool IsKeywordType(std::string_view type) { return type == KEYWORD_TYPE || type == ENUM_KEYWORD_TYPE; }
+		bool IsKeywordType(std::string_view type) { return type == KeywordType || type == EnumKeywordType; }
 
 		str ReferenceFor(std::string_view name, bool keyword = false) {
 			str out = "_";
@@ -417,10 +417,10 @@ namespace Shalltear {
 			if (type == "Vector4") {
 				return "[0,0,0,0]";
 			}
-			if (std::find(std::begin(TEXTURE_TYPES), std::end(TEXTURE_TYPES), type) != std::end(TEXTURE_TYPES)) {
+			if (std::find(std::begin(TextureTypes), std::end(TextureTypes), type) != std::end(TextureTypes)) {
 				return {};
 			}
-			if (type == KEYWORD_TYPE) {
+			if (type == KeywordType) {
 				return "false";
 			}
 			return "0";
@@ -429,11 +429,11 @@ namespace Shalltear {
 		bool ReadKeyword(GraphDocument& document, u32 id, GraphProperty*& out, Vector<GraphKeywordEntry>& entries) {
 			out = FindProperty(document, id);
 			str error;
-			return out && out->type == ENUM_KEYWORD_TYPE && GraphProperties::ReadEntries(*out, entries, error);
+			return out && out->type == EnumKeywordType && GraphProperties::ReadEntries(*out, entries, error);
 		}
 
 		void WriteKeyword(GraphProperty& property, const Vector<GraphKeywordEntry>& entries) {
-			SettingFor(property.settings, ENTRIES_SETTING).value = GraphProperties::WriteEntries(entries);
+			SettingFor(property.settings, EntriesSetting).value = GraphProperties::WriteEntries(entries);
 		}
 
 		size_t DefaultEntry(const GraphProperty& property) { return static_cast<size_t>(std::max(0l, std::strtol(property.defaultValue.c_str(), nullptr, 10))); }
@@ -718,8 +718,8 @@ namespace Shalltear {
 
 		u32 AddSubgraphOutput(GraphDocument& document, u32 context, std::string_view type) {
 			GraphContext* stack = FindContext(document, context);
-			const auto& types = GRAPH_SUBGRAPH_OUTPUT_TYPES;
-			if (!stack || stack->node.def != GRAPH_SUBGRAPH_OUTPUT_CONTEXT || std::find(std::begin(types), std::end(types), type) == std::end(types)) {
+			const auto& types = GraphSubgraphOutputTypes;
+			if (!stack || stack->node.def != GraphSubgraphOutputContext || std::find(std::begin(types), std::end(types), type) == std::end(types)) {
 				return 0;
 			}
 			const str base = "Out_" + str(type);
@@ -730,7 +730,7 @@ namespace Shalltear {
 			}
 			GraphNode block;
 			block.id = document.nextId++;
-			block.def = str(GRAPH_SUBGRAPH_OUTPUT_BLOCK);
+			block.def = str(GraphSubgraphOutputBlock);
 			SettingFor(block.settings, "Name").value = Quote(name);
 			SettingFor(block.settings, "Type").value = Quote(type);
 			const u32 id = block.id;
@@ -741,7 +741,7 @@ namespace Shalltear {
 		bool RenameSubgraphOutput(GraphDocument& document, u32 block, std::string_view name) {
 			for (GraphContext& context : document.contexts) {
 				for (GraphNode& held : context.blocks) {
-					if (held.id != block || held.def != GRAPH_SUBGRAPH_OUTPUT_BLOCK) {
+					if (held.id != block || held.def != GraphSubgraphOutputBlock) {
 						continue;
 					}
 					const bool taken = std::any_of(context.blocks.begin(), context.blocks.end(),
@@ -757,13 +757,13 @@ namespace Shalltear {
 		}
 
 		bool SetSubgraphOutputType(GraphDocument& document, u32 block, std::string_view type) {
-			const auto& types = GRAPH_SUBGRAPH_OUTPUT_TYPES;
+			const auto& types = GraphSubgraphOutputTypes;
 			if (std::find(std::begin(types), std::end(types), type) == std::end(types)) {
 				return false;
 			}
 			for (GraphContext& context : document.contexts) {
 				for (GraphNode& held : context.blocks) {
-					if (held.id == block && held.def == GRAPH_SUBGRAPH_OUTPUT_BLOCK && GraphSubgraphs::OutputTypeOf(held) < std::size(types) &&
+					if (held.id == block && held.def == GraphSubgraphOutputBlock && GraphSubgraphs::OutputTypeOf(held) < std::size(types) &&
 						types[GraphSubgraphs::OutputTypeOf(held)] != type) {
 						SettingFor(held.settings, "Type").value = Quote(type);
 						return true;
@@ -779,8 +779,8 @@ namespace Shalltear {
 			}
 			GraphNode node;
 			node.id = document.nextId++;
-			node.def = str(GRAPH_SUBGRAPH_NODE);
-			SettingFor(node.settings, GRAPH_SUBGRAPH_ASSET_SETTING).value = Quote(asset.ToString());
+			node.def = str(GraphSubgraphNode);
+			SettingFor(node.settings, GraphSubgraphAssetSetting).value = Quote(asset.ToString());
 			const u32 id = node.id;
 			document.nodes.push_back(std::move(node));
 			GraphDocumentOps::MoveNode(document, id, position);
@@ -790,7 +790,7 @@ namespace Shalltear {
 		u32 AddCustomFunctionNode(GraphDocument& document, Vec2 position) {
 			GraphNode node;
 			node.id = document.nextId++;
-			node.def = str(GRAPH_CUSTOM_FUNCTION_NODE);
+			node.def = str(GraphCustomFunctionNode);
 			const u32 id = node.id;
 			document.nodes.push_back(std::move(node));
 			GraphDocumentOps::MoveNode(document, id, position);
@@ -803,14 +803,14 @@ namespace Shalltear {
 									Vector<GraphCustomFunctionPort>& outputs) {
 				out = GraphDocumentOps::FindNode(document, node);
 				str error;
-				return out && out->def == GRAPH_CUSTOM_FUNCTION_NODE &&
-					   GraphCustomFunctions::ReadPorts(*out, GRAPH_CUSTOM_FUNCTION_INPUTS, inputs, error) &&
-					   GraphCustomFunctions::ReadPorts(*out, GRAPH_CUSTOM_FUNCTION_OUTPUTS, outputs, error);
+				return out && out->def == GraphCustomFunctionNode &&
+					   GraphCustomFunctions::ReadPorts(*out, GraphCustomFunctionInputs, inputs, error) &&
+					   GraphCustomFunctions::ReadPorts(*out, GraphCustomFunctionOutputs, outputs, error);
 			}
 
 			void WriteCustomFunction(GraphNode& node, const Vector<GraphCustomFunctionPort>& inputs, const Vector<GraphCustomFunctionPort>& outputs) {
-				SettingFor(node.settings, GRAPH_CUSTOM_FUNCTION_INPUTS).value = GraphCustomFunctions::WritePorts(inputs);
-				SettingFor(node.settings, GRAPH_CUSTOM_FUNCTION_OUTPUTS).value = GraphCustomFunctions::WritePorts(outputs);
+				SettingFor(node.settings, GraphCustomFunctionInputs).value = GraphCustomFunctions::WritePorts(inputs);
+				SettingFor(node.settings, GraphCustomFunctionOutputs).value = GraphCustomFunctions::WritePorts(outputs);
 			}
 
 			str UniquePortName(std::string_view name, u32 port, const Vector<GraphCustomFunctionPort>& inputs,
@@ -847,7 +847,7 @@ namespace Shalltear {
 		} // anonymous namespace
 
 		u32 AddCustomFunctionPort(GraphDocument& document, u32 node, bool output, std::string_view type) {
-			const auto& types = GRAPH_CUSTOM_FUNCTION_PORT_TYPES;
+			const auto& types = GraphCustomFunctionPortTypes;
 			const auto* known = std::find(std::begin(types), std::end(types), type);
 			GraphNode* held = nullptr;
 			Vector<GraphCustomFunctionPort> inputs{GetMemoryResource(MemTag::Editor)};
@@ -891,7 +891,7 @@ namespace Shalltear {
 		}
 
 		bool SetCustomFunctionPortType(GraphDocument& document, u32 node, u32 port, std::string_view type) {
-			const auto& types = GRAPH_CUSTOM_FUNCTION_PORT_TYPES;
+			const auto& types = GraphCustomFunctionPortTypes;
 			const auto* known = std::find(std::begin(types), std::end(types), type);
 			GraphNode* held = nullptr;
 			Vector<GraphCustomFunctionPort> inputs{GetMemoryResource(MemTag::Editor)};
@@ -977,17 +977,17 @@ namespace Shalltear {
 			return removed;
 		}
 
-		std::span<const std::string_view> PropertyTypes() { return PROPERTY_TYPES; }
+		std::span<const std::string_view> PropertyTypes() { return PropertyTypeTable; }
 
 		std::string_view PropertyTypeLabel(std::string_view type) {
-			if (type == KEYWORD_TYPE) {
+			if (type == KeywordType) {
 				return "Boolean Keyword";
 			}
-			return type == ENUM_KEYWORD_TYPE ? std::string_view("Enum Keyword") : type;
+			return type == EnumKeywordType ? std::string_view("Enum Keyword") : type;
 		}
 
 		u32 AddProperty(GraphDocument& document, std::string_view type) {
-			if (std::find(std::begin(PROPERTY_TYPES), std::end(PROPERTY_TYPES), type) == std::end(PROPERTY_TYPES)) {
+			if (std::find(std::begin(PropertyTypeTable), std::end(PropertyTypeTable), type) == std::end(PropertyTypeTable)) {
 				return 0;
 			}
 			GraphProperty property;
@@ -997,7 +997,7 @@ namespace Shalltear {
 			property.name = UniqueName(document, keyword ? PropertyTypeLabel(type) : type, 0);
 			property.reference = UniqueReference(document, ReferenceFor(property.name, keyword), 0);
 			property.defaultValue = DefaultFor(type);
-			if (type == ENUM_KEYWORD_TYPE) {
+			if (type == EnumKeywordType) {
 				Vector<GraphKeywordEntry> entries{GetMemoryResource(MemTag::Editor)};
 				for (u32 i = 0; i < 3; ++i) {
 					const str letter(1, static_cast<char>('A' + i));
@@ -1075,11 +1075,11 @@ namespace Shalltear {
 
 		u32 PropertyOf(const GraphDocument& document, u32 node) {
 			const GraphNode* held = FindConst(document, node);
-			if (!held || (held->def != PROPERTY_NODE && held->def != KEYWORD_NODE)) {
+			if (!held || (held->def != PropertyNode && held->def != KeywordNode)) {
 				return 0;
 			}
 			for (const GraphSetting& setting : held->settings) {
-				if (setting.key == PROPERTY_SETTING) {
+				if (setting.key == PropertySetting) {
 					return static_cast<u32>(std::strtoul(setting.value.c_str(), nullptr, 10));
 				}
 			}
@@ -1108,9 +1108,9 @@ namespace Shalltear {
 			if (!read) {
 				return 0;
 			}
-			const u32 id = AddNode(document, IsKeywordType(read->type) ? KEYWORD_NODE : PROPERTY_NODE, position);
+			const u32 id = AddNode(document, IsKeywordType(read->type) ? KeywordNode : PropertyNode, position);
 			if (id != 0) {
-				SetNodeSetting(document, id, PROPERTY_SETTING, std::to_string(property));
+				SetNodeSetting(document, id, PropertySetting, std::to_string(property));
 			}
 			return id;
 		}
@@ -1301,7 +1301,7 @@ namespace Shalltear {
 				}
 				auto found = remap.find(property);
 				if (found != remap.end()) {
-					SettingFor(node.settings, PROPERTY_SETTING).value = std::to_string(found->second);
+					SettingFor(node.settings, PropertySetting).value = std::to_string(found->second);
 				}
 			}
 			return GraphDocumentOps::Paste(document, GraphDocumentOps::Write(fragment), offset, pasted, error);

@@ -25,28 +25,28 @@ namespace Shalltear {
 		constexpr P OUTPUT_PORT_TYPES[] = {P::Float, P::Float2, P::Float3, P::Float4, P::Boolean,
 										   P::Float2x2, P::Float3x3, P::Float4x4, P::Texture2D, P::Texture2DArray,
 										   P::Texture3D, P::Cubemap, P::Gradient};
-		static_assert(std::size(OUTPUT_PORT_TYPES) == std::size(GRAPH_SUBGRAPH_OUTPUT_TYPES), "one port type per output type");
+		static_assert(std::size(OUTPUT_PORT_TYPES) == std::size(GraphSubgraphOutputTypes), "one port type per output type");
 
-		constexpr GraphSettingDefinition OUTPUT_SETTINGS[] = {
+		constexpr GraphSettingDefinition OutputSettings[] = {
 			{"Name", GraphSettingKind::Text, {}, 0, "Out_Vector4"},
-			{"Type", GraphSettingKind::Choice, GRAPH_SUBGRAPH_OUTPUT_TYPES, GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE},
+			{"Type", GraphSettingKind::Choice, GraphSubgraphOutputTypes, GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE},
 		};
 
 		template <size_t... I>
-		constexpr std::array<GraphPortDefinition, sizeof...(I)> OutputPorts(std::index_sequence<I...>) {
+		constexpr std::array<GraphPortDefinition, sizeof...(I)> BuildOutputPorts(std::index_sequence<I...>) {
 			return {GraphPortDefinition{"Value", OUTPUT_PORT_TYPES[I]}...};
 		}
-		constexpr auto OUTPUT_PORTS = OutputPorts(std::make_index_sequence<std::size(OUTPUT_PORT_TYPES)>{});
+		constexpr auto OutputPorts = BuildOutputPorts(std::make_index_sequence<std::size(OUTPUT_PORT_TYPES)>{});
 
 		template <size_t... I>
-		constexpr std::array<GraphNodeDefinition, sizeof...(I)> OutputBlocks(std::index_sequence<I...>) {
-			return {GraphNodeDefinition{GRAPH_SUBGRAPH_OUTPUT_BLOCK, "Output", "Block", "", std::span<const GraphPortDefinition>(&OUTPUT_PORTS[I], 1), {}, OUTPUT_SETTINGS, nullptr}...};
+		constexpr std::array<GraphNodeDefinition, sizeof...(I)> BuildOutputBlocks(std::index_sequence<I...>) {
+			return {GraphNodeDefinition{GraphSubgraphOutputBlock, "Output", "Block", "", std::span<const GraphPortDefinition>(&OutputPorts[I], 1), {}, OutputSettings, nullptr}...};
 		}
-		constexpr auto OUTPUT_BLOCKS = OutputBlocks(std::make_index_sequence<std::size(OUTPUT_PORT_TYPES)>{});
+		constexpr auto OutputBlocks = BuildOutputBlocks(std::make_index_sequence<std::size(OUTPUT_PORT_TYPES)>{});
 
-		constexpr GraphNodeDefinition SUBGRAPH_DEFINITIONS[] = {
-			{GRAPH_SUBGRAPH_OUTPUT_CONTEXT, "Output", "Context", "", {}, {}, {}, nullptr},
-			OUTPUT_BLOCKS[GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE],
+		constexpr GraphNodeDefinition SubgraphDefinitions[] = {
+			{GraphSubgraphOutputContext, "Output", "Context", "", {}, {}, {}, nullptr},
+			OutputBlocks[GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE],
 		};
 
 		const GraphSetting* FindSetting(const Vector<GraphSetting>& settings, std::string_view key) {
@@ -118,7 +118,7 @@ namespace Shalltear {
 		}
 
 		u32 PropertyIdOf(const GraphNode& node) {
-			const GraphSetting* setting = FindSetting(node.settings, GRAPH_PROPERTY_SETTING);
+			const GraphSetting* setting = FindSetting(node.settings, GraphPropertySetting);
 			return setting ? static_cast<u32>(std::strtoul(setting->value.c_str(), nullptr, 10)) : 0;
 		}
 
@@ -126,7 +126,7 @@ namespace Shalltear {
 			const GraphDocument& document = out.document;
 			const GraphContext* output = nullptr;
 			for (const GraphContext& context : document.contexts) {
-				if (context.node.def != GRAPH_SUBGRAPH_OUTPUT_CONTEXT) {
+				if (context.node.def != GraphSubgraphOutputContext) {
 					continue;
 				}
 				if (output != nullptr) {
@@ -141,7 +141,7 @@ namespace Shalltear {
 			}
 			for (const GraphNode& block : output->blocks) {
 				const u32 type = GraphSubgraphs::OutputTypeOf(block);
-				if (block.def != GRAPH_SUBGRAPH_OUTPUT_BLOCK || type >= std::size(OUTPUT_PORT_TYPES)) {
+				if (block.def != GraphSubgraphOutputBlock || type >= std::size(OUTPUT_PORT_TYPES)) {
 					out.error = "has an output (" + std::to_string(block.id) + ") that isn't a subgraph output of a known type";
 					return;
 				}
@@ -175,12 +175,12 @@ namespace Shalltear {
 				u32 first = 0;
 				u32 wired = 0;
 				for (const GraphNode& node : document.nodes) {
-					if (node.def != GRAPH_PROPERTY_NODE || PropertyIdOf(node) != property.id) {
+					if (node.def != GraphPropertyNode || PropertyIdOf(node) != property.id) {
 						continue;
 					}
 					first = first != 0 ? first : node.id;
 					for (const GraphInput& input : node.inputs) {
-						if (input.port != GRAPH_SUBGRAPH_OUTPUT_PORT || input.fromNode == 0) {
+						if (input.port != GraphSubgraphOutputPort || input.fromNode == 0) {
 							continue;
 						}
 						if (wired != 0) {
@@ -204,7 +204,7 @@ namespace Shalltear {
 
 		void BuildBlockContext(GraphSubgraph& out) {
 			for (const GraphContext& context : out.document.contexts) {
-				if (context.node.def != GRAPH_EFFECT_BLOCK_SUBGRAPH_CONTEXT) {
+				if (context.node.def != GraphEffectBlockSubgraphContext) {
 					out.error = "holds a context other than its Block Subgraph (a block subgraph has no other)";
 					return;
 				}
@@ -217,13 +217,13 @@ namespace Shalltear {
 			}
 			if (out.blockContext == 0) {
 				out.error = "has no Block Subgraph context (it holds the blocks)";
-			} else if (out.suitable >= std::size(GRAPH_EFFECT_SUITABLE_CONTEXTS)) {
+			} else if (out.suitable >= std::size(GraphEffectSuitableContexts)) {
 				out.error = "has Suitable Contexts that aren't one of its options";
 			}
 		}
 
 		str EventNameOf(const GraphNode& event) {
-			return FindSetting(event.settings, "Event Name") ? SettingString(event.settings, "Event Name") : str(GRAPH_EFFECT_ON_PLAY);
+			return FindSetting(event.settings, "Event Name") ? SettingString(event.settings, "Event Name") : str(GraphEffectOnPlay);
 		}
 
 		bool Linked(const GraphContext& context, std::string_view slot) {
@@ -236,12 +236,12 @@ namespace Shalltear {
 			Vector<str> direct{GetMemoryResource(MemTag::Editor)};
 			Vector<str> nested{GetMemoryResource(MemTag::Editor)};
 			for (const GraphContext& context : out.document.contexts) {
-				if (context.node.def == GRAPH_EFFECT_SPAWN) {
-					start = start || !Linked(context, GRAPH_EFFECT_START);
-					stop = stop || !Linked(context, GRAPH_EFFECT_STOP);
-				} else if (context.node.def == GRAPH_EFFECT_EVENT) {
+				if (context.node.def == GraphEffectSpawn) {
+					start = start || !Linked(context, GraphEffectStart);
+					stop = stop || !Linked(context, GraphEffectStop);
+				} else if (context.node.def == GraphEffectEvent) {
 					direct.push_back(EventNameOf(context.node));
-				} else if (context.node.def == GRAPH_EFFECT_SYSTEM_SUBGRAPH) {
+				} else if (context.node.def == GraphEffectSystemSubgraph) {
 					const Guid asset = GraphSubgraphs::AssetOf(context.node);
 					const GraphSubgraph* inner = asset.IsValid() ? resolver.Subgraph(asset) : nullptr;
 					if (!inner || inner->kind != GraphSubgraphKind::EffectSystem || inner->definition.subgraph == nullptr) {
@@ -251,9 +251,9 @@ namespace Shalltear {
 						if (Linked(context, slot)) {
 							continue;
 						}
-						start = start || slot == GRAPH_EFFECT_ON_PLAY;
-						stop = stop || slot == GRAPH_EFFECT_ON_STOP;
-						if (slot != GRAPH_EFFECT_ON_PLAY && slot != GRAPH_EFFECT_ON_STOP) {
+						start = start || slot == GraphEffectOnPlay;
+						stop = stop || slot == GraphEffectOnStop;
+						if (slot != GraphEffectOnPlay && slot != GraphEffectOnStop) {
 							nested.push_back(str(slot));
 						}
 					}
@@ -263,11 +263,11 @@ namespace Shalltear {
 			std::sort(nested.begin(), nested.end());
 			const auto has = [&direct](std::string_view name) { return std::find(direct.begin(), direct.end(), name) != direct.end(); };
 			Vector<str> slots{GetMemoryResource(MemTag::Editor)};
-			if (start || has(GRAPH_EFFECT_ON_PLAY)) {
-				slots.push_back(str(GRAPH_EFFECT_ON_PLAY));
+			if (start || has(GraphEffectOnPlay)) {
+				slots.push_back(str(GraphEffectOnPlay));
 			}
-			if (stop || has(GRAPH_EFFECT_ON_STOP)) {
-				slots.push_back(str(GRAPH_EFFECT_ON_STOP));
+			if (stop || has(GraphEffectOnStop)) {
+				slots.push_back(str(GraphEffectOnStop));
 			}
 			for (const Vector<str>* list : {&direct, &nested}) {
 				for (const str& name : *list) {
@@ -292,7 +292,7 @@ namespace Shalltear {
 				out.error = "is a " + document.type + " document, not a subgraph";
 				return;
 			}
-			out.category = SettingString(document.settings, GRAPH_SUBGRAPH_CATEGORY_SETTING);
+			out.category = SettingString(document.settings, GraphSubgraphCategorySetting);
 			if (out.category.empty()) {
 				out.category = str(GraphSubgraphs::DefaultCategory(out.kind));
 			}
@@ -348,9 +348,9 @@ namespace Shalltear {
 			}
 
 			GraphNodeDefinition& definition = out.definition;
-			definition.id = out.kind == GraphSubgraphKind::EffectBlock	  ? GRAPH_EFFECT_SUBGRAPH_BLOCK
-							: out.kind == GraphSubgraphKind::EffectSystem ? GRAPH_EFFECT_SYSTEM_SUBGRAPH
-																		  : GRAPH_SUBGRAPH_NODE;
+			definition.id = out.kind == GraphSubgraphKind::EffectBlock	  ? GraphEffectSubgraphBlock
+							: out.kind == GraphSubgraphKind::EffectSystem ? GraphEffectSystemSubgraph
+																		  : GraphSubgraphNode;
 			definition.name = out.name;
 			definition.category = out.category;
 			definition.inputs = out.inputs;
@@ -360,8 +360,8 @@ namespace Shalltear {
 		}
 
 		constexpr bool PortTypesAreOutputTypes() {
-			for (size_t i = 0; i < std::size(GRAPH_CUSTOM_FUNCTION_PORT_TYPES); ++i) {
-				if (GRAPH_CUSTOM_FUNCTION_PORT_TYPES[i] != GRAPH_SUBGRAPH_OUTPUT_TYPES[i]) {
+			for (size_t i = 0; i < std::size(GraphCustomFunctionPortTypes); ++i) {
+				if (GraphCustomFunctionPortTypes[i] != GraphSubgraphOutputTypes[i]) {
 					return false;
 				}
 			}
@@ -369,18 +369,18 @@ namespace Shalltear {
 		}
 		static_assert(PortTypesAreOutputTypes(), "a custom function's port types are a subgraph output's first 8");
 
-		constexpr GraphSettingDefinition CUSTOM_FUNCTION_SETTINGS[] = {
-			{GRAPH_CUSTOM_FUNCTION_TYPE, GraphSettingKind::Choice, GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES},
-			{GRAPH_CUSTOM_FUNCTION_NAME, GraphSettingKind::Text},
-			{GRAPH_CUSTOM_FUNCTION_SOURCE, GraphSettingKind::Text},
-			{GRAPH_CUSTOM_FUNCTION_BODY, GraphSettingKind::Text},
+		constexpr GraphSettingDefinition CustomFunctionSettings[] = {
+			{GraphCustomFunctionType, GraphSettingKind::Choice, GraphCustomFunctionSourceTypes},
+			{GraphCustomFunctionName, GraphSettingKind::Text},
+			{GraphCustomFunctionSource, GraphSettingKind::Text},
+			{GraphCustomFunctionBody, GraphSettingKind::Text},
 		};
-		enum : u32 { SETTING_TYPE,
-					 SETTING_NAME,
-					 SETTING_SOURCE,
-					 SETTING_BODY };
+		enum : u32 { SettingType,
+					 SettingName,
+					 SettingSource,
+					 SettingBody };
 
-		constexpr std::string_view HLSL_KEYWORDS[] = {
+		constexpr std::string_view HLSLKeywords[] = {
 			"AppendStructuredBuffer", "asm", "asm_fragment", "auto", "BlendState", "break", "Buffer", "ByteAddressBuffer", "case", "catch",
 			"cbuffer", "centroid", "char", "class", "column_major", "compile", "compile_fragment", "CompileShader", "const", "const_cast",
 			"continue", "ComputeShader", "ConsumeStructuredBuffer", "default", "delete", "DepthStencilState", "DepthStencilView", "discard",
@@ -396,21 +396,21 @@ namespace Shalltear {
 			"Texture2DMSArray", "Texture3D", "TextureCube", "TextureCubeArray", "this", "throw", "true", "try", "typedef", "typename",
 			"triangle", "triangleadj", "TriangleStream", "uniform", "unorm", "union", "unsigned", "using", "vector", "vertexfragment",
 			"VertexShader", "virtual", "void", "volatile", "while"};
-		constexpr std::string_view HLSL_NUMERIC_TYPES[] = {"float", "half", "real", "int", "uint", "bool",
-														   "min10float", "min16float", "min12int", "min16int", "min16uint"};
-		constexpr std::string_view HLSL_NUMERIC_SUFFIXES[] = {"", "1", "2", "3", "4", "1x1", "1x2", "1x3", "1x4", "2x1", "2x2",
-															  "2x3", "2x4", "3x1", "3x2", "3x3", "3x4", "4x1", "4x2", "4x3", "4x4"};
+		constexpr std::string_view HLSLNumericTypes[] = {"float", "half", "real", "int", "uint", "bool",
+														 "min10float", "min16float", "min12int", "min16int", "min16uint"};
+		constexpr std::string_view HLSLNumericSuffixes[] = {"", "1", "2", "3", "4", "1x1", "1x2", "1x3", "1x4", "2x1", "2x2",
+															"2x3", "2x4", "3x1", "3x2", "3x3", "3x4", "4x1", "4x2", "4x3", "4x4"};
 
 		bool IsHLSLKeyword(std::string_view id) {
-			for (std::string_view keyword : HLSL_KEYWORDS) {
+			for (std::string_view keyword : HLSLKeywords) {
 				if (keyword == id) {
 					return true;
 				}
 			}
-			for (std::string_view type : HLSL_NUMERIC_TYPES) {
+			for (std::string_view type : HLSLNumericTypes) {
 				if (id.starts_with(type)) {
 					const std::string_view rest = id.substr(type.size());
-					for (std::string_view suffix : HLSL_NUMERIC_SUFFIXES) {
+					for (std::string_view suffix : HLSLNumericSuffixes) {
 						if (rest == suffix) {
 							return true;
 						}
@@ -451,13 +451,13 @@ namespace Shalltear {
 				return false;
 			}
 			const str extension = StringUtil::ToLower(fs::path(path.ToString()).extension().generic_string());
-			if (std::find(std::begin(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS), extension) ==
-				std::end(GRAPH_CUSTOM_FUNCTION_EXTENSIONS)) {
+			if (std::find(std::begin(GraphCustomFunctionExtensions), std::end(GraphCustomFunctionExtensions), extension) ==
+				std::end(GraphCustomFunctionExtensions)) {
 				error = "uses '" + path.ToString() + "' (not an .hlsl file)";
 				return false;
 			}
 			const fs::path file(FileSystem::Resolve(path).ToString());
-			const fs::path directory(FileSystem::Resolve(Path(str(GRAPH_GENERATED_DIRECTORY))).ToString());
+			const fs::path directory(FileSystem::Resolve(Path(str(GraphGeneratedDirectory))).ToString());
 			const fs::path relative = file.lexically_relative(directory);
 			out = relative.empty() ? file.generic_string() : relative.generic_string();
 			return true;
@@ -479,15 +479,15 @@ namespace Shalltear {
 				parameter(port, true);
 			}
 			out += ")\n{\n";
-			constexpr std::string_view TOKEN = "$precision";
+			constexpr std::string_view Token = "$precision";
 			for (size_t at = 0; at < body.size();) {
-				const size_t found = body.find(TOKEN, at);
+				const size_t found = body.find(Token, at);
 				out += body.substr(at, found == std::string_view::npos ? std::string_view::npos : found - at);
 				if (found == std::string_view::npos) {
 					break;
 				}
 				out += "float";
-				at = found + TOKEN.size();
+				at = found + Token.size();
 			}
 			if (!body.empty() && body.back() != '\n') {
 				out += "\n";
@@ -497,7 +497,7 @@ namespace Shalltear {
 
 		void CustomFunctionBody(GraphBodyContext& c) {
 			const GraphNodeDefinition& definition = *c.definition;
-			const std::string_view name = c.Text(SETTING_NAME);
+			const std::string_view name = c.Text(SettingName);
 			if (name.empty()) {
 				c.error = "has no function name";
 				return;
@@ -511,16 +511,16 @@ namespace Shalltear {
 			for (const GraphPortDefinition& port : definition.outputs) {
 				call.outputs.push_back(ValueTypeOf(port.type));
 			}
-			if (c.Setting(SETTING_TYPE) == 0) {
-				if (!IncludeOf(c.Text(SETTING_SOURCE), call.include, c.error)) {
+			if (c.Setting(SettingType) == 0) {
+				if (!IncludeOf(c.Text(SettingSource), call.include, c.error)) {
 					return;
 				}
 			} else {
-				if (c.Text(SETTING_BODY).empty()) {
+				if (c.Text(SettingBody).empty()) {
 					c.error = "has no body";
 					return;
 				}
-				call.definition = Definition(call.function, definition, c.Text(SETTING_BODY));
+				call.definition = Definition(call.function, definition, c.Text(SettingBody));
 			}
 			c.builder.Call(std::move(call), c.inputs, c.outputs);
 		}
@@ -529,8 +529,8 @@ namespace Shalltear {
 			Vector<GraphCustomFunctionPort> inputs{GetMemoryResource(MemTag::Editor)};
 			Vector<GraphCustomFunctionPort> outputs{GetMemoryResource(MemTag::Editor)};
 			str error;
-			if (!GraphCustomFunctions::ReadPorts(node, GRAPH_CUSTOM_FUNCTION_INPUTS, inputs, error) ||
-				!GraphCustomFunctions::ReadPorts(node, GRAPH_CUSTOM_FUNCTION_OUTPUTS, outputs, error)) {
+			if (!GraphCustomFunctions::ReadPorts(node, GraphCustomFunctionInputs, inputs, error) ||
+				!GraphCustomFunctions::ReadPorts(node, GraphCustomFunctionOutputs, outputs, error)) {
 				out.error = std::move(error);
 				return;
 			}
@@ -560,22 +560,22 @@ namespace Shalltear {
 					ports.push_back(port);
 				}
 			}
-			const str function = SettingString(node.settings, GRAPH_CUSTOM_FUNCTION_NAME);
+			const str function = SettingString(node.settings, GraphCustomFunctionName);
 			GraphNodeDefinition& definition = out.definition;
-			definition.id = GRAPH_CUSTOM_FUNCTION_NODE;
+			definition.id = GraphCustomFunctionNode;
 			definition.name = out.strings.emplace_back(function.empty() ? str("Custom Function") : function + " (Custom Function)");
 			definition.category = "Utility";
 			definition.synonyms = "code HLSL";
 			definition.inputs = out.inputs;
 			definition.outputs = out.outputs;
-			definition.settings = CUSTOM_FUNCTION_SETTINGS;
+			definition.settings = CustomFunctionSettings;
 			definition.body = CustomFunctionBody;
 		}
 
-		constexpr std::string_view KEYWORD_NODE = "Utility/Keyword";
+		constexpr std::string_view KeywordNode = "Utility/Keyword";
 
 		void BuildEnumKeyword(const GraphPropertyInfo& info, GraphBuiltDefinition& out) {
-			const GraphNodeDefinition* table = GraphNodeLibrary::Find(KEYWORD_NODE);
+			const GraphNodeDefinition* table = GraphNodeLibrary::Find(KeywordNode);
 			for (size_t i = 0; i < info.entries.size(); ++i) {
 				GraphPortDefinition port;
 				port.name = out.strings.emplace_back(std::to_string(info.entries[i].id));
@@ -589,14 +589,14 @@ namespace Shalltear {
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphSubgraphDefinitions() { return SUBGRAPH_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphSubgraphDefinitions() { return SubgraphDefinitions; }
 
 	GraphDefinitions::GraphDefinitions() = default;
 	GraphDefinitions::~GraphDefinitions() = default;
 
 	const GraphNodeDefinition* GraphDefinitions::Find(const GraphDocument& document, const GraphNode& node, str* error) {
-		if (node.def == KEYWORD_NODE) {
-			const GraphSetting* setting = FindSetting(node.settings, GRAPH_PROPERTY_SETTING);
+		if (node.def == KeywordNode) {
+			const GraphSetting* setting = FindSetting(node.settings, GraphPropertySetting);
 			const u32 id = setting ? static_cast<u32>(std::strtoul(setting->value.c_str(), nullptr, 10)) : 0;
 			for (const GraphProperty& property : document.properties) {
 				if (property.id == id && id != 0 && property.type == "EnumKeyword") {
@@ -604,10 +604,10 @@ namespace Shalltear {
 				}
 			}
 		}
-		if (node.def == GRAPH_SUBGRAPH_NODE || node.def == GRAPH_EFFECT_SUBGRAPH_BLOCK || node.def == GRAPH_EFFECT_SYSTEM_SUBGRAPH) {
+		if (node.def == GraphSubgraphNode || node.def == GraphEffectSubgraphBlock || node.def == GraphEffectSystemSubgraph) {
 			return UsedSubgraph(document, node, error);
 		}
-		if (node.def == GRAPH_PROPERTY_NODE) {
+		if (node.def == GraphPropertyNode) {
 			const u32 id = PropertyIdOf(node);
 			for (const GraphProperty& property : document.properties) {
 				if (property.id == id && id != 0 && GraphSubgraphs::IsOutput(property)) {
@@ -615,10 +615,10 @@ namespace Shalltear {
 				}
 			}
 		}
-		if (node.def == GRAPH_CUSTOM_FUNCTION_NODE) {
+		if (node.def == GraphCustomFunctionNode) {
 			return CustomFunction(node, error);
 		}
-		if (node.def == GRAPH_EFFECT_CUSTOM_HLSL_BLOCK || node.def == GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR) {
+		if (node.def == GraphEffectCustomHLSLBlock || node.def == GraphEffectCustomHLSLOperator) {
 			return CustomHLSL(node);
 		}
 		if (GraphEffectShading::IsNodeShaderOutput(node.def)) {
@@ -627,7 +627,7 @@ namespace Shalltear {
 		if (GraphEffectAttributes::BuildsPerNode(node.def)) {
 			return EffectNode(node, error);
 		}
-		if (node.def == GRAPH_SUBGRAPH_OUTPUT_BLOCK) {
+		if (node.def == GraphSubgraphOutputBlock) {
 			const GraphNodeDefinition* definition = GraphSubgraphs::OutputBlockDefinition(GraphSubgraphs::OutputTypeOf(node));
 			if (!definition && error) {
 				*error = "is an output with a Type that isn't one of its options";
@@ -688,7 +688,7 @@ namespace Shalltear {
 	const GraphReadDocument& GraphDefinitions::DefaultNodeShader() {
 		if (_defaultNodeShader.empty()) {
 			GraphReadDocument& made = _defaultNodeShader.emplace_back();
-			made.name = str(GraphEffectShading::DEFAULT_NAME);
+			made.name = str(GraphEffectShading::DefaultName);
 			str error;
 			if (!GraphDocumentOps::Read(GraphEffectShading::DefaultDocumentText(), made.document, error)) {
 				made.error = "is a built-in the editor couldn't read: " + error;
@@ -712,8 +712,8 @@ namespace Shalltear {
 				made.name = str(fs::path(made.path.ToString()).stem().generic_string());
 				made.physicalPath = FileSystem::Resolve(made.path).ToString();
 				const str extension = StringUtil::ToLower(fs::path(made.path.ToString()).extension().generic_string());
-				if (std::find(std::begin(GRAPH_CUSTOM_HLSL_EXTENSIONS), std::end(GRAPH_CUSTOM_HLSL_EXTENSIONS), extension) ==
-					std::end(GRAPH_CUSTOM_HLSL_EXTENSIONS)) {
+				if (std::find(std::begin(GraphCustomHLSLExtensions), std::end(GraphCustomHLSLExtensions), extension) ==
+					std::end(GraphCustomHLSLExtensions)) {
 					made.error = "isn't an .hlsl file";
 				} else {
 					made.text = FileSystem::ReadTextFile(made.path, MemTag::Editor);
@@ -780,16 +780,16 @@ namespace Shalltear {
 		if (!subgraph) {
 			return nullptr;
 		}
-		const GraphSubgraphKind wanted = node.def == GRAPH_EFFECT_SUBGRAPH_BLOCK	? GraphSubgraphKind::EffectBlock
-										 : node.def == GRAPH_EFFECT_SYSTEM_SUBGRAPH ? GraphSubgraphKind::EffectSystem
-										 : IsEffectDocumentType(document.type)		? GraphSubgraphKind::EffectOperator
-																					: GraphSubgraphKind::Shader;
+		const GraphSubgraphKind wanted = node.def == GraphEffectSubgraphBlock	 ? GraphSubgraphKind::EffectBlock
+										 : node.def == GraphEffectSystemSubgraph ? GraphSubgraphKind::EffectSystem
+										 : IsEffectDocumentType(document.type)	 ? GraphSubgraphKind::EffectOperator
+																				 : GraphSubgraphKind::Shader;
 		if (subgraph->kind != wanted) {
-			constexpr std::string_view KINDS[] = {"a shader subgraph", "an effect operator", "an effect block",
+			constexpr std::string_view Kinds[] = {"a shader subgraph", "an effect operator", "an effect block",
 												  "an effect graph"};
 			if (error) {
-				*error = "uses '" + subgraph->name + "', which is " + str(KINDS[static_cast<u32>(subgraph->kind)]) + ", where it takes " +
-						 str(KINDS[static_cast<u32>(wanted)]);
+				*error = "uses '" + subgraph->name + "', which is " + str(Kinds[static_cast<u32>(subgraph->kind)]) + ", where it takes " +
+						 str(Kinds[static_cast<u32>(wanted)]);
 			}
 			return nullptr;
 		}
@@ -807,16 +807,16 @@ namespace Shalltear {
 		}
 		bool made = false;
 		GraphBuiltDefinition& found =
-			Built(str(GRAPH_PROPERTY_NODE) + "\noutput\n" + std::to_string(property.id) + "\n" + property.type + "\n" + property.defaultValue, made);
+			Built(str(GraphPropertyNode) + "\noutput\n" + std::to_string(property.id) + "\n" + property.type + "\n" + property.defaultValue, made);
 		if (made) {
 			GraphPortDefinition port;
-			port.name = GRAPH_SUBGRAPH_OUTPUT_PORT;
+			port.name = GraphSubgraphOutputPort;
 			port.type = SlotTypeOf(info.kind);
 			for (u32 i = 0; i < 4; ++i) {
 				port.defaultValue[i] = info.defaultValue[i];
 			}
 			found.inputs.push_back(port);
-			found.definition = *GraphNodeLibrary::Find(GRAPH_PROPERTY_NODE);
+			found.definition = *GraphNodeLibrary::Find(GraphPropertyNode);
 			found.definition.inputs = found.inputs;
 			found.definition.outputs = {};
 			found.definition.body = nullptr;
@@ -826,12 +826,12 @@ namespace Shalltear {
 
 	const GraphNodeDefinition* GraphDefinitions::CustomFunction(const GraphNode& node, str* error) {
 		str key;
-		for (std::string_view part : {GRAPH_CUSTOM_FUNCTION_NAME, GRAPH_CUSTOM_FUNCTION_INPUTS, GRAPH_CUSTOM_FUNCTION_OUTPUTS}) {
+		for (std::string_view part : {GraphCustomFunctionName, GraphCustomFunctionInputs, GraphCustomFunctionOutputs}) {
 			const GraphSetting* setting = FindSetting(node.settings, part);
 			key += (setting ? setting->value : str()) + "\n";
 		}
 		bool made = false;
-		GraphBuiltDefinition& found = Built(str(GRAPH_CUSTOM_FUNCTION_NODE) + "\n" + key, made);
+		GraphBuiltDefinition& found = Built(str(GraphCustomFunctionNode) + "\n" + key, made);
 		if (made) {
 			BuildCustomFunction(node, found);
 		}
@@ -842,10 +842,10 @@ namespace Shalltear {
 	}
 
 	const GraphNodeDefinition* GraphDefinitions::CustomHLSL(const GraphNode& node) {
-		const bool block = node.def == GRAPH_EFFECT_CUSTOM_HLSL_BLOCK;
-		str key = node.def + "\n" + SettingString(node.settings, block ? GRAPH_CUSTOM_HLSL_BLOCK_NAME : GRAPH_CUSTOM_HLSL_OPERATOR_NAME) + "\n" +
-				  SettingString(node.settings, GRAPH_CUSTOM_HLSL_FUNCTION) + "\n";
-		const str held = SettingString(node.settings, GRAPH_CUSTOM_HLSL_FILE);
+		const bool block = node.def == GraphEffectCustomHLSLBlock;
+		str key = node.def + "\n" + SettingString(node.settings, block ? GraphCustomHLSLBlockName : GraphCustomHLSLOperatorName) + "\n" +
+				  SettingString(node.settings, GraphCustomHLSLFunction) + "\n";
+		const str held = SettingString(node.settings, GraphCustomHLSLFile);
 		const Guid asset = held.empty() ? Guid{} : Guid::FromString(held);
 		str fileError;
 		const GraphReadText* file = held.empty() ? nullptr : ShaderFile(asset, &fileError);
@@ -853,9 +853,9 @@ namespace Shalltear {
 		if (!held.empty()) {
 			key += held + "\n" + (file ? std::to_string(file->contentHash) : str("missing"));
 		} else {
-			const GraphSetting* stored = FindSetting(node.settings, GRAPH_CUSTOM_HLSL_CODE);
-			code = stored ? SettingString(node.settings, GRAPH_CUSTOM_HLSL_CODE)
-						  : str(block ? GraphCustomHLSL::DEFAULT_BLOCK_CODE : GraphCustomHLSL::DEFAULT_OPERATOR_CODE);
+			const GraphSetting* stored = FindSetting(node.settings, GraphCustomHLSLCode);
+			code = stored ? SettingString(node.settings, GraphCustomHLSLCode)
+						  : str(block ? GraphCustomHLSL::DefaultBlockCode : GraphCustomHLSL::DefaultOperatorCode);
 			key += "code\n" + code;
 		}
 		bool made = false;
@@ -880,7 +880,7 @@ namespace Shalltear {
 			return nullptr;
 		}
 		bool made = false;
-		GraphBuiltDefinition& found = Built(str(KEYWORD_NODE) + "\n" + info.reference + "\n" + GraphProperties::WriteEntries(info.entries), made);
+		GraphBuiltDefinition& found = Built(str(KeywordNode) + "\n" + info.reference + "\n" + GraphProperties::WriteEntries(info.entries), made);
 		if (made) {
 			BuildEnumKeyword(info, found);
 		}
@@ -929,26 +929,26 @@ namespace Shalltear {
 	namespace GraphSubgraphs {
 
 		Guid AssetOf(const GraphNode& node) {
-			if (node.def != GRAPH_SUBGRAPH_NODE && node.def != GRAPH_EFFECT_SUBGRAPH_BLOCK && node.def != GRAPH_EFFECT_SYSTEM_SUBGRAPH) {
+			if (node.def != GraphSubgraphNode && node.def != GraphEffectSubgraphBlock && node.def != GraphEffectSystemSubgraph) {
 				return Guid{};
 			}
-			const str text = SettingString(node.settings, GRAPH_SUBGRAPH_ASSET_SETTING);
+			const str text = SettingString(node.settings, GraphSubgraphAssetSetting);
 			return text.empty() ? Guid{} : Guid::FromString(text);
 		}
 
 		namespace {
-			constexpr std::string_view KIND_TYPES[] = {GRAPH_SUBGRAPH_DOCUMENT_TYPE, GRAPH_EFFECT_OPERATOR_SUBGRAPH_DOCUMENT_TYPE,
-													   GRAPH_EFFECT_BLOCK_SUBGRAPH_DOCUMENT_TYPE, GRAPH_EFFECT_DOCUMENT_TYPE};
-			constexpr std::string_view KIND_EXTENSIONS[] = {GRAPH_SUBGRAPH_EXTENSION, GRAPH_EFFECT_OPERATOR_SUBGRAPH_EXTENSION,
-															GRAPH_EFFECT_BLOCK_SUBGRAPH_EXTENSION, GRAPH_EFFECT_EXTENSION};
-			constexpr std::string_view KIND_CATEGORIES[] = {GRAPH_SUBGRAPH_DEFAULT_CATEGORY, GRAPH_EFFECT_OPERATOR_SUBGRAPH_CATEGORY,
-															GRAPH_EFFECT_BLOCK_SUBGRAPH_CATEGORY, "System Subgraph"};
-			static_assert(std::size(KIND_TYPES) == static_cast<size_t>(GraphSubgraphKind::EffectSystem) + 1, "a document type per subgraph kind");
+			constexpr std::string_view KindTypes[] = {GraphSubgraphDocumentType, GraphEffectOperatorSubgraphDocumentType,
+													  GraphEffectBlockSubgraphDocumentType, GraphEffectDocumentType};
+			constexpr std::string_view KindExtensions[] = {GraphSubgraphExtension, GraphEffectOperatorSubgraphExtension,
+														   GraphEffectBlockSubgraphExtension, GraphEffectExtension};
+			constexpr std::string_view KindCategories[] = {GraphSubgraphDefaultCategory, GraphEffectOperatorSubgraphCategory,
+														   GraphEffectBlockSubgraphCategory, "System Subgraph"};
+			static_assert(std::size(KindTypes) == static_cast<size_t>(GraphSubgraphKind::EffectSystem) + 1, "a document type per subgraph kind");
 		} // anonymous namespace
 
 		bool KindOf(std::string_view type, GraphSubgraphKind& out) {
-			for (u32 kind = 0; kind < std::size(KIND_TYPES); ++kind) {
-				if (KIND_TYPES[kind] == type) {
+			for (u32 kind = 0; kind < std::size(KindTypes); ++kind) {
+				if (KindTypes[kind] == type) {
 					out = static_cast<GraphSubgraphKind>(kind);
 					return true;
 				}
@@ -956,15 +956,15 @@ namespace Shalltear {
 			return false;
 		}
 
-		std::string_view DocumentType(GraphSubgraphKind kind) { return KIND_TYPES[static_cast<u32>(kind)]; }
+		std::string_view DocumentType(GraphSubgraphKind kind) { return KindTypes[static_cast<u32>(kind)]; }
 
-		std::string_view Extension(GraphSubgraphKind kind) { return KIND_EXTENSIONS[static_cast<u32>(kind)]; }
+		std::string_view Extension(GraphSubgraphKind kind) { return KindExtensions[static_cast<u32>(kind)]; }
 
-		std::string_view DefaultCategory(GraphSubgraphKind kind) { return KIND_CATEGORIES[static_cast<u32>(kind)]; }
+		std::string_view DefaultCategory(GraphSubgraphKind kind) { return KindCategories[static_cast<u32>(kind)]; }
 
 		bool IsOutput(const GraphProperty& property) {
 			for (const GraphSetting& setting : property.settings) {
-				if (setting.key == GRAPH_PROPERTY_OUTPUT_SETTING) {
+				if (setting.key == GraphPropertyOutputSetting) {
 					return setting.value == "true";
 				}
 			}
@@ -973,7 +973,7 @@ namespace Shalltear {
 
 		u32 BlockContext(const GraphDocument& document) {
 			for (const GraphContext& context : document.contexts) {
-				if (context.node.def == GRAPH_EFFECT_BLOCK_SUBGRAPH_CONTEXT) {
+				if (context.node.def == GraphEffectBlockSubgraphContext) {
 					return context.node.id;
 				}
 			}
@@ -1027,30 +1027,30 @@ namespace Shalltear {
 			if (type.empty() && FindSetting(block.settings, "Type") == nullptr) {
 				return GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE;
 			}
-			for (u32 i = 0; i < std::size(GRAPH_SUBGRAPH_OUTPUT_TYPES); ++i) {
-				if (GRAPH_SUBGRAPH_OUTPUT_TYPES[i] == type) {
+			for (u32 i = 0; i < std::size(GraphSubgraphOutputTypes); ++i) {
+				if (GraphSubgraphOutputTypes[i] == type) {
 					return i;
 				}
 			}
-			return static_cast<u32>(std::size(GRAPH_SUBGRAPH_OUTPUT_TYPES));
+			return static_cast<u32>(std::size(GraphSubgraphOutputTypes));
 		}
 
 		str OutputNameOf(const GraphNode& block) { return SettingString(block.settings, "Name"); }
 
 		GraphPortType InputPortType(GraphPropertyKind kind) { return SlotTypeOf(kind); }
 
-		const GraphNodeDefinition* OutputBlockDefinition(u32 type) { return type < OUTPUT_BLOCKS.size() ? &OUTPUT_BLOCKS[type] : nullptr; }
+		const GraphNodeDefinition* OutputBlockDefinition(u32 type) { return type < OutputBlocks.size() ? &OutputBlocks[type] : nullptr; }
 
 		u32 OutputContext(const GraphDocument& document) {
 			for (const GraphContext& context : document.contexts) {
-				if (context.node.def == GRAPH_SUBGRAPH_OUTPUT_CONTEXT) {
+				if (context.node.def == GraphSubgraphOutputContext) {
 					return context.node.id;
 				}
 			}
 			return 0;
 		}
 
-		void ProjectSubgraphs(Vector<Guid>& out) { ProjectFiles(GRAPH_SUBGRAPH_EXTENSION, out); }
+		void ProjectSubgraphs(Vector<Guid>& out) { ProjectFiles(GraphSubgraphExtension, out); }
 
 		void ProjectFiles(std::string_view extension, Vector<Guid>& out) {
 			out.clear();
@@ -1157,7 +1157,7 @@ namespace Shalltear {
 			}
 			LinearAllocator arena(setting->value.size() + 64, MemTag::Editor);
 			const JSONValue list = JSONParse(setting->value, arena);
-			const str what = key == GRAPH_CUSTOM_FUNCTION_INPUTS ? "inputs" : "outputs";
+			const str what = key == GraphCustomFunctionInputs ? "inputs" : "outputs";
 			if (!list.IsArray()) {
 				error = "has " + what + " that aren't a list";
 				return false;
@@ -1174,12 +1174,12 @@ namespace Shalltear {
 				GraphCustomFunctionPort port;
 				port.id = static_cast<u32>(id->AsNumber());
 				port.name = str(name->AsString());
-				const auto* known = std::find(std::begin(GRAPH_CUSTOM_FUNCTION_PORT_TYPES), std::end(GRAPH_CUSTOM_FUNCTION_PORT_TYPES), type->AsString());
-				if (known == std::end(GRAPH_CUSTOM_FUNCTION_PORT_TYPES)) {
+				const auto* known = std::find(std::begin(GraphCustomFunctionPortTypes), std::end(GraphCustomFunctionPortTypes), type->AsString());
+				if (known == std::end(GraphCustomFunctionPortTypes)) {
 					error = "has a port '" + port.name + "' of type '" + str(type->AsString()) + "' (a custom function doesn't take it)";
 					return false;
 				}
-				port.type = static_cast<u32>(known - std::begin(GRAPH_CUSTOM_FUNCTION_PORT_TYPES));
+				port.type = static_cast<u32>(known - std::begin(GraphCustomFunctionPortTypes));
 				out.push_back(std::move(port));
 			}
 			return true;
@@ -1191,7 +1191,7 @@ namespace Shalltear {
 				JSONValue entry = JSONValue::MakeObject();
 				entry.AddMember("id", JSONValue::MakeNumber(port.id));
 				entry.AddMember("name", JSONValue::MakeString(port.name));
-				entry.AddMember("type", JSONValue::MakeString(GRAPH_CUSTOM_FUNCTION_PORT_TYPES[port.type]));
+				entry.AddMember("type", JSONValue::MakeString(GraphCustomFunctionPortTypes[port.type]));
 				list.Push(std::move(entry));
 			}
 			return JSONSerialize(list, false);

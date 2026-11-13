@@ -49,7 +49,7 @@ namespace Shalltear {
 
 			AudioEnvelope _envelope;
 			AudioClipData* _data = nullptr;
-			AudioClipEncoding _codec = AudioClipEncoding::Pcm;
+			AudioClipEncoding _codec = AudioClipEncoding::PCM;
 			const AudioStreamSource* _source = nullptr;
 			AudioStreamSource _resident;
 			bool _finished = false;

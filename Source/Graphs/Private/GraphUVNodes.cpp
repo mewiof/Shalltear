@@ -14,7 +14,7 @@ namespace Shalltear {
 		constexpr std::string_view UV0 = "UV0";
 		constexpr f32 FLOAT_EPSILON = 5.960464478e-8f;
 
-		constexpr GraphPortDefinition OUT_UV[] = {{"Out", P::Float2}};
+		constexpr GraphPortDefinition OutUV[] = {{"Out", P::Float2}};
 
 		GraphValueId Vector2(B& b, GraphValueId x, GraphValueId y) {
 			const GraphValueId parts[] = {x, y};
@@ -32,12 +32,12 @@ namespace Shalltear {
 			return Vector3(b, b.Swizzle(tangent, "x"), b.Unary(GraphOp::Negate, b.Swizzle(tangent, "y")), b.Swizzle(tangent, "z"));
 		}
 
-		constexpr std::string_view CHANNEL_SWIZZLES[] = {"x", "y", "z", "w"};
-		constexpr std::string_view CHANNELS[] = {"Red", "Green", "Blue", "Alpha"};
+		constexpr std::string_view ChannelSwizzles[] = {"x", "y", "z", "w"};
+		constexpr std::string_view Channels[] = {"Red", "Green", "Blue", "Alpha"};
 
-		constexpr GraphPortDefinition FLIPBOOK_INPUTS[] = {
+		constexpr GraphPortDefinition FlipbookInputs[] = {
 			{"UV", P::Float2, {}, UV0}, {"Width", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}, {"Height", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}, {"Tile", P::Float}};
-		constexpr GraphSettingDefinition FLIPBOOK_SETTINGS[] = {{"Invert X", S::Toggle, {}, 0}, {"Invert Y", S::Toggle, {}, 0}};
+		constexpr GraphSettingDefinition FlipbookSettings[] = {{"Invert X", S::Toggle, {}, 0}, {"Invert Y", S::Toggle, {}, 0}};
 
 		void FlipbookBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -54,16 +54,16 @@ namespace Shalltear {
 			c.outputs[0] = b.Multiply(b.Add(c.In(0), Vector2(b, tileX, tileY)), tileCount);
 		}
 
-		constexpr GraphPortDefinition PARALLAX_INPUTS[] = {
+		constexpr GraphPortDefinition ParallaxInputs[] = {
 			{"Heightmap", P::Texture2D}, {"Amplitude", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}, {"UVs", P::Float2, {}, UV0}};
-		constexpr GraphPortDefinition PARALLAX_OUTPUTS[] = {{"ParallaxUVs", P::Float2}};
-		constexpr GraphSettingDefinition PARALLAX_SETTINGS[] = {{"Heightmap Sample Channel", S::Choice, CHANNELS, 1}};
+		constexpr GraphPortDefinition ParallaxOutputs[] = {{"ParallaxUVs", P::Float2}};
+		constexpr GraphSettingDefinition ParallaxSettings[] = {{"Heightmap Sample Channel", S::Choice, Channels, 1}};
 
 		void ParallaxMappingBody(GraphBodyContext& c) {
 			B& b = c.builder;
 			GraphValueId uvs = c.In(2);
 			const GraphValueId sample[] = {c.In(0), uvs};
-			GraphValueId height = b.Swizzle(b.TextureOp(GraphOp::SampleTexture, sample), CHANNEL_SWIZZLES[c.Setting(0)]);
+			GraphValueId height = b.Swizzle(b.TextureOp(GraphOp::SampleTexture, sample), ChannelSwizzles[c.Setting(0)]);
 			GraphValueId amplitude = b.Multiply(c.In(1), b.Scalar(0.01f));
 			GraphValueId centred = b.Subtract(b.Multiply(height, amplitude), b.Divide(amplitude, b.Scalar(2.0f)));
 			GraphValueId view = b.Unary(GraphOp::Normalize, TextureSpaceViewDirection(c));
@@ -71,17 +71,17 @@ namespace Shalltear {
 			c.outputs[0] = b.Add(uvs, b.Multiply(centred, b.Divide(b.Swizzle(view, "xy"), lifted)));
 		}
 
-		constexpr GraphPortDefinition POM_INPUTS[] = {{"Heightmap", P::Texture2D},
-													  {"Amplitude", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
-													  {"Steps", P::Float, {5.0f, 5.0f, 5.0f, 5.0f}},
-													  {"UVs", P::Float2, {}, UV0},
-													  {"Tiling", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}},
-													  {"Offset", P::Float2},
-													  {"PrimitiveSize", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}},
-													  {"LOD", P::Float},
-													  {"LODThreshold", P::Float}};
-		constexpr GraphPortDefinition POM_OUTPUTS[] = {{"PixelDepthOffset", P::Float}, {"ParallaxUVs", P::Float2}};
-		constexpr GraphSettingDefinition POM_SETTINGS[] = {{"Heightmap Sample Channel", S::Choice, CHANNELS, 0}};
+		constexpr GraphPortDefinition PomInputs[] = {{"Heightmap", P::Texture2D},
+													 {"Amplitude", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
+													 {"Steps", P::Float, {5.0f, 5.0f, 5.0f, 5.0f}},
+													 {"UVs", P::Float2, {}, UV0},
+													 {"Tiling", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}},
+													 {"Offset", P::Float2},
+													 {"PrimitiveSize", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}},
+													 {"LOD", P::Float},
+													 {"LODThreshold", P::Float}};
+		constexpr GraphPortDefinition PomOutputs[] = {{"PixelDepthOffset", P::Float}, {"ParallaxUVs", P::Float2}};
+		constexpr GraphSettingDefinition PomSettings[] = {{"Heightmap Sample Channel", S::Choice, Channels, 0}};
 
 		void ParallaxOcclusionMappingBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -106,10 +106,10 @@ namespace Shalltear {
 			c.outputs[1] = b.Add(uvs, b.Swizzle(search, "xy"));
 		}
 
-		constexpr GraphPortDefinition POLAR_INPUTS[] = {{"UV", P::Float2, {}, UV0},
-														{"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
-														{"RadialScale", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
-														{"LengthScale", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}};
+		constexpr GraphPortDefinition PolarInputs[] = {{"UV", P::Float2, {}, UV0},
+													   {"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
+													   {"RadialScale", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
+													   {"LengthScale", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}};
 
 		void PolarCoordinatesBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -120,10 +120,10 @@ namespace Shalltear {
 			c.outputs[0] = Vector2(b, radius, angle);
 		}
 
-		constexpr GraphPortDefinition SHEAR_INPUTS[] = {{"UV", P::Float2, {}, UV0},
-														{"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
-														{"Strength", P::Float2, {10.0f, 10.0f, 10.0f, 10.0f}},
-														{"Offset", P::Float2}};
+		constexpr GraphPortDefinition ShearInputs[] = {{"UV", P::Float2, {}, UV0},
+													   {"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
+													   {"Strength", P::Float2, {10.0f, 10.0f, 10.0f, 10.0f}},
+													   {"Offset", P::Float2}};
 
 		void RadialShearBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -141,9 +141,9 @@ namespace Shalltear {
 			c.outputs[0] = b.Add(b.Add(c.In(0), b.Multiply(delta, offset)), c.In(3));
 		}
 
-		constexpr std::string_view ROTATION_UNITS[] = {"Radians", "Degrees"};
-		constexpr GraphSettingDefinition ROTATE_SETTINGS[] = {{"Unit", S::Choice, ROTATION_UNITS}};
-		constexpr GraphPortDefinition ROTATE_INPUTS[] = {{"UV", P::Float2, {}, UV0}, {"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}}, {"Rotation", P::Float}};
+		constexpr std::string_view RotationUnits[] = {"Radians", "Degrees"};
+		constexpr GraphSettingDefinition RotateSettings[] = {{"Unit", S::Choice, RotationUnits}};
+		constexpr GraphPortDefinition RotateInputs[] = {{"UV", P::Float2, {}, UV0}, {"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}}, {"Rotation", P::Float}};
 
 		void RotateBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -159,17 +159,17 @@ namespace Shalltear {
 			c.outputs[0] = b.Add(Vector2(b, x, y), c.In(1));
 		}
 
-		constexpr GraphPortDefinition TILING_INPUTS[] = {{"UV", P::Float2, {}, UV0}, {"Tiling", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}}, {"Offset", P::Float2}};
+		constexpr GraphPortDefinition TilingInputs[] = {{"UV", P::Float2, {}, UV0}, {"Tiling", P::Float2, {1.0f, 1.0f, 1.0f, 1.0f}}, {"Offset", P::Float2}};
 
 		void TilingAndOffsetBody(GraphBodyContext& c) {
 			B& b = c.builder;
 			c.outputs[0] = b.Add(b.Multiply(c.In(0), c.In(1)), c.In(2));
 		}
 
-		constexpr GraphPortDefinition TWIRL_INPUTS[] = {{"UV", P::Float2, {}, UV0},
-														{"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
-														{"Strength", P::Float, {10.0f, 0.0f, 0.0f, 0.0f}},
-														{"Offset", P::Float2}};
+		constexpr GraphPortDefinition TwirlInputs[] = {{"UV", P::Float2, {}, UV0},
+													   {"Center", P::Float2, {0.5f, 0.5f, 0.5f, 0.5f}},
+													   {"Strength", P::Float, {10.0f, 0.0f, 0.0f, 0.0f}},
+													   {"Offset", P::Float2}};
 
 		void TwirlBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -187,22 +187,22 @@ namespace Shalltear {
 								   b.Add(b.Add(y, b.Swizzle(center, "y")), b.Swizzle(offset, "y")));
 		}
 
-		constexpr std::string_view TRIPLANAR_TYPES[] = {"Default", "Normal"};
-		constexpr std::string_view TRIPLANAR_SPACES[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld"};
-		constexpr GraphSettingDefinition TRIPLANAR_SETTINGS[] = {
-			{"Type", S::Choice, TRIPLANAR_TYPES}, {"Input Space", S::Choice, TRIPLANAR_SPACES, 4}, {"Normal Output Space", S::Choice, TRIPLANAR_SPACES, 3}};
-		constexpr GraphPortDefinition TRIPLANAR_INPUTS[] = {{"Texture", P::Texture2D},
-															{"Position", P::Float3, {}, "AbsoluteWorldSpacePosition"},
-															{"Normal", P::Float3, {}, "WorldSpaceNormal"},
-															{"Tile", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
-															{"Blend", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}};
-		constexpr GraphPortDefinition TRIPLANAR_OUTPUTS[] = {{"Out", P::Float4}};
+		constexpr std::string_view TriplanarTypes[] = {"Default", "Normal"};
+		constexpr std::string_view TriplanarSpaces[] = {"Object", "View", "World", "Tangent", "AbsoluteWorld"};
+		constexpr GraphSettingDefinition TriplanarSettings[] = {
+			{"Type", S::Choice, TriplanarTypes}, {"Input Space", S::Choice, TriplanarSpaces, 4}, {"Normal Output Space", S::Choice, TriplanarSpaces, 3}};
+		constexpr GraphPortDefinition TriplanarInputs[] = {{"Texture", P::Texture2D},
+														   {"Position", P::Float3, {}, "AbsoluteWorldSpacePosition"},
+														   {"Normal", P::Float3, {}, "WorldSpaceNormal"},
+														   {"Tile", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}},
+														   {"Blend", P::Float, {1.0f, 1.0f, 1.0f, 1.0f}}};
+		constexpr GraphPortDefinition TriplanarOutputs[] = {{"Out", P::Float4}};
 
 		void TriplanarBody(GraphBodyContext& c) {
 			B& b = c.builder;
 			const u32 space = c.Setting(1);
-			const std::string_view normalSpace = space == 4 ? std::string_view("World") : TRIPLANAR_SPACES[space];
-			GraphValueId position = c.IsConnected(1) ? c.In(1) : c.Binding(str(TRIPLANAR_SPACES[space]) + "SpacePosition");
+			const std::string_view normalSpace = space == 4 ? std::string_view("World") : TriplanarSpaces[space];
+			GraphValueId position = c.IsConnected(1) ? c.In(1) : c.Binding(str(TriplanarSpaces[space]) + "SpacePosition");
 			GraphValueId normal = c.IsConnected(2) ? c.In(2) : c.Binding(str(normalSpace) + "SpaceNormal");
 			GraphValueId uv = b.Multiply(position, c.In(3));
 			GraphValueId exponent = b.Minimum(c.In(4), b.Scalar(158.0f));
@@ -251,22 +251,22 @@ namespace Shalltear {
 			c.outputs[0] = b.Construct(GraphValueType::Float4, parts);
 		}
 
-		constexpr GraphNodeDefinition UV_DEFINITIONS[] = {
-			{"UV/Flipbook", "Flipbook", "UV", "atlas animation", FLIPBOOK_INPUTS, OUT_UV, FLIPBOOK_SETTINGS, FlipbookBody},
-			{"UV/ParallaxMapping", "Parallax Mapping", "UV", "offset mapping", PARALLAX_INPUTS, PARALLAX_OUTPUTS, PARALLAX_SETTINGS, ParallaxMappingBody, GraphPreviewMode::None},
-			{"UV/ParallaxOcclusionMapping", "Parallax Occlusion Mapping", "UV", "pom", POM_INPUTS, POM_OUTPUTS, POM_SETTINGS,
+		constexpr GraphNodeDefinition UVDefinitions[] = {
+			{"UV/Flipbook", "Flipbook", "UV", "atlas animation", FlipbookInputs, OutUV, FlipbookSettings, FlipbookBody},
+			{"UV/ParallaxMapping", "Parallax Mapping", "UV", "offset mapping", ParallaxInputs, ParallaxOutputs, ParallaxSettings, ParallaxMappingBody, GraphPreviewMode::None},
+			{"UV/ParallaxOcclusionMapping", "Parallax Occlusion Mapping", "UV", "pom", PomInputs, PomOutputs, PomSettings,
 			 ParallaxOcclusionMappingBody, GraphPreviewMode::None},
-			{"UV/PolarCoordinates", "Polar Coordinates", "UV", "", POLAR_INPUTS, OUT_UV, {}, PolarCoordinatesBody},
-			{"UV/RadialShear", "Radial Shear", "UV", "", SHEAR_INPUTS, OUT_UV, {}, RadialShearBody},
-			{"UV/Rotate", "Rotate", "UV", "", ROTATE_INPUTS, OUT_UV, ROTATE_SETTINGS, RotateBody},
-			{"UV/Spherize", "Spherize", "UV", "", SHEAR_INPUTS, OUT_UV, {}, SpherizeBody},
-			{"UV/TilingAndOffset", "Tiling And Offset", "UV", "pan scale", TILING_INPUTS, OUT_UV, {}, TilingAndOffsetBody},
-			{"UV/Triplanar", "Triplanar", "UV", "project", TRIPLANAR_INPUTS, TRIPLANAR_OUTPUTS, TRIPLANAR_SETTINGS, TriplanarBody, GraphPreviewMode::Preview3D},
-			{"UV/Twirl", "Twirl", "UV", "", TWIRL_INPUTS, OUT_UV, {}, TwirlBody},
+			{"UV/PolarCoordinates", "Polar Coordinates", "UV", "", PolarInputs, OutUV, {}, PolarCoordinatesBody},
+			{"UV/RadialShear", "Radial Shear", "UV", "", ShearInputs, OutUV, {}, RadialShearBody},
+			{"UV/Rotate", "Rotate", "UV", "", RotateInputs, OutUV, RotateSettings, RotateBody},
+			{"UV/Spherize", "Spherize", "UV", "", ShearInputs, OutUV, {}, SpherizeBody},
+			{"UV/TilingAndOffset", "Tiling And Offset", "UV", "pan scale", TilingInputs, OutUV, {}, TilingAndOffsetBody},
+			{"UV/Triplanar", "Triplanar", "UV", "project", TriplanarInputs, TriplanarOutputs, TriplanarSettings, TriplanarBody, GraphPreviewMode::Preview3D},
+			{"UV/Twirl", "Twirl", "UV", "", TwirlInputs, OutUV, {}, TwirlBody},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphUVDefinitions() { return UV_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphUVDefinitions() { return UVDefinitions; }
 
 } // namespace Shalltear

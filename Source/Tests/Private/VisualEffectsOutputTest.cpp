@@ -396,14 +396,14 @@ TEST_F(ParticleOutputFixture, BatchedSystemsDrawSeparately) {
 	MakeMaterial(red, _quad, Color(1.0f, 0.0f, 0.0f, 1.0f));
 	ShadingStage stage;
 	ASSERT_TRUE(BuildEmptyStage(stage, green));
-	constexpr VisualEffectsImpl::ParticleBatchKey SPARKS{7, 1, 0};
+	constexpr VisualEffectsImpl::ParticleBatchKey Sparks{7, 1, 0};
 	const Vec3 left(-0.6f, 0.0f, 0.5f);
 	const Vec3 right(0.6f, 0.0f, 0.5f);
 	const Vec3 above(0.0f, 5.0f, 0.5f);
 	Handle<ParticleProbeRenderer> greenEffect = AddEffect(stage.scene);
 	Handle<ParticleProbeRenderer> redEffect = AddEffect(stage.scene);
-	ASSERT_TRUE(Create(greenEffect->system, 16, left, green, 0.2f, SPARKS, 4));
-	ASSERT_TRUE(Create(redEffect->system, 16, above, red, 0.2f, SPARKS, 4));
+	ASSERT_TRUE(Create(greenEffect->system, 16, left, green, 0.2f, Sparks, 4));
+	ASSERT_TRUE(Create(redEffect->system, 16, above, red, 0.2f, Sparks, 4));
 	ASSERT_EQ(greenEffect->system.GetBatch(), redEffect->system.GetBatch());
 	EXPECT_EQ(redEffect->system.GetSlot(), 1u);
 	const auto spawnAt = [](ParticleSystem& system, const Vec3& at, f32 lifetime) {

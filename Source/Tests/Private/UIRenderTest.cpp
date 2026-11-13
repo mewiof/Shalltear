@@ -1597,10 +1597,10 @@ TEST_F(UIRenderFixture, EllipsizedRunEndsWithRasterizedMark) {
 	ASSERT_TRUE(fonts->ShapeText(query("\xE2\x80\xA6", UI::TextOverflow::Wrap, 0.0f), mark));
 	ASSERT_FALSE(mark.glyphs.empty());
 
-	constexpr std::string_view TEXT = "New Object (Copy) (Copy)";
-	const f32 budget = fonts->MeasureText(query(TEXT, UI::TextOverflow::Wrap, 0.0f)).x * 0.5f;
+	constexpr std::string_view Text = "New Object (Copy) (Copy)";
+	const f32 budget = fonts->MeasureText(query(Text, UI::TextOverflow::Wrap, 0.0f)).x * 0.5f;
 	UI::ShapedRun run;
-	ASSERT_TRUE(fonts->ShapeText(query(TEXT, UI::TextOverflow::Ellipsis, budget), run));
+	ASSERT_TRUE(fonts->ShapeText(query(Text, UI::TextOverflow::Ellipsis, budget), run));
 	ASSERT_FALSE(run.glyphs.empty());
 
 	const UI::Rect& tail = run.glyphs.back().uv;
@@ -2168,7 +2168,7 @@ TEST_F(UIRenderFixture, TurnedStrokesCoverageTracksSupersampledTruth) {
 		f32 width;
 		void (*draw)(UI::PaintScope&);
 	};
-	const Sweep SWEEPS[] = {
+	const Sweep sweeps[] = {
 		{{12.0f, 12.0f},
 		 {52.0f, 52.0f},
 		 5.0f,
@@ -2195,7 +2195,7 @@ TEST_F(UIRenderFixture, TurnedStrokesCoverageTracksSupersampledTruth) {
 		 }},
 	};
 
-	for (const Sweep& sweep : SWEEPS) {
+	for (const Sweep& sweep : sweeps) {
 		Vector<u8> texels{GetMemoryResource(MemTag::Debug)};
 		if (!RenderStrokeOffscreen(sweep.draw, texels)) {
 			GTEST_SKIP() << "engine://Shaders/UI.hlsl unavailable (dxcompiler not staged)";

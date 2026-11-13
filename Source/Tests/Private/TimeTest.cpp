@@ -387,7 +387,7 @@ TEST_F(FrameClockFixture, PositionTracksAccumulator) {
 
 	FixedTimestep fixed(STEP, static_cast<f64>(bounded.maximumDeltaTime));
 
-	auto RunFrame = [&](f64 wallDeltaSeconds) {
+	auto runFrame = [&](f64 wallDeltaSeconds) {
 		Time::BeginFrame(wallDeltaSeconds);
 		const u32 steps = fixed.Advance(static_cast<f64>(Time::GetFrame().ComputeGameDelta()));
 		for (u32 i = 0; i < steps; ++i) {
@@ -397,16 +397,16 @@ TEST_F(FrameClockFixture, PositionTracksAccumulator) {
 	};
 
 	for (int i = 0; i < 40; ++i) {
-		RunFrame(STEP / 8.0);
+		runFrame(STEP / 8.0);
 		ASSERT_NEAR(probe.seen.fixedAlpha, fixed.GetAlpha(), 1e-5f) << "healthy frame " << i;
 	}
 
-	RunFrame(30.0);
+	runFrame(30.0);
 	EXPECT_NEAR(probe.seen.fixedAlpha, fixed.GetAlpha(), 1e-5f);
 	EXPECT_LT(probe.seen.fixedAlpha, 1.0f);
 
 	for (int i = 0; i < 200; ++i) {
-		RunFrame(STEP / 8.0);
+		runFrame(STEP / 8.0);
 		ASSERT_NEAR(probe.seen.fixedAlpha, fixed.GetAlpha(), 1e-5f) << "frame " << i;
 		ASSERT_LT(probe.seen.fixedAlpha, 1.0f) << "frame " << i;
 	}

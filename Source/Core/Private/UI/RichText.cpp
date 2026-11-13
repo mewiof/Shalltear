@@ -42,7 +42,7 @@ namespace Shalltear::UI {
 			bool takesValue;
 		};
 
-		constexpr NamedTag TAGS[] = {
+		constexpr NamedTag Tags[] = {
 			{"b", TagKind::Bold, false},
 			{"i", TagKind::Italic, false},
 			{"u", TagKind::Underline, false},
@@ -66,7 +66,7 @@ namespace Shalltear::UI {
 			{"mspace", TagKind::Monospace, true},
 		};
 
-		constexpr std::string_view IGNORED[] = {"a", "align", "gradient", "indent", "line-indent", "link", "margin", "margin-left",
+		constexpr std::string_view Ignored[] = {"a", "align", "gradient", "indent", "line-indent", "link", "margin", "margin-left",
 												"margin-right", "pos", "sprite", "style", "width"};
 
 		struct TagEntry {
@@ -239,7 +239,7 @@ namespace Shalltear::UI {
 			const u32 bit = 1u << index;
 			if (!(warned & bit)) {
 				warned |= bit;
-				SLT_LOG_WARN("UI", "rich text tag <{}> isn't supported (content shown unstyled)", IGNORED[index]);
+				SLT_LOG_WARN("UI", "rich text tag <{}> isn't supported (content shown unstyled)", Ignored[index]);
 			}
 		}
 
@@ -303,7 +303,7 @@ namespace Shalltear::UI {
 					if (SameName(parts.name, "noparse") || SameName(parts.name, "br")) {
 						return true;
 					}
-					for (const NamedTag& tag : TAGS) {
+					for (const NamedTag& tag : Tags) {
 						if (SameName(parts.name, tag.name)) {
 							Pop(tag.kind);
 							return true;
@@ -330,7 +330,7 @@ namespace Shalltear::UI {
 					_isolate = true;
 					return true;
 				}
-				for (const NamedTag& tag : TAGS) {
+				for (const NamedTag& tag : Tags) {
 					if (!SameName(parts.name, tag.name)) {
 						continue;
 					}
@@ -349,8 +349,8 @@ namespace Shalltear::UI {
 			}
 
 			bool IsIgnored(std::string_view name) {
-				for (size_t i = 0; i < std::size(IGNORED); ++i) {
-					if (SameName(name, IGNORED[i])) {
+				for (size_t i = 0; i < std::size(Ignored); ++i) {
+					if (SameName(name, Ignored[i])) {
 						WarnIgnored(i);
 						return true;
 					}

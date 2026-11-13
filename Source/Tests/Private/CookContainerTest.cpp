@@ -707,15 +707,15 @@ namespace {
 		return sources;
 	}
 
-	constexpr std::string_view MANIFEST = "{\"formatVersion\": 2, \"productName\": \"Docs\"}";
-	constexpr std::string_view SETTINGS = "[Graphics]\nvsync = Off\n";
+	constexpr std::string_view Manifest = "{\"formatVersion\": 2, \"productName\": \"Docs\"}";
+	constexpr std::string_view Settings = "[Graphics]\nvsync = Off\n";
 
 } // anonymous namespace
 
 TEST_F(CookContainerFixture, DocumentsReadBackByKind) {
 	CookOps::PakWriteDesc desc;
-	desc.documents.push_back({PakDocumentKind::ProjectSettings, str(SETTINGS)});
-	desc.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
+	desc.documents.push_back({PakDocumentKind::ProjectSettings, str(Settings)});
+	desc.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
 	Vector<u8> bytes{GetMemoryResource(MemTag::Editor)};
 	str error;
 	ASSERT_TRUE(CookOps::BuildPackage(OneAsset(), desc, bytes, error)) << error;
@@ -725,16 +725,16 @@ TEST_F(CookContainerFixture, DocumentsReadBackByKind) {
 	PakReader reader;
 	ASSERT_TRUE(reader.Mount(path, error)) << error;
 	EXPECT_NE(reader.GetSuperblock().featuresOptional & static_cast<u64>(PakFeatureOptional::Documents), 0u);
-	EXPECT_EQ(reader.GetDocument(PakDocumentKind::BootManifest), MANIFEST);
-	EXPECT_EQ(reader.GetDocument(PakDocumentKind::ProjectSettings), SETTINGS);
+	EXPECT_EQ(reader.GetDocument(PakDocumentKind::BootManifest), Manifest);
+	EXPECT_EQ(reader.GetDocument(PakDocumentKind::ProjectSettings), Settings);
 	EXPECT_EQ(reader.FindAsset(Guid(12, 12)), 0u);
 
 	CookOps::PakWriteDesc manifestOnly;
-	manifestOnly.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
+	manifestOnly.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
 	ASSERT_TRUE(CookOps::BuildPackage(OneAsset(), manifestOnly, bytes, error)) << error;
 	PakReader second;
 	ASSERT_TRUE(second.MountFromMemory(bytes.data(), bytes.size(), "ManifestOnly.slpak", error)) << error;
-	EXPECT_EQ(second.GetDocument(PakDocumentKind::BootManifest), MANIFEST);
+	EXPECT_EQ(second.GetDocument(PakDocumentKind::BootManifest), Manifest);
 	EXPECT_TRUE(second.GetDocument(PakDocumentKind::ProjectSettings).empty());
 
 	ASSERT_TRUE(CookOps::BuildPackage(OneAsset(), CookOps::PakWriteDesc(), bytes, error)) << error;
@@ -747,11 +747,11 @@ TEST_F(CookContainerFixture, DocumentsReadBackByKind) {
 
 TEST_F(CookContainerFixture, DocumentOrderDoesNotReachFile) {
 	CookOps::PakWriteDesc forward;
-	forward.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
-	forward.documents.push_back({PakDocumentKind::ProjectSettings, str(SETTINGS)});
+	forward.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
+	forward.documents.push_back({PakDocumentKind::ProjectSettings, str(Settings)});
 	CookOps::PakWriteDesc backward;
-	backward.documents.push_back({PakDocumentKind::ProjectSettings, str(SETTINGS)});
-	backward.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
+	backward.documents.push_back({PakDocumentKind::ProjectSettings, str(Settings)});
+	backward.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
 
 	Vector<u8> a{GetMemoryResource(MemTag::Editor)};
 	Vector<u8> b{GetMemoryResource(MemTag::Editor)};
@@ -766,7 +766,7 @@ TEST_F(CookContainerFixture, WriterRefusesBadDocuments) {
 	str error;
 
 	CookOps::PakWriteDesc twice;
-	twice.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
+	twice.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
 	twice.documents.push_back({PakDocumentKind::BootManifest, str("{}")});
 	EXPECT_FALSE(CookOps::BuildPackage(OneAsset(), twice, bytes, error));
 	EXPECT_NE(error.find("two documents"), str::npos) << error;
@@ -781,7 +781,7 @@ TEST_F(CookContainerFixture, WriterRefusesBadDocuments) {
 	EXPECT_NE(error.find("99"), str::npos) << error;
 
 	CookOps::PakWriteDesc fine;
-	fine.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
+	fine.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
 	EXPECT_TRUE(CookOps::BuildPackage(OneAsset(), fine, bytes, error)) << error;
 }
 
@@ -799,8 +799,8 @@ namespace {
 
 TEST_F(CookContainerFixture, MountRefusesBadDocument) {
 	CookOps::PakWriteDesc desc;
-	desc.documents.push_back({PakDocumentKind::BootManifest, str(MANIFEST)});
-	desc.documents.push_back({PakDocumentKind::ProjectSettings, str(SETTINGS)});
+	desc.documents.push_back({PakDocumentKind::BootManifest, str(Manifest)});
+	desc.documents.push_back({PakDocumentKind::ProjectSettings, str(Settings)});
 	Vector<u8> good{GetMemoryResource(MemTag::Editor)};
 	str error;
 	ASSERT_TRUE(CookOps::BuildPackage(OneAsset(), desc, good, error)) << error;
@@ -836,7 +836,7 @@ TEST_F(CookContainerFixture, MountRefusesBadDocument) {
 		EditDocumentEntry(bytes, docsAt, 1, [](PakDocumentEntry& entry) { entry.kind = 77; });
 		PakReader reader;
 		ASSERT_TRUE(reader.MountFromMemory(bytes.data(), bytes.size(), "Newer.slpak", error)) << error;
-		EXPECT_EQ(reader.GetDocument(PakDocumentKind::BootManifest), MANIFEST);
+		EXPECT_EQ(reader.GetDocument(PakDocumentKind::BootManifest), Manifest);
 		EXPECT_TRUE(reader.GetDocument(PakDocumentKind::ProjectSettings).empty());
 	}
 

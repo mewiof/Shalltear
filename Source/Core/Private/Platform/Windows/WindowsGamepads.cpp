@@ -17,10 +17,10 @@ namespace Shalltear::InputInternal {
 			u16 buttons;
 			u8 leftTrigger;
 			u8 rightTrigger;
-			i16 thumbLX;
-			i16 thumbLY;
-			i16 thumbRX;
-			i16 thumbRY;
+			i16 thumbLeftX;
+			i16 thumbLeftY;
+			i16 thumbRightX;
+			i16 thumbRightY;
 		};
 
 		struct XInputStateBlock {
@@ -30,25 +30,25 @@ namespace Shalltear::InputInternal {
 
 		static_assert(sizeof(XInputGamepad) == 12 && alignof(XInputGamepad) == 2, "XINPUT_GAMEPAD is 12 bytes packed to 2");
 		static_assert(offsetof(XInputGamepad, leftTrigger) == 2, "the triggers follow the button word");
-		static_assert(offsetof(XInputGamepad, thumbLX) == 4, "the sticks follow the 2 trigger bytes");
+		static_assert(offsetof(XInputGamepad, thumbLeftX) == 4, "the sticks follow the 2 trigger bytes");
 		static_assert(sizeof(XInputStateBlock) == 16, "XINPUT_STATE is a DWORD then the pad");
 		static_assert(offsetof(XInputStateBlock, gamepad) == 4, "the pad follows the packet number");
 
 		enum : u16 {
-			PAD_DPAD_UP = 0x0001,
-			PAD_DPAD_DOWN = 0x0002,
-			PAD_DPAD_LEFT = 0x0004,
-			PAD_DPAD_RIGHT = 0x0008,
-			PAD_START = 0x0010,
-			PAD_BACK = 0x0020,
-			PAD_LEFT_THUMB = 0x0040,
-			PAD_RIGHT_THUMB = 0x0080,
-			PAD_LEFT_SHOULDER = 0x0100,
-			PAD_RIGHT_SHOULDER = 0x0200,
-			PAD_A = 0x1000,
-			PAD_B = 0x2000,
-			PAD_X = 0x4000,
-			PAD_Y = 0x8000,
+			PadDpadUp = 0x0001,
+			PadDpadDown = 0x0002,
+			PadDpadLeft = 0x0004,
+			PadDpadRight = 0x0008,
+			PadStart = 0x0010,
+			PadBack = 0x0020,
+			PadLeftThumb = 0x0040,
+			PadRightThumb = 0x0080,
+			PadLeftShoulder = 0x0100,
+			PadRightShoulder = 0x0200,
+			PadA = 0x1000,
+			PadB = 0x2000,
+			PadX = 0x4000,
+			PadY = 0x8000,
 		};
 
 		constexpr f32 PAD_LEFT_THUMB_DEADZONE = 7849.0f;
@@ -101,26 +101,26 @@ namespace Shalltear::InputInternal {
 			auto set = [&out, &pad](GamepadButton button, u16 mask) {
 				out.buttons[static_cast<size_t>(button)] = (pad.buttons & mask) != 0;
 			};
-			set(GamepadButton::South, PAD_A);
-			set(GamepadButton::East, PAD_B);
-			set(GamepadButton::West, PAD_X);
-			set(GamepadButton::North, PAD_Y);
-			set(GamepadButton::LeftBumper, PAD_LEFT_SHOULDER);
-			set(GamepadButton::RightBumper, PAD_RIGHT_SHOULDER);
-			set(GamepadButton::Back, PAD_BACK);
-			set(GamepadButton::Start, PAD_START);
-			set(GamepadButton::LeftThumb, PAD_LEFT_THUMB);
-			set(GamepadButton::RightThumb, PAD_RIGHT_THUMB);
-			set(GamepadButton::DpadUp, PAD_DPAD_UP);
-			set(GamepadButton::DpadDown, PAD_DPAD_DOWN);
-			set(GamepadButton::DpadLeft, PAD_DPAD_LEFT);
-			set(GamepadButton::DpadRight, PAD_DPAD_RIGHT);
+			set(GamepadButton::South, PadA);
+			set(GamepadButton::East, PadB);
+			set(GamepadButton::West, PadX);
+			set(GamepadButton::North, PadY);
+			set(GamepadButton::LeftBumper, PadLeftShoulder);
+			set(GamepadButton::RightBumper, PadRightShoulder);
+			set(GamepadButton::Back, PadBack);
+			set(GamepadButton::Start, PadStart);
+			set(GamepadButton::LeftThumb, PadLeftThumb);
+			set(GamepadButton::RightThumb, PadRightThumb);
+			set(GamepadButton::DpadUp, PadDpadUp);
+			set(GamepadButton::DpadDown, PadDpadDown);
+			set(GamepadButton::DpadLeft, PadDpadLeft);
+			set(GamepadButton::DpadRight, PadDpadRight);
 
 			f32* axes = out.axes;
-			ApplyStickDeadzone(pad.thumbLX, pad.thumbLY, PAD_LEFT_THUMB_DEADZONE,
+			ApplyStickDeadzone(pad.thumbLeftX, pad.thumbLeftY, PAD_LEFT_THUMB_DEADZONE,
 							   axes[static_cast<size_t>(GamepadAxis::LeftX)],
 							   axes[static_cast<size_t>(GamepadAxis::LeftY)]);
-			ApplyStickDeadzone(pad.thumbRX, pad.thumbRY, PAD_RIGHT_THUMB_DEADZONE,
+			ApplyStickDeadzone(pad.thumbRightX, pad.thumbRightY, PAD_RIGHT_THUMB_DEADZONE,
 							   axes[static_cast<size_t>(GamepadAxis::RightX)],
 							   axes[static_cast<size_t>(GamepadAxis::RightY)]);
 			axes[static_cast<size_t>(GamepadAxis::LeftTrigger)] = ApplyTriggerThreshold(pad.leftTrigger);

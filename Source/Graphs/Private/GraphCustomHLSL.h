@@ -15,16 +15,16 @@ namespace Shalltear {
 	struct GraphNode;
 	struct GraphBuiltDefinition;
 
-	inline constexpr std::string_view GRAPH_EFFECT_CUSTOM_HLSL_BLOCK = "Block/CustomHLSL";
-	inline constexpr std::string_view GRAPH_EFFECT_CUSTOM_HLSL_OPERATOR = "HLSL/CustomHLSL";
+	inline constexpr std::string_view GraphEffectCustomHLSLBlock = "Block/CustomHLSL";
+	inline constexpr std::string_view GraphEffectCustomHLSLOperator = "HLSL/CustomHLSL";
 
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_BLOCK_NAME = "Block Name";
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_OPERATOR_NAME = "Operator Name";
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_CODE = "HLSL Code";
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_FILE = "Shader File";
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_FUNCTION = "Available Function";
+	inline constexpr std::string_view GraphCustomHLSLBlockName = "Block Name";
+	inline constexpr std::string_view GraphCustomHLSLOperatorName = "Operator Name";
+	inline constexpr std::string_view GraphCustomHLSLCode = "HLSL Code";
+	inline constexpr std::string_view GraphCustomHLSLFile = "Shader File";
+	inline constexpr std::string_view GraphCustomHLSLFunction = "Available Function";
 
-	inline constexpr std::string_view GRAPH_CUSTOM_HLSL_EXTENSIONS[] = {".hlsl"};
+	inline constexpr std::string_view GraphCustomHLSLExtensions[] = {".hlsl"};
 
 	struct GraphCustomHLSLCall {
 		GraphCall call;
@@ -37,30 +37,30 @@ namespace Shalltear {
 
 	namespace GraphCustomHLSL {
 
-		inline constexpr std::string_view DEFAULT_BLOCK_CODE = "void CustomHLSL(inout EffectAttributes attributes, in float3 offset, in float speedFactor)\n"
-															   "{\n"
-															   "  attributes.position += offset;\n"
-															   "  attributes.velocity *= speedFactor;\n"
-															   "}";
-		inline constexpr std::string_view DEFAULT_OPERATOR_CODE = "float FloatFunction(in float value)\n"
-																  "{\n"
-																  "  return value;\n"
-																  "}";
+		inline constexpr std::string_view DefaultBlockCode = "void CustomHLSL(inout EffectAttributes attributes, in float3 offset, in float speedFactor)\n"
+															 "{\n"
+															 "  attributes.position += offset;\n"
+															 "  attributes.velocity *= speedFactor;\n"
+															 "}";
+		inline constexpr std::string_view DefaultOperatorCode = "float FloatFunction(in float value)\n"
+																"{\n"
+																"  return value;\n"
+																"}";
 
-		inline constexpr GraphPortDefinition BLOCK_INPUTS[] = {{"offset", GraphPortType::Float3}, {"speedFactor", GraphPortType::Float}};
-		inline constexpr GraphPortDefinition BLOCK_OUTPUTS[] = {{"position", GraphPortType::Float3}, {"velocity", GraphPortType::Float3}};
-		inline constexpr GraphPortDefinition OPERATOR_INPUTS[] = {{"value", GraphPortType::Float}};
-		inline constexpr GraphPortDefinition OPERATOR_OUTPUTS[] = {{"out", GraphPortType::Float}};
+		inline constexpr GraphPortDefinition BlockInputs[] = {{"offset", GraphPortType::Float3}, {"speedFactor", GraphPortType::Float}};
+		inline constexpr GraphPortDefinition BlockOutputs[] = {{"position", GraphPortType::Float3}, {"velocity", GraphPortType::Float3}};
+		inline constexpr GraphPortDefinition OperatorInputs[] = {{"value", GraphPortType::Float}};
+		inline constexpr GraphPortDefinition OperatorOutputs[] = {{"out", GraphPortType::Float}};
 
-		inline constexpr GraphSettingDefinition BLOCK_SETTINGS[] = {
-			{.key = GRAPH_CUSTOM_HLSL_BLOCK_NAME, .kind = GraphSettingKind::Text, .defaultText = "Custom HLSL"},
-			{.key = GRAPH_CUSTOM_HLSL_CODE, .kind = GraphSettingKind::Text, .defaultText = DEFAULT_BLOCK_CODE, .multiline = true},
-			{.key = GRAPH_CUSTOM_HLSL_FILE, .kind = GraphSettingKind::Asset, .options = GRAPH_CUSTOM_HLSL_EXTENSIONS, .defaultText = "None"},
+		inline constexpr GraphSettingDefinition BlockSettings[] = {
+			{.key = GraphCustomHLSLBlockName, .kind = GraphSettingKind::Text, .defaultText = "Custom HLSL"},
+			{.key = GraphCustomHLSLCode, .kind = GraphSettingKind::Text, .defaultText = DefaultBlockCode, .multiline = true},
+			{.key = GraphCustomHLSLFile, .kind = GraphSettingKind::Asset, .options = GraphCustomHLSLExtensions, .defaultText = "None"},
 		};
-		inline constexpr GraphSettingDefinition OPERATOR_SETTINGS[] = {
-			{.key = GRAPH_CUSTOM_HLSL_OPERATOR_NAME, .kind = GraphSettingKind::Text, .defaultText = "Custom HLSL"},
-			{.key = GRAPH_CUSTOM_HLSL_CODE, .kind = GraphSettingKind::Text, .defaultText = DEFAULT_OPERATOR_CODE, .multiline = true},
-			{.key = GRAPH_CUSTOM_HLSL_FILE, .kind = GraphSettingKind::Asset, .options = GRAPH_CUSTOM_HLSL_EXTENSIONS, .defaultText = "None"},
+		inline constexpr GraphSettingDefinition OperatorSettings[] = {
+			{.key = GraphCustomHLSLOperatorName, .kind = GraphSettingKind::Text, .defaultText = "Custom HLSL"},
+			{.key = GraphCustomHLSLCode, .kind = GraphSettingKind::Text, .defaultText = DefaultOperatorCode, .multiline = true},
+			{.key = GraphCustomHLSLFile, .kind = GraphSettingKind::Asset, .options = GraphCustomHLSLExtensions, .defaultText = "None"},
 		};
 
 		void BlockBody(GraphBodyContext& c);
@@ -111,16 +111,16 @@ namespace Shalltear {
 
 	template <class Resolve>
 	bool GraphCustomHLSL::ResolveIncludes(str& definition, Resolve&& resolve, str& missing) {
-		constexpr std::string_view DIRECTIVE = "#include \"";
+		constexpr std::string_view Directive = "#include \"";
 		str out;
 		size_t at = 0;
 		while (at < definition.size()) {
 			size_t end = definition.find('\n', at);
 			end = end == str::npos ? definition.size() : end + 1;
 			const std::string_view line(definition.data() + at, end - at);
-			if (line.starts_with(DIRECTIVE)) {
-				const size_t close = line.find('"', DIRECTIVE.size());
-				const std::string_view path = line.substr(DIRECTIVE.size(), close == std::string_view::npos ? 0 : close - DIRECTIVE.size());
+			if (line.starts_with(Directive)) {
+				const size_t close = line.find('"', Directive.size());
+				const std::string_view path = line.substr(Directive.size(), close == std::string_view::npos ? 0 : close - Directive.size());
 				const str resolved = resolve(path);
 				if (resolved.empty()) {
 					missing = str(path);

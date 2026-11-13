@@ -27,7 +27,7 @@ namespace {
 	}
 
 	str StripEffect(u32 strips, u32 perStrip, std::string_view nodes, std::string_view initialize, std::string_view update = "",
-					std::string_view stripIndex = "", std::string_view output = GRAPH_EFFECT_OUTPUT_STRIP, std::string_view outputBlocks = "",
+					std::string_view stripIndex = "", std::string_view output = GraphEffectOutputStrip, std::string_view outputBlocks = "",
 					std::string_view outputSettings = "{}") {
 		return std::format(R"({{"_type":"EffectGraph","version":4,"nextId":100,"nodes":[{}],"contexts":[
 			{{"id":1,"def":"Context/Initialize","settings":{{"Data Type":"ParticleStrip","Strip Capacity":{},"Particle Per Strip Count":{}}},
@@ -62,7 +62,7 @@ TEST(GraphEffectStripTest, StripSystemsCapacityIsStripsTimesParticles) {
 	EXPECT_TRUE(effect.systems[0].outputs[0].strip);
 	EXPECT_EQ(effect.systems[0].outputs[0].vertices, 6u);
 
-	str particles = StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT);
+	str particles = StripEffect(1, 8, "", "", "", "", GraphEffectOutputDefinition);
 	particles.replace(particles.find("\"Data Type\":\"ParticleStrip\""), std::string_view("\"Data Type\":\"ParticleStrip\"").size(), "\"Capacity\":12");
 	ASSERT_TRUE(Compiles(particles, effect, diagnostics)) << First(diagnostics);
 	EXPECT_EQ(effect.systems[0].strips, 0u);
@@ -86,33 +86,33 @@ TEST(GraphEffectStripTest, StripOutputDrawsStripSystemAlone) {
 	particles.replace(particles.find("\"Data Type\":\"ParticleStrip\""), std::string_view("\"Data Type\":\"ParticleStrip\"").size(), "\"Data Type\":\"Particle\"");
 	EXPECT_FALSE(Compiles(particles, effect, diagnostics));
 	EXPECT_TRUE(Said(diagnostics, 3, "Particle Strip")) << First(diagnostics);
-	EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT), effect, diagnostics)) << First(diagnostics);
-	EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT_POINT), effect, diagnostics)) << First(diagnostics);
+	EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputDefinition), effect, diagnostics)) << First(diagnostics);
+	EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputPoint), effect, diagnostics)) << First(diagnostics);
 
 	GraphDocument document;
-	document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
-	const u32 particleInit = Ops::AddContext(document, GRAPH_EFFECT_INITIALIZE, Vec2());
-	const u32 particleUpdate = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	ASSERT_TRUE(Ops::Link(document, particleInit, particleUpdate, GRAPH_EFFECT_IN));
+	document.type = str(GraphEffectDocumentType);
+	const u32 particleInit = Ops::AddContext(document, GraphEffectInitialize, Vec2());
+	const u32 particleUpdate = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	ASSERT_TRUE(Ops::Link(document, particleInit, particleUpdate, GraphEffectIn));
 	Vector<Ops::BlockChoice> contexts{GetMemoryResource(MemTag::Editor)};
 	Ops::ContextChoices(contexts);
 	const auto strips = std::find_if(contexts.begin(), contexts.end(), [](const Ops::BlockChoice& choice) { return choice.name == "Initialize Particle Strip"; });
 	ASSERT_NE(strips, contexts.end());
 	const u32 stripInit = Ops::AddContext(document, *strips, Vec2());
-	const u32 stripUpdate = Ops::AddContext(document, GRAPH_EFFECT_UPDATE, Vec2());
-	ASSERT_TRUE(Ops::Link(document, stripInit, stripUpdate, GRAPH_EFFECT_IN));
-	for (std::string_view def : {GRAPH_EFFECT_OUTPUT_STRIP, GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP}) {
+	const u32 stripUpdate = Ops::AddContext(document, GraphEffectUpdate, Vec2());
+	ASSERT_TRUE(Ops::Link(document, stripInit, stripUpdate, GraphEffectIn));
+	for (std::string_view def : {GraphEffectOutputStrip, GraphEffectOutputNodeShaderStrip}) {
 		SCOPED_TRACE(def);
 		const u32 output = Ops::AddContext(document, def, Vec2());
 		str why;
-		EXPECT_FALSE(Ops::CanLink(document, particleInit, output, GRAPH_EFFECT_IN, &why));
+		EXPECT_FALSE(Ops::CanLink(document, particleInit, output, GraphEffectIn, &why));
 		EXPECT_NE(why.find("strips"), str::npos) << why;
-		EXPECT_FALSE(Ops::CanLink(document, particleUpdate, output, GRAPH_EFFECT_IN));
-		EXPECT_TRUE(Ops::CanLink(document, stripInit, output, GRAPH_EFFECT_IN));
-		EXPECT_TRUE(Ops::CanLink(document, stripUpdate, output, GRAPH_EFFECT_IN));
+		EXPECT_FALSE(Ops::CanLink(document, particleUpdate, output, GraphEffectIn));
+		EXPECT_TRUE(Ops::CanLink(document, stripInit, output, GraphEffectIn));
+		EXPECT_TRUE(Ops::CanLink(document, stripUpdate, output, GraphEffectIn));
 	}
-	const u32 quad = Ops::AddContext(document, GRAPH_EFFECT_OUTPUT, Vec2());
-	EXPECT_TRUE(Ops::CanLink(document, stripUpdate, quad, GRAPH_EFFECT_IN));
+	const u32 quad = Ops::AddContext(document, GraphEffectOutputDefinition, Vec2());
+	EXPECT_TRUE(Ops::CanLink(document, stripUpdate, quad, GraphEffectIn));
 }
 
 TEST(GraphEffectStripTest, StripSetIsReadWhereProgramRuns) {
@@ -125,7 +125,7 @@ TEST(GraphEffectStripTest, StripSetIsReadWhereProgramRuns) {
 	const str faded = R"({"id":12,"def":"Block/SetAttribute","settings":{"Attribute":"alpha","Composition":"Multiply"},"in":{"Alpha":{"from":[23,"t"]}}})";
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compiles(StripEffect(2, 4, nodes, sized, alpha, "", GRAPH_EFFECT_OUTPUT_STRIP, faded), effect, diagnostics)) << First(diagnostics);
+	ASSERT_TRUE(Compiles(StripEffect(2, 4, nodes, sized, alpha, "", GraphEffectOutputStrip, faded), effect, diagnostics)) << First(diagnostics);
 	const GraphEffectSystem& system = effect.systems[0];
 	EXPECT_NE(system.initializeKernel.find("SltParticleStripSpawn(sltStrip, sltIndex, sltStripPlace)"), str::npos);
 	EXPECT_EQ(system.initializeKernel.find("SltParticlePopDead"), str::npos);
@@ -140,7 +140,7 @@ TEST(GraphEffectStripTest, StripSetIsReadWhereProgramRuns) {
 	const size_t tested = system.updateKernel.find("SltParticleStripLive");
 	EXPECT_LT(stored, tested);
 
-	str particles = StripEffect(1, 8, nodes, sized, alpha, "", GRAPH_EFFECT_OUTPUT, faded);
+	str particles = StripEffect(1, 8, nodes, sized, alpha, "", GraphEffectOutputDefinition, faded);
 	particles.replace(particles.find("\"Data Type\":\"ParticleStrip\""), std::string_view("\"Data Type\":\"ParticleStrip\"").size(), "\"Capacity\":8");
 	ASSERT_TRUE(Compiles(particles, effect, diagnostics)) << First(diagnostics);
 	EXPECT_EQ(effect.systems[0].initializeKernel.find("SltParticleStrip"), str::npos);
@@ -188,20 +188,20 @@ TEST(GraphEffectStripTest, StripModesOnlyForStrips) {
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
 	for (std::string_view mode : {"FaceCameraPosition", "LookAtPosition", "LookAtLine", "Advanced", "CustomZ", "CustomY"}) {
 		SCOPED_TRACE(mode);
-		EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT_STRIP, orient(mode)), effect, diagnostics)) << First(diagnostics);
+		EXPECT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputStrip, orient(mode)), effect, diagnostics)) << First(diagnostics);
 	}
 	for (std::string_view mode : {"FaceCameraPlane", "FixedAxis", "AlongVelocity"}) {
 		SCOPED_TRACE(mode);
-		EXPECT_FALSE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT_STRIP, orient(mode)), effect, diagnostics));
+		EXPECT_FALSE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputStrip, orient(mode)), effect, diagnostics));
 		EXPECT_TRUE(Said(diagnostics, 10, "a strip output doesn't support")) << First(diagnostics);
 	}
 	for (std::string_view mode : {"CustomZ", "CustomY"}) {
 		SCOPED_TRACE(mode);
-		EXPECT_FALSE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT, orient(mode)), effect, diagnostics));
+		EXPECT_FALSE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputDefinition, orient(mode)), effect, diagnostics));
 		EXPECT_TRUE(Said(diagnostics, 10, "only a strip output supports")) << First(diagnostics);
 	}
 	const str placed = R"({"id":11,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"value":[1,2,3]}}})";
-	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", placed, "", "", GRAPH_EFFECT_OUTPUT_STRIP, orient("FaceCameraPosition")), effect, diagnostics))
+	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", placed, "", "", GraphEffectOutputStrip, orient("FaceCameraPosition")), effect, diagnostics))
 		<< First(diagnostics);
 	const str& shader = effect.systems[0].outputs[0].shader;
 	EXPECT_NE(shader.find("float4 sltStripPrevious = SltParticleOutputStripNeighbor(sltIndex, false,"), str::npos);
@@ -227,21 +227,21 @@ TEST(GraphEffectStripTest, StripOutputsPortsFollowTilingAndTexture) {
 		}
 		return false;
 	};
-	EXPECT_EQ(GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT_STRIP)->name, "Output ParticleStrip Quad");
-	EXPECT_EQ(GraphNodeLibrary::Find(GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP)->name, "Output ParticleStrip NodeShader Quad");
-	EXPECT_FALSE(shown(GRAPH_EFFECT_OUTPUT_STRIP, "{}", "Tex Coord", true));
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_STRIP, R"({"Tiling Mode":"Custom"})", "Tex Coord", true));
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_STRIP, "{}", "Swap UV", false));
-	EXPECT_FALSE(shown(GRAPH_EFFECT_OUTPUT_STRIP, R"({"Use Base Color Map":"None"})", "Swap UV", false));
-	EXPECT_FALSE(shown(GRAPH_EFFECT_OUTPUT_STRIP, "{}", "Primitive Type", false));
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP, "{}", "Swap UV", false));
-	EXPECT_TRUE(shown(GRAPH_EFFECT_OUTPUT_NODE_SHADER_STRIP, R"({"Tiling Mode":"Custom"})", "Tex Coord", true));
+	EXPECT_EQ(GraphNodeLibrary::Find(GraphEffectOutputStrip)->name, "Output ParticleStrip Quad");
+	EXPECT_EQ(GraphNodeLibrary::Find(GraphEffectOutputNodeShaderStrip)->name, "Output ParticleStrip NodeShader Quad");
+	EXPECT_FALSE(shown(GraphEffectOutputStrip, "{}", "Tex Coord", true));
+	EXPECT_TRUE(shown(GraphEffectOutputStrip, R"({"Tiling Mode":"Custom"})", "Tex Coord", true));
+	EXPECT_TRUE(shown(GraphEffectOutputStrip, "{}", "Swap UV", false));
+	EXPECT_FALSE(shown(GraphEffectOutputStrip, R"({"Use Base Color Map":"None"})", "Swap UV", false));
+	EXPECT_FALSE(shown(GraphEffectOutputStrip, "{}", "Primitive Type", false));
+	EXPECT_TRUE(shown(GraphEffectOutputNodeShaderStrip, "{}", "Swap UV", false));
+	EXPECT_TRUE(shown(GraphEffectOutputNodeShaderStrip, R"({"Tiling Mode":"Custom"})", "Tex Coord", true));
 
 	GraphEffect effect;
 	Vector<GraphDiagnostic> diagnostics{GetMemoryResource(MemTag::Editor)};
-	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT_STRIP, "", "{}"), effect, diagnostics)) << First(diagnostics);
+	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputStrip, "", "{}"), effect, diagnostics)) << First(diagnostics);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("float2 sltUV = float2(float(SltParticleOutputStripPlace(sltIndex)) / "), str::npos);
-	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GRAPH_EFFECT_OUTPUT_STRIP, "", R"({"Tiling Mode":"RepeatPerSegment","Swap UV":true})"), effect, diagnostics))
+	ASSERT_TRUE(Compiles(StripEffect(1, 8, "", "", "", "", GraphEffectOutputStrip, "", R"({"Tiling Mode":"RepeatPerSegment","Swap UV":true})"), effect, diagnostics))
 		<< First(diagnostics);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("float2 sltUV = float2(float(sltEnd), "), str::npos);
 	EXPECT_NE(effect.systems[0].outputs[0].shader.find("sltUV = float2(1.0 - sltUV.y, sltUV.x);"), str::npos);
@@ -260,7 +260,7 @@ TEST(GraphEffectStripTest, TheSearcherOffersStripsInTheirCategory) {
 	EXPECT_LT(at("Output ParticleStrip Quad"), static_cast<std::ptrdiff_t>(names.size()));
 	EXPECT_LT(at("Output ParticleStrip NodeShader Quad"), static_cast<std::ptrdiff_t>(names.size()));
 	GraphDocument document;
-	document.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+	document.type = str(GraphEffectDocumentType);
 	const u32 made = Ops::AddContext(document, contexts[static_cast<size_t>(at("Initialize Particle Strip"))], Vec2());
 	ASSERT_NE(made, 0u);
 	EXPECT_TRUE(GraphEffectRules::MakesStrips(document.contexts.back().node));
@@ -271,16 +271,16 @@ TEST(GraphEffectStripTest, TheSearcherOffersStripsInTheirCategory) {
 
 	const auto offered = [&](std::string_view context, std::string_view name) {
 		GraphDocument holder;
-		holder.type = str(GRAPH_EFFECT_DOCUMENT_TYPE);
+		holder.type = str(GraphEffectDocumentType);
 		const u32 id = Ops::AddContext(holder, context, Vec2());
 		Vector<Ops::BlockChoice> choices{GetMemoryResource(MemTag::Editor)};
 		Ops::BlockChoices(holder, id, choices);
 		return std::any_of(choices.begin(), choices.end(), [&](const Ops::BlockChoice& choice) { return choice.name == name; });
 	};
-	EXPECT_TRUE(offered(GRAPH_EFFECT_SPAWN, "Increment Strip Index On Start"));
-	EXPECT_FALSE(offered(GRAPH_EFFECT_INITIALIZE, "Increment Strip Index On Start"));
-	EXPECT_TRUE(offered(GRAPH_EFFECT_OUTPUT_STRIP, "Orient: Custom Z"));
-	EXPECT_TRUE(offered(GRAPH_EFFECT_OUTPUT_STRIP, "Orient: Custom Y"));
+	EXPECT_TRUE(offered(GraphEffectSpawn, "Increment Strip Index On Start"));
+	EXPECT_FALSE(offered(GraphEffectInitialize, "Increment Strip Index On Start"));
+	EXPECT_TRUE(offered(GraphEffectOutputStrip, "Orient: Custom Z"));
+	EXPECT_TRUE(offered(GraphEffectOutputStrip, "Orient: Custom Y"));
 
 	Vector<Ops::BlockChoice> operators{GetMemoryResource(MemTag::Editor)};
 	Ops::OperatorChoices(operators);
@@ -289,8 +289,8 @@ TEST(GraphEffectStripTest, TheSearcherOffersStripsInTheirCategory) {
 										[&](const Ops::BlockChoice& choice) { return choice.name == std::format("Get Attribute: {}", attribute); });
 		EXPECT_TRUE(listed) << attribute;
 	}
-	EXPECT_TRUE(Ops::IsOperator(*GraphNodeLibrary::Find(GRAPH_EFFECT_RATIO_OVER_STRIP)));
-	EXPECT_EQ(GraphNodeLibrary::Find(GRAPH_EFFECT_RATIO_OVER_STRIP)->name, "Get Ratio Over Strip [0..1]");
+	EXPECT_TRUE(Ops::IsOperator(*GraphNodeLibrary::Find(GraphEffectRatioOverStrip)));
+	EXPECT_EQ(GraphNodeLibrary::Find(GraphEffectRatioOverStrip)->name, "Get Ratio Over Strip [0..1]");
 }
 
 #ifndef SHALLTEAR_SHARED
@@ -299,12 +299,12 @@ using namespace Shalltear::EffectKernelHarness;
 
 namespace {
 
-	constexpr std::string_view STRIP_SET_NODES = R"({"id":30,"def":"Attribute/GetAttribute","settings":{"Attribute":"stripIndex"}},
+	constexpr std::string_view StripSetNodes = R"({"id":30,"def":"Attribute/GetAttribute","settings":{"Attribute":"stripIndex"}},
 		{"id":31,"def":"Attribute/GetAttribute","settings":{"Attribute":"particleIndexInStrip"}},
 		{"id":32,"def":"Attribute/GetAttribute","settings":{"Attribute":"spawnIndexInStrip"}},
 		{"id":33,"def":"Attribute/GetAttribute","settings":{"Attribute":"particleCountInStrip"}},
 		{"id":34,"def":"Input/Vector3","in":{"X":{"from":[30,"stripIndex"]},"Y":{"from":[31,"particleIndexInStrip"]},"Z":{"from":[32,"spawnIndexInStrip"]}}})";
-	constexpr std::string_view STRIP_SET_BLOCKS = R"({"id":40,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[34,"Out"]}}},
+	constexpr std::string_view StripSetBlocks = R"({"id":40,"def":"Block/SetAttribute","settings":{"Attribute":"color"},"in":{"Color":{"from":[34,"Out"]}}},
 		{"id":41,"def":"Block/SetAttribute","settings":{"Attribute":"size"},"in":{"Size":{"from":[33,"particleCountInStrip"]}}})";
 
 	str TakingTurns(u32 strips) {
@@ -355,7 +355,7 @@ protected:
 
 TEST_F(ParticleStripFixture, SpawnFillsStripInOrder) {
 	BlockRun run;
-	if (!Begin(run, StripEffect(2, 4, str(STRIP_SET_NODES) + "," + TakingTurns(2), STRIP_SET_BLOCKS, "", R"({"from":[51,"Out"]})"), "StripTurns")) {
+	if (!Begin(run, StripEffect(2, 4, str(StripSetNodes) + "," + TakingTurns(2), StripSetBlocks, "", R"({"from":[51,"Out"]})"), "StripTurns")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
 	Advance(run, 0.0f, DELTA, {6});
@@ -399,7 +399,7 @@ TEST_F(ParticleStripFixture, SpawnFillsStripInOrder) {
 
 TEST_F(ParticleStripFixture, StripIndexPastStripsIsDropped) {
 	BlockRun past;
-	if (!Begin(past, StripEffect(2, 4, STRIP_SET_NODES, STRIP_SET_BLOCKS, "", R"({"value":[2]})"), "StripPast")) {
+	if (!Begin(past, StripEffect(2, 4, StripSetNodes, StripSetBlocks, "", R"({"value":[2]})"), "StripPast")) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 	}
 	Advance(past, 0.0f, DELTA, {3});
@@ -407,7 +407,7 @@ TEST_F(ParticleStripFixture, StripIndexPastStripsIsDropped) {
 	EXPECT_EQ(Dropped(past.system), 3u);
 
 	BlockRun below;
-	ASSERT_TRUE(Begin(below, StripEffect(2, 4, STRIP_SET_NODES, STRIP_SET_BLOCKS, "", R"({"value":[-1]})"), "StripBelow"));
+	ASSERT_TRUE(Begin(below, StripEffect(2, 4, StripSetNodes, StripSetBlocks, "", R"({"value":[-1]})"), "StripBelow"));
 	Advance(below, 0.0f, DELTA, {2});
 	EXPECT_EQ(AliveCount(below), 2u);
 	EXPECT_EQ(Strip(below.system, 0).count, 2u);
@@ -434,8 +434,8 @@ TEST_F(ParticleStripFixture, StripDropsDeadEnds) {
 	for (const Case& entry : cases) {
 		SCOPED_TRACE(entry.name);
 		BlockRun run;
-		const str nodes = str(STRIP_SET_NODES) + "," + LifetimeNodes(entry.expression);
-		if (!Begin(run, StripEffect(1, 8, nodes, str(STRIP_SET_BLOCKS) + "," + LifetimeBlock()), (str("StripDeath") + entry.name).c_str())) {
+		const str nodes = str(StripSetNodes) + "," + LifetimeNodes(entry.expression);
+		if (!Begin(run, StripEffect(1, 8, nodes, str(StripSetBlocks) + "," + LifetimeBlock()), (str("StripDeath") + entry.name).c_str())) {
 			GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
 		}
 		Advance(run, 0.0f, DELTA, {5});
@@ -451,7 +451,7 @@ TEST_F(ParticleStripFixture, StripDropsDeadEnds) {
 	}
 
 	BlockRun middle;
-	ASSERT_TRUE(Begin(middle, StripEffect(1, 8, str(STRIP_SET_NODES) + "," + LifetimeNodes(cases[0].expression), str(STRIP_SET_BLOCKS) + "," + LifetimeBlock()),
+	ASSERT_TRUE(Begin(middle, StripEffect(1, 8, str(StripSetNodes) + "," + LifetimeNodes(cases[0].expression), str(StripSetBlocks) + "," + LifetimeBlock()),
 					  "StripDeathKept"));
 	Advance(middle, 0.0f, DELTA, {5});
 	Advance(middle, DELTA, DELTA, {});

@@ -32,14 +32,14 @@ namespace Shalltear {
 
 			void FillHead(AudioClipData& data) {
 				const u64 frames = data.frames < CLIP_HEAD_FRAMES ? data.frames : CLIP_HEAD_FRAMES;
-				if (data.encoding == AudioClipEncoding::Pcm || data.encoding == AudioClipEncoding::Streamed) {
-					const f32* from = data.encoding == AudioClipEncoding::Pcm ? data.pcm : data.prime;
+				if (data.encoding == AudioClipEncoding::PCM || data.encoding == AudioClipEncoding::Streamed) {
+					const f32* from = data.encoding == AudioClipEncoding::PCM ? data.pcm : data.prime;
 					std::memcpy(data.head, from, static_cast<size_t>(frames * data.channels) * sizeof(f32));
 					return;
 				}
-				QoaCursor cursor;
+				QOACursor cursor;
 				for (u64 frame = 0; frame < frames; ++frame) {
-					QoaRead(data.qoa, cursor, frame, data.head + frame * data.channels);
+					QOARead(data.qoa, cursor, frame, data.head + frame * data.channels);
 				}
 			}
 
@@ -51,18 +51,18 @@ namespace Shalltear {
 
 			bool DecodePrime(const AudioClipData& data, f32* out) {
 				const u32 channels = data.channels;
-				if (data.codec == AudioClipEncoding::Pcm) {
+				if (data.codec == AudioClipEncoding::PCM) {
 					return ReadStreamSource(data.source, 0, reinterpret_cast<u8*>(out), data.primeFrames * channels * sizeof(f32));
 				}
 				if (data.codec == AudioClipEncoding::Opus) {
 					return DecodeOpusHead(data.source, data.opus, channels, data.primeFrames, out);
 				}
-				Buffer bytes(static_cast<size_t>(QoaFrameSize(channels, QOA_FRAME_FRAMES)), MemTag::Audio);
+				Buffer bytes(static_cast<size_t>(QOAFrameSize(channels, QOA_FRAME_FRAMES)), MemTag::Audio);
 				for (u64 first = 0, frame = 0; first < data.primeFrames; first += QOA_FRAME_FRAMES, ++frame) {
 					const u32 count = static_cast<u32>(data.frames - first < QOA_FRAME_FRAMES ? data.frames - first : QOA_FRAME_FRAMES);
-					const u64 size = QoaFrameSize(channels, count);
-					if (!ReadStreamSource(data.source, QoaFrameOffset(channels, frame), bytes.data, size) ||
-						!QoaDecodeFrame(bytes.data, size, channels, data.sampleRate, count, out + first * channels)) {
+					const u64 size = QOAFrameSize(channels, count);
+					if (!ReadStreamSource(data.source, QOAFrameOffset(channels, frame), bytes.data, size) ||
+						!QOADecodeFrame(bytes.data, size, channels, data.sampleRate, count, out + first * channels)) {
 						return false;
 					}
 				}
@@ -84,7 +84,7 @@ namespace Shalltear {
 			return Realtime::ReadAt(source.file, source.base + offset, std::span<u8>(out, static_cast<size_t>(count)));
 		}
 
-		AudioClipData* CreatePcmClipData(const void* interleaved, u64 frames, const ChannelLayout& layout, u32 sampleRate) {
+		AudioClipData* CreatePCMClipData(const void* interleaved, u64 frames, const ChannelLayout& layout, u32 sampleRate) {
 			const u32 channels = layout.count;
 			if (!interleaved || frames == 0 || channels == 0 || channels > MAX_AUDIO_CHANNELS || sampleRate == 0) {
 				return nullptr;
@@ -92,7 +92,7 @@ namespace Shalltear {
 			const u64 bytes = frames * channels * sizeof(f32);
 			AudioClipData* data = AllocateBlock(bytes);
 			std::memcpy(PayloadOf(data), interleaved, static_cast<size_t>(bytes));
-			data->encoding = AudioClipEncoding::Pcm;
+			data->encoding = AudioClipEncoding::PCM;
 			data->sampleRate = sampleRate;
 			data->channels = channels;
 			data->frames = frames;
@@ -102,15 +102,15 @@ namespace Shalltear {
 			return data;
 		}
 
-		AudioClipData* CreateQoaClipData(const u8* bytes, u64 size, const ChannelLayout& layout) {
-			QoaStream probe;
-			if (!QoaOpen(bytes, size, probe) || probe.channels != layout.count) {
+		AudioClipData* CreateQOAClipData(const u8* bytes, u64 size, const ChannelLayout& layout) {
+			QOAStream probe;
+			if (!QOAOpen(bytes, size, probe) || probe.channels != layout.count) {
 				return nullptr;
 			}
 			AudioClipData* data = AllocateBlock(size);
 			std::memcpy(PayloadOf(data), bytes, static_cast<size_t>(size));
-			QoaOpen(PayloadOf(data), size, data->qoa);
-			data->encoding = AudioClipEncoding::Qoa;
+			QOAOpen(PayloadOf(data), size, data->qoa);
+			data->encoding = AudioClipEncoding::QOA;
 			data->sampleRate = data->qoa.sampleRate;
 			data->channels = data->qoa.channels;
 			data->frames = data->qoa.frames;
@@ -173,7 +173,7 @@ namespace Shalltear {
 				return nullptr;
 			}
 			u32 chunkFrames = 0;
-			if (codec == AudioClipEncoding::Pcm) {
+			if (codec == AudioClipEncoding::PCM) {
 				if (size / (static_cast<u64>(channels) * sizeof(f32)) != frames || size % (static_cast<u64>(channels) * sizeof(f32)) != 0) {
 					return nullptr;
 				}
@@ -183,9 +183,9 @@ namespace Shalltear {
 					return nullptr;
 				}
 				chunkFrames = OPUS_CHUNK_FRAMES;
-			} else if (codec == AudioClipEncoding::Qoa) {
-				QoaStream probe;
-				if (!QoaOpen(bytes, size, probe) || probe.channels != channels || probe.sampleRate != sampleRate || probe.frames != frames) {
+			} else if (codec == AudioClipEncoding::QOA) {
+				QOAStream probe;
+				if (!QOAOpen(bytes, size, probe) || probe.channels != channels || probe.sampleRate != sampleRate || probe.frames != frames) {
 					return nullptr;
 				}
 				chunkFrames = QOA_FRAME_FRAMES;
@@ -231,11 +231,11 @@ namespace Shalltear {
 			}
 			u64 expected = 0;
 			u32 chunkFrames = 0;
-			if (codec == AudioClipEncoding::Pcm) {
+			if (codec == AudioClipEncoding::PCM) {
 				expected = frames * channels * sizeof(f32);
 				chunkFrames = PCM_STREAM_CHUNK_FRAMES;
-			} else if (codec == AudioClipEncoding::Qoa && frames <= 0xFFFFFFFFull) {
-				expected = QoaFileSize(channels, frames);
+			} else if (codec == AudioClipEncoding::QOA && frames <= 0xFFFFFFFFull) {
+				expected = QOAFileSize(channels, frames);
 				chunkFrames = QOA_FRAME_FRAMES;
 			} else if (codec == AudioClipEncoding::Opus && sampleRate == OPUS_RATE) {
 				expected = locator.size;
@@ -250,7 +250,7 @@ namespace Shalltear {
 			if (!locator.file || !file.Open(*locator.file) || locator.offset > file.GetSize() || locator.size > file.GetSize() - locator.offset) {
 				return nullptr;
 			}
-			if (codec == AudioClipEncoding::Qoa) {
+			if (codec == AudioClipEncoding::QOA) {
 				u8 header[8];
 				if (!file.ReadAt(locator.offset, std::span<u8>(header, sizeof(header)))) {
 					return nullptr;
@@ -292,7 +292,7 @@ namespace Shalltear {
 		}
 
 		void GetPayload(const AudioClipData& data, const u8*& bytes, u64& size) {
-			if (data.encoding == AudioClipEncoding::Pcm) {
+			if (data.encoding == AudioClipEncoding::PCM) {
 				bytes = reinterpret_cast<const u8*>(data.pcm);
 				size = data.frames * data.channels * sizeof(f32);
 				return;
@@ -311,9 +311,9 @@ namespace Shalltear {
 			size = data.qoa.size;
 		}
 
-		AudioClipData* DecodeToPcm(const AudioClipData& source) {
-			if (source.encoding == AudioClipEncoding::Pcm) {
-				return CreatePcmClipData(source.pcm, source.frames, source.layout, source.sampleRate);
+		AudioClipData* DecodeToPCM(const AudioClipData& source) {
+			if (source.encoding == AudioClipEncoding::PCM) {
+				return CreatePCMClipData(source.pcm, source.frames, source.layout, source.sampleRate);
 			}
 			const u64 bytes = source.frames * source.channels * sizeof(f32);
 			AudioClipData* data = AllocateBlock(bytes);
@@ -324,9 +324,9 @@ namespace Shalltear {
 					return nullptr;
 				}
 			} else {
-				QoaDecodeAll(source.qoa, samples);
+				QOADecodeAll(source.qoa, samples);
 			}
-			data->encoding = AudioClipEncoding::Pcm;
+			data->encoding = AudioClipEncoding::PCM;
 			data->sampleRate = source.sampleRate;
 			data->channels = source.channels;
 			data->frames = source.frames;

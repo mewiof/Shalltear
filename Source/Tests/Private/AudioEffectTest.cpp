@@ -133,7 +133,7 @@ TEST(AudioEffectChainTest, EffectOrderAroundFader) {
 	for (const bool above : {true, false}) {
 		ChainProbe clip(ChainProbe::Kind::Clip, 0.3f);
 		OfflineMixer mixer(1);
-		ClipBlock source(MakePcm(Constant(4 * BLOCK, 0.5f), 1, 48000));
+		ClipBlock source(MakePCM(Constant(4 * BLOCK, 0.5f), 1, 48000));
 		const OfflineBus bus = mixer.Bus(1, {}, 0.5f);
 		ASSERT_TRUE(above ? Chain(mixer, bus, AudioBusRowKind::Effect, AudioBusRowKind::Fader, &clip)
 						  : Chain(mixer, bus, AudioBusRowKind::Fader, AudioBusRowKind::Effect, &clip));
@@ -150,7 +150,7 @@ TEST(AudioEffectChainTest, SendBelowEffectCarriesWhatEffectMade) {
 	for (const bool sendFirst : {false, true}) {
 		ChainProbe clip(ChainProbe::Kind::Clip, 0.3f);
 		OfflineMixer mixer(1);
-		ClipBlock source(MakePcm(Constant(4 * BLOCK, 0.5f), 1, 48000));
+		ClipBlock source(MakePCM(Constant(4 * BLOCK, 0.5f), 1, 48000));
 		const OfflineBus reverb = mixer.Bus(2);
 		const OfflineBus dry = mixer.Bus(1, {}, 0.0f);
 		const u32 effectRow = sendFirst ? 1 : 0;
@@ -171,7 +171,7 @@ TEST(AudioEffectChainTest, SendBelowEffectCarriesWhatEffectMade) {
 TEST(AudioEffectChainTest, BypassPassesSoundThrough) {
 	ChainProbe clip(ChainProbe::Kind::Clip, 0.3f);
 	OfflineMixer mixer(1);
-	ClipBlock source(MakePcm(Constant(16 * BLOCK, 0.5f), 1, 48000));
+	ClipBlock source(MakePCM(Constant(16 * BLOCK, 0.5f), 1, 48000));
 	const OfflineBus bus = mixer.Bus(1);
 	ASSERT_TRUE(mixer.Push(EffectRow(bus, 0, &clip, true)));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Row(bus, 1, AudioBusRowKind::Fader)));
@@ -202,7 +202,7 @@ TEST(AudioEffectChainTest, BypassPassesSoundThrough) {
 TEST(AudioEffectChainTest, WetMixBlendsWithDry) {
 	ChainProbe silence(ChainProbe::Kind::Silence, 0.0f);
 	OfflineMixer mixer(1);
-	ClipBlock source(MakePcm(Constant(16 * BLOCK, 0.5f), 1, 48000));
+	ClipBlock source(MakePCM(Constant(16 * BLOCK, 0.5f), 1, 48000));
 	const OfflineBus bus = mixer.Bus(1);
 	ASSERT_TRUE(mixer.Push(EffectRow(bus, 0, &silence, false, true, 0.25f)));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Row(bus, 1, AudioBusRowKind::Fader)));
@@ -227,7 +227,7 @@ TEST(AudioEffectChainTest, WetMixBlendsWithDry) {
 TEST(AudioEffectChainTest, SilentGroupRunsUntilQuiet) {
 	ChainProbe tail(ChainProbe::Kind::Tail, 0.125f);
 	OfflineMixer mixer(1);
-	ClipBlock source(MakePcm(Constant(BLOCK, 0.5f), 1, 48000));
+	ClipBlock source(MakePCM(Constant(BLOCK, 0.5f), 1, 48000));
 	const OfflineBus bus = mixer.Bus(1);
 	ASSERT_TRUE(Chain(mixer, bus, AudioBusRowKind::Effect, AudioBusRowKind::Fader, &tail));
 	for (f32 sample : mixer.Render(BLOCK)) {
@@ -256,7 +256,7 @@ TEST(AudioEffectChainTest, SilentGroupRunsUntilQuiet) {
 TEST(AudioEffectChainTest, AParameterReachesTheInstanceBetweenBlocks) {
 	ChainProbe gain(ChainProbe::Kind::Gain, 1.0f);
 	OfflineMixer mixer(1);
-	ClipBlock source(MakePcm(Constant(8 * BLOCK, 0.5f), 1, 48000));
+	ClipBlock source(MakePCM(Constant(8 * BLOCK, 0.5f), 1, 48000));
 	const OfflineBus bus = mixer.Bus(1);
 	ASSERT_TRUE(Chain(mixer, bus, AudioBusRowKind::Effect, AudioBusRowKind::Fader, &gain));
 	ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, source.Get()), bus)));
@@ -282,7 +282,7 @@ TEST(AudioEffectChainTest, EffectsFlushDenormalsRestoreMode) {
 	{
 		ChainProbe gain(ChainProbe::Kind::Gain, 1.0f);
 		OfflineMixer mixer(1);
-		ClipBlock source(MakePcm(Constant(4 * BLOCK, 0.5f), 1, 48000));
+		ClipBlock source(MakePCM(Constant(4 * BLOCK, 0.5f), 1, 48000));
 		const OfflineBus bus = mixer.Bus(1);
 		ASSERT_TRUE(Chain(mixer, bus, AudioBusRowKind::Effect, AudioBusRowKind::Fader, &gain));
 		ASSERT_TRUE(mixer.Push(OfflineMixer::Into(mixer.Play(0, source.Get()), bus)));
@@ -322,7 +322,7 @@ TEST(AudioEffectChainTest, SendEntersAtReceive) {
 	for (const Aim aim : {Aim::Input, Aim::Receive, Aim::Fader}) {
 		ChainProbe clip(ChainProbe::Kind::Clip, 0.3f);
 		OfflineMixer mixer(1);
-		ClipBlock source(MakePcm(Constant(4 * BLOCK, 0.5f), 1, 48000));
+		ClipBlock source(MakePCM(Constant(4 * BLOCK, 0.5f), 1, 48000));
 		const OfflineBus target = mixer.Bus(2);
 		ASSERT_TRUE(mixer.Receives(target, 1));
 		ASSERT_TRUE(Rows(mixer, target,
@@ -346,8 +346,8 @@ TEST(AudioEffectChainTest, SendFeedsTargetSidechain) {
 	ChainProbe keyed(ChainProbe::Kind::Gain, 1.0f);
 	ChainProbe plain(ChainProbe::Kind::Gain, 1.0f);
 	OfflineMixer mixer(1);
-	ClipBlock own(MakePcm(Constant(8 * BLOCK, 0.25f), 1, 48000));
-	ClipBlock sent(MakePcm(Constant(BLOCK, 0.5f), 1, 48000));
+	ClipBlock own(MakePCM(Constant(8 * BLOCK, 0.25f), 1, 48000));
+	ClipBlock sent(MakePCM(Constant(BLOCK, 0.5f), 1, 48000));
 	const OfflineBus target = mixer.Bus(2);
 	ASSERT_TRUE(mixer.Receives(target, 1));
 	ASSERT_TRUE(Rows(mixer, target,
@@ -371,7 +371,7 @@ TEST(AudioEffectChainTest, SendFeedsTargetSidechain) {
 
 TEST(AudioEffectChainTest, GroupMuteHoldsReceive) {
 	OfflineMixer mixer(1);
-	ClipBlock source(MakePcm(Constant(8 * BLOCK, 0.5f), 1, 48000));
+	ClipBlock source(MakePCM(Constant(8 * BLOCK, 0.5f), 1, 48000));
 	const OfflineBus target = mixer.Bus(2);
 	ASSERT_TRUE(mixer.Receives(target, 1));
 	ASSERT_TRUE(Rows(mixer, target,
@@ -405,14 +405,14 @@ namespace {
 		std::atomic<u32> releasedInside{0};
 	};
 
-	constexpr std::chrono::milliseconds STALL{50};
+	constexpr std::chrono::milliseconds StallDuration{50};
 
 	void Stall(std::atomic<bool>& armed, std::atomic<bool>& inside) {
 		if (!armed.exchange(false)) {
 			return;
 		}
 		inside.store(true);
-		const auto until = std::chrono::steady_clock::now() + STALL;
+		const auto until = std::chrono::steady_clock::now() + StallDuration;
 		while (std::chrono::steady_clock::now() < until) {
 		}
 		inside.store(false);
@@ -467,9 +467,9 @@ namespace {
 
 	class ProbeDefinition final : public IAudioEffectDefinition {
 	public:
-		static constexpr AudioParameterDefinition PARAMETERS[] = {{"Gain", "x", 0.0f, 4.0f, 1.0f}};
+		static constexpr AudioParameterDefinition Parameters[] = {{"Gain", "x", 0.0f, 4.0f, 1.0f}};
 
-		std::span<const AudioParameterDefinition> GetParameters() const override { return PARAMETERS; }
+		std::span<const AudioParameterDefinition> GetParameters() const override { return Parameters; }
 
 		IAudioEffect* CreateEffect(const AudioEffectContext& context) override {
 			if (refuse) {
@@ -599,12 +599,12 @@ TEST_F(AudioEffectFixture, RegisterRefusesUnnameable) {
 	ASSERT_TRUE(RegisterProbe());
 	EXPECT_FALSE(RegisterProbe());
 
-	static constexpr AudioParameterDefinition UNNAMED[] = {{"", "x", 0.0f, 1.0f, 0.5f}};
-	static constexpr AudioParameterDefinition REPEATED[] = {{"Mix", "%", 0.0f, 100.0f, 50.0f}, {"Mix", "%", 0.0f, 100.0f, 50.0f}};
-	static constexpr AudioParameterDefinition OUTSIDE[] = {{"Cutoff", "Hz", 20.0f, 20000.0f, 10.0f}};
-	TableDefinition unnamed(UNNAMED);
-	TableDefinition repeated(REPEATED);
-	TableDefinition outside(OUTSIDE);
+	static constexpr AudioParameterDefinition Unnamed[] = {{"", "x", 0.0f, 1.0f, 0.5f}};
+	static constexpr AudioParameterDefinition Repeated[] = {{"Mix", "%", 0.0f, 100.0f, 50.0f}, {"Mix", "%", 0.0f, 100.0f, 50.0f}};
+	static constexpr AudioParameterDefinition Outside[] = {{"Cutoff", "Hz", 20.0f, 20000.0f, 10.0f}};
+	TableDefinition unnamed(Unnamed);
+	TableDefinition repeated(Repeated);
+	TableDefinition outside(Outside);
 	EXPECT_FALSE(AudioEffects::Register("Test.Unnamed", &unnamed, &_module));
 	EXPECT_FALSE(AudioEffects::Register("Test.Repeated", &repeated, &_module));
 	EXPECT_FALSE(AudioEffects::Register("Test.Outside", &outside, &_module));

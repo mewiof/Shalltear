@@ -118,7 +118,7 @@ namespace Shalltear::Linux {
 #define SLT_XCURSOR_FUNCS(X) \
 	X(XcursorLibraryLoadCursor)
 
-	struct X11Api {
+	struct X11API {
 #define SLT_X11_DECLARE(name) decltype(&::name) name = nullptr;
 		SLT_X11_FUNCS(SLT_X11_DECLARE)
 		SLT_XI_FUNCS(SLT_X11_DECLARE)

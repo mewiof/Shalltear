@@ -1174,10 +1174,10 @@ TEST(WidgetsTest, ScrubWrapsPointer) {
 TEST(WidgetsTest, DropdownOpensSelectsAndUpdatesLabel) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Alpha", "Beta", "Gamma"};
+	static constexpr std::string_view Items[] = {"Alpha", "Beta", "Gamma"};
 	u32 selected = 0;
 	UI::Widgets::DropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.selected = 0;
 	desc.onSelect = [&](u32 index) { selected = index; };
 	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
@@ -1201,9 +1201,9 @@ TEST(WidgetsTest, DropdownOpensSelectsAndUpdatesLabel) {
 TEST(WidgetsTest, DropdownWidthFollowsItsSelection) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(400.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"S", "MMMMMMMMMMMM"};
+	static constexpr std::string_view Items[] = {"S", "MMMMMMMMMMMM"};
 	UI::Widgets::DropdownDesc desc;
-	desc.items = {ITEMS, 2};
+	desc.items = {Items, 2};
 	desc.selected = 0;
 	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
 	for (int i = 0; i < 3; ++i) {
@@ -1221,9 +1221,9 @@ TEST(WidgetsTest, DropdownWidthFollowsItsSelection) {
 
 TEST(WidgetsTest, DropdownFillsSlotOnRequest) {
 	Rig rig;
-	static constexpr std::string_view ITEMS[] = {"S"};
+	static constexpr std::string_view Items[] = {"S"};
 	UI::Widgets::DropdownDesc desc;
-	desc.items = {ITEMS, 1};
+	desc.items = {Items, 1};
 
 	UI::ElementHandle bare = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(400.0f, 24.0f));
 	UI::Widgets::DropdownParts loose = UI::Widgets::Dropdown(rig.ctx, bare, desc);
@@ -1246,14 +1246,14 @@ TEST(WidgetsTest, DropdownFillsSlotOnRequest) {
 TEST(WidgetsTest, DropdownTicksLiveSelection) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Alpha", "Beta", "Gamma"};
+	static constexpr std::string_view Items[] = {"Alpha", "Beta", "Gamma"};
 	UI::Widgets::DropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.selected = 0;
 	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
 	rig.ctx.Update();
 
-	UI::Widgets::SetDropdownSelection(rig.ctx, dropdown, {ITEMS, 3}, 2);
+	UI::Widgets::SetDropdownSelection(rig.ctx, dropdown, {Items, 3}, 2);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "Gamma");
 
@@ -1412,15 +1412,15 @@ TEST(WidgetsTest, ValueWidgetsReportThroughElement) {
 TEST(WidgetsTest, UnnamedSelectionClearsLabel) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Alpha", "Beta"};
+	static constexpr std::string_view Items[] = {"Alpha", "Beta"};
 	UI::Widgets::DropdownDesc desc;
-	desc.items = {ITEMS, 2};
+	desc.items = {Items, 2};
 	desc.selected = 1;
 	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
 	rig.ctx.Update();
 	ASSERT_EQ(rig.ctx.GetTextString(dropdown.label), "Beta");
 
-	UI::Widgets::SetDropdownSelection(rig.ctx, dropdown, {ITEMS, 2}, 7);
+	UI::Widgets::SetDropdownSelection(rig.ctx, dropdown, {Items, 2}, 7);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "");
 }
@@ -1428,11 +1428,11 @@ TEST(WidgetsTest, UnnamedSelectionClearsLabel) {
 TEST(WidgetsTest, MaskDropdownTogglesBits) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(300.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Info", "Warn", "Error"};
+	static constexpr std::string_view Items[] = {"Info", "Warn", "Error"};
 	u64 reported = 0;
 	int calls = 0;
 	UI::Widgets::MaskDropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.mask = 0b001;
 	desc.onChange = [&](u64 mask) {
 		reported = mask;
@@ -1460,10 +1460,10 @@ TEST(WidgetsTest, MaskDropdownTogglesBits) {
 TEST(WidgetsTest, MaskDropdownEndsReadNothingAndEverything) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(300.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Info", "Warn", "Error"};
+	static constexpr std::string_view Items[] = {"Info", "Warn", "Error"};
 	u64 reported = 0;
 	UI::Widgets::MaskDropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.mask = 0b101;
 	desc.onChange = [&](u64 mask) { reported = mask; };
 	UI::Widgets::DropdownParts picker = UI::Widgets::MaskDropdown(rig.ctx, container, desc);
@@ -1486,17 +1486,17 @@ TEST(WidgetsTest, MaskDropdownEndsReadNothingAndEverything) {
 TEST(WidgetsTest, ResyncedMaskMovesValue) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(300.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Info", "Warn", "Error"};
+	static constexpr std::string_view Items[] = {"Info", "Warn", "Error"};
 	u64 reported = 0;
 	UI::Widgets::MaskDropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.mask = 0b011;
 	desc.onChange = [&](u64 mask) { reported = mask; };
 	UI::Widgets::DropdownParts picker = UI::Widgets::MaskDropdown(rig.ctx, container, desc);
 	rig.ctx.Update();
 	ASSERT_EQ(rig.ctx.GetTextString(picker.label), "Info, Warn");
 
-	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {ITEMS, 3}, 0b001);
+	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {Items, 3}, 0b001);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(picker.label), "Info");
 
@@ -1509,23 +1509,23 @@ TEST(WidgetsTest, ResyncedMaskMovesValue) {
 TEST(WidgetsTest, ResyncedMaskLabelMatches) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(300.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Info", "Warn", "Error"};
+	static constexpr std::string_view Items[] = {"Info", "Warn", "Error"};
 	UI::Widgets::MaskDropdownDesc desc;
-	desc.items = {ITEMS, 3};
+	desc.items = {Items, 3};
 	desc.mask = 0b111;
 	UI::Widgets::DropdownParts picker = UI::Widgets::MaskDropdown(rig.ctx, container, desc);
 	rig.ctx.Update();
 	ASSERT_EQ(rig.ctx.GetTextString(picker.label), "Everything");
 
-	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {ITEMS, 3}, 0u);
+	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {Items, 3}, 0u);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(picker.label), "Nothing");
 
-	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {ITEMS, 3}, 0b101);
+	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {Items, 3}, 0b101);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(picker.label), "Info, Error");
 
-	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {ITEMS, 3}, 0b111);
+	UI::Widgets::SetMaskDropdownValue(rig.ctx, picker, {Items, 3}, 0b111);
 	rig.ctx.Update();
 	EXPECT_EQ(rig.ctx.GetTextString(picker.label), "Everything");
 }
@@ -1533,9 +1533,9 @@ TEST(WidgetsTest, ResyncedMaskLabelMatches) {
 TEST(WidgetsTest, MaskDropdownReticksEveryRowAfterPick) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(300.0f, 24.0f));
-	static constexpr std::string_view ITEMS[] = {"Info", "Warn"};
+	static constexpr std::string_view Items[] = {"Info", "Warn"};
 	UI::Widgets::MaskDropdownDesc desc;
-	desc.items = {ITEMS, 2};
+	desc.items = {Items, 2};
 	desc.mask = 0b11;
 	UI::Widgets::DropdownParts picker = UI::Widgets::MaskDropdown(rig.ctx, container, desc);
 	rig.ctx.Update();

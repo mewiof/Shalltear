@@ -125,13 +125,13 @@ namespace Shalltear::UI {
 		constexpr std::string_view ScaleModes[] = {"scale-to-fit", "stretch-to-fill", "scale-and-crop", "sliced", "tiled"};
 		constexpr std::string_view FillMethods[] = {"none", "horizontal", "vertical", "radial-90", "radial-180", "radial-360"};
 		constexpr std::string_view FillOrigins[] = {"bottom", "top", "left", "right", "bottom-left", "bottom-right", "top-left", "top-right"};
-		constexpr ImageScaleMode ScaleModeValues[] = {ImageScaleMode::ScaleToFit, ImageScaleMode::StretchToFill, ImageScaleMode::ScaleAndCrop,
-													  ImageScaleMode::Sliced, ImageScaleMode::Tiled};
-		constexpr ImageFillMethod FillMethodValues[] = {ImageFillMethod::None, ImageFillMethod::Horizontal, ImageFillMethod::Vertical,
-														ImageFillMethod::Radial90, ImageFillMethod::Radial180, ImageFillMethod::Radial360};
-		constexpr ImageFillOrigin FillOriginValues[] = {ImageFillOrigin::Bottom, ImageFillOrigin::Top, ImageFillOrigin::Left,
-														ImageFillOrigin::Right, ImageFillOrigin::BottomLeft, ImageFillOrigin::BottomRight,
-														ImageFillOrigin::TopLeft, ImageFillOrigin::TopRight};
+		constexpr ImageScaleMode SCALE_MODE_VALUES[] = {ImageScaleMode::ScaleToFit, ImageScaleMode::StretchToFill, ImageScaleMode::ScaleAndCrop,
+														ImageScaleMode::Sliced, ImageScaleMode::Tiled};
+		constexpr ImageFillMethod FILL_METHOD_VALUES[] = {ImageFillMethod::None, ImageFillMethod::Horizontal, ImageFillMethod::Vertical,
+														  ImageFillMethod::Radial90, ImageFillMethod::Radial180, ImageFillMethod::Radial360};
+		constexpr ImageFillOrigin FILL_ORIGIN_VALUES[] = {ImageFillOrigin::Bottom, ImageFillOrigin::Top, ImageFillOrigin::Left,
+														  ImageFillOrigin::Right, ImageFillOrigin::BottomLeft, ImageFillOrigin::BottomRight,
+														  ImageFillOrigin::TopLeft, ImageFillOrigin::TopRight};
 
 		constexpr WidgetAttribute ImageAttributes[] = {
 			{"src", WidgetAttributeType::Asset, {}, ImageSourceTypes},
@@ -168,8 +168,8 @@ namespace Shalltear::UI {
 		ImageFill ReadFill(std::span<const WidgetAttributeValue> attributes) {
 			WidgetArgs args{UIInstantiateDesc{}, attributes};
 			ImageFill fill;
-			fill.method = Choose(FillMethods, FillMethodValues, args.Get("fill-method"), ImageFillMethod::None);
-			fill.origin = Choose(FillOrigins, FillOriginValues, args.Get("fill-origin"), DefaultOrigin(fill.method));
+			fill.method = Choose(FillMethods, FILL_METHOD_VALUES, args.Get("fill-method"), ImageFillMethod::None);
+			fill.origin = Choose(FillOrigins, FILL_ORIGIN_VALUES, args.Get("fill-origin"), DefaultOrigin(fill.method));
 			fill.amount = static_cast<f32>(args.GetNumber("fill-amount", 1.0));
 			fill.clockwise = args.GetBool("fill-clockwise", true);
 			return fill;
@@ -209,7 +209,7 @@ namespace Shalltear::UI {
 					image.texture = Handle<TextureAsset>(static_cast<TextureAsset*>(source));
 				}
 			}
-			image.scaleMode = Choose(ScaleModes, ScaleModeValues, args.Get("scale-mode"), ImageScaleMode::ScaleToFit);
+			image.scaleMode = Choose(ScaleModes, SCALE_MODE_VALUES, args.Get("scale-mode"), ImageScaleMode::ScaleToFit);
 			image.fill = ReadFill(args.attributes);
 			image.sliceScale = static_cast<f32>(args.GetNumber("slice-scale", 1.0));
 			context.SetImage(element, image);

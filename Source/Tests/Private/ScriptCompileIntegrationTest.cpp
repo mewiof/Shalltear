@@ -401,7 +401,7 @@ namespace {
 		return "Content-Length: " + std::to_string(json.size()) + "\r\n\r\n" + json;
 	}
 
-	str JsonString(const str& text) {
+	str JSONString(const str& text) {
 		str out = "\"";
 		for (char c : text) {
 			switch (c) {
@@ -444,7 +444,7 @@ namespace {
 
 	str DidOpen(const str& path, const str& text) {
 		return LspMessage("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":" +
-						  JsonString(FileUri(path)) + ",\"languageId\":\"cpp\",\"version\":1,\"text\":" + JsonString(text) + "}}}");
+						  JSONString(FileUri(path)) + ",\"languageId\":\"cpp\",\"version\":1,\"text\":" + JSONString(text) + "}}}");
 	}
 
 	str PublishedLine(const str& output, const str& fileSuffix) {
@@ -495,7 +495,7 @@ TEST_F(ScriptCompileIntegrationTest, ScaffoldHasNoUnusedInclude) {
 
 	str requests;
 	requests += LspMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"processId\":null,\"rootUri\":" +
-						   JsonString(FileUri(Root())) + ",\"capabilities\":{}}}");
+						   JSONString(FileUri(Root())) + ",\"capabilities\":{}}}");
 	requests += LspMessage("{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}");
 	requests += DidOpen(component, ReadWholeFile(std::filesystem::path(component)));
 	requests += DidOpen(unused, ReadWholeFile(std::filesystem::path(unused)));
@@ -908,11 +908,11 @@ TEST_F(ScriptCompileIntegrationTest, ScaffoldedProjectConfiguresAgainstLaterEngi
 	EXPECT_NE(output.find("Build files have been written"), str::npos) << output;
 
 	str cmake = FileSystem::ReadTextFile(Path(Root() + "/CMakeLists.txt"), MemTag::Editor);
-	constexpr std::string_view VERSIONLESS = "find_package(Shalltear REQUIRED)";
-	size_t at = cmake.find(VERSIONLESS);
+	constexpr std::string_view Versionless = "find_package(Shalltear REQUIRED)";
+	size_t at = cmake.find(Versionless);
 	ASSERT_NE(at, str::npos) << cmake;
 	WriteFile("CMakeLists.txt", cmake.substr(0, at) + "find_package(Shalltear " + ours.substr(0, separator) +
-									" REQUIRED)" + cmake.substr(at + VERSIONLESS.size()));
+									" REQUIRED)" + cmake.substr(at + Versionless.size()));
 
 	str control = configure("VersionPinned");
 	EXPECT_EQ(control.find("Build files have been written"), str::npos) << control;

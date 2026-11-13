@@ -43,7 +43,7 @@ namespace Shalltear::VisualEffectsImpl {
 			u8 operands;
 		};
 
-		constexpr std::array<OpInfo, static_cast<size_t>(EffectOp::Count)> OPS = {{
+		constexpr std::array<OpInfo, static_cast<size_t>(EffectOp::Count)> Ops = {{
 			{"const", Shape::Leaf, 0},
 			{"input", Shape::Leaf, 0},
 			{"negate", Shape::Componentwise, 1},
@@ -113,16 +113,16 @@ namespace Shalltear::VisualEffectsImpl {
 			{"meshindex", Shape::Mesh, 1},
 			{"meshvertex", Shape::Mesh, 1},
 		}};
-		static_assert(OPS[static_cast<size_t>(EffectOp::IsInfinite)].mnemonic == "isinf", "OPS is out of step with EffectOp");
-		static_assert(OPS[static_cast<size_t>(EffectOp::Random)].mnemonic == "random", "OPS is out of step with EffectOp");
-		static_assert(OPS[static_cast<size_t>(EffectOp::MeshVertex)].mnemonic == "meshvertex", "OPS is out of step with EffectOp");
+		static_assert(Ops[static_cast<size_t>(EffectOp::IsInfinite)].mnemonic == "isinf", "OPS is out of step with EffectOp");
+		static_assert(Ops[static_cast<size_t>(EffectOp::Random)].mnemonic == "random", "OPS is out of step with EffectOp");
+		static_assert(Ops[static_cast<size_t>(EffectOp::MeshVertex)].mnemonic == "meshvertex", "OPS is out of step with EffectOp");
 
 		constexpr u32 NOISE_HASHES = 3;
 		constexpr u32 VORONOI_HASHES = 2;
 		constexpr u32 EFFECT_NOISE_TYPES = 3;
 		constexpr u32 MESH_CHANNELS = 5;
 
-		const OpInfo& Info(EffectOp op) { return OPS[static_cast<size_t>(op)]; }
+		const OpInfo& Info(EffectOp op) { return Ops[static_cast<size_t>(op)]; }
 
 		u32 SwizzleCount(u32 pattern) { return pattern & 7u; }
 		u32 SwizzleComponent(u32 pattern, u32 index) { return (pattern >> (4 + 2 * index)) & 3u; }
@@ -446,11 +446,11 @@ namespace Shalltear::VisualEffectsImpl {
 					continue;
 				}
 				EffectInstruction instruction;
-				const auto found = std::find_if(OPS.begin(), OPS.end(), [&](const OpInfo& info) { return info.mnemonic == tokens[0]; });
-				if (found == OPS.end()) {
+				const auto found = std::find_if(Ops.begin(), Ops.end(), [&](const OpInfo& info) { return info.mnemonic == tokens[0]; });
+				if (found == Ops.end()) {
 					return refuse("'" + str(tokens[0]) + "' is no op");
 				}
-				instruction.op = static_cast<EffectOp>(found - OPS.begin());
+				instruction.op = static_cast<EffectOp>(found - Ops.begin());
 				u32 width = 0;
 				if (tokens.size() < 2 || !ParseNumber(tokens[1], width) || width < 1 || width > 4) {
 					return refuse("a value is 1 to 4 wide");

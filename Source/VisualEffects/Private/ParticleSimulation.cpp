@@ -872,8 +872,8 @@ namespace Shalltear::VisualEffectsImpl {
 			}
 			*kernel = {};
 		}
-		_reset = LoadKernel(PARTICLE_RESET_KERNEL);
-		_counts = LoadKernel(PARTICLE_ARGUMENTS_KERNEL);
+		_reset = LoadKernel(ParticleResetKernel);
+		_counts = LoadKernel(ParticleArgumentsKernel);
 		if (IsUsableKernel(_reset) && IsUsableKernel(_counts)) {
 			return true;
 		}
@@ -894,8 +894,8 @@ namespace Shalltear::VisualEffectsImpl {
 			}
 			*kernel = {};
 		}
-		_sortLocal = LoadKernel(PARTICLE_SORT_LOCAL_KERNEL);
-		_sortMerge = LoadKernel(PARTICLE_SORT_MERGE_KERNEL);
+		_sortLocal = LoadKernel(ParticleSortLocalKernel);
+		_sortMerge = LoadKernel(ParticleSortMergeKernel);
 		if (IsUsableKernel(_sortLocal) && IsUsableKernel(_sortMerge)) {
 			return true;
 		}
@@ -913,7 +913,7 @@ namespace Shalltear::VisualEffectsImpl {
 		if (ShaderAsset* shader = _strips.Get()) {
 			AssetDatabase::UnloadAsset(shader);
 		}
-		_strips = LoadKernel(PARTICLE_STRIPS_KERNEL);
+		_strips = LoadKernel(ParticleStripsKernel);
 		return IsUsableKernel(_strips);
 	}
 

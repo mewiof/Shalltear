@@ -1,7 +1,7 @@
 #include "AudioStream.h"
 
 #include "AudioClipData.h"
-#include "AudioQoa.h"
+#include "AudioQOA.h"
 
 #include "Shalltear/Core/Memory.h"
 
@@ -56,19 +56,19 @@ namespace Shalltear {
 				const u32 channels = clip.channels;
 				const u64 first = ChunkFirst(clip, chunk);
 				const u32 count = ChunkCount(clip, chunk);
-				if (clip.codec == AudioClipEncoding::Pcm) {
+				if (clip.codec == AudioClipEncoding::PCM) {
 					const u64 frameBytes = static_cast<u64>(channels) * sizeof(f32);
 					return ReadStreamSource(clip.source, first * frameBytes, reinterpret_cast<u8*>(into.samples), count * frameBytes);
 				}
 				if (clip.codec == AudioClipEncoding::Opus) {
 					return DecodeOpusChunk(stream, first, count, into);
 				}
-				const u64 offset = QoaFrameOffset(channels, static_cast<u64>(chunk));
-				const u64 size = QoaFrameSize(channels, count);
+				const u64 offset = QOAFrameOffset(channels, static_cast<u64>(chunk));
+				const u64 size = QOAFrameSize(channels, count);
 				if (size > stream.byteCapacity || !ReadStreamSource(clip.source, offset, stream.bytes, size)) {
 					return false;
 				}
-				return QoaDecodeFrame(stream.bytes, size, channels, clip.sampleRate, count, into.samples);
+				return QOADecodeFrame(stream.bytes, size, channels, clip.sampleRate, count, into.samples);
 			}
 
 			void Hold(AudioStream& stream, u16 index) [[clang::nonblocking]] {
@@ -113,8 +113,8 @@ namespace Shalltear {
 				new (&stream->chunks[index]) AudioStreamChunk();
 				stream->chunks[index].samples = reinterpret_cast<f32*>(storage + samples * index);
 			}
-			if (clip->codec == AudioClipEncoding::Qoa) {
-				stream->byteCapacity = QoaFrameSize(clip->channels, QOA_FRAME_FRAMES);
+			if (clip->codec == AudioClipEncoding::QOA) {
+				stream->byteCapacity = QOAFrameSize(clip->channels, QOA_FRAME_FRAMES);
 			} else if (clip->codec == AudioClipEncoding::Opus && !clip->source.memory) {
 				stream->byteCapacity = clip->opus.largestRun;
 			}

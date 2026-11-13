@@ -9,7 +9,7 @@ namespace Shalltear {
 
 			namespace {
 
-				constexpr AudioParameterDefinition PITCH_SHIFTER[] = {
+				constexpr AudioParameterDefinition PitchShifterParameters[] = {
 					{"Pitch", "x", 0.5f, 2.0f, 1.0f},
 					{"FFT Size", "", 256.0f, 4096.0f, 1024.0f},
 					{"Overlap", "", 1.0f, 32.0f, 4.0f},
@@ -226,7 +226,7 @@ namespace Shalltear {
 					f32 _sine[MAX_SIZE / 2];
 				};
 
-				BuiltinDefinition<PitchShifter> _pitchShifter(PITCH_SHIFTER);
+				BuiltinDefinition<PitchShifter> _pitchShifter(PitchShifterParameters);
 
 			} // anonymous namespace
 

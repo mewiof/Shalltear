@@ -12,11 +12,11 @@ namespace Shalltear {
 		constexpr double PI = 3.14159265358979323846;
 		constexpr double HALF_PI = 1.57079632679489661923;
 
-		constexpr GraphPortDefinition CHECKERBOARD_INPUTS[] = {{"UV", P::Float2, {}, UV0},
-															   {"Color A", P::Float3, {0.2f, 0.2f, 0.2f, 1}},
-															   {"Color B", P::Float3, {0.7f, 0.7f, 0.7f, 1}},
-															   {"Frequency", P::Float2, {1, 1, 1, 1}}};
-		constexpr GraphPortDefinition CHECKERBOARD_OUTPUTS[] = {{"Out", P::Float3}};
+		constexpr GraphPortDefinition CheckerboardInputs[] = {{"UV", P::Float2, {}, UV0},
+															  {"Color A", P::Float3, {0.2f, 0.2f, 0.2f, 1}},
+															  {"Color B", P::Float3, {0.7f, 0.7f, 0.7f, 1}},
+															  {"Frequency", P::Float2, {1, 1, 1, 1}}};
+		constexpr GraphPortDefinition CheckerboardOutputs[] = {{"Out", P::Float3}};
 
 		void CheckerboardBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -39,17 +39,17 @@ namespace Shalltear {
 			c.outputs[0] = b.Lerp(c.In(1), c.In(2), b.Swizzle(alpha, "xxx"));
 		}
 
-		constexpr std::string_view HASHES_SINE[] = {"Deterministic", "LegacySine"};
-		constexpr std::string_view HASHES_MOD[] = {"Deterministic", "LegacyMod"};
-		constexpr GraphSettingDefinition SINE_HASH_SETTINGS[] = {{"Hash Type", GraphSettingKind::Choice, HASHES_SINE}};
-		constexpr GraphSettingDefinition MOD_HASH_SETTINGS[] = {{"Hash Type", GraphSettingKind::Choice, HASHES_MOD}};
+		constexpr std::string_view HashesSine[] = {"Deterministic", "LegacySine"};
+		constexpr std::string_view HashesMod[] = {"Deterministic", "LegacyMod"};
+		constexpr GraphSettingDefinition SineHashSettings[] = {{"Hash Type", GraphSettingKind::Choice, HashesSine}};
+		constexpr GraphSettingDefinition ModHashSettings[] = {{"Hash Type", GraphSettingKind::Choice, HashesMod}};
 
-		constexpr GraphPortDefinition SIMPLE_NOISE_INPUTS[] = {{"UV", P::Float2, {}, UV0}, {"Scale", P::Float, {500, 0, 0, 0}}};
-		constexpr GraphPortDefinition GRADIENT_NOISE_INPUTS[] = {{"UV", P::Float2, {}, UV0}, {"Scale", P::Float, {10, 0, 0, 0}}};
-		constexpr GraphPortDefinition VORONOI_INPUTS[] = {
+		constexpr GraphPortDefinition SimpleNoiseInputs[] = {{"UV", P::Float2, {}, UV0}, {"Scale", P::Float, {500, 0, 0, 0}}};
+		constexpr GraphPortDefinition GradientNoiseInputs[] = {{"UV", P::Float2, {}, UV0}, {"Scale", P::Float, {10, 0, 0, 0}}};
+		constexpr GraphPortDefinition VoronoiInputs[] = {
 			{"UV", P::Float2, {}, UV0}, {"AngleOffset", P::Float, {2, 0, 0, 0}}, {"CellDensity", P::Float, {5, 0, 0, 0}}};
-		constexpr GraphPortDefinition NOISE_OUTPUTS[] = {{"Out", P::Float}};
-		constexpr GraphPortDefinition VORONOI_OUTPUTS[] = {{"Out", P::Float}, {"Cells", P::Float}};
+		constexpr GraphPortDefinition NoiseOutputs[] = {{"Out", P::Float}};
+		constexpr GraphPortDefinition VoronoiOutputs[] = {{"Out", P::Float}, {"Cells", P::Float}};
 
 		void SimpleNoiseBody(GraphBodyContext& c) {
 			B& b = c.builder;
@@ -81,21 +81,21 @@ namespace Shalltear {
 			c.outputs[1] = b.Swizzle(cell, "y");
 		}
 
-		constexpr GraphPortDefinition ELLIPSE_INPUTS[] = {
+		constexpr GraphPortDefinition EllipseInputs[] = {
 			{"UV", P::Float2, {}, UV0}, {"Width", P::Float, {0.5f, 0, 0, 0}}, {"Height", P::Float, {0.5f, 0, 0, 0}}};
-		constexpr GraphPortDefinition POLYGON_INPUTS[] = {
+		constexpr GraphPortDefinition PolygonInputs[] = {
 			{"UV", P::Float2, {}, UV0}, {"Sides", P::Float, {6, 0, 0, 0}}, {"Width", P::Float, {0.5f, 0, 0, 0}}, {"Height", P::Float, {0.5f, 0, 0, 0}}};
-		constexpr GraphPortDefinition ROUNDED_POLYGON_INPUTS[] = {{"UV", P::Float2, {}, UV0},
-																  {"Width", P::Float, {0.5f, 0, 0, 0}},
-																  {"Height", P::Float, {0.5f, 0, 0, 0}},
-																  {"Sides", P::Float, {5, 0, 0, 0}},
-																  {"Roundness", P::Float, {0.3f, 0, 0, 0}}};
-		constexpr GraphPortDefinition ROUNDED_RECTANGLE_INPUTS[] = {
+		constexpr GraphPortDefinition RoundedPolygonInputs[] = {{"UV", P::Float2, {}, UV0},
+																{"Width", P::Float, {0.5f, 0, 0, 0}},
+																{"Height", P::Float, {0.5f, 0, 0, 0}},
+																{"Sides", P::Float, {5, 0, 0, 0}},
+																{"Roundness", P::Float, {0.3f, 0, 0, 0}}};
+		constexpr GraphPortDefinition RoundedRectangleInputs[] = {
 			{"UV", P::Float2, {}, UV0}, {"Width", P::Float, {0.5f, 0, 0, 0}}, {"Height", P::Float, {0.5f, 0, 0, 0}}, {"Radius", P::Float, {0.1f, 0, 0, 0}}};
-		constexpr GraphPortDefinition SHAPE_OUTPUTS[] = {{"Out", P::Float}};
-		constexpr GraphPortDefinition POLYGON_OUTPUTS[] = {{"Out", P::DynamicVector}};
-		constexpr std::string_view CLAMP_TYPES[] = {"Fastest", "Nicest"};
-		constexpr GraphSettingDefinition RECTANGLE_SETTINGS[] = {{"Clamp Type", GraphSettingKind::Choice, CLAMP_TYPES}};
+		constexpr GraphPortDefinition ShapeOutputs[] = {{"Out", P::Float}};
+		constexpr GraphPortDefinition PolygonOutputs[] = {{"Out", P::DynamicVector}};
+		constexpr std::string_view ClampTypes[] = {"Fastest", "Nicest"};
+		constexpr GraphSettingDefinition RectangleSettings[] = {{"Clamp Type", GraphSettingKind::Choice, ClampTypes}};
 
 		GraphValueId Centered(B& b, GraphValueId uv) { return b.Subtract(b.Multiply(uv, b.Scalar(2.0f)), b.Scalar(1.0f)); }
 
@@ -196,22 +196,22 @@ namespace Shalltear {
 			c.outputs[0] = Edge(b, out);
 		}
 
-		constexpr GraphNodeDefinition PROCEDURAL_DEFINITIONS[] = {
-			{"Procedural/Checkerboard", "Checkerboard", "Procedural", "", CHECKERBOARD_INPUTS, CHECKERBOARD_OUTPUTS, {}, CheckerboardBody},
-			{"Procedural/GradientNoise", "Gradient Noise", "Procedural/Noise", "perlin noise", GRADIENT_NOISE_INPUTS, NOISE_OUTPUTS, MOD_HASH_SETTINGS,
+		constexpr GraphNodeDefinition ProceduralDefinitions[] = {
+			{"Procedural/Checkerboard", "Checkerboard", "Procedural", "", CheckerboardInputs, CheckerboardOutputs, {}, CheckerboardBody},
+			{"Procedural/GradientNoise", "Gradient Noise", "Procedural/Noise", "perlin noise", GradientNoiseInputs, NoiseOutputs, ModHashSettings,
 			 GradientNoiseBody},
-			{"Procedural/SimpleNoise", "Simple Noise", "Procedural/Noise", "value noise", SIMPLE_NOISE_INPUTS, NOISE_OUTPUTS, SINE_HASH_SETTINGS,
+			{"Procedural/SimpleNoise", "Simple Noise", "Procedural/Noise", "value noise", SimpleNoiseInputs, NoiseOutputs, SineHashSettings,
 			 SimpleNoiseBody},
-			{"Procedural/Voronoi", "Voronoi", "Procedural/Noise", "worley noise", VORONOI_INPUTS, VORONOI_OUTPUTS, SINE_HASH_SETTINGS, VoronoiBody},
-			{"Procedural/Ellipse", "Ellipse", "Procedural/Shape", "circle", ELLIPSE_INPUTS, SHAPE_OUTPUTS, {}, EllipseBody},
-			{"Procedural/Polygon", "Polygon", "Procedural/Shape", "shape", POLYGON_INPUTS, POLYGON_OUTPUTS, {}, PolygonBody},
-			{"Procedural/Rectangle", "Rectangle", "Procedural/Shape", "square", ELLIPSE_INPUTS, SHAPE_OUTPUTS, RECTANGLE_SETTINGS, RectangleBody},
-			{"Procedural/RoundedPolygon", "Rounded Polygon", "Procedural/Shape", "shape", ROUNDED_POLYGON_INPUTS, SHAPE_OUTPUTS, {}, RoundedPolygonBody},
-			{"Procedural/RoundedRectangle", "Rounded Rectangle", "Procedural/Shape", "square", ROUNDED_RECTANGLE_INPUTS, SHAPE_OUTPUTS, {}, RoundedRectangleBody},
+			{"Procedural/Voronoi", "Voronoi", "Procedural/Noise", "worley noise", VoronoiInputs, VoronoiOutputs, SineHashSettings, VoronoiBody},
+			{"Procedural/Ellipse", "Ellipse", "Procedural/Shape", "circle", EllipseInputs, ShapeOutputs, {}, EllipseBody},
+			{"Procedural/Polygon", "Polygon", "Procedural/Shape", "shape", PolygonInputs, PolygonOutputs, {}, PolygonBody},
+			{"Procedural/Rectangle", "Rectangle", "Procedural/Shape", "square", EllipseInputs, ShapeOutputs, RectangleSettings, RectangleBody},
+			{"Procedural/RoundedPolygon", "Rounded Polygon", "Procedural/Shape", "shape", RoundedPolygonInputs, ShapeOutputs, {}, RoundedPolygonBody},
+			{"Procedural/RoundedRectangle", "Rounded Rectangle", "Procedural/Shape", "square", RoundedRectangleInputs, ShapeOutputs, {}, RoundedRectangleBody},
 		};
 
 	} // anonymous namespace
 
-	std::span<const GraphNodeDefinition> GraphProceduralDefinitions() { return PROCEDURAL_DEFINITIONS; }
+	std::span<const GraphNodeDefinition> GraphProceduralDefinitions() { return ProceduralDefinitions; }
 
 } // namespace Shalltear

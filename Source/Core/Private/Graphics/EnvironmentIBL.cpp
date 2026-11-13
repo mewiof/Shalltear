@@ -161,9 +161,9 @@ namespace Shalltear::GraphicsInternal {
 			return (tangentX * halfTangent.x + tangentY * halfTangent.y + normal * halfTangent.z).Normalized();
 		}
 
-		f32 DistributionGGX(f32 NoH, f32 linearRoughness) {
+		f32 DistributionGGX(f32 noH, f32 linearRoughness) {
 			const f32 a2 = linearRoughness * linearRoughness;
-			const f32 denominator = NoH * NoH * (a2 - 1.0f) + 1.0f;
+			const f32 denominator = noH * noH * (a2 - 1.0f) + 1.0f;
 			return a2 / Math::Max(PI * denominator * denominator, 1e-8f);
 		}
 
@@ -181,19 +181,19 @@ namespace Shalltear::GraphicsInternal {
 					f32 weight = 0.0f;
 					for (u32 s = 0; s < PREFILTER_SAMPLES; ++s) {
 						const Vec3 half = ImportanceSampleGGX(Hammersley(s, PREFILTER_SAMPLES), linearRoughness, normal);
-						const f32 VoH = Vec3::Dot(normal, half);
-						const Vec3 light = half * (2.0f * VoH) - normal;
-						const f32 NoL = Vec3::Dot(normal, light);
-						if (NoL <= 0.0f) {
+						const f32 voH = Vec3::Dot(normal, half);
+						const Vec3 light = half * (2.0f * voH) - normal;
+						const f32 noL = Vec3::Dot(normal, light);
+						if (noL <= 0.0f) {
 							continue;
 						}
-						const f32 NoH = Math::Max(VoH, 0.0f);
-						const f32 pdf = DistributionGGX(NoH, linearRoughness) * 0.25f;
+						const f32 noH = Math::Max(voH, 0.0f);
+						const f32 pdf = DistributionGGX(noH, linearRoughness) * 0.25f;
 						const f32 sampleSolidAngle = 1.0f / (static_cast<f32>(PREFILTER_SAMPLES) * pdf + 1e-4f);
 						const f32 sampleMip = 0.5f * std::log2(sampleSolidAngle / texelSolidAngle);
 						const u32 readMip = static_cast<u32>(Math::Clamp(sampleMip, 0.0f, static_cast<f32>(chain.mipCount - 1)));
-						sum += SampleChain(chain, readMip, light) * NoL;
-						weight += NoL;
+						sum += SampleChain(chain, readMip, light) * noL;
+						weight += noL;
 					}
 					const Vec3 color = weight > 0.0f ? sum * (1.0f / weight) : SampleChain(chain, 0, normal);
 					u16* texel = destination + (static_cast<u64>(y) * side + x) * 4;

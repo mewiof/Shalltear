@@ -63,7 +63,7 @@ TEST(NodeShaderCreateTest, EachTemplateIsGraphThatGeneratesTarget) {
 		GraphDocument document;
 		str error;
 		ASSERT_TRUE(GraphDocumentOps::Read(NodeShaderImporter::TemplateDocument(index), document, error)) << error;
-		EXPECT_EQ(document.type, GraphSurface::DOCUMENT_TYPE);
+		EXPECT_EQ(document.type, GraphSurface::DocumentType);
 		ASSERT_EQ(document.contexts.size(), 2u);
 		EXPECT_EQ(document.contexts[0].node.def, "Context/Vertex");
 		EXPECT_EQ(document.contexts[1].node.def, "Context/Fragment");

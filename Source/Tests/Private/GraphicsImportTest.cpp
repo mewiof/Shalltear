@@ -1031,16 +1031,16 @@ TEST_F(GraphicsImportFixture, ModelPrefabRowPerNode) {
 	EXPECT_FALSE(fragment->basePrefab.IsValid());
 	ASSERT_EQ(fragment->rows.size(), 5u);
 
-	constexpr u64 ROOT_ID = 2, bodyId = 4, muzzleId = 6, shearedId = 8, visorCopyId = 10;
+	constexpr u64 ROOT_ID = 2, BODY_ID = 4, MUZZLE_ID = 6, SHEARED_ID = 8, VISOR_COPY_ID = 10;
 	EXPECT_EQ(fragment->rows[0].id, ROOT_ID);
 	EXPECT_EQ(fragment->rows[0].parent, 0u);
-	EXPECT_EQ(fragment->rows[1].id, bodyId);
+	EXPECT_EQ(fragment->rows[1].id, BODY_ID);
 	EXPECT_EQ(fragment->rows[1].parent, ROOT_ID);
-	EXPECT_EQ(fragment->rows[2].id, muzzleId);
+	EXPECT_EQ(fragment->rows[2].id, MUZZLE_ID);
 	EXPECT_EQ(fragment->rows[2].parent, ROOT_ID);
-	EXPECT_EQ(fragment->rows[3].id, shearedId);
+	EXPECT_EQ(fragment->rows[3].id, SHEARED_ID);
 	EXPECT_EQ(fragment->rows[3].parent, ROOT_ID);
-	EXPECT_EQ(fragment->rows[4].id, visorCopyId);
+	EXPECT_EQ(fragment->rows[4].id, VISOR_COPY_ID);
 	EXPECT_EQ(fragment->rows[4].parent, ROOT_ID);
 	EXPECT_EQ(fragment->nextLocalId, 12u);
 
@@ -1405,10 +1405,10 @@ TEST_F(GraphicsImportFixture, MeshlessDocumentImportsTracks) {
 }
 
 TEST_F(GraphicsImportFixture, EmptyDocumentRefusedByName) {
-	constexpr std::string_view EMPTY = "{\"asset\":{\"version\":\"2.0\"}}";
+	constexpr std::string_view Empty = "{\"asset\":{\"version\":\"2.0\"}}";
 	std::filesystem::path empty = _root / "empty.gltf";
-	Buffer payload(EMPTY.size(), MemTag::Asset);
-	std::memcpy(payload.data, EMPTY.data(), EMPTY.size());
+	Buffer payload(Empty.size(), MemTag::Asset);
+	std::memcpy(payload.data, Empty.data(), Empty.size());
 	ASSERT_TRUE(FileSystem::WriteFile(Path(empty.generic_string()), payload));
 
 	ModelParseResult parsed = ParseGLTF(Path(empty.generic_string()));

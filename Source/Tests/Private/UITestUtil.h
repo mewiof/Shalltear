@@ -629,7 +629,7 @@ namespace UITest {
 			context.InjectInput(event);
 			advance();
 		};
-		constexpr Vec2 FAR_AWAY{-5000.0f, -5000.0f};
+		constexpr Vec2 FarAway{-5000.0f, -5000.0f};
 
 		Vector<UI::ElementHandle> candidates{GetMemoryResource(MemTag::Core)};
 		std::function<void(UI::ElementHandle)> collect = [&](UI::ElementHandle element) {
@@ -682,7 +682,7 @@ namespace UITest {
 			PaintSnapshot resting{GetMemoryResource(MemTag::Core)};
 			PaintSnapshot hovered{GetMemoryResource(MemTag::Core)};
 			PaintSnapshot pressed{GetMemoryResource(MemTag::Core)};
-			send(InputEventType::MouseMove, FAR_AWAY);
+			send(InputEventType::MouseMove, FarAway);
 			SnapshotPaint(context, element, resting);
 			send(InputEventType::MouseMove, point);
 			SnapshotPaint(context, element, hovered);
@@ -691,7 +691,7 @@ namespace UITest {
 			if (!died) {
 				SnapshotPaint(context, element, pressed);
 			}
-			send(InputEventType::MouseUp, FAR_AWAY);
+			send(InputEventType::MouseUp, FarAway);
 			context.CloseAllPopups();
 			advance();
 			if (died) {

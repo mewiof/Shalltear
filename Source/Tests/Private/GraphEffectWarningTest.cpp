@@ -17,7 +17,7 @@ namespace {
 		str initializeBlocks;
 		bool update = true;
 		str updateBlocks;
-		str output = str(GRAPH_EFFECT_OUTPUT);
+		str output = str(GraphEffectOutputDefinition);
 		str outputSettings;
 		str outputBlocks;
 		str properties;
@@ -83,7 +83,7 @@ namespace {
 		return count;
 	}
 
-	str Json(std::string_view text) {
+	str JSON(std::string_view text) {
 		str out = "\"";
 		for (const char c : text) {
 			out += c == '\n' ? str("\\n") : (c == '"' ? str("\\\"") : str(1, c));
@@ -91,7 +91,7 @@ namespace {
 		return out + "\"";
 	}
 
-	constexpr std::string_view SET_VELOCITY = R"({"id":22,"def":"Block/SetAttribute","settings":{"Attribute":"velocity"},"in":{"Velocity":{"value":[0,1,0]}}})";
+	constexpr std::string_view SetVelocity = R"({"id":22,"def":"Block/SetAttribute","settings":{"Attribute":"velocity"},"in":{"Velocity":{"value":[0,1,0]}}})";
 
 } // anonymous namespace
 
@@ -121,13 +121,13 @@ TEST(GraphEffectWarningTest, CollisionWarnings) {
 	effect.updateBlocks = R"({"id":20,"def":"Block/CollisionShape","settings":{"Collision Attributes":"WritePunctualContactOnly"}})";
 	EXPECT_TRUE(Warnings(effect).empty()) << Said(Warnings(effect));
 
-	effect.updateBlocks = str(R"({"id":20,"def":"Block/CollisionShape"},)") + str(SET_VELOCITY);
+	effect.updateBlocks = str(R"({"id":20,"def":"Block/CollisionShape"},)") + str(SetVelocity);
 	const Vector<GraphDiagnostic> after = Warnings(effect);
 	ASSERT_NE(Find(after, 20, "velocity-after-collision"), nullptr) << Said(after);
 	EXPECT_EQ(Find(after, 20, "velocity-after-collision")->message,
 			  "A later block in this context writes velocity and overrides this bounce. Write velocity before the "
 			  "collision blocks.");
-	effect.updateBlocks = str(SET_VELOCITY) + R"(,{"id":20,"def":"Block/CollisionShape"})";
+	effect.updateBlocks = str(SetVelocity) + R"(,{"id":20,"def":"Block/CollisionShape"})";
 	EXPECT_TRUE(Warnings(effect).empty());
 	effect.updateBlocks = R"({"id":20,"def":"Block/CollisionShape"},{"id":21,"def":"Block/CollisionShape","settings":{"Shape":"Sphere"}})";
 	EXPECT_TRUE(Warnings(effect).empty());
@@ -160,9 +160,9 @@ TEST(GraphEffectWarningTest, UnfireableTriggerWarns) {
 TEST(GraphEffectWarningTest, BadConstantAttributeWarns) {
 	Effect effect;
 	effect.initializeBlocks = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[20000]}}})";
-	const Vector<GraphDiagnostic> long_ = Warnings(effect);
-	ASSERT_NE(Find(long_, 20, "lifetime-very-long"), nullptr) << Said(long_);
-	EXPECT_EQ(Find(long_, 20, "lifetime-very-long")->message,
+	const Vector<GraphDiagnostic> longLifetime = Warnings(effect);
+	ASSERT_NE(Find(longLifetime, 20, "lifetime-very-long"), nullptr) << Said(longLifetime);
+	EXPECT_EQ(Find(longLifetime, 20, "lifetime-very-long")->message,
 			  "This lifetime is 05h33m.\nA particle with no Set Lifetime block never dies (if that's the intent).");
 	effect.initializeBlocks = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"lifetime"},"in":{"Lifetime":{"value":[2]}}})";
 	EXPECT_TRUE(Warnings(effect).empty()) << Said(Warnings(effect));
@@ -197,14 +197,14 @@ TEST(GraphEffectWarningTest, DuplicateHLSLFunctionWarns) {
 	const str block = "void Push(inout EffectAttributes attributes, in float3 offset)\n{\n  attributes.position += offset;\n}\n"
 					  "void Push(inout EffectAttributes attributes, in float speed)\n{\n  attributes.velocity *= speed;\n}";
 	Effect effect;
-	effect.updateBlocks = std::format(R"({{"id":20,"def":"Block/CustomHLSL","settings":{{"HLSL Code":{}}}}})", Json(block));
+	effect.updateBlocks = std::format(R"({{"id":20,"def":"Block/CustomHLSL","settings":{{"HLSL Code":{}}}}})", JSON(block));
 	const Vector<GraphDiagnostic> twice = Warnings(effect);
 	ASSERT_NE(Find(twice, 20, "hlsl-duplicate-function"), nullptr) << Said(twice);
 	EXPECT_EQ(Find(twice, 20, "hlsl-duplicate-function")->message, "More than one function is named 'Push' (only the 1st can be picked)");
 
 	const str operation = "float Twice(in float value)\n{\n  return value * 2;\n}\nfloat Twice(in float value)\n{\n  return value + value;\n}";
 	effect.updateBlocks = {};
-	effect.nodes = std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","x":0,"y":0,"settings":{{"HLSL Code":{}}}}})", Json(operation));
+	effect.nodes = std::format(R"({{"id":40,"def":"HLSL/CustomHLSL","x":0,"y":0,"settings":{{"HLSL Code":{}}}}})", JSON(operation));
 	EXPECT_NE(Find(Warnings(effect), 40, "hlsl-duplicate-function"), nullptr) << Said(Warnings(effect));
 }
 
@@ -240,7 +240,7 @@ TEST(GraphEffectWarningTest, OutputWarnsOfBoundsEscape) {
 	EXPECT_TRUE(Warnings(effect).empty());
 
 	effect.initializeSettings = R"("Capacity":64)";
-	effect.output = str(GRAPH_EFFECT_OUTPUT_MESH);
+	effect.output = str(GraphEffectOutputMesh);
 	effect.outputBlocks = {};
 	const Vector<GraphDiagnostic> mesh = Warnings(effect);
 	ASSERT_EQ(Count(mesh, "recorded-bounds-may-miss"), 1u) << Said(mesh);
@@ -281,7 +281,7 @@ TEST(GraphEffectWarningTest, FlipbookPlayerWarnings) {
 TEST(GraphEffectWarningTest, AStripOutputWritingPositionWarns) {
 	Effect effect;
 	effect.initializeSettings = R"("Data Type":"ParticleStrip","Bounds Setting Mode":"Manual")";
-	effect.output = str(GRAPH_EFFECT_OUTPUT_STRIP);
+	effect.output = str(GraphEffectOutputStrip);
 	effect.outputSettings = R"("Sort":"Off")";
 	effect.outputBlocks = R"({"id":20,"def":"Block/SetAttribute","settings":{"Attribute":"position"},"in":{"Position":{"value":[0,1,0]}}})";
 	EXPECT_NE(Find(Warnings(effect), 9, "strip-output-writes-position"), nullptr) << Said(Warnings(effect));
@@ -292,7 +292,7 @@ TEST(GraphEffectWarningTest, AStripOutputWritingPositionWarns) {
 TEST(GraphEffectWarningTest, PerParticleStripIndexWarns) {
 	Effect effect;
 	effect.initializeSettings = R"("Data Type":"ParticleStrip","Strip Capacity":4,"Bounds Setting Mode":"Manual")";
-	effect.output = str(GRAPH_EFFECT_OUTPUT_STRIP);
+	effect.output = str(GraphEffectOutputStrip);
 	effect.outputSettings = R"("Sort":"Off")";
 	effect.nodes = R"({"id":10,"def":"Attribute/GetAttribute","x":0,"y":0,"settings":{"Attribute":"particleId"}},{"id":11,"def":"Attribute/RatioOverStrip","x":0,"y":0})";
 	effect.initializeInputs = R"("Strip Index":{"from":[10,"particleId"]})";

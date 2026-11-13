@@ -152,8 +152,8 @@ namespace {
 		bool _mounted = false;
 		ShaderAsset _kernel;
 		static constexpr u32 COUNT = 500;
-		static inline char OWNER = 0;
-		static inline char OTHER_OWNER = 0;
+		static inline char owner = 0;
+		static inline char otherOwner = 0;
 
 		void SetUp() override {
 			std::filesystem::path engineAssets = FramePassRepoDir("EngineAssets");
@@ -175,8 +175,8 @@ namespace {
 		}
 
 		void TearDown() override {
-			FramePasses::UnregisterOwnedBy(&OWNER);
-			FramePasses::UnregisterOwnedBy(&OTHER_OWNER);
+			FramePasses::UnregisterOwnedBy(&owner);
+			FramePasses::UnregisterOwnedBy(&otherOwner);
 			SceneSystem::Terminate();
 			AssetDatabase::Terminate();
 			RenderSystem::Terminate();
@@ -341,7 +341,7 @@ namespace {
 	class CameraDepthFixture : public ::testing::Test {
 	protected:
 		static constexpr f32 QUAD_DISTANCE = 4.0f;
-		static inline char OWNER = 0;
+		static inline char owner = 0;
 		bool _mounted = false;
 		bool _projectMounted = false;
 		std::filesystem::path _root;
@@ -394,7 +394,7 @@ namespace {
 		}
 
 		void TearDown() override {
-			FramePasses::UnregisterOwnedBy(&OWNER);
+			FramePasses::UnregisterOwnedBy(&owner);
 			if (_scene.IsValid()) {
 				SceneSystem::UnloadScene(_scene);
 				SceneSystem::EndFrame();
@@ -464,7 +464,7 @@ namespace {
 TEST_F(FramePassFixture, PassRunsOnEmptyFrame) {
 	CountingPass pass;
 	Prepare(pass, 3);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	for (int frame = 0; frame < 3; ++frame) {
 		RenderSystem::RenderAll();
 	}
@@ -478,7 +478,7 @@ TEST_F(FramePassFixture, PassRunsOnEmptyFrame) {
 TEST_F(FramePassFixture, OnceFrameHoweverManyViewsFrameDraws) {
 	CountingPass pass;
 	Prepare(pass, 0);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	ViewTargetId first = RenderSystem::CreateViewTarget({64, 64});
 	ViewTargetId second = RenderSystem::CreateViewTarget({64, 64});
 	ASSERT_NE(first, INVALID_VIEW_TARGET);
@@ -498,7 +498,7 @@ TEST_F(FramePassFixture, StepBindsOnlyBuffersItDeclared) {
 	CountingPass pass;
 	Prepare(pass, 9);
 	pass.stray = MakeValues();
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	RenderSystem::RenderAll();
 	EXPECT_EQ(pass.records, 1u);
 	EXPECT_EQ(pass.dispatched, 0u);
@@ -512,11 +512,11 @@ TEST_F(FramePassFixture, SweepTakesOwnersPasses) {
 	Prepare(swept, 0);
 	Prepare(kept, 0);
 	EXPECT_FALSE(FramePasses::Register(swept, nullptr));
-	ASSERT_TRUE(FramePasses::Register(swept, &OWNER));
-	EXPECT_FALSE(FramePasses::Register(swept, &OWNER));
-	ASSERT_TRUE(FramePasses::Register(kept, &OTHER_OWNER));
+	ASSERT_TRUE(FramePasses::Register(swept, &owner));
+	EXPECT_FALSE(FramePasses::Register(swept, &owner));
+	ASSERT_TRUE(FramePasses::Register(kept, &otherOwner));
 	RenderSystem::RenderAll();
-	EXPECT_EQ(FramePasses::UnregisterOwnedBy(&OWNER), 1u);
+	EXPECT_EQ(FramePasses::UnregisterOwnedBy(&owner), 1u);
 	RenderSystem::RenderAll();
 	EXPECT_EQ(swept.records, 1u);
 	EXPECT_EQ(kept.records, 2u);
@@ -529,7 +529,7 @@ TEST_F(FramePassFixture, FrameCopyReadsBackLater) {
 	ReadbackPass pass;
 	Prepare(pass);
 	ASSERT_TRUE(pass.values.IsValid() && pass.ring.IsValid());
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	constexpr u32 FRAMES = 7;
 	for (u32 frame = 0; frame < FRAMES; ++frame) {
 		RenderSystem::RenderAll();
@@ -549,8 +549,8 @@ TEST_F(FramePassFixture, CopyTouchesDeclaredBuffers) {
 	ReadbackPass stray;
 	Prepare(stray);
 	stray.copyInto = MakeRing();
-	ASSERT_TRUE(FramePasses::Register(wrongState, &OWNER));
-	ASSERT_TRUE(FramePasses::Register(stray, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(wrongState, &owner));
+	ASSERT_TRUE(FramePasses::Register(stray, &owner));
 	RenderSystem::RenderAll();
 	EXPECT_EQ(wrongState.copied, 0u);
 	EXPECT_EQ(stray.copied, 0u);
@@ -569,7 +569,7 @@ TEST_F(FramePassFixture, KernelSamplesTextureAssetDispatchNames) {
 	TexturePass pass;
 	Prepare(pass, kernel);
 	pass.slots.push_back({1, 2, Handle<TextureAsset>(&volume)});
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	pass.push = {{0.25f, 0.75f, 0.25f}, 0.0f};
 	RenderSystem::RenderAll();
 	EXPECT_EQ(pass.dispatched, 1u);
@@ -606,9 +606,9 @@ TEST_F(FramePassFixture, BadSlotSamplesFallback) {
 		TexturePass pass;
 		Prepare(pass, kernel);
 		pass.slots.push_back({1, 2, cases[i]});
-		ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+		ASSERT_TRUE(FramePasses::Register(pass, &owner));
 		RenderSystem::RenderAll();
-		FramePasses::UnregisterOwnedBy(&OWNER);
+		FramePasses::UnregisterOwnedBy(&owner);
 		EXPECT_EQ(pass.dispatched, 1u) << names[i];
 		const Vec4 sampled = Sampled(pass);
 		EXPECT_NEAR(sampled.x, 128.0f / 255.0f, 1.0e-3f) << names[i];
@@ -634,9 +634,9 @@ TEST_F(FramePassFixture, TextureFillsDeclaredBindings) {
 		TexturePass pass;
 		Prepare(pass, kernel);
 		pass.slots.assign(wrong[i].begin(), wrong[i].end());
-		ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+		ASSERT_TRUE(FramePasses::Register(pass, &owner));
 		RenderSystem::RenderAll();
-		FramePasses::UnregisterOwnedBy(&OWNER);
+		FramePasses::UnregisterOwnedBy(&owner);
 		EXPECT_EQ(pass.dispatched, 0u) << names[i] << " was dispatched";
 		RenderSystem::GetDevice()->DestroyResource(pass.values);
 	}
@@ -700,7 +700,7 @@ TEST_F(FramePassFixture, KernelReadsMeshByAddress) {
 	desc.usage = RHI::BufferUsage::Storage | RHI::BufferUsage::TransferSrc;
 	pass.values = RenderSystem::GetDevice()->CreateBufferResource(desc);
 	pass.push = {mesh.vertexBufferAddress, mesh.indexBufferAddress, count};
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	RenderSystem::RenderAll();
 	ASSERT_EQ(pass.dispatched, 1u);
 	RHI::Device& device = *RenderSystem::GetDevice();
@@ -714,7 +714,7 @@ TEST_F(FramePassFixture, KernelReadsMeshByAddress) {
 		wrong += read[i * 2] == index && std::bit_cast<f32>(read[i * 2 + 1]) == mesh.vertices[index].position.x ? 0u : 1u;
 	}
 	EXPECT_EQ(wrong, 0u) << "of " << count;
-	FramePasses::UnregisterOwnedBy(&OWNER);
+	FramePasses::UnregisterOwnedBy(&owner);
 	device.DestroyResource(pass.values);
 	mesh.OnUnload();
 	EXPECT_EQ(mesh.indexBufferAddress, 0u);
@@ -724,7 +724,7 @@ TEST_F(FramePassFixture, KernelReadsMeshByAddress) {
 TEST_F(CameraDepthFixture, PassReadsPreviousFrameDepth) {
 	DepthPass pass;
 	Prepare(pass);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	const Vec2I size{64, 64};
 	const ViewTargetId target = RenderSystem::CreateViewTarget(size);
 	ASSERT_NE(target, INVALID_VIEW_TARGET);
@@ -769,7 +769,7 @@ TEST_F(CameraDepthFixture, WindowCameraKeepsDepth) {
 	_camera->SetTargetWindow(window);
 	DepthPass pass;
 	Prepare(pass);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	for (u32 frame = 0; frame < 3; ++frame) {
 		WindowSystem::PumpEvents();
 		RenderSystem::RenderAll();
@@ -780,7 +780,7 @@ TEST_F(CameraDepthFixture, WindowCameraKeepsDepth) {
 	const Mat4 projection = _camera->BuildProjection(static_cast<f32>(drawn.size.x) / static_cast<f32>(drawn.size.y));
 	EXPECT_TRUE(SameMatrix(drawn.projection, projection));
 	EXPECT_NEAR(Loaded(pass), DepthAt(projection, QUAD_DISTANCE), 1.0e-6f);
-	FramePasses::UnregisterOwnedBy(&OWNER);
+	FramePasses::UnregisterOwnedBy(&owner);
 	RenderSystem::RenderAll();
 	WindowSystem::RequestDestroy(window);
 }
@@ -788,7 +788,7 @@ TEST_F(CameraDepthFixture, WindowCameraKeepsDepth) {
 TEST_F(CameraDepthFixture, FirstSubmittedViewKeepsDepth) {
 	DepthPass pass;
 	Prepare(pass);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	const Vec2I wide{64, 64};
 	const Vec2I narrow{32, 48};
 	const ViewTargetId a = RenderSystem::CreateViewTarget(wide);
@@ -828,7 +828,7 @@ TEST_F(CameraDepthFixture, KeptDepthFreedWhenUnasked) {
 
 	DepthPass pass;
 	Prepare(pass);
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	for (u32 frame = 0; frame < 3; ++frame) {
 		RenderSystem::SubmitView(target, CameraView(size));
 		RenderSystem::RenderAll();
@@ -837,7 +837,7 @@ TEST_F(CameraDepthFixture, KeptDepthFreedWhenUnasked) {
 	const u32 asked = RenderSystem::GetStats().liveTextures;
 	EXPECT_GT(asked, base);
 
-	FramePasses::UnregisterOwnedBy(&OWNER);
+	FramePasses::UnregisterOwnedBy(&owner);
 	u32 frames = 0;
 	while (RenderSystem::GetStats().liveTextures > base && frames < 1000) {
 		RenderSystem::SubmitView(target, CameraView(size));
@@ -847,7 +847,7 @@ TEST_F(CameraDepthFixture, KeptDepthFreedWhenUnasked) {
 	EXPECT_EQ(RenderSystem::GetStats().liveTextures, base);
 	EXPECT_GT(frames, 30u);
 
-	ASSERT_TRUE(FramePasses::Register(pass, &OWNER));
+	ASSERT_TRUE(FramePasses::Register(pass, &owner));
 	for (u32 frame = 0; frame < 3; ++frame) {
 		RenderSystem::SubmitView(target, CameraView(size));
 		RenderSystem::RenderAll();
@@ -885,7 +885,7 @@ TEST_F(CameraDepthFixture, StepBindsOnlyImageItDeclaredReading) {
 	DepthPass control;
 	Prepare(control);
 	for (DepthPass* pass : {&stray, &both, &late, &control}) {
-		ASSERT_TRUE(FramePasses::Register(*pass, &OWNER));
+		ASSERT_TRUE(FramePasses::Register(*pass, &owner));
 	}
 	for (u32 frame = 0; frame < 3; ++frame) {
 		RenderSystem::SubmitView(target, CameraView(size));
@@ -899,7 +899,7 @@ TEST_F(CameraDepthFixture, StepBindsOnlyImageItDeclaredReading) {
 	EXPECT_EQ(late.dispatched, 0u);
 	EXPECT_EQ(control.answers.back().size, size);
 	EXPECT_EQ(control.dispatched, 3u);
-	FramePasses::UnregisterOwnedBy(&OWNER);
+	FramePasses::UnregisterOwnedBy(&owner);
 	RenderSystem::DestroyViewTarget(target);
 	flat.OnUnload();
 }

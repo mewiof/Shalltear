@@ -38,7 +38,7 @@ namespace Shalltear::GraphEffectBlocks {
 		GraphValueId DeltaTime(GraphBodyContext& c) { return c.builder.Swizzle(c.Binding("TimeParameters"), "w"); }
 
 		GraphValueId Draw(GraphBodyContext& c, u32 k) {
-			return c.builder.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE), c.builder.Scalar(0.0f), c.builder.Identity() * 8u + k);
+			return c.builder.Random(c.Binding(GraphEffectRandomParticle), c.builder.Scalar(0.0f), c.builder.Identity() * 8u + k);
 		}
 
 		GraphValueId Vec3(GraphProgramBuilder& b, f32 x, f32 y, f32 z) {
@@ -91,7 +91,7 @@ namespace Shalltear::GraphEffectBlocks {
 			GraphValueId axes[3] = {GRAPH_NO_VALUE, GRAPH_NO_VALUE, GRAPH_NO_VALUE};
 		};
 
-		Frame TrsFrame(GraphProgramBuilder& b, GraphValueId position, GraphValueId angles, GraphValueId scale) {
+		Frame TRSFrame(GraphProgramBuilder& b, GraphValueId position, GraphValueId angles, GraphValueId scale) {
 			const GraphValueId radians = b.Multiply(angles, b.Scalar(DEGREES));
 			const GraphValueId s = b.Unary(GraphOp::Sine, radians);
 			const GraphValueId k = b.Unary(GraphOp::Cosine, radians);
@@ -121,7 +121,7 @@ namespace Shalltear::GraphEffectBlocks {
 		}
 
 		Frame TransformInput(GraphBodyContext& c, std::string_view position, std::string_view angles, std::string_view scale) {
-			return Converted(c, TrsFrame(c.builder, In(c, position), In(c, angles), In(c, scale)), IndexOf(c, position));
+			return Converted(c, TRSFrame(c.builder, In(c, position), In(c, angles), In(c, scale)), IndexOf(c, position));
 		}
 
 		Frame Scaled(GraphProgramBuilder& b, Frame frame, GraphValueId by) {
@@ -455,8 +455,8 @@ namespace Shalltear::GraphEffectBlocks {
 			const u32 port = IndexOf(c, "Center");
 			const GraphValueId center = In(c, "Center");
 			const GraphValueId angles = In(c, "Angles");
-			const Frame sized = Converted(c, TrsFrame(b, center, angles, In(c, "Size")), port);
-			const Frame turned = Converted(c, TrsFrame(b, center, angles, Vec3(b, 1.0f, 1.0f, 1.0f)), port);
+			const Frame sized = Converted(c, TRSFrame(b, center, angles, In(c, "Size")), port);
+			const Frame turned = Converted(c, TRSFrame(b, center, angles, Vec3(b, 1.0f, 1.0f, 1.0f)), port);
 			Frame frame = sized;
 			GraphValueId size = Vec3(b, 1.0f, 1.0f, 1.0f);
 			if (mode == 2) {
@@ -555,7 +555,7 @@ namespace Shalltear::GraphEffectBlocks {
 
 	ElementSphere ElementBounds(GraphProgramBuilder& b, GraphValueId position, GraphValueId size, GraphValueId scale, GraphValueId angle,
 								GraphValueId pivot, GraphValueId axisX, GraphValueId axisY, GraphValueId axisZ) {
-		const Frame rotated = TrsFrame(b, position, angle, b.Multiply(scale, size));
+		const Frame rotated = TRSFrame(b, position, angle, b.Multiply(scale, size));
 		GraphValueId columns[3];
 		for (u32 j = 0; j < 3; ++j) {
 			const GraphValueId along = rotated.axes[j];
@@ -768,7 +768,7 @@ namespace Shalltear::GraphEffectBlocks {
 		const Frame frame = MeshTransform(c);
 		for (u32 output = 0; output < MESH_OUTPUT_COUNT; ++output) {
 			if (c.Setting(output) != 0) {
-				Out(c, MESH_OUTPUTS[output], MeshOutputValue(b, place, frame, output));
+				Out(c, MeshOutputs[output], MeshOutputValue(b, place, frame, output));
 			}
 		}
 	}
@@ -1182,15 +1182,15 @@ namespace Shalltear::GraphEffectBlocks {
 			const GraphValueId d = b.Multiply(signs, b.Maximum(b.Multiply(step, signs), b.Scalar(EPSILON)));
 			const GraphValueId faces = b.Multiply(b.Unary(GraphOp::Negate, sign), signs);
 			const GraphValueId ts = b.Divide(b.Subtract(b.Multiply(faces, extents), origin), d);
-			constexpr std::string_view AXES[] = {"x", "y", "z"};
-			constexpr std::string_view OTHERS[] = {"yz", "xz", "xy"};
+			constexpr std::string_view Axes[] = {"x", "y", "z"};
+			constexpr std::string_view Others[] = {"yz", "xz", "xy"};
 			GraphValueId hits[3];
 			GraphValueId filtered[3];
 			for (u32 i = 0; i < 3; ++i) {
-				const GraphValueId t = Comp(b, ts, AXES[i]);
+				const GraphValueId t = Comp(b, ts, Axes[i]);
 				const GraphValueId at = b.Add(origin, b.Multiply(t, d));
-				const GraphValueId inPlane = And(b, Less(b, b.Unary(GraphOp::Absolute, Comp(b, at, OTHERS[i].substr(0, 1))), Comp(b, extents, OTHERS[i].substr(0, 1))),
-												 Less(b, b.Unary(GraphOp::Absolute, Comp(b, at, OTHERS[i].substr(1, 1))), Comp(b, extents, OTHERS[i].substr(1, 1))));
+				const GraphValueId inPlane = And(b, Less(b, b.Unary(GraphOp::Absolute, Comp(b, at, Others[i].substr(0, 1))), Comp(b, extents, Others[i].substr(0, 1))),
+												 Less(b, b.Unary(GraphOp::Absolute, Comp(b, at, Others[i].substr(1, 1))), Comp(b, extents, Others[i].substr(1, 1))));
 				hits[i] = And(b, And(b, Not(b, Less(b, t, b.Scalar(0.0f))), Less(b, t, b.Scalar(1.0f))), inPlane);
 				filtered[i] = b.Add(b.Unary(GraphOp::Absolute, t), b.Select(hits[i], b.Scalar(0.0f), b.Scalar(1.0f)));
 			}
@@ -1529,7 +1529,7 @@ namespace Shalltear::GraphEffectBlocks {
 		Rows CameraMatrix(GraphBodyContext& c, u32 matrix) {
 			Rows out;
 			for (u32 i = 0; i < 4; ++i) {
-				out.row[i] = c.Binding(str(GRAPH_EFFECT_CAMERA_DEPTH_MATRICES[matrix]) + std::to_string(i));
+				out.row[i] = c.Binding(str(GraphEffectCameraDepthMatrices[matrix]) + std::to_string(i));
 			}
 			return out;
 		}
@@ -1558,7 +1558,7 @@ namespace Shalltear::GraphEffectBlocks {
 			const GraphValueId uv = Vec2(b, b.Add(b.Multiply(Comp(b, clip, "x"), half), half), b.Subtract(half, b.Multiply(Comp(b, clip, "y"), half)));
 			const GraphValueId extent = Comp(b, size, "xy");
 			const GraphValueId pixel = b.Clamp(b.Multiply(uv, extent), Vec2(b, b.Scalar(0.0f), b.Scalar(0.0f)), b.Subtract(extent, b.Scalar(1.0f)));
-			const GraphValueId operands[] = {c.Binding(GRAPH_EFFECT_CAMERA_DEPTH), pixel};
+			const GraphValueId operands[] = {c.Binding(GraphEffectCameraDepth), pixel};
 			return Comp(b, b.TextureOp(GraphOp::LoadTexture, operands), "x");
 		}
 
@@ -1582,7 +1582,7 @@ namespace Shalltear::GraphEffectBlocks {
 		const Rows viewToEffect = CameraMatrix(c, 1);
 		const Rows viewToClip = CameraMatrix(c, 2);
 		const Rows clipToView = CameraMatrix(c, 3);
-		const GraphValueId size = c.Binding(GRAPH_EFFECT_CAMERA_DEPTH_SIZE);
+		const GraphValueId size = c.Binding(GraphEffectCameraDepthSize);
 		const GraphValueId drawn = Less(b, b.Scalar(0.5f), Comp(b, size, "z"));
 		const GraphValueId orthographic = Less(b, b.Scalar(0.5f), Comp(b, size, "w"));
 
@@ -1623,7 +1623,7 @@ namespace Shalltear::GraphEffectBlocks {
 		GraphProgramBuilder& b = c.builder;
 		const Rows viewToEffect = CameraMatrix(c, 1);
 		const Rows clipToView = CameraMatrix(c, 3);
-		const GraphValueId size = c.Binding(GRAPH_EFFECT_CAMERA_DEPTH_SIZE);
+		const GraphValueId size = c.Binding(GraphEffectCameraDepthSize);
 		const GraphValueId extent = Comp(b, size, "xy");
 		const GraphValueId one = b.Scalar(1.0f);
 		GraphValueId uv = GRAPH_NO_VALUE;
@@ -1691,7 +1691,7 @@ namespace Shalltear::GraphEffectBlocks {
 		}
 		case TriggerOnDie: {
 			const GraphValueId expiring = Less(b, Current(c, "lifetime"), b.Add(Current(c, "age"), DeltaTime(c)));
-			const GraphValueId reaped = b.Binary(GraphOp::LogicalAnd, c.Binding(GRAPH_EFFECT_IMPLICIT_REAP), expiring);
+			const GraphValueId reaped = b.Binary(GraphOp::LogicalAnd, c.Binding(GraphEffectImplicitReap), expiring);
 			const GraphValueId died = b.Binary(GraphOp::LogicalOr, reaped, b.Unary(GraphOp::LogicalNot, Current(c, "alive")));
 			c.outputs[0] = b.Select(died, In(c, "Count"), b.Scalar(0.0f));
 			return;
@@ -1707,7 +1707,7 @@ namespace Shalltear::GraphEffectBlocks {
 
 	void CameraFadeBody(GraphBodyContext& c) {
 		GraphProgramBuilder& b = c.builder;
-		const GraphValueId row = c.Binding(GRAPH_EFFECT_CAMERA_CLIP_W);
+		const GraphValueId row = c.Binding(GraphEffectCameraClipW);
 		const GraphValueId position = Current(c, "position");
 		const GraphValueId axis = b.Swizzle(row, "xyz");
 		const GraphValueId along = b.Dot(axis, position);
@@ -1719,7 +1719,7 @@ namespace Shalltear::GraphEffectBlocks {
 		const GraphValueId span = b.Subtract(visible, faded);
 		GraphValueId fade = b.Unary(GraphOp::Saturate, b.Divide(past, span));
 		if (c.Setting(2) == 0) {
-			fade = b.Select(c.Binding(GRAPH_EFFECT_SHADOW_PASS), b.Scalar(1.0f), fade);
+			fade = b.Select(c.Binding(GraphEffectShadowPass), b.Scalar(1.0f), fade);
 		}
 		const u32 mode = c.Setting(0);
 		const GraphValueId color = Current(c, "color");
@@ -1758,7 +1758,7 @@ namespace Shalltear::GraphEffectBlocks {
 				const GraphValueId there = And(b, Greater(b, Comp(b, neighbor, "w"), b.Scalar(0.0f)), Greater(b, square, b.Scalar(EPSILON * EPSILON)));
 				return b.Select(there, b.Multiply(way, b.Unary(GraphOp::ReciprocalSquareRoot, b.Maximum(square, b.Scalar(FLT_MIN_VALUE)))), Vec3(b, 0.0f, 0.0f, 0.0f));
 			};
-			return SafeNormalize(b, b.Add(toward(c.Binding(GRAPH_EFFECT_STRIP_PREVIOUS), false), toward(c.Binding(GRAPH_EFFECT_STRIP_NEXT), true)));
+			return SafeNormalize(b, b.Add(toward(c.Binding(GraphEffectStripPrevious), false), toward(c.Binding(GraphEffectStripNext), true)));
 		}
 
 	} // anonymous namespace
@@ -1766,20 +1766,20 @@ namespace Shalltear::GraphEffectBlocks {
 	void OrientBody(GraphBodyContext& c) {
 		GraphProgramBuilder& b = c.builder;
 		const u32 mode = c.Setting(0);
-		const bool strip = Supplied(c, GRAPH_EFFECT_STRIP_PREVIOUS);
+		const bool strip = Supplied(c, GraphEffectStripPrevious);
 		if (strip && (mode == FaceCameraPlane || mode == FixedAxis || mode == AlongVelocity)) {
-			c.error = std::format("is Orient: {} (a strip output doesn't support it, its quads run along the strip)", ORIENT_MODE_NAMES[mode]);
+			c.error = std::format("is Orient: {} (a strip output doesn't support it, its quads run along the strip)", OrientModeNames[mode]);
 			return;
 		}
 		if (!strip && (mode == CustomZ || mode == CustomY)) {
-			c.error = std::format("is Orient: {} (only a strip output supports it)", ORIENT_MODE_NAMES[mode]);
+			c.error = std::format("is Orient: {} (only a strip output supports it)", OrientModeNames[mode]);
 			return;
 		}
 		const GraphValueId position = Current(c, "position");
-		const GraphValueId right = c.Binding(GRAPH_EFFECT_CAMERA_RIGHT);
-		const GraphValueId up = c.Binding(GRAPH_EFFECT_CAMERA_UP);
-		const GraphValueId forward = c.Binding(GRAPH_EFFECT_CAMERA_FORWARD);
-		const GraphValueId eye = c.Binding(GRAPH_EFFECT_CAMERA_POSITION);
+		const GraphValueId right = c.Binding(GraphEffectCameraRight);
+		const GraphValueId up = c.Binding(GraphEffectCameraUp);
+		const GraphValueId forward = c.Binding(GraphEffectCameraForward);
+		const GraphValueId eye = c.Binding(GraphEffectCameraPosition);
 		const GraphValueId fallbackX = Vec3(b, 1.0f, 0.0f, 0.0f);
 		GraphValueId axes[3] = {GRAPH_NO_VALUE, GRAPH_NO_VALUE, GRAPH_NO_VALUE};
 		const auto lookAt = [&](GraphValueId toward) {
@@ -1801,7 +1801,7 @@ namespace Shalltear::GraphEffectBlocks {
 		if (strip && mode != OrientAdvanced) {
 			switch (mode) {
 			case FaceCameraPosition:
-				alongStrip(b.Select(c.Binding(GRAPH_EFFECT_CAMERA_ORTHOGRAPHIC), Normalized(b, forward), b.Subtract(position, eye)));
+				alongStrip(b.Select(c.Binding(GraphEffectCameraOrthographic), Normalized(b, forward), b.Subtract(position, eye)));
 				break;
 			case LookAtPosition:
 				alongStrip(b.Unary(GraphOp::Negate, Normalized(b, b.Subtract(position, In(c, "Position")))));
@@ -1832,7 +1832,7 @@ namespace Shalltear::GraphEffectBlocks {
 		switch (mode) {
 		case FaceCameraPosition: {
 			lookAt(b.Subtract(position, eye));
-			const GraphValueId orthographic = c.Binding(GRAPH_EFFECT_CAMERA_ORTHOGRAPHIC);
+			const GraphValueId orthographic = c.Binding(GraphEffectCameraOrthographic);
 			const GraphValueId plane[3] = {right, up, forward};
 			for (u32 i = 0; i < 3; ++i) {
 				axes[i] = Normalized(b, b.Select(orthographic, plane[i], axes[i]));
@@ -1853,13 +1853,13 @@ namespace Shalltear::GraphEffectBlocks {
 			constexpr u32 FIRST[] = {0, 1, 2, 1, 2, 0};
 			constexpr u32 SECOND[] = {1, 2, 0, 0, 1, 2};
 			constexpr u32 SECOND_PAIR[] = {AxesXZ, AxesYX, AxesZY, AxesYZ, AxesZX, AxesXY};
-			constexpr std::string_view NAMES[] = {"Axis X", "Axis Y", "Axis Z"};
+			constexpr std::string_view Names[] = {"Axis X", "Axis Y", "Axis Z"};
 			const u32 pair = c.Setting(1);
 			const u32 first = FIRST[pair];
 			const u32 second = SECOND[pair];
 			const u32 third = 3 - first - second;
-			const GraphValueId given = In(c, NAMES[first]);
-			const GraphValueId other = In(c, NAMES[second]);
+			const GraphValueId given = In(c, Names[first]);
+			const GraphValueId other = In(c, Names[second]);
 			axes[first] = Normalized(b, given);
 			axes[third] = Normalized(b, pair <= AxesZX ? b.Binary(GraphOp::Cross, given, other) : b.Binary(GraphOp::Cross, other, given));
 			axes[second] = SECOND_PAIR[pair] <= AxesZX ? b.Binary(GraphOp::Cross, axes[first], axes[third]) : b.Binary(GraphOp::Cross, axes[third], axes[first]);
@@ -1902,13 +1902,13 @@ namespace Shalltear::GraphEffectBlocks {
 		const bool customCurve = cycles && c.Setting(CustomCurveKey) != 0;
 		const bool clamp = c.Setting(ClampBlendingKey) != 0;
 		const bool ranged = cycles || c.Setting(UseCustomRangeKey) != 0;
-		const GraphValueId blending = cycles ? c.Binding(GRAPH_EFFECT_FLIPBOOK_BLENDING) : GRAPH_NO_VALUE;
+		const GraphValueId blending = cycles ? c.Binding(GraphEffectFlipbookBlending) : GRAPH_NO_VALUE;
 		const GraphValueId age = Current(c, "age");
 		const GraphValueId lifetime = Current(c, "lifetime");
 		const GraphValueId zero = b.Scalar(0.0f);
 		const GraphValueId one = b.Scalar(1.0f);
 		const auto drawn = [&](GraphValueId between) {
-			const GraphValueId r = b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE_CONSTANT), In(c, "Seed"), 0);
+			const GraphValueId r = b.Random(c.Binding(GraphEffectRandomParticleConstant), In(c, "Seed"), 0);
 			return b.Add(b.Multiply(r, b.Subtract(Comp(b, between, "y"), Comp(b, between, "x"))), Comp(b, between, "x"));
 		};
 		GraphValueId texIndex = Current(c, "texIndex");
@@ -1921,7 +1921,7 @@ namespace Shalltear::GraphEffectBlocks {
 		GraphValueId endFrame = GRAPH_NO_VALUE;
 		GraphValueId previous = GRAPH_NO_VALUE;
 		if (ranged) {
-			const GraphValueId size = c.Binding(GRAPH_EFFECT_FLIPBOOK_SIZE);
+			const GraphValueId size = c.Binding(GraphEffectFlipbookSize);
 			const GraphValueId across = Comp(b, size, "x");
 			switch (range) {
 			case FlipbookRow:
@@ -1993,7 +1993,7 @@ namespace Shalltear::GraphEffectBlocks {
 			case CyclesRandomFullCycle: {
 				const GraphValueId between = In(c, "Cycles Range");
 				const GraphValueId count = b.Unary(GraphOp::Truncate, b.Add(b.Subtract(Comp(b, between, "y"), Comp(b, between, "x")), one));
-				const GraphValueId r = b.Random(c.Binding(GRAPH_EFFECT_RANDOM_PARTICLE_CONSTANT), In(c, "Seed"), 0);
+				const GraphValueId r = b.Random(c.Binding(GraphEffectRandomParticleConstant), In(c, "Seed"), 0);
 				cycleCount = b.Add(b.Unary(GraphOp::Floor, b.Multiply(r, count)), Comp(b, between, "x"));
 				break;
 			}

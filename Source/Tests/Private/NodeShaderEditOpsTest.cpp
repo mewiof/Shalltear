@@ -92,13 +92,13 @@ TEST(NodeShaderEditOpsTest, WireMeetsCompatiblePort) {
 TEST(NodeShaderEditOpsTest, ARedirectCarriesWhatFeedsIt) {
 	StackBuilder builder;
 	builder.Property(20, 21, "albedo", "Texture2D");
-	builder.Node(30, GraphDocumentOps::REDIRECT_DEF);
-	builder.Connect(21, "Out", 30, GraphDocumentOps::REDIRECT_IN);
+	builder.Node(30, GraphDocumentOps::RedirectDef);
+	builder.Connect(21, "Out", 30, GraphDocumentOps::RedirectIn);
 	builder.Node(12, "Input/SampleTexture2D");
 	builder.Node(11, "Math/Add");
 
-	EXPECT_TRUE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::REDIRECT_OUT, 12, "Texture"));
-	EXPECT_FALSE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::REDIRECT_OUT, 11, "A"));
+	EXPECT_TRUE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::RedirectOut, 12, "Texture"));
+	EXPECT_FALSE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::RedirectOut, 11, "A"));
 }
 
 TEST(NodeShaderEditOpsTest, ConnectionStateNeedsCustomBinding) {
@@ -108,12 +108,12 @@ TEST(NodeShaderEditOpsTest, ConnectionStateNeedsCustomBinding) {
 	builder.Property(22, 23, "plain", "Float");
 	builder.Node(10, "Channel/Combine");
 	builder.Node(11, "Utility/BranchOnInputConnection");
-	builder.Node(30, GraphDocumentOps::REDIRECT_DEF);
-	builder.Connect(21, "Out", 30, GraphDocumentOps::REDIRECT_IN);
+	builder.Node(30, GraphDocumentOps::RedirectDef);
+	builder.Connect(21, "Out", 30, GraphDocumentOps::RedirectIn);
 
 	str why;
 	EXPECT_TRUE(Ops::CanConnect(builder.document, 21, "Out", 11, "Input", &why)) << why;
-	EXPECT_TRUE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::REDIRECT_OUT, 11, "Input", &why)) << why;
+	EXPECT_TRUE(Ops::CanConnect(builder.document, 30, GraphDocumentOps::RedirectOut, 11, "Input", &why)) << why;
 	EXPECT_FALSE(Ops::CanConnect(builder.document, 23, "Out", 11, "Input", &why));
 	EXPECT_NE(why.find("Use Custom Binding"), str::npos) << why;
 	EXPECT_FALSE(Ops::CanConnect(builder.document, 10, "RGBA", 11, "Input"));

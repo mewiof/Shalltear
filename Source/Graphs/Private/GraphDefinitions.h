@@ -19,22 +19,22 @@
 
 namespace Shalltear {
 
-	inline constexpr std::string_view GRAPH_SUBGRAPH_DOCUMENT_TYPE = "ShaderSubgraph";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_EXTENSION = ".slsubgraph";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_NODE = "Utility/Subgraph";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_ASSET_SETTING = "asset";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_OUTPUT_CONTEXT = "Context/SubgraphOutput";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_OUTPUT_BLOCK = "Block/SubgraphOutput";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_CATEGORY_SETTING = "category";
-	inline constexpr std::string_view GRAPH_SUBGRAPH_DEFAULT_CATEGORY = "Subgraphs";
+	inline constexpr std::string_view GraphSubgraphDocumentType = "ShaderSubgraph";
+	inline constexpr std::string_view GraphSubgraphExtension = ".slsubgraph";
+	inline constexpr std::string_view GraphSubgraphNode = "Utility/Subgraph";
+	inline constexpr std::string_view GraphSubgraphAssetSetting = "asset";
+	inline constexpr std::string_view GraphSubgraphOutputContext = "Context/SubgraphOutput";
+	inline constexpr std::string_view GraphSubgraphOutputBlock = "Block/SubgraphOutput";
+	inline constexpr std::string_view GraphSubgraphCategorySetting = "category";
+	inline constexpr std::string_view GraphSubgraphDefaultCategory = "Subgraphs";
 
-	inline constexpr std::string_view GRAPH_SUBGRAPH_OUTPUT_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4", "Boolean",
-																	   "Matrix2", "Matrix3", "Matrix4", "Texture2D", "Texture2DArray",
-																	   "Texture3D", "Cubemap", "Gradient"};
+	inline constexpr std::string_view GraphSubgraphOutputTypes[] = {"Float", "Vector2", "Vector3", "Vector4", "Boolean",
+																	"Matrix2", "Matrix3", "Matrix4", "Texture2D", "Texture2DArray",
+																	"Texture3D", "Cubemap", "Gradient"};
 	inline constexpr u32 GRAPH_SUBGRAPH_DEFAULT_OUTPUT_TYPE = 3;
 
-	inline constexpr std::string_view GRAPH_SUBGRAPH_OUTPUT_PORT = "Value";
-	inline constexpr std::string_view GRAPH_PROPERTY_OUTPUT_SETTING = "output";
+	inline constexpr std::string_view GraphSubgraphOutputPort = "Value";
+	inline constexpr std::string_view GraphPropertyOutputSetting = "output";
 
 	enum class GraphSubgraphKind : u8 {
 		Shader,
@@ -73,23 +73,23 @@ namespace Shalltear {
 		std::pmr::deque<str> strings{GetMemoryResource(MemTag::Editor)};
 	};
 
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_NODE = "Utility/CustomFunction";
+	inline constexpr std::string_view GraphCustomFunctionNode = "Utility/CustomFunction";
 
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_TYPE = "Type";
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_NAME = "Name";
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_SOURCE = "Source";
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_BODY = "Body";
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_INPUTS = "Inputs";
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_OUTPUTS = "Outputs";
+	inline constexpr std::string_view GraphCustomFunctionType = "Type";
+	inline constexpr std::string_view GraphCustomFunctionName = "Name";
+	inline constexpr std::string_view GraphCustomFunctionSource = "Source";
+	inline constexpr std::string_view GraphCustomFunctionBody = "Body";
+	inline constexpr std::string_view GraphCustomFunctionInputs = "Inputs";
+	inline constexpr std::string_view GraphCustomFunctionOutputs = "Outputs";
 
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_SOURCE_TYPES[] = {"File", "String"};
+	inline constexpr std::string_view GraphCustomFunctionSourceTypes[] = {"File", "String"};
 
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_PORT_TYPES[] = {"Float", "Vector2", "Vector3", "Vector4",
-																			"Boolean", "Matrix2", "Matrix3", "Matrix4"};
+	inline constexpr std::string_view GraphCustomFunctionPortTypes[] = {"Float", "Vector2", "Vector3", "Vector4",
+																		"Boolean", "Matrix2", "Matrix3", "Matrix4"};
 
-	inline constexpr std::string_view GRAPH_CUSTOM_FUNCTION_EXTENSIONS[] = {".hlsl"};
+	inline constexpr std::string_view GraphCustomFunctionExtensions[] = {".hlsl"};
 
-	inline constexpr std::string_view GRAPH_GENERATED_DIRECTORY = "project://Library/NodeShader";
+	inline constexpr std::string_view GraphGeneratedDirectory = "project://Library/NodeShader";
 
 	struct GraphCustomFunctionPort {
 		u32 id = 0;

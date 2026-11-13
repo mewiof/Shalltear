@@ -225,9 +225,9 @@ namespace Shalltear::CppToolchain {
 		out.sdkCompilerTarget = ReadPackageVariable(text, "SHALLTEAR_COMPILER_TARGET");
 		out.sdkLinkMode = ReadPackageVariable(text, "SHALLTEAR_LINK_MODE");
 		out.sdkToolchainFile = ReadPackageVariable(text, "SHALLTEAR_TOOLCHAIN_FILE");
-		constexpr std::string_view PACKAGE_ROOT = "${SHALLTEAR_PACKAGE_ROOT}";
-		if (out.sdkToolchainFile.starts_with(PACKAGE_ROOT)) {
-			out.sdkToolchainFile = sdkRoot + out.sdkToolchainFile.substr(PACKAGE_ROOT.size());
+		constexpr std::string_view PackageRoot = "${SHALLTEAR_PACKAGE_ROOT}";
+		if (out.sdkToolchainFile.starts_with(PackageRoot)) {
+			out.sdkToolchainFile = sdkRoot + out.sdkToolchainFile.substr(PackageRoot.size());
 		}
 		return true;
 	}

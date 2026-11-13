@@ -217,7 +217,7 @@ namespace {
 					texel[3] = 255;
 				}
 			}
-			TestImages::WriteTga(_root / file, STRIPES_SIZE, STRIPES_SIZE, rgba.data());
+			TestImages::WriteTGA(_root / file, STRIPES_SIZE, STRIPES_SIZE, rgba.data());
 			return AssetDatabase::EnsureAssetIdentity(Path(str("project://") + file));
 		}
 

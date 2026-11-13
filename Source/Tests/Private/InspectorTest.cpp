@@ -5990,8 +5990,8 @@ TEST_F(InspectorTest, QuaternionFieldDrawsAndEditsEulerAngles) {
 
 namespace WideIntegerRow {
 
-	constexpr u64 TwoToThe53 = 9007199254740992ull;
-	constexpr u64 TwoToThe53Plus1 = 9007199254740993ull;
+	constexpr u64 TWO_TO_THE53 = 9007199254740992ull;
+	constexpr u64 TWO_TO_THE53_PLUS1 = 9007199254740993ull;
 
 	struct Holder {
 		u64 seed = 0;
@@ -6063,19 +6063,19 @@ namespace WideIntegerRow {
 
 TEST(InspectorWideIntegerTest, U64RoundTripsPastMantissa) {
 	WideIntegerRow::Rig rig;
-	rig.value.seed = WideIntegerRow::TwoToThe53Plus1;
+	rig.value.seed = WideIntegerRow::TWO_TO_THE53_PLUS1;
 
 	PropertyRows::ScalarRow row = rig.BuildFor("seed");
 	ASSERT_EQ(row.kind, PropertyRows::ScalarRow::Kind::IntegerField);
 
-	EXPECT_EQ(rig.context.GetTextString(row.element), std::to_string(WideIntegerRow::TwoToThe53Plus1));
+	EXPECT_EQ(rig.context.GetTextString(row.element), std::to_string(WideIntegerRow::TWO_TO_THE53_PLUS1));
 
 	rig.TypeInto(row.element, "18446744073709551615");
 	EXPECT_EQ(rig.value.seed, 18446744073709551615ull);
 
-	rig.value.seed = WideIntegerRow::TwoToThe53;
+	rig.value.seed = WideIntegerRow::TWO_TO_THE53;
 	PropertyRows::Refresh(rig.context, row);
-	EXPECT_EQ(rig.context.GetTextString(row.element), std::to_string(WideIntegerRow::TwoToThe53));
+	EXPECT_EQ(rig.context.GetTextString(row.element), std::to_string(WideIntegerRow::TWO_TO_THE53));
 }
 
 TEST(InspectorWideIntegerTest, I64KeepsSignAndRange) {

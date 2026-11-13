@@ -406,8 +406,8 @@ namespace Shalltear {
 			context.SetStyle(mutability, mutabilityStyle);
 			context.SetHoverable(mutability, true);
 			context.SetText(mutability, UISystem::GetDefaultFont(), TinyFont(), TextDim(), when);
-			MutabilityClass when_ = MutabilityClass::Hot;
-			const bool restarts = Settings::GetFieldMutability(&field, when_) && when_ == MutabilityClass::Restart;
+			MutabilityClass mutabilityClass = MutabilityClass::Hot;
+			const bool restarts = Settings::GetFieldMutability(&field, mutabilityClass) && mutabilityClass == MutabilityClass::Restart;
 			context.SetTooltip(mutability, str(restarts ? SettingsOps::RestartLine(categoryPath) : SettingsOps::FieldMutabilityLine(field)));
 		}
 

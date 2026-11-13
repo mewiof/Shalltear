@@ -587,8 +587,8 @@ TEST_F(ScriptWorkflowFixture, RegenerateReportsResult) {
 	LogManager::SetGlobalLevel(LogLevel::Trace);
 	auto sink = std::make_shared<CapturingLogSink>();
 	LogManager::AddSink(sink);
-	constexpr std::string_view SENTINEL = "RegeneratingProjectFilesSaysWhatItDid begins";
-	SLT_LOG_INFO("Test", "{}", SENTINEL);
+	constexpr std::string_view Sentinel = "RegeneratingProjectFilesSaysWhatItDid begins";
+	SLT_LOG_INFO("Test", "{}", Sentinel);
 
 	options.sdkRoot = Root() + "/OtherSDK";
 	ScriptProjectOps::ScaffoldResult rewrote;
@@ -600,15 +600,15 @@ TEST_F(ScriptWorkflowFixture, RegenerateReportsResult) {
 	JobSystem::Terminate();
 
 	ASSERT_FALSE(rewrote.written.empty());
-	ASSERT_FALSE(sink->MatchingAfter(SENTINEL, "").empty());
-	Vector<str> rewroteLines = sink->MatchingAfter(SENTINEL, "regenerated ");
+	ASSERT_FALSE(sink->MatchingAfter(Sentinel, "").empty());
+	Vector<str> rewroteLines = sink->MatchingAfter(Sentinel, "regenerated ");
 	ASSERT_EQ(rewroteLines.size(), 1u);
 	for (const str& file : rewrote.written) {
 		EXPECT_NE(rewroteLines[0].find(file), str::npos) << file << ": " << rewroteLines[0];
 	}
 
 	ASSERT_TRUE(unchanged.written.empty());
-	EXPECT_EQ(sink->MatchingAfter(SENTINEL, "already up to date").size(), 1u);
+	EXPECT_EQ(sink->MatchingAfter(Sentinel, "already up to date").size(), 1u);
 }
 
 TEST_F(ScriptWorkflowFixture, CMakeListsCarriesNoEngineFact) {
@@ -1372,8 +1372,8 @@ TEST(AggregateHeaderTest, AggregateHeadersExportIncludes) {
 	}
 	const std::vector<std::filesystem::path> trees = PublicTrees(root);
 
-	constexpr std::string_view BEGIN = "// IWYU pragma: begin_exports";
-	constexpr std::string_view END = "// IWYU pragma: end_exports";
+	constexpr std::string_view Begin = "// IWYU pragma: begin_exports";
+	constexpr std::string_view End = "// IWYU pragma: end_exports";
 	std::vector<str> aggregates;
 	for (const std::filesystem::path& tree : trees) {
 		std::error_code ec;
@@ -1420,8 +1420,8 @@ TEST(AggregateHeaderTest, AggregateHeadersExportIncludes) {
 
 			str relative = std::filesystem::relative(entry.path(), tree, ec).generic_string();
 			aggregates.push_back(relative);
-			size_t beginAt = text.find(BEGIN);
-			size_t endAt = text.find(END);
+			size_t beginAt = text.find(Begin);
+			size_t endAt = text.find(End);
 			EXPECT_TRUE(beginAt != str::npos && endAt != str::npos && beginAt < firstInclude && endAt > lastInclude);
 		}
 	}
@@ -1470,7 +1470,7 @@ namespace {
 		const char* header;
 		const char* reason;
 	};
-	constexpr EngineFacingHeader ENGINE_FACING[] = {
+	constexpr EngineFacingHeader EngineFacing[] = {
 		{"Shalltear/Core/Asset/AssetCues.h", "package to package hook"},
 		{"Shalltear/Core/Asset/ImportTier.h", "editor only import code"},
 		{"Shalltear/Core/Asset/PakFormat.h", "cook container format"},
@@ -1500,7 +1500,7 @@ TEST(UmbrellaHeaderTest, UmbrellaReachesGameHeaders) {
 
 	const std::set<str> reached = ReachedFrom(trees, "Shalltear.h");
 	std::set<str> engineFacing;
-	for (const EngineFacingHeader& entry : ENGINE_FACING) {
+	for (const EngineFacingHeader& entry : EngineFacing) {
 		engineFacing.insert(entry.header);
 		EXPECT_TRUE(std::filesystem::is_regular_file(root / "Source/Core/Public" / entry.header));
 	}
@@ -1586,7 +1586,7 @@ TEST(ScaffoldTemplateTest, NoTemplateCitesTheEnginesOwnDocumentation) {
 		GTEST_SKIP() << "EngineAssets/Templates not found";
 	}
 
-	constexpr std::string_view SECTION = "\xc2\xa7";
+	constexpr std::string_view Section = "\xc2\xa7";
 	size_t checked = 0;
 	std::error_code ec;
 	for (const auto& entry : std::filesystem::directory_iterator(templates, ec)) {
@@ -1599,7 +1599,7 @@ TEST(ScaffoldTemplateTest, NoTemplateCitesTheEnginesOwnDocumentation) {
 		++checked;
 
 		EXPECT_EQ(text.find(".md"), str::npos);
-		EXPECT_EQ(text.find(SECTION), str::npos) << name;
+		EXPECT_EQ(text.find(Section), str::npos) << name;
 		str lowered = StringUtil::ToLower(text);
 		EXPECT_EQ(lowered.find("decision "), str::npos);
 	}

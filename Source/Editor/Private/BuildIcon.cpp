@@ -22,7 +22,7 @@ namespace Shalltear::BuildIcon {
 
 		namespace fs = std::filesystem;
 
-		constexpr std::string_view KEY = "icon";
+		constexpr std::string_view Key = "icon";
 		constexpr u32 PNG_ENTRY_SIZE = 256;
 
 		struct SquareImage {
@@ -248,7 +248,7 @@ namespace Shalltear::BuildIcon {
 
 	void DescribeSetting(Vector<BuildSettingDesc>& out) {
 		BuildSettingDesc icon;
-		icon.key = str(KEY);
+		icon.key = str(Key);
 		icon.type = BuildSettingType::Path;
 		icon.merge = BuildMergePolicy::Replace;
 		icon.label = "Icon";
@@ -257,20 +257,20 @@ namespace Shalltear::BuildIcon {
 	}
 
 	void Validate(const str& projectPath, const ResolvedProfile& profile, Vector<BuildIssue>& out) {
-		const ResolvedSetting* setting = profile.Find(KEY);
+		const ResolvedSetting* setting = profile.Find(Key);
 		if (!setting || setting->value.empty()) {
 			return;
 		}
 		const str& value = setting->value;
 		const bool absolute = Path(value).IsAbsolute();
 		if (absolute) {
-			out.push_back(BuildIssue{BuildIssueSeverity::Warning, profile.name, str(KEY),
+			out.push_back(BuildIssue{BuildIssueSeverity::Warning, profile.name, str(Key),
 									 "'" + value + "' is an absolute path (only valid on 1 machine)"});
 		}
 		std::error_code ec;
 		const fs::path file = absolute ? fs::path{value} : fs::path{projectPath} / fs::path{value};
 		if (!fs::is_regular_file(file, ec) || ec) {
-			out.push_back(BuildIssue{BuildIssueSeverity::Error, profile.name, str(KEY),
+			out.push_back(BuildIssue{BuildIssueSeverity::Error, profile.name, str(Key),
 									 "'" + value + "' is not a file in this project"});
 		}
 	}
@@ -278,7 +278,7 @@ namespace Shalltear::BuildIcon {
 	BuildStepStatus Step(BuildContext& context) {
 		context.executableIconFile.clear();
 		context.windowIconDocument.clear();
-		const ResolvedSetting* setting = context.profile ? context.profile->Find(KEY) : nullptr;
+		const ResolvedSetting* setting = context.profile ? context.profile->Find(Key) : nullptr;
 		if (!setting || setting->value.empty() ||
 			(context.executableIconSizes.empty() && context.windowIconSizes.empty())) {
 			return BuildStepStatus::Succeeded;
@@ -291,11 +291,11 @@ namespace Shalltear::BuildIcon {
 		source.settings.shape = TextureShape::Texture2D;
 		source.settings.compression = TextureCompression::None;
 		if (!source.Import(Path(path)) || source.size.x <= 0 || source.size.y <= 0) {
-			context.AddIssue(BuildIssueSeverity::Error, KEY, "couldn't read '" + value + "' as an image. Use a PNG/JPG/TGA/BMP file");
+			context.AddIssue(BuildIssueSeverity::Error, Key, "couldn't read '" + value + "' as an image. Use a PNG/JPG/TGA/BMP file");
 			return BuildStepStatus::Failed;
 		}
 		if (source.format != RHI::Format::RGBA8SRGB && source.format != RHI::Format::RGBA8Unorm) {
-			context.AddIssue(BuildIssueSeverity::Error, KEY, "'" + value + "' is an HDR image. Use an 8 bit PNG");
+			context.AddIssue(BuildIssueSeverity::Error, Key, "'" + value + "' is an HDR image. Use an 8 bit PNG");
 			return BuildStepStatus::Failed;
 		}
 
@@ -307,7 +307,7 @@ namespace Shalltear::BuildIcon {
 		}
 		const u32 edge = static_cast<u32>(std::max(source.size.x, source.size.y));
 		if (edge < largest) {
-			context.AddIssue(BuildIssueSeverity::Warning, KEY,
+			context.AddIssue(BuildIssueSeverity::Warning, Key,
 							 std::format("'{}' is {}x{} (scaled up to {}x{}). Use {}x{} or larger", value, source.size.x,
 										 source.size.y, largest, largest, largest, largest));
 		}
@@ -324,7 +324,7 @@ namespace Shalltear::BuildIcon {
 			Buffer bytes(ico.size(), MemTag::Editor);
 			std::memcpy(bytes.data, ico.data(), ico.size());
 			if (!FileSystem::WriteFile(Path(file), bytes)) {
-				context.AddIssue(BuildIssueSeverity::Error, KEY, "couldn't write '" + file + "'");
+				context.AddIssue(BuildIssueSeverity::Error, Key, "couldn't write '" + file + "'");
 				return BuildStepStatus::Failed;
 			}
 			context.executableIconFile = file;

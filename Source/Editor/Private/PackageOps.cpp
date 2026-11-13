@@ -40,8 +40,8 @@ namespace Shalltear {
 			constexpr std::string_view SettingsField = "enabled";
 			constexpr std::string_view FormatField = "format";
 			constexpr u32 STORED_SET_FORMAT = 2;
-			constexpr std::string_view ID_PREFIX = "dev.shalltear.";
-			constexpr std::string_view RETIRED_ID_PREFIX = "com.shalltear.";
+			constexpr std::string_view IdPrefix = "dev.shalltear.";
+			constexpr std::string_view RetiredIdPrefix = "com.shalltear.";
 
 			bool IsValidName(std::string_view name) {
 				if (name.empty() || name.size() > 214) {
@@ -599,8 +599,8 @@ namespace Shalltear {
 
 			if (format < 2) {
 				for (str& name : stored) {
-					if (name.starts_with(RETIRED_ID_PREFIX)) {
-						name = str(ID_PREFIX) + name.substr(RETIRED_ID_PREFIX.size());
+					if (name.starts_with(RetiredIdPrefix)) {
+						name = str(IdPrefix) + name.substr(RetiredIdPrefix.size());
 					}
 				}
 			}

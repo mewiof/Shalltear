@@ -232,13 +232,13 @@ namespace {
 
 } // namespace
 
-TEST_F(AnimationDisableCycleFixture, RegistersTwoStagesOneCategory) {
+TEST_F(AnimationDisableCycleFixture, RegistersThreeStagesOneCategory) {
 	ASSERT_TRUE(StandUp());
 
 	const void* owner = OwnerToken();
 	ASSERT_NE(owner, nullptr);
 
-	EXPECT_EQ(FrameStages::UnregisterOwnedBy(owner), 2u);
+	EXPECT_EQ(FrameStages::UnregisterOwnedBy(owner), 3u);
 
 	EXPECT_EQ(CountSettingsCategories(), _categoriesBefore + 1);
 }

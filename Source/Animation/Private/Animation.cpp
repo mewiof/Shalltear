@@ -6,6 +6,7 @@
 #include "Shalltear/Animation/Animator.h"
 #include "Shalltear/Animation/AnimatorController.h"
 #include "Shalltear/Animation/RetargetProfile.h"
+#include "Shalltear/Animation/SpringBone.h"
 
 #include "AnimationPass.h"
 #include "AnimationSettings.h"
@@ -41,11 +42,14 @@ namespace Shalltear {
 #endif
 
 			AnimationImpl::RegisterStages(owner);
+			AnimationImpl::RegisterSpringBones(owner);
 
 			// static player drops types without these
 			AnimationClip::GetReflectType();
 			Animator::GetReflectType();
 			RetargetProfile::GetReflectType();
+			SpringBone::GetReflectType();
+			SpringBoneCollider::GetReflectType();
 
 			AnimatorController::GetReflectType();
 			AnimatorStateMachine::GetReflectType();
@@ -65,6 +69,7 @@ namespace Shalltear {
 			AnimationImpl::SetDeclaredSettings(nullptr);
 
 			AnimationImpl::ShutdownPass();
+			AnimationImpl::ShutdownSpringBones();
 		}
 
 	} // namespace AnimationImpl

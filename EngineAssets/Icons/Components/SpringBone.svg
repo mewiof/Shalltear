@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+	<title id="t">Spring Bone</title>
+	<path fill="#4fd0c8" d="M36 8 L52 12 L36 16 L52 20 L52 24 L36 20 L52 16 L36 12 Z"/>
+	<path fill="#e8eaf0" d="M13 8 L18 9 L24 27 L19 28 Z M21 29 L26 27 L38 43 L33 46 Z M35 46 L39 43 L52 55 L49 58 Z"/>
+	<circle fill="#5d6b85" cx="15" cy="7" r="6"/>
+	<circle fill="#5d6b85" cx="23" cy="28" r="5.5"/>
+	<circle fill="#5d6b85" cx="36" cy="45" r="5"/>
+	<circle fill="#5d6b85" cx="51" cy="57" r="4.5"/>
+</svg>

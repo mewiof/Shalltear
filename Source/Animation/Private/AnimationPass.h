@@ -18,6 +18,9 @@ namespace Shalltear {
 
 		void RegisterStages(const void* owner);
 
+		void RegisterSpringBones(const void* owner);
+		void ShutdownSpringBones();
+
 		void ShutdownPass();
 
 		u32 GetRegisteredAnimatorCount();

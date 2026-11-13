@@ -7,4 +7,5 @@
 #include "Shalltear/Animation/Animator.h"
 #include "Shalltear/Animation/AnimatorController.h"
 #include "Shalltear/Animation/RetargetProfile.h"
+#include "Shalltear/Animation/SpringBone.h"
 // IWYU pragma: end_exports

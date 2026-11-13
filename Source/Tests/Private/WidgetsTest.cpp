@@ -1264,6 +1264,151 @@ TEST(WidgetsTest, DropdownTicksLiveSelection) {
 	EXPECT_TRUE(TickIsVisible(rig.ctx, NthChildOf(rig.ctx, content, 2)));
 }
 
+TEST(WidgetsTest, DropdownListWalksByKey) {
+	Rig rig;
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	static constexpr std::string_view Items[] = {"Alpha", "Beta", "Gamma"};
+	u32 selected = 0;
+	f64 reported = -1.0;
+	UI::Widgets::DropdownDesc desc;
+	desc.items = {Items, 3};
+	desc.onSelect = [&](u32 index) { selected = index; };
+	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
+	rig.ctx.Events(dropdown.root).onValueChange = [&](f64 value) { reported = value; };
+	rig.ctx.Update();
+
+	Click(rig.ctx, Center(rig.ctx, dropdown.root));
+	ASSERT_EQ(rig.ctx.GetOpenPopupCount(), 1u);
+	UI::ElementHandle content = rig.ctx.GetOpenPopup(0);
+	EXPECT_EQ(rig.ctx.GetFocused(), content);
+	EXPECT_TRUE(rig.ctx.HasClass(NthChildOf(rig.ctx, content, 0), "slt-selected"_hash));
+
+	rig.ctx.InjectInput(KeyPress(Key::Down));
+	rig.ctx.InjectInput(KeyPress(Key::Down));
+	rig.ctx.InjectInput(KeyPress(Key::Down));
+	rig.ctx.InjectInput(KeyPress(Key::Up));
+	rig.ctx.Update();
+	EXPECT_FALSE(rig.ctx.HasClass(NthChildOf(rig.ctx, content, 0), "slt-selected"_hash));
+	EXPECT_TRUE(rig.ctx.HasClass(NthChildOf(rig.ctx, content, 1), "slt-selected"_hash));
+	EXPECT_EQ(reported, -1.0);
+
+	rig.ctx.InjectInput(KeyPress(Key::Enter));
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetOpenPopupCount(), 0u);
+	EXPECT_EQ(selected, 1u);
+	EXPECT_EQ(reported, 1.0);
+	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "Beta");
+	EXPECT_EQ(UI::Widgets::GetDropdownSelection(rig.ctx, dropdown.root), 1u);
+
+	Click(rig.ctx, Center(rig.ctx, dropdown.root));
+	ASSERT_EQ(rig.ctx.GetOpenPopupCount(), 1u);
+	rig.ctx.InjectInput(KeyPress(Key::End));
+	rig.ctx.InjectInput(KeyPress(Key::Escape));
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetOpenPopupCount(), 0u);
+	EXPECT_EQ(UI::Widgets::GetDropdownSelection(rig.ctx, dropdown.root), 1u);
+
+	Click(rig.ctx, Center(rig.ctx, dropdown.root));
+	rig.ctx.InjectInput(KeyPress(Key::End));
+	rig.ctx.InjectInput(KeyPress(Key::Enter));
+	rig.ctx.Update();
+	EXPECT_EQ(reported, 2.0);
+	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "Gamma");
+}
+
+TEST(WidgetsTest, DropdownOptionsReplacedFromCode) {
+	Rig rig;
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	static constexpr std::string_view First[] = {"Alpha"};
+	UI::Widgets::DropdownDesc desc;
+	desc.items = {First, 1};
+	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
+
+	static constexpr std::string_view Later[] = {"Low", "Medium", "High"};
+	UI::Widgets::SetDropdownOptions(rig.ctx, dropdown.root, {Later, 3}, 2);
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "High");
+	EXPECT_EQ(UI::Widgets::GetDropdownSelection(rig.ctx, dropdown.root), 2u);
+
+	Click(rig.ctx, Center(rig.ctx, dropdown.root));
+	ASSERT_EQ(rig.ctx.GetOpenPopupCount(), 1u);
+	UI::ElementHandle content = rig.ctx.GetOpenPopup(0);
+	EXPECT_TRUE(NthChildOf(rig.ctx, content, 2).IsValid());
+	EXPECT_FALSE(NthChildOf(rig.ctx, content, 3).IsValid());
+	EXPECT_TRUE(TickIsVisible(rig.ctx, NthChildOf(rig.ctx, content, 2)));
+	Click(rig.ctx, Center(rig.ctx, NthChildOf(rig.ctx, content, 0)));
+	EXPECT_EQ(rig.ctx.GetTextString(dropdown.label), "Low");
+	EXPECT_EQ(FindByText(rig.ctx, rig.ctx.GetRoot(), "Medium").IsValid(), false);
+}
+
+TEST(WidgetsTest, LongDropdownListScrollsToKeyedRow) {
+	Rig rig;
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));
+	Vector<str> names{GetMemoryResource(MemTag::Debug)};
+	for (u32 i = 0; i < 80; ++i) {
+		names.push_back("Item " + std::to_string(i));
+	}
+	Vector<std::string_view> items{GetMemoryResource(MemTag::Debug)};
+	for (const str& name : names) {
+		items.push_back(name);
+	}
+	UI::Widgets::DropdownDesc desc;
+	desc.items = {items.data(), items.size()};
+	UI::Widgets::DropdownParts dropdown = UI::Widgets::Dropdown(rig.ctx, container, desc);
+	rig.ctx.Update();
+
+	Click(rig.ctx, Center(rig.ctx, dropdown.root));
+	ASSERT_EQ(rig.ctx.GetOpenPopupCount(), 1u);
+	UI::ElementHandle content = rig.ctx.GetOpenPopup(0);
+	rig.ctx.Update();
+	const UI::Rect list = rig.ctx.GetLayout(content).borderBox;
+	const UI::Rect last = rig.ctx.GetLayout(NthChildOf(rig.ctx, content, 79)).borderBox;
+	EXPECT_GT(last.y, list.y + list.h);
+
+	InputEvent move{};
+	move.type = InputEventType::MouseMove;
+	move.mousePosPx = {static_cast<i32>(list.x + list.w * 0.5f), static_cast<i32>(list.y + list.h * 0.5f)};
+	rig.ctx.InjectInput(move);
+	InputEvent wheel = move;
+	wheel.type = InputEventType::MouseWheel;
+	wheel.wheel = {0.0f, -2.0f};
+	rig.ctx.InjectInput(wheel);
+	rig.ctx.Update();
+	EXPECT_EQ(rig.ctx.GetOpenPopupCount(), 1u);
+	EXPECT_GT(rig.ctx.GetElement(content)->scrollOffset.y, 0.0f);
+
+	rig.ctx.InjectInput(KeyPress(Key::End));
+	rig.ctx.Update();
+	rig.ctx.Update();
+	const UI::Rect shown = rig.ctx.GetLayout(NthChildOf(rig.ctx, content, 79)).borderBox;
+	EXPECT_LE(shown.y + shown.h, list.y + list.h + 0.5f);
+	EXPECT_GE(shown.y, list.y - 0.5f);
+}
+
+TEST(WidgetsTest, ValueWidgetsReportThroughElement) {
+	Rig rig;
+	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 60.0f));
+	UI::Widgets::CheckboxParts checkbox = UI::Widgets::Checkbox(rig.ctx, container, false, {});
+	f64 checked = -1.0;
+	rig.ctx.Events(checkbox.box).onValueChange = [&](f64 value) { checked = value; };
+	rig.ctx.Update();
+	Click(rig.ctx, Center(rig.ctx, checkbox.box));
+	EXPECT_EQ(checked, 1.0);
+	Click(rig.ctx, Center(rig.ctx, checkbox.box));
+	EXPECT_EQ(checked, 0.0);
+
+	UI::Widgets::SliderDesc sliderDesc;
+	sliderDesc.minValue = 0.0f;
+	sliderDesc.maxValue = 10.0f;
+	UI::Widgets::SliderParts slider = UI::Widgets::Slider(rig.ctx, container, sliderDesc);
+	f64 slid = -1.0;
+	rig.ctx.Events(slider.root).onValueChange = [&](f64 value) { slid = value; };
+	rig.ctx.Update();
+	const UI::Rect track = rig.ctx.GetLayout(slider.track).content;
+	Click(rig.ctx, Vec2(track.x + track.w * 0.75f, track.y + track.h * 0.5f));
+	EXPECT_NEAR(slid, 7.5, 0.5);
+}
+
 TEST(WidgetsTest, UnnamedSelectionClearsLabel) {
 	Rig rig;
 	UI::ElementHandle container = MakeChild(rig.ctx, rig.ctx.GetRoot(), FixedBox(200.0f, 24.0f));

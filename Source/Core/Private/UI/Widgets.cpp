@@ -84,6 +84,7 @@ namespace Shalltear::UI::Widgets {
 .slt-menu-bar-item { padding: 4 10 4 10; cursor: hand; border-radius: var(--slt-radius); }
 .slt-menu-bar-item:hover { background-color: var(--slt-menu-bar-hover); }
 .slt-menu-bar-item:active { background-color: var(--slt-menu-bar-active); }
+.slt-dropdown-list { max-height: 320; overflow: scroll; }
 .slt-menu-popup { flex-direction: column; background-color: var(--slt-surface); border-radius: var(--slt-radius-lg); padding: 4 0 4 0; min-width: 160; box-shadow: inset 0 0 0 1 var(--slt-edge-light-strong), 0 6 16 var(--slt-shadow); }
 .slt-menu-item { flex-direction: row; align-items: center; padding: 4 12 4 12; cursor: hand; width: 100%; }
 .slt-menu-check { width: var(--slt-menu-check-gutter); flex-shrink: 0; justify-content: center; align-items: center; }
@@ -130,6 +131,16 @@ namespace Shalltear::UI::Widgets {
 
 		Color TreeGuideColor(const Context& context) {
 			return context.GetStyleVarColor("--slt-tree-guide"_hash, Color(1.0f, 1.0f, 1.0f, 0.078f));
+		}
+
+		void NotifyValueChange(Context& ctx, ElementHandle element, f64 value) {
+			if (!ctx.IsAlive(element) || !ctx.HasEvents(element)) {
+				return;
+			}
+			const std::function<void(f64)> notify = ctx.Events(element).onValueChange;
+			if (notify) {
+				notify(value);
+			}
 		}
 
 		ElementHandle MakeLabel(Context& ctx, ElementHandle parent, Handle<FontAsset> font,
@@ -344,7 +355,8 @@ namespace Shalltear::UI::Widgets {
 
 		Context* context = &ctx;
 		ElementHandle mark = parts.mark;
-		ctx.Events(parts.box).onClick = [context, mark, onChange]() {
+		ElementHandle box = parts.box;
+		ctx.Events(parts.box).onClick = [context, mark, box, onChange]() {
 			const Element* element = context->GetElement(mark);
 			if (!element) {
 				return;
@@ -354,6 +366,7 @@ namespace Shalltear::UI::Widgets {
 			if (onChange) {
 				onChange(next);
 			}
+			NotifyValueChange(*context, box, next ? 1.0 : 0.0);
 		};
 		return parts;
 	}
@@ -461,11 +474,12 @@ namespace Shalltear::UI::Widgets {
 			field.decimals = desc.decimals;
 			field.font = desc.font;
 			field.fontSizePx = desc.fontSizePx;
-			field.onChange = [context, placement, minValue, maxValue, onChange = desc.onChange](f64 typed) {
+			field.onChange = [context, placement, minValue, maxValue, root = parts.root, onChange = desc.onChange](f64 typed) {
 				PlaceSliderAt(*context, placement, SliderFraction(minValue, maxValue, static_cast<f32>(typed)));
 				if (onChange) {
 					onChange(static_cast<f32>(typed));
 				}
+				NotifyValueChange(*context, root, typed);
 			};
 			parts.value = NumberField(ctx, parts.root, field);
 			ctx.AddClass(parts.value.root, StringHash("slt-slider-value"));
@@ -475,7 +489,7 @@ namespace Shalltear::UI::Widgets {
 		SetSliderValue(ctx, parts, desc.minValue, desc.maxValue, desc.value);
 
 		ElementHandle track = parts.track;
-		auto apply = [context, track, placement, minValue, maxValue, onChange = desc.onChange](Vec2 mouse) {
+		auto apply = [context, track, placement, minValue, maxValue, root = parts.root, onChange = desc.onChange](Vec2 mouse) {
 			const Rect& content = context->GetLayout(track).content;
 			if (content.w <= 0.0f) {
 				return;
@@ -489,6 +503,7 @@ namespace Shalltear::UI::Widgets {
 			if (onChange) {
 				onChange(value);
 			}
+			NotifyValueChange(*context, root, value);
 		};
 		ctx.Events(rail).onMouseDown = [context, rail, apply, onDragBegin = desc.onDragBegin]() {
 			if (onDragBegin) {
@@ -1273,6 +1288,125 @@ namespace Shalltear::UI::Widgets {
 			return parts;
 		}
 
+		struct DropdownModel {
+			Vector<str> items{GetMemoryResource(MemTag::UI)};
+			Handle<FontAsset> font;
+			f32 fontSizePx = 13.0f;
+			std::function<void(u32)> onSelect;
+		};
+
+		ElementHandle DropdownLabel(const Context& ctx, ElementHandle root) {
+			const Element* pod = ctx.GetElement(root);
+			return pod && pod->firstChild != INVALID_UI_INDEX ? ctx.MakeHandle(pod->firstChild) : ElementHandle{};
+		}
+
+		ElementHandle NthRow(const Context& ctx, ElementHandle content, u32 n) {
+			const Element* pod = ctx.GetElement(content);
+			u32 child = pod ? pod->firstChild : INVALID_UI_INDEX;
+			for (u32 i = 0; child != INVALID_UI_INDEX && i < n; ++i) {
+				child = ctx.GetElement(ctx.MakeHandle(child))->nextSibling;
+			}
+			return child != INVALID_UI_INDEX ? ctx.MakeHandle(child) : ElementHandle{};
+		}
+
+		void HighlightRow(Context& ctx, ElementHandle content, u32 from, u32 to) {
+			if (const ElementHandle old = NthRow(ctx, content, from); ctx.IsAlive(old)) {
+				ctx.RemoveClass(old, StringHash("slt-selected"));
+			}
+			if (const ElementHandle row = NthRow(ctx, content, to); ctx.IsAlive(row)) {
+				ctx.AddClass(row, StringHash("slt-selected"));
+				ctx.ScrollIntoView(row);
+			}
+			ctx.SetUserTag(content, to);
+		}
+
+		void ChooseDropdownItem(Context& ctx, const DropdownParts& parts, u32 index, std::string_view text,
+								const std::function<void(u32)>& onSelect) {
+			ctx.SetUserTag(parts.root, index);
+			if (ctx.IsAlive(parts.label)) {
+				ctx.SetTextString(parts.label, text);
+			}
+			if (onSelect) {
+				onSelect(index);
+			}
+			NotifyValueChange(ctx, parts.root, static_cast<f64>(index));
+		}
+
+		void OpenDropdownList(Context& ctx, const DropdownParts& parts) {
+			const std::shared_ptr<DropdownModel> model = GetElementModel<DropdownModel>(ctx, parts.root);
+			if (!model) {
+				return;
+			}
+			auto items = std::make_shared<Vector<str>>(model->items);
+			const Handle<FontAsset> font = model->font;
+			const f32 fontSizePx = model->fontSizePx;
+			const std::function<void(u32)> onSelect = model->onSelect;
+			const Element* button = ctx.GetElement(parts.root);
+			const u32 selected = button ? static_cast<u32>(button->userTag) : 0u;
+			const ElementHandle previousFocus = ctx.GetFocused();
+			Context* context = &ctx;
+
+			ElementHandle content = OpenDropdownPopup(ctx, parts.root);
+			ctx.AddClass(content, StringHash("slt-dropdown-list"));
+			auto close = [context, content, previousFocus]() {
+				context->ClosePopup(content);
+				if (context->IsAlive(previousFocus)) {
+					context->SetFocus(previousFocus);
+				}
+			};
+			for (u32 i = 0; i < items->size(); ++i) {
+				PopupRow row = MakePopupRow(ctx, content, font, fontSizePx, (*items)[i], i == selected);
+				ctx.Events(row.row).onClick = [context, parts, items, i, onSelect, close]() {
+					close();
+					ChooseDropdownItem(*context, parts, i, (*items)[i], onSelect);
+				};
+			}
+			ctx.SetFocusable(content, true);
+			ctx.Events(content).onKeyDown = [context, content, parts, items, onSelect, close](Key key, KeyMod mods) {
+				if (mods != KeyMod::None || items->empty()) {
+					if (key == Key::Escape) {
+						close();
+						return true;
+					}
+					return false;
+				}
+				const Element* list = context->GetElement(content);
+				const u32 at = list ? static_cast<u32>(list->userTag) : 0u;
+				const u32 last = static_cast<u32>(items->size()) - 1;
+				switch (key) {
+				case Key::Up:
+					HighlightRow(*context, content, at, at > 0 ? at - 1 : 0);
+					return true;
+				case Key::Down:
+					HighlightRow(*context, content, at, std::min(at + 1, last));
+					return true;
+				case Key::Home:
+					HighlightRow(*context, content, at, 0);
+					return true;
+				case Key::End:
+					HighlightRow(*context, content, at, last);
+					return true;
+				case Key::Enter:
+				case Key::KpEnter:
+				case Key::Space: {
+					const u32 chosen = std::min(at, last);
+					close();
+					ChooseDropdownItem(*context, parts, chosen, (*items)[chosen], onSelect);
+					return true;
+				}
+				case Key::Escape:
+					close();
+					return true;
+				default:
+					return false;
+				}
+			};
+			const Rect& box = ctx.GetLayout(parts.root).borderBox;
+			ctx.OpenPopup(content, {box.x, box.y + box.h});
+			HighlightRow(ctx, content, selected, std::min<u32>(selected, items->empty() ? 0u : static_cast<u32>(items->size()) - 1));
+			ctx.SetFocus(content);
+		}
+
 		struct MaskRow {
 			PopupRow row;
 			u64 bits = 0;
@@ -1296,38 +1430,42 @@ namespace Shalltear::UI::Widgets {
 	}
 
 	DropdownParts Dropdown(Context& ctx, ElementHandle parent, const DropdownDesc& desc) {
-		OwnedItems items = CopyItems(desc.items, desc.items.size());
-		std::string_view current = desc.selected < items->size()
-									   ? std::string_view((*items)[desc.selected])
-									   : std::string_view{};
+		std::string_view current = desc.selected < desc.items.size() ? desc.items[desc.selected] : std::string_view{};
 		DropdownParts parts = MakeDropdownButton(ctx, parent, desc.font, desc.fontSizePx, current);
 		ctx.SetUserTag(parts.root, desc.selected);
+		auto model = std::make_shared<DropdownModel>();
+		for (std::string_view item : desc.items) {
+			model->items.emplace_back(item);
+		}
+		model->font = desc.font;
+		model->fontSizePx = desc.fontSizePx;
+		model->onSelect = desc.onSelect;
+		SetElementModel(ctx, parts.root, model);
 
 		Context* context = &ctx;
-		ctx.Events(parts.root).onClick = [context, parts, items,
-										  font = desc.font, fontSizePx = desc.fontSizePx,
-										  onSelect = desc.onSelect]() {
-			const Element* button = context->GetElement(parts.root);
-			u64 selected = button ? button->userTag : 0;
-
-			ElementHandle content = OpenDropdownPopup(*context, parts.root);
-			for (u32 i = 0; i < items->size(); ++i) {
-				PopupRow row = MakePopupRow(*context, content, font, fontSizePx, (*items)[i], i == selected);
-				context->Events(row.row).onClick = [context, content, parts, items, i, onSelect]() {
-					context->SetUserTag(parts.root, i);
-					if (context->IsAlive(parts.label)) {
-						context->SetTextString(parts.label, (*items)[i]);
-					}
-					context->ClosePopup(content);
-					if (onSelect) {
-						onSelect(i);
-					}
-				};
-			}
-			const Rect& box = context->GetLayout(parts.root).borderBox;
-			context->OpenPopup(content, {box.x, box.y + box.h});
-		};
+		ctx.Events(parts.root).onClick = [context, parts]() { OpenDropdownList(*context, parts); };
 		return parts;
+	}
+
+	void SetDropdownOptions(Context& ctx, ElementHandle root, std::span<const std::string_view> items, u32 selected) {
+		const std::shared_ptr<DropdownModel> model = GetElementModel<DropdownModel>(ctx, root);
+		if (!model) {
+			return;
+		}
+		model->items.clear();
+		for (std::string_view item : items) {
+			model->items.emplace_back(item);
+		}
+		ctx.SetUserTag(root, selected);
+		const ElementHandle label = DropdownLabel(ctx, root);
+		if (ctx.IsAlive(label)) {
+			ctx.SetTextString(label, selected < items.size() ? items[selected] : std::string_view{});
+		}
+	}
+
+	u32 GetDropdownSelection(const Context& ctx, ElementHandle root) {
+		const Element* element = ctx.GetElement(root);
+		return element ? static_cast<u32>(element->userTag) : 0u;
 	}
 
 	void SetDropdownSelection(Context& ctx, const DropdownParts& parts,

@@ -9,6 +9,7 @@
 #include "Shalltear/Core/UI/StyleSheetAsset.h"
 #include "Shalltear/Core/UI/UIDocument.h"
 #include "Shalltear/Core/UI/WidgetRegistry.h"
+#include "Shalltear/Core/UI/Widgets.h"
 
 using namespace Shalltear;
 using namespace UITest;
@@ -336,6 +337,32 @@ TEST(UIDocumentTest, WidgetsAttributeVocabularyIsWhatDescDeclares) {
 	ExpectRefused(Document(R"(<button id="pause" onclick="Fire"/>)"), "pause");
 
 	ExpectRefused(Document(R"(<button text="a" on-click="Fire"/>)"), "on-click");
+}
+
+TEST(UIDocumentTest, DropdownChoicesFromMarkupBindAfterward) {
+	Parsed parsed(Document(R"(<dropdown id="quality" choices="Low, Medium ,High," index="2"/>)"));
+	ASSERT_TRUE(parsed.ok) << parsed.error;
+	ExpectRefused(Document(R"(<dropdown index="two"/>)"), "two");
+
+	MockFontSystem fonts;
+	UI::Context ctx(Desc(), &fonts);
+	UI::ElementHandle root = parsed.document.Instantiate(ctx, ctx.GetRoot());
+	ASSERT_TRUE(ctx.IsAlive(root));
+	EXPECT_TRUE(ctx.HasClass(root, "slt-dropdown"_hash));
+	EXPECT_EQ(UI::Widgets::GetDropdownSelection(ctx, root), 2u);
+
+	f64 chosen = -1.0;
+	ctx.Events(root).onValueChange = [&](f64 value) { chosen = value; };
+	ctx.Update();
+	ClickElement(ctx, root);
+	ASSERT_EQ(ctx.GetOpenPopupCount(), 1u);
+	UI::ElementHandle list = ctx.GetOpenPopup(0);
+	EXPECT_TRUE(NthChildOf(ctx, list, 3).IsValid());
+	EXPECT_FALSE(NthChildOf(ctx, list, 4).IsValid());
+	EXPECT_TRUE(FindByText(ctx, list, "Medium").IsValid());
+	ClickElement(ctx, NthChildOf(ctx, list, 0));
+	EXPECT_EQ(chosen, 0.0);
+	EXPECT_EQ(UI::Widgets::GetDropdownSelection(ctx, root), 0u);
 }
 
 TEST(UIDocumentTest, BadAttributeValueRefused) {

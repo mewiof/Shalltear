@@ -2,6 +2,10 @@
 
 #include "UITestUtil.h"
 
+#if !defined(SHALLTEAR_SHARED)
+#include "UI/UIInternal.h"
+#endif
+
 using namespace Shalltear;
 using namespace UITest;
 
@@ -338,3 +342,42 @@ TEST(UIElementTest, UserTagAndTintPersist) {
 	EXPECT_EQ(ctx.GetElement(element)->userTag, 0xC0FFEEu);
 	EXPECT_EQ(ctx.GetElement(element)->tint, Color(0.5f, 0.25f, 0.125f, 1.0f));
 }
+
+#if !defined(SHALLTEAR_SHARED)
+
+TEST(UIElementTest, ModelPerTypeReleasedWithElement) {
+	struct Score {
+		i32 points = 0;
+	};
+	struct Name {
+		str text;
+	};
+	UI::Context ctx(Desc(), nullptr);
+	UI::ElementHandle element = ctx.CreateElement();
+	ctx.AppendChild(ctx.GetRoot(), element);
+	auto score = std::make_shared<Score>(Score{7});
+	UI::SetElementModel(ctx, element, score);
+	UI::SetElementModel(ctx, element, std::make_shared<Name>(Name{"seven"}));
+	EXPECT_EQ(UI::GetElementModel<Score>(ctx, element), score);
+	ASSERT_NE(UI::GetElementModel<Name>(ctx, element), nullptr);
+	EXPECT_EQ(UI::GetElementModel<Name>(ctx, element)->text, "seven");
+	EXPECT_EQ(UI::GetElementModel<i32>(ctx, element), nullptr);
+
+	auto replaced = std::make_shared<Score>(Score{9});
+	UI::SetElementModel(ctx, element, replaced);
+	EXPECT_EQ(score.use_count(), 1);
+	EXPECT_EQ(UI::GetElementModel<Score>(ctx, element)->points, 9);
+	UI::SetElementModel(ctx, element, std::shared_ptr<Name>{});
+	EXPECT_EQ(UI::GetElementModel<Name>(ctx, element), nullptr);
+	EXPECT_EQ(UI::GetElementModel<Score>(ctx, element), replaced);
+
+	std::weak_ptr<Score> held = replaced;
+	replaced.reset();
+	ctx.DestroyElement(element);
+	EXPECT_TRUE(held.expired());
+	UI::ElementHandle reused = ctx.CreateElement();
+	EXPECT_EQ(UI::GetElementModel<Score>(ctx, reused), nullptr);
+	EXPECT_EQ(UI::GetElementModel<Score>(ctx, element), nullptr);
+}
+
+#endif

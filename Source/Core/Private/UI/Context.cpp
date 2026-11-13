@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace Shalltear::UI {
 
@@ -67,6 +68,7 @@ namespace Shalltear::UI {
 			textInputFreeList.push_back(element.textInputIndex);
 		}
 		events.erase(index);
+		models.erase(index);
 		icons.erase(index);
 		scrollShown.erase(index);
 
@@ -2008,6 +2010,44 @@ namespace Shalltear::UI {
 	bool Context::HasEvents(ElementHandle handle) const {
 		u32 index = _impl->ResolveIndex(handle);
 		return index != INVALID_UI_INDEX && _impl->events.contains(index);
+	}
+
+	void ContextImpl::SetModel(Context& context, ElementHandle handle, const void* type, std::shared_ptr<void> model) {
+		ContextImpl& impl = *context._impl;
+		const u32 index = impl.ResolveIndex(handle);
+		if (index == INVALID_UI_INDEX) {
+			return;
+		}
+		std::shared_ptr<void> released;
+		Vector<ElementModel>& slots = impl.models[index];
+		auto found = std::find_if(slots.begin(), slots.end(), [type](const ElementModel& slot) {
+			return slot.type == type;
+		});
+		if (found != slots.end()) {
+			released = std::exchange(found->value, std::move(model));
+			if (!found->value) {
+				slots.erase(found);
+			}
+		} else if (model) {
+			slots.push_back({type, std::move(model)});
+		}
+		if (slots.empty()) {
+			impl.models.erase(index);
+		}
+	}
+
+	std::shared_ptr<void> ContextImpl::GetModel(const Context& context, ElementHandle handle, const void* type) {
+		const ContextImpl& impl = *context._impl;
+		const u32 index = impl.ResolveIndex(handle);
+		auto entry = index == INVALID_UI_INDEX ? impl.models.end() : impl.models.find(index);
+		if (entry != impl.models.end()) {
+			for (const ElementModel& slot : entry->second) {
+				if (slot.type == type) {
+					return slot.value;
+				}
+			}
+		}
+		return {};
 	}
 
 	ElementEvents& Context::Events(ElementHandle handle) {

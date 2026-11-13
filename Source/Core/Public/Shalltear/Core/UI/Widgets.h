@@ -166,6 +166,11 @@ namespace Shalltear::UI::Widgets {
 	SHALLTEAR_CORE_API void SetDropdownSelection(Context& context, const DropdownParts& parts,
 												 std::span<const std::string_view> items, u32 selected);
 
+	// root of Dropdown/document's <dropdown>
+	SHALLTEAR_CORE_API void SetDropdownOptions(Context& context, ElementHandle root, std::span<const std::string_view> items,
+											   u32 selected);
+	SHALLTEAR_CORE_API u32 GetDropdownSelection(const Context& context, ElementHandle root);
+
 	// bit i selects items[i], max 64 items
 	struct MaskDropdownDesc {
 		std::span<const std::string_view> items;

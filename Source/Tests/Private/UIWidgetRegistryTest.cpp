@@ -92,7 +92,8 @@ TEST_F(UIWidgetRegistryFixture, DeclaredClassesMatchFactory) {
 		const char* declaration;
 	};
 	for (const Case& probe : {Case{"button", "slt-button"}, Case{"checkbox", "slt-checkbox"},
-							  Case{"slider", "slt-slider"}, Case{"scroll-view", "slt-scroll-root"}}) {
+							  Case{"slider", "slt-slider"}, Case{"dropdown", "slt-dropdown"},
+							  Case{"scroll-view", "slt-scroll-root"}}) {
 		const UI::WidgetDesc* desc = UI::WidgetRegistry::Find(probe.tag);
 		ASSERT_NE(desc, nullptr) << probe.tag;
 		ASSERT_EQ(desc->builtInClasses.size(), 1u) << probe.tag;

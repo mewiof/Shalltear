@@ -63,6 +63,8 @@ namespace Shalltear::UI {
 		std::function<bool(Key, KeyMod)> onKeyDown;
 		std::function<void(std::string_view)> onTextChange;
 		std::function<void(std::string_view)> onTextCommit;
+		// user edits only (checkbox 0/1, slider value, dropdown index)
+		std::function<void(f64 value)> onValueChange;
 		std::function<bool(char32_t)> onTextFilter;
 		std::function<void()> onPopupClosed;
 		std::function<bool(const DragPayload&)> onDragOver;

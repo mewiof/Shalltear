@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 namespace Shalltear::UI {
 
@@ -348,6 +349,13 @@ namespace Shalltear::UI {
 		Vector<TextInputState> textInputs{GetMemoryResource(MemTag::UI)};
 		Vector<u32> textInputFreeList{GetMemoryResource(MemTag::UI)};
 		HashMap<u32, ElementEvents> events{GetMemoryResource(MemTag::UI)};
+		struct ElementModel {
+			const void* type = nullptr;
+			std::shared_ptr<void> value;
+		};
+		HashMap<u32, Vector<ElementModel>> models{GetMemoryResource(MemTag::UI)};
+		static void SetModel(Context& context, ElementHandle handle, const void* type, std::shared_ptr<void> model);
+		static std::shared_ptr<void> GetModel(const Context& context, ElementHandle handle, const void* type);
 		HashMap<u32, IconComponent> icons{GetMemoryResource(MemTag::UI)};
 
 		HashMap<u32, ScrollBand> scrollShown{GetMemoryResource(MemTag::UI)};
@@ -558,6 +566,20 @@ namespace Shalltear::UI {
 		Rect& Ink(u32 index) { return subtreeInk[index]; }
 		const Rect& Ink(u32 index) const { return subtreeInk[index]; }
 	};
+
+	template <typename T>
+	inline constexpr char ElementModelType = 0;
+
+	// one model per type T, released with element
+	template <typename T>
+	void SetElementModel(Context& context, ElementHandle handle, std::shared_ptr<T> model) {
+		ContextImpl::SetModel(context, handle, &ElementModelType<T>, std::move(model));
+	}
+
+	template <typename T>
+	std::shared_ptr<T> GetElementModel(const Context& context, ElementHandle handle) {
+		return std::static_pointer_cast<T>(ContextImpl::GetModel(context, handle, &ElementModelType<T>));
+	}
 
 	namespace Layout {
 		void UpdateLayout(ContextImpl& ctx);

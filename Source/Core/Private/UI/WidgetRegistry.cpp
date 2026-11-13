@@ -81,6 +81,36 @@ namespace Shalltear::UI {
 			return {Widgets::Slider(context, parent, desc).root, {}};
 		}
 
+		constexpr std::string_view DropdownClasses[] = {"slt-dropdown"};
+		constexpr WidgetAttribute DropdownAttributes[] = {
+			{"choices", WidgetAttributeType::String},
+			{"index", WidgetAttributeType::Number},
+		};
+
+		WidgetResult MakeDropdown(Context& context, ElementHandle parent, const WidgetArgs& args) {
+			Vector<std::string_view> choices{GetMemoryResource(MemTag::UI)};
+			const std::string_view list = args.Get("choices");
+			for (size_t start = 0; !list.empty() && start <= list.size();) {
+				const size_t comma = std::min(list.find(',', start), list.size());
+				std::string_view choice = list.substr(start, comma - start);
+				while (!choice.empty() && choice.front() == ' ') {
+					choice.remove_prefix(1);
+				}
+				while (!choice.empty() && choice.back() == ' ') {
+					choice.remove_suffix(1);
+				}
+				choices.push_back(choice);
+				start = comma + 1;
+			}
+			Widgets::DropdownDesc desc;
+			desc.items = {choices.data(), choices.size()};
+			const f64 index = args.GetNumber("index", 0.0);
+			desc.selected = index > 0.0 ? static_cast<u32>(std::min(index, 4294967295.0)) : 0u;
+			desc.font = args.desc.font;
+			desc.fontSizePx = args.desc.fontSizePx;
+			return {Widgets::Dropdown(context, parent, desc).root, {}};
+		}
+
 		constexpr std::string_view ScrollViewClasses[] = {"slt-scroll-root"};
 
 		WidgetResult MakeScrollView(Context& context, ElementHandle parent, const WidgetArgs&) {
@@ -191,6 +221,7 @@ namespace Shalltear::UI {
 			{"button", &MakeButton, ButtonAttributes, ButtonClasses, CategoryControls},
 			{"checkbox", &MakeCheckbox, CheckboxAttributes, CheckboxClasses, CategoryControls},
 			{"slider", &MakeSlider, SliderAttributes, SliderClasses, CategoryControls},
+			{"dropdown", &MakeDropdown, DropdownAttributes, DropdownClasses, CategoryControls},
 			{"scroll-view", &MakeScrollView, {}, ScrollViewClasses, CategoryContainers},
 			{"image", &MakeImage, ImageAttributes, {}, CategoryControls, &ValidateImage},
 		};

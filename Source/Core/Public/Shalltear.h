@@ -33,6 +33,7 @@
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/FullScreenPass.h"
 #include "Shalltear/Core/Graphics/ImageEncoding.h"
+#include "Shalltear/Core/Graphics/ColorSpace.h"
 #include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/ObjectShadow.h"
 #include "Shalltear/Core/Graphics/ObjectPass.h"

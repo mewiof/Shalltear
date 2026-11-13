@@ -32,5 +32,5 @@ VSOutput VSMain(uint vertexId : SV_VertexID) {
 float4 PSMain(VSOutput input) : SV_Target {
 	float3 scene = sltSceneColor.Sample(sltSceneSampler, input.uv).rgb;
 	scene = ShalltearTonemap(gPresent.tonemap, scene);
-	return float4(ShalltearLinearToSrgb(scene), 1.0);
+	return float4(ShalltearSceneToSrgb(scene), 1.0);
 }

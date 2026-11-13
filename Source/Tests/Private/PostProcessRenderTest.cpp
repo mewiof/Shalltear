@@ -29,6 +29,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 using namespace Shalltear;
 
@@ -78,6 +79,8 @@ namespace {
 		Handle<Scene> _scene;
 		char _token = 0;
 
+		virtual str ProjectSettingsDocument() const { return {}; }
+
 		void SetUp() override {
 			static std::atomic<u64> counter{0};
 			const u64 stamp = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -87,6 +90,9 @@ namespace {
 
 			SettingsPaths paths;
 			paths.project = Path((_root / "ProjectSettings.ini").generic_string());
+			if (const str document = ProjectSettingsDocument(); !document.empty()) {
+				std::ofstream(_root / "ProjectSettings.ini", std::ios::binary) << document;
+			}
 			Settings::Initialize(paths);
 
 			std::filesystem::path engineAssets = FindRepoDir("EngineAssets");
@@ -162,7 +168,7 @@ namespace {
 			return volume;
 		}
 
-		bool AddBrightQuad(f32 intensity, const Vec3& position = Vec3(), const char* name = "Bright") {
+		bool AddBrightQuad(f32 intensity, const Vec3& position = Vec3(), const char* name = "Bright", f32 scale = 0.6f) {
 			Asset* unlitShader = AssetDatabase::LoadAsset(Path("engine://Shaders/Unlit.hlsl"));
 			Asset* quadMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Quad)));
 			if (!unlitShader || !quadMesh) {
@@ -178,12 +184,54 @@ namespace {
 			material->SetColor("baseColor", Color(intensity, intensity, intensity, 1.0f));
 			Handle<SceneObject> object = SceneSystem::CreateObject(name, _scene);
 			object->SetLocalPosition(position);
-			object->SetLocalScale(Vec3(0.6f, 0.6f, 0.6f));
+			object->SetLocalScale(Vec3(scale, scale, scale));
 			Handle<MeshRenderer> renderer = object->AddComponent<MeshRenderer>();
 			renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(quadMesh)));
 			renderer->SetMaterial(0, Handle<MaterialAsset>(material));
 			SceneSystem::EndFrame();
 			return true;
+		}
+
+		f32 BloomShare(f32 scale, bool gamma) {
+			if (_scene.IsValid()) {
+				SceneSystem::UnloadScene(_scene);
+				SceneSystem::EndFrame();
+			}
+			_scene = SceneSystem::CreateScene("Share");
+			const str name = std::format("Source{}", static_cast<i32>(scale * 100.0f));
+			Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+			Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+			Vec2I size{};
+			if (!AddBrightQuad(12.0f, Vec3(), name.c_str(), scale) || !Render({}, reference, size, Color(0.0f, 0.0f, 0.0f))) {
+				return -1.0f;
+			}
+			PostProcessProfile* profile = MakeProfile((name + ".slpp").c_str());
+			if (!profile) {
+				return -1.0f;
+			}
+			profile->bloom = true;
+			profile->bloomIntensity = 1.0f;
+			profile->bloomThreshold = 0.9f;
+			AddVolume(profile);
+			PostProcessPass row;
+			const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+			if (!Render(rows, pixels, size, Color(0.0f, 0.0f, 0.0f))) {
+				return -1.0f;
+			}
+			auto value = [gamma](u8 byte) { return gamma ? static_cast<f32>(byte) / 255.0f : ByteToLinear(byte); };
+			f32 source = 0.0f;
+			f32 spread = 0.0f;
+			for (i32 y = 0; y < size.y; ++y) {
+				for (i32 x = 0; x < size.x; ++x) {
+					const u8 before = Texel(reference, size, x, y)[0];
+					if (before > 200) {
+						source += 1.0f;
+					} else {
+						spread += value(Texel(pixels, size, x, y)[0]) - value(before);
+					}
+				}
+			}
+			return source > 0.0f ? spread / source : -1.0f;
 		}
 
 		bool Render(std::span<const Handle<RenderPass>> rows, Vector<u8>& outPixels, Vec2I& outSize,
@@ -836,6 +884,78 @@ TEST_F(PostProcessRenderFixture, ThresholdAboveEverythingLeavesSurroundDark) {
 	const u8 before = Texel(reference, referenceSize, size.x / 2, edgeY + 4)[0];
 	const u8 after = Texel(pixels, size, size.x / 2, edgeY + 4)[0];
 	EXPECT_LE(after, before + 2) << static_cast<i32>(before) << " -> " << static_cast<i32>(after);
+}
+
+namespace {
+
+	class GammaPostProcessFixture : public PostProcessRenderFixture {
+	protected:
+		str ProjectSettingsDocument() const override { return "[Graphics]\ncolorSpace = Gamma\n"; }
+	};
+
+} // anonymous namespace
+
+TEST_F(GammaPostProcessFixture, GammaThresholdReadsSceneValues) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const Color clear = Color(0.0f, 0.0f, 0.0f);
+	ASSERT_TRUE(AddBrightQuad(4.0f));
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize, clear));
+
+	PostProcessProfile* profile = MakeProfile("BloomHigh.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->bloom = true;
+	profile->bloomIntensity = 1.0f;
+	profile->bloomThreshold = 2.8f;
+	AddVolume(profile);
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, pixels, size, clear));
+	ASSERT_EQ(size, referenceSize);
+
+	u32 spread = 0;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			const u8 before = Texel(reference, referenceSize, x, y)[0];
+			const u8 after = Texel(pixels, size, x, y)[0];
+			spread += before < 200 && after > before ? static_cast<u32>(after - before) : 0u;
+		}
+	}
+	EXPECT_GT(spread, 100u);
+}
+
+TEST_F(PostProcessRenderFixture, BloomShareIgnoresSourceSize) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const f32 lamp = BloomShare(0.6f, false);
+	const f32 glint = BloomShare(0.12f, false);
+	ASSERT_GT(lamp, 0.0f);
+	EXPECT_NEAR(glint, lamp, 0.25f * lamp) << glint << " -> " << lamp;
+}
+
+TEST_F(GammaPostProcessFixture, GammaBloomKeepsGlintsSmall) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const f32 lamp = BloomShare(0.6f, true);
+	const f32 glint = BloomShare(0.12f, true);
+	ASSERT_GT(lamp, 0.0f);
+	EXPECT_LT(glint, 0.6f * lamp) << glint << " -> " << lamp;
 }
 
 TEST_F(PostProcessRenderFixture, ViewsResolveOwnVolumes) {

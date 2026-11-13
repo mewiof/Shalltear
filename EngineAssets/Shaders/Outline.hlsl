@@ -2,6 +2,8 @@
 #pragma shalltear_depth off
 #pragma shalltear_cull off
 
+#include "Color.hlsli"
+
 [[vk::binding(0, 1)]] Texture2D<uint> sltOutlineMask;
 [[vk::binding(1, 1)]] SamplerState sltOutlineMaskSampler;
 [[vk::binding(2, 1)]] Texture2D<float> sltOutlineDepth;
@@ -20,6 +22,9 @@ struct ShalltearOutlinePush {
 [[vk::push_constant]] ShalltearOutlinePush gOutline;
 
 float ShalltearOutlineSrgbToLinear(float c) {
+	if (gShalltearGammaColorSpace) {
+		return c;
+	}
 	return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 

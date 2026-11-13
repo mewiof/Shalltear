@@ -4,6 +4,8 @@
 #pragma shalltear_depth test_write
 #pragma shalltear_cull off
 
+#include "Color.hlsli"
+
 // 108/128 push bytes
 struct ShalltearGridPush {
 	float4x4 invGridProjection;	// relative to gridCameraPosition
@@ -44,6 +46,9 @@ VSOutput VSMain(uint vertexId : SV_VertexID) {
 }
 
 float ShalltearSrgbToLinearChannel(float c) {
+	if (gShalltearGammaColorSpace) {
+		return c;
+	}
 	return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 

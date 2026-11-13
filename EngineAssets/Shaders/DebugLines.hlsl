@@ -5,6 +5,8 @@
 #pragma shalltear_cull off
 #pragma shalltear_topology line
 
+#include "Color.hlsli"
+
 struct ShalltearDebugLinePush {
 	float4x4 viewProjection;
 	uint64_t vertexAddress;
@@ -20,6 +22,9 @@ struct VSOutput {
 
 // HLSL 2021 rejects the ternary on vectors
 float ShalltearSrgbToLinearChannel(float c) {
+	if (gShalltearGammaColorSpace) {
+		return c;
+	}
 	return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 

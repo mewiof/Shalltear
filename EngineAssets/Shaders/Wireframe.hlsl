@@ -4,6 +4,7 @@
 #pragma shalltear_fill wireframe
 #pragma shalltear_depth_bias 1.0 2.0
 
+#include "Color.hlsli"
 #include "ShalltearCommon.hlsli"
 
 struct ShalltearWirePush {
@@ -19,6 +20,9 @@ struct VSOutput {
 
 // HLSL 2021 rejects the ternary on vectors
 float ShalltearWireSrgbToLinearChannel(float c) {
+	if (gShalltearGammaColorSpace) {
+		return c;
+	}
 	return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Shalltear/Core/Graphics/ColorSpace.h"
 #include "Shalltear/Core/Reflection/Reflect.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Types.h"
@@ -30,6 +31,7 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(adapter, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
 		SLT_REFLECT_FIELD(validation, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
 		SLT_REFLECT_FIELD(physicalLightUnits, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
+		SLT_REFLECT_FIELD(colorSpace, SLT_MUTABILITY(::Shalltear::MutabilityClass::Restart))
 		SLT_REFLECT_FIELD(qualityProfiles, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary), SLT_ASSET_REFS)
 		SLT_REFLECT_FIELD(qualityLevel, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_END_REFLECT()
@@ -46,6 +48,8 @@ namespace Shalltear {
 
 		// lux for directional, lumens for point/spot
 		bool physicalLightUnits = false;
+
+		ColorSpace colorSpace = ColorSpace::Linear;
 
 		// semicolon separated guids
 		str qualityProfiles;

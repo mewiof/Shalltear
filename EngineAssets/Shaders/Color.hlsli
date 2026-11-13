@@ -13,6 +13,19 @@ float3 ShalltearSrgbToLinear(float3 c) {
 	return select(c <= 0.04045, c / 12.92, pow((c + 0.055) / 1.055, 2.4));
 }
 
+// must match ShaderReflection.h's SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID
+#define SHALLTEAR_GAMMA_COLOR_SPACE_CONSTANT 102
+[[vk::constant_id(SHALLTEAR_GAMMA_COLOR_SPACE_CONSTANT)]] const bool gShalltearGammaColorSpace = false;
+
+// sRGB display value into scene color, unchanged under gamma color space
+float3 ShalltearSrgbToScene(float3 c) {
+	return gShalltearGammaColorSpace ? c : ShalltearSrgbToLinear(c);
+}
+
+float3 ShalltearSceneToSrgb(float3 c) {
+	return gShalltearGammaColorSpace ? c : ShalltearLinearToSrgb(c);
+}
+
 // must match TonemapCurve in GraphicsProfile.h
 #define SHALLTEAR_TONEMAP_NONE 0
 #define SHALLTEAR_TONEMAP_NEUTRAL 1

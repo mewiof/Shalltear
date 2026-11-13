@@ -118,6 +118,8 @@ namespace Shalltear {
 	inline constexpr u32 SHADER_LOD_FADE_CONSTANT_ID = 100;
 	// must match Shadows.hlsli's SHALLTEAR_SHADOW_MOMENTS_CONSTANT
 	inline constexpr u32 SHADER_SHADOW_MOMENTS_CONSTANT_ID = 101;
+	// must match Color.hlsli's SHALLTEAR_GAMMA_COLOR_SPACE_CONSTANT
+	inline constexpr u32 SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID = 102;
 
 	SHALLTEAR_CORE_API SpirvReflection ReflectSpirv(std::span<const u8> blob);
 

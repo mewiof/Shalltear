@@ -163,7 +163,9 @@ float4 PSMain(VSOutput input) : SV_Target {
 
 	// steps shall return before grading runs
 	if (step == SHALLTEAR_POST_STEP_PREFILTER) {
-		return float4(ShalltearBloomThreshold(ShalltearBloomDownsample(sltSceneColor, input.uv, sourceTexel)), 1.0);
+		float3 bright = ShalltearBloomThreshold(ShalltearBloomDownsample(sltSceneColor, input.uv, sourceTexel));
+		// levels filtered square root encoded under gamma color space
+		return float4(gShalltearGammaColorSpace ? sqrt(bright) : bright, 1.0);
 	}
 	if (step == SHALLTEAR_POST_STEP_DOWNSAMPLE) {
 		return float4(ShalltearBloomDownsample(sltPassInput0, input.uv, sourceTexel), 1.0);
@@ -179,6 +181,7 @@ float4 PSMain(VSOutput input) : SV_Target {
 	// bloom added before grade (filters should tint it too)
 	if (gPost.bloomTintAndIntensity.w > 0.0) {
 		float3 bloom = ShalltearBloomUpsample(sltPassInput0, input.uv, sourceTexel);
+		bloom = gShalltearGammaColorSpace ? bloom * bloom : bloom;
 		color += bloom * gPost.bloomTintAndIntensity.rgb * gPost.bloomTintAndIntensity.w;
 	}
 

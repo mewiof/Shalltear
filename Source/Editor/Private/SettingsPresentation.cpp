@@ -136,6 +136,13 @@ namespace Shalltear {
 			units.keywords = "lumens lux candela photometric intensity exposure";
 			RegisterField("Graphics", "physicalLightUnits", std::move(units));
 
+			SettingsFieldPresentation colorSpace;
+			colorSpace.label = "Color Space";
+			colorSpace.tooltip = "\"Gamma\": textures sampled as stored, lit/blended as stored, no display encode (for content made for "
+								 "gamma pipelines). \"Linear\": sRGB textures decoded, lit in linear values, encoded for the display.";
+			colorSpace.keywords = "gamma linear srgb color space encode decode";
+			RegisterField("Graphics", "colorSpace", std::move(colorSpace));
+
 			SettingsFieldPresentation profiles;
 			profiles.label = "Quality Profiles";
 			profiles.tooltip = "Graphics Profile asset ids separated by ';', in quality-level order. Empty uses the built-in defaults. "

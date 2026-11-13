@@ -2,6 +2,7 @@
 
 #include "Shalltear/Core/Containers.h"
 #include "Shalltear/Core/CoreAPI.h"
+#include "Shalltear/Core/Graphics/ColorSpace.h"
 #include "Shalltear/Core/Handle.h"
 #include "Shalltear/Core/Math/Color.h"
 #include "Shalltear/Core/Math/Matrix.h"
@@ -175,6 +176,8 @@ namespace Shalltear {
 		static const GraphicsProfile* GetActiveProfile();
 
 		static i32 GetReflectionProbeResolution();
+
+		static ColorSpace GetColorSpace();
 
 		static ViewTargetId CreateViewTarget(Vec2I sizePx);
 		static void ResizeViewTarget(ViewTargetId target, Vec2I sizePx);

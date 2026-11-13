@@ -67,6 +67,19 @@ namespace Shalltear::RHI {
 		return format == Format::RGBA8SRGB || format == Format::BGRA8SRGB || format == Format::BC7SRGB;
 	}
 
+	inline Format WithoutSRGB(Format format) {
+		switch (format) {
+		case Format::RGBA8SRGB:
+			return Format::RGBA8Unorm;
+		case Format::BGRA8SRGB:
+			return Format::BGRA8Unorm;
+		case Format::BC7SRGB:
+			return Format::BC7Unorm;
+		default:
+			return format;
+		}
+	}
+
 	inline u64 FormatLevelBytes(Format format, Vec2I size) {
 		const u64 width = static_cast<u64>(size.x > 0 ? size.x : 0);
 		const u64 height = static_cast<u64>(size.y > 0 ? size.y : 0);

@@ -66,5 +66,5 @@ float4 PSMain(VSOutput input) : SV_Target {
 		display = float3(0.95, 0.55, 0.15);
 	}
 
-	return float4(ShalltearSrgbToLinear(display), 1.0);
+	return float4(ShalltearSrgbToScene(display), 1.0);
 }

@@ -341,7 +341,8 @@ TEST_F(ShaderCompileFixture, OnlyEngineSpecializationsImport) {
 	};
 	EXPECT_TRUE(withConstant(SHADER_LOD_FADE_CONSTANT_ID));
 	EXPECT_TRUE(withConstant(SHADER_SHADOW_MOMENTS_CONSTANT_ID));
-	EXPECT_FALSE(withConstant(SHADER_SHADOW_MOMENTS_CONSTANT_ID + 1));
+	EXPECT_TRUE(withConstant(SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID));
+	EXPECT_FALSE(withConstant(SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID + 1));
 }
 
 TEST_F(ShaderCompileFixture, ImportCompilesReflectsAndParsesState) {

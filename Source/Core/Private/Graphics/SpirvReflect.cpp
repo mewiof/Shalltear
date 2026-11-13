@@ -276,9 +276,13 @@ namespace Shalltear {
 			reflection.error = "no entry point found";
 			return reflection;
 		}
+		auto engineConstant = [](u32 constantId) {
+			return constantId == SHADER_LOD_FADE_CONSTANT_ID || constantId == SHADER_SHADOW_MOMENTS_CONSTANT_ID ||
+				   constantId == SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID;
+		};
 		for (u32 id : specConstants) {
 			const auto found = specIds.find(id);
-			if (found == specIds.end() || (found->second != SHADER_LOD_FADE_CONSTANT_ID && found->second != SHADER_SHADOW_MOMENTS_CONSTANT_ID)) {
+			if (found == specIds.end() || !engineConstant(found->second)) {
 				reflection.error = "specialization constants aren't supported in v1";
 				return reflection;
 			}

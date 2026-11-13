@@ -299,9 +299,10 @@ namespace Shalltear {
 		push.bloomTintAndIntensity[1] = resolved.bloomTint.g;
 		push.bloomTintAndIntensity[2] = resolved.bloomTint.b;
 		push.bloomTintAndIntensity[3] = hasPyramid ? Math::Clamp(resolved.bloomIntensity, 0.0f, 1.0f) : 0.0f;
-		const f32 thresholdLinear = GammaToLinear(Math::Max(resolved.bloomThreshold, 0.0f));
-		push.bloomParams[0] = thresholdLinear;
-		push.bloomParams[1] = thresholdLinear * 0.5f;
+		const f32 threshold = Math::Max(resolved.bloomThreshold, 0.0f);
+		const f32 sceneThreshold = RenderSystem::GetColorSpace() == ColorSpace::Gamma ? threshold : GammaToLinear(threshold);
+		push.bloomParams[0] = sceneThreshold;
+		push.bloomParams[1] = sceneThreshold * 0.5f;
 		push.bloomParams[2] = 0.05f + Math::Clamp(resolved.bloomScatter, 0.0f, 1.0f) * 0.9f;
 		push.bloomParams[3] = Math::Max(resolved.bloomClamp, 0.0f);
 

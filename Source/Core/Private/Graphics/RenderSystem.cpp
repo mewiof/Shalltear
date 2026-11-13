@@ -438,6 +438,7 @@ namespace Shalltear {
 		constexpr u32 DRAW_FADE_ABOVE = 1u << 24;
 		constexpr RHI::SpecializationConstant LODFadeConstant{SHADER_LOD_FADE_CONSTANT_ID, 1};
 		constexpr RHI::SpecializationConstant ShadowMomentsConstant{SHADER_SHADOW_MOMENTS_CONSTANT_ID, 1};
+		constexpr RHI::SpecializationConstant GammaColorSpaceConstant{SHADER_GAMMA_COLOR_SPACE_CONSTANT_ID, 1};
 		static_assert(static_cast<u32>(RHI::BlendMode::Count) <= 8u, "the blend's 3 bits of the per-draw flags");
 		static_assert(static_cast<u32>(RHI::BlendMode::Opaque) == 0u && static_cast<u32>(RHI::BlendMode::Alpha) == 1u &&
 						  static_cast<u32>(RHI::BlendMode::Additive) == 2u && static_cast<u32>(RHI::BlendMode::Premultiplied) == 3u &&
@@ -819,6 +820,7 @@ namespace Shalltear {
 			i32 vsyncOverride = -1;
 
 			bool physicalLightUnits = false;
+			ColorSpace colorSpace = ColorSpace::Linear;
 
 			GraphicsProfile* applied = nullptr;
 			GraphicsProfile* builtIn = nullptr;
@@ -1343,10 +1345,12 @@ namespace Shalltear {
 		}
 
 		u64 PipelineKey(u64 shaderId, u32 shaderVersion, u32 variant, ShaderProgramKind kind,
-						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples, bool lodFade, bool moments) {
+						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples, bool lodFade, bool moments,
+						bool gamma) {
 			u64 key = shaderId * 1099511628211ull;
 			key ^= lodFade ? 0x9E3779B97F4A7C15ull : 0ull;
 			key ^= moments ? 0xC2B2AE3D27D4EB4Full : 0ull;
+			key ^= gamma ? 0x165667B19E3779F9ull : 0ull;
 			key ^= static_cast<u64>(shaderVersion) << 32;
 			key ^= static_cast<u64>(kind) << 62;
 			key ^= static_cast<u64>(variant) << 40;
@@ -1436,8 +1440,9 @@ namespace Shalltear {
 			const RHI::ShaderRenderState& pipelineState = stateOverride ? *stateOverride : shader->renderState;
 			lodFade = lodFade && kind != ShaderProgramKind::Compute;
 			const bool moments = kind == ShaderProgramKind::Forward && state.MomentsActive() && ShaderDeclaresBinding(*shader, 0, SHADOW_ATLAS_BINDING);
+			const bool gamma = kind != ShaderProgramKind::Compute && state.colorSpace == ColorSpace::Gamma;
 			u64 key = PipelineKey(shaderId, shader->version, variant, kind, colorFormat, depthFormat, RenderStateKey(pipelineState), samples,
-								  lodFade, moments);
+								  lodFade, moments, gamma);
 			auto it = state.pipelineCache.find(key);
 			if (it != state.pipelineCache.end()) {
 				if (outInstanced) {
@@ -1482,13 +1487,16 @@ namespace Shalltear {
 										   : valuePass ? blob(code->depthValuePixelSpirv)
 													   : blob(code->depthPixelSpirv))
 										: blob(code->pixelSpirv);
-			RHI::SpecializationConstant constants[2];
+			RHI::SpecializationConstant constants[3];
 			u32 constantCount = 0;
 			if (lodFade) {
 				constants[constantCount++] = LODFadeConstant;
 			}
 			if (moments) {
 				constants[constantCount++] = ShadowMomentsConstant;
+			}
+			if (gamma) {
+				constants[constantCount++] = GammaColorSpaceConstant;
 			}
 			desc.pixelConstants = {constants, constantCount};
 			desc.bindings = {shader->bindings.data(), shader->bindings.size()};
@@ -9470,6 +9478,7 @@ namespace Shalltear {
 		state.builtIn = New<GraphicsProfile>(MemTag::Graphics);
 		state.applied = New<GraphicsProfile>(MemTag::Graphics);
 		state.physicalLightUnits = graphics.physicalLightUnits;
+		state.colorSpace = graphics.colorSpace == ColorSpace::Gamma ? ColorSpace::Gamma : ColorSpace::Linear;
 
 		SettingsEvents::Changed.Subscribe(EventBus::GetGlobal(), Handle<RenderState>(&state), &RenderState::OnSettingChanged);
 
@@ -10328,6 +10337,10 @@ namespace Shalltear {
 			}
 		}
 	}
+	ColorSpace RenderSystem::GetColorSpace() {
+		return _state ? _state->colorSpace : ColorSpace::Linear;
+	}
+
 	void RenderSystem::RegisterObjectShadow(Handle<ObjectShadow> shadow) {
 		ObjectShadow* target = shadow.Get();
 		if (!_state || !target || KindOfOwningScene(*target) != SceneKind::World) {

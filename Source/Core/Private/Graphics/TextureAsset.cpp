@@ -137,7 +137,7 @@ namespace Shalltear {
 		u32 mipLevels = DeviceMipLevels(*this);
 		RHI::TextureDesc desc;
 		desc.size = size;
-		desc.format = format;
+		desc.format = RenderSystem::GetColorSpace() == ColorSpace::Gamma ? RHI::WithoutSRGB(format) : format;
 		desc.usage = RHI::TextureUsage::Sampled | RHI::TextureUsage::TransferDst | RHI::TextureUsage::TransferSrc;
 		desc.mipLevels = mipLevels;
 		desc.debugName = virtualPath.c_str();

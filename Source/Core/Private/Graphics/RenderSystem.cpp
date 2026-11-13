@@ -5620,7 +5620,8 @@ namespace Shalltear {
 					boundPipeline = pipeline;
 					boundMaterial = ~0ull;
 					viewSet = CreateViewSet(device, pipeline, *entry.shader, viewAllocation, state.DirectionalShadowTexture(),
-											state.punctualShadowAtlas, environment.cube[0], ambientOcclusion, environment.cube[1]);
+											state.punctualShadowAtlas, environment.cube[0], entry.alpha ? RHI::TextureHandle{} : ambientOcclusion,
+											environment.cube[1]);
 					cmd.BindTransientSet(0, viewSet);
 					if (SceneRequests::DeclaresSceneSet(*entry.shader)) {
 						BindSceneTextureSet(cmd, device, pipeline, *entry.shader, bound, passView);
@@ -5682,7 +5683,7 @@ namespace Shalltear {
 				init.punctualAtlas = state.punctualShadowAtlas;
 				init.environmentCube = environment.cube[0];
 				init.environmentCube2 = environment.cube[1];
-				init.ambientOcclusion = ambientOcclusion;
+				init.ambientOcclusion = draw.alpha ? RHI::TextureHandle{} : ambientOcclusion;
 				init.drawCalls = &drawCalls;
 				ProceduralContext context(init);
 				renderer->Record(context);

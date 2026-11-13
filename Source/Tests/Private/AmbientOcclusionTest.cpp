@@ -6,6 +6,7 @@
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
+#include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Module/ModuleAPI.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
@@ -55,6 +56,38 @@ namespace {
 		}
 		return {};
 	}
+
+	class OcclusionPane : public ProceduralRenderer {
+	public:
+		SLT_REFLECT_COMPONENT(OcclusionPane, ProceduralRenderer)
+		SLT_END_REFLECT()
+
+		Handle<MaterialAsset> material;
+		Vec3 center{};
+		f32 half = 1.0f;
+
+		void Declare(ProceduralPlan& plan) override {
+			plan.SetBounds(AABB::FromCenterExtents(center, Vec3(half, half, 0.01f)));
+			plan.AddItem(material, center, ShadowCasting::Off);
+		}
+
+		void Record(ProceduralContext& context) override {
+			const Vec3 corners[4] = {center + Vec3(-half, -half, 0.0f), center + Vec3(half, -half, 0.0f), center + Vec3(half, half, 0.0f),
+									 center + Vec3(-half, half, 0.0f)};
+			const u32 order[6] = {0, 1, 2, 0, 2, 3};
+			Vector<MeshVertex> triangles{GetMemoryResource(MemTag::Scene)};
+			for (u32 corner : order) {
+				MeshVertex vertex;
+				vertex.position = corners[corner];
+				vertex.normal = Vec3(0.0f, 0.0f, 1.0f);
+				vertex.tangent = Vec3(1.0f, 0.0f, 0.0f);
+				triangles.push_back(vertex);
+			}
+			context.DrawTriangles(triangles, false);
+		}
+	};
+
+	SLT_REGISTER_TYPE(OcclusionPane)
 
 	class AmbientOcclusionRenderFixture : public ::testing::Test {
 	protected:
@@ -241,6 +274,90 @@ namespace {
 			renderer->SetMaterial(0, Handle<MaterialAsset>(material));
 			SceneSystem::EndFrame();
 			return true;
+		}
+
+		bool AddBlendedPane(const Vec3& center, bool procedural) {
+			Asset* litShader = AssetDatabase::LoadAsset(Path("engine://Shaders/Lit.hlsl"));
+			Asset* cubeMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
+			if (!litShader || !cubeMesh) {
+				return false;
+			}
+			FileSystem::WriteTextFile(Path((_root / "Pane.mat").generic_string()),
+									  str("{\n\t\"shader\": \"") + litShader->assetId.ToString() + "\",\n\t\"blend\": \"alpha\"\n}\n");
+			auto* material = static_cast<MaterialAsset*>(AssetDatabase::LoadAsset(Path("project://Pane.mat")));
+			if (!material) {
+				return false;
+			}
+			material->SetColor("baseColor", Color(0.5f, 0.5f, 0.5f, 1.0f));
+			material->SetFloat("roughness", 1.0f);
+			material->SetFloat("metallic", 0.0f);
+
+			Handle<SceneObject> pane = SceneSystem::CreateObject("Pane", _scene);
+			if (procedural) {
+				Handle<OcclusionPane> renderer = pane->AddComponent<OcclusionPane>();
+				renderer->material = Handle<MaterialAsset>(material);
+				renderer->center = center;
+				renderer->half = 0.6f;
+			} else {
+				pane->SetLocalPosition(center);
+				pane->SetLocalScale(Vec3(1.2f, 1.2f, 0.02f));
+				Handle<MeshRenderer> renderer = pane->AddComponent<MeshRenderer>();
+				renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(cubeMesh)));
+				renderer->SetMaterial(0, Handle<MaterialAsset>(material));
+			}
+			SceneSystem::EndFrame();
+			return true;
+		}
+
+		void ExpectBlendedPaneUnoccluded(bool procedural) {
+			AmbientOcclusionPass off;
+			off.intensity = 0.0f;
+			const Handle<RenderPass> offRows[] = {Handle<RenderPass>(&off)};
+			AmbientOcclusionPass on;
+			on.radius = 1.0f;
+			const Handle<RenderPass> onRows[] = {Handle<RenderPass>(&on)};
+
+			Vector<u8> bareOff{GetMemoryResource(MemTag::Graphics)};
+			Vector<u8> bareOn{GetMemoryResource(MemTag::Graphics)};
+			Vec2I size{};
+			Vec2I bareOnSize{};
+			ASSERT_TRUE(Render(offRows, bareOff, size));
+			ASSERT_TRUE(Render(onRows, bareOn, bareOnSize));
+			ASSERT_EQ(size, bareOnSize);
+
+			const Vec3 crease(0.0f, 0.0f, 1.1f);
+			Vec2I creasePixel{};
+			ASSERT_TRUE(Pixel(crease, creasePixel));
+			constexpr i32 HALF = 2;
+			constexpr i32 BLOCK = (HALF * 2 + 1) * (HALF * 2 + 1);
+			i32 lit = 0;
+			const i32 behind = WorstDarkening(bareOff, bareOn, size, creasePixel, HALF, lit);
+			ASSERT_EQ(lit, BLOCK);
+			ASSERT_GE(behind, 8);
+
+			ASSERT_TRUE(AddBlendedPane((_eye + crease) * 0.5f, procedural));
+			Vector<u8> paneOff{GetMemoryResource(MemTag::Graphics)};
+			Vector<u8> paneOn{GetMemoryResource(MemTag::Graphics)};
+			Vec2I paneOffSize{};
+			Vec2I paneOnSize{};
+			ASSERT_TRUE(Render(offRows, paneOff, paneOffSize));
+			ASSERT_TRUE(Render(onRows, paneOn, paneOnSize));
+			ASSERT_EQ(size, paneOffSize);
+			ASSERT_EQ(size, paneOnSize);
+
+			i32 covered = 0;
+			i32 changed = 0;
+			i32 worst = 0;
+			for (i32 y = creasePixel.y - HALF; y <= creasePixel.y + HALF; ++y) {
+				for (i32 x = creasePixel.x - HALF; x <= creasePixel.x + HALF; ++x) {
+					const u8* shaded = Texel(paneOff, size, x, y);
+					covered += shaded[0] + 16 < Texel(bareOff, size, x, y)[0] ? 1 : 0;
+					changed += std::memcmp(shaded, Texel(paneOn, size, x, y), 4) != 0 ? 1 : 0;
+					worst = Math::Max(worst, static_cast<i32>(shaded[0]) - static_cast<i32>(Texel(paneOn, size, x, y)[0]));
+				}
+			}
+			ASSERT_EQ(covered, BLOCK);
+			EXPECT_EQ(changed, 0) << worst << " of " << behind;
 		}
 
 		static i32 WorstDarkening(const Vector<u8>& reference, const Vector<u8>& occluded, Vec2I size, Vec2I center, i32 half, i32& outLit) {
@@ -674,6 +791,28 @@ TEST_F(AmbientOcclusionRenderFixture, StraightCreaseReadsUniform) {
 		EXPECT_LT(brightest, base - 4) << (on.downsample ? "half" : "full");
 		EXPECT_LE(brightest - darkest, 2) << (on.downsample ? "half " : "full ") << darkest << " -> " << brightest;
 	}
+}
+
+TEST_F(AmbientOcclusionRenderFixture, BlendedMeshTakesNoOcclusionBehind) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+	ExpectBlendedPaneUnoccluded(false);
+}
+
+TEST_F(AmbientOcclusionRenderFixture, BlendedProceduralItemTakesNoOcclusionBehind) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	ASSERT_TRUE(BuildScene());
+	ExpectBlendedPaneUnoccluded(true);
 }
 
 TEST(AmbientOcclusionPlanTest, HalfChainMakesFullExtentTarget) {

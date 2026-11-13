@@ -34,6 +34,7 @@ namespace Shalltear {
 
 		inline constexpr Guid DepthRangeShader{0x8eb34c5451694467, 0xb5d0ba59fe5da069};
 		inline constexpr Guid DepthRangeMultisampledShader{0x4e8bcc81de9c4b4b, 0xba784b5c914b51c9};
+		inline constexpr Guid MomentResolveShader{0x3b000d9d71e9ac00, 0x2d611a3275e557c5};
 
 		inline constexpr Guid DecalShader{0x9a59af4a6d601949, 0x887a56e24d68e9ba};
 		inline constexpr Guid UIShader{0x338097fb9c0c87b0, 0x92e117f93e38c514};
@@ -57,6 +58,7 @@ namespace Shalltear {
 			SkinningShader,
 			DepthRangeShader,
 			DepthRangeMultisampledShader,
+			MomentResolveShader,
 		};
 
 	} // namespace EngineBuiltins

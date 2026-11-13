@@ -278,7 +278,7 @@ namespace Shalltear {
 		}
 		for (u32 id : specConstants) {
 			const auto found = specIds.find(id);
-			if (found == specIds.end() || found->second != SHADER_LOD_FADE_CONSTANT_ID) {
+			if (found == specIds.end() || (found->second != SHADER_LOD_FADE_CONSTANT_ID && found->second != SHADER_SHADOW_MOMENTS_CONSTANT_ID)) {
 				reflection.error = "specialization constants aren't supported in v1";
 				return reflection;
 			}

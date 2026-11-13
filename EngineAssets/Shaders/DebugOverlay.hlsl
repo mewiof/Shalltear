@@ -44,8 +44,11 @@ float4 PSMain(VSOutput input) : SV_Target {
 	int2 texel = int2(saturate(input.uv) * side);
 
 	float stored = gOverlay.mode == SHALLTEAR_DEBUG_OVERLAY_PUNCTUAL
-					   ? sltPunctualShadowAtlas.Load(int3(texel, 0))
-					   : sltShadowAtlas.Load(int3(texel, 0));
+					   ? sltPunctualShadowAtlas.Load(int3(texel, 0)).r
+					   : sltShadowAtlas.Load(int3(texel, 0)).r;
+	if (gOverlay.mode != SHALLTEAR_DEBUG_OVERLAY_PUNCTUAL && gShalltearShadowMoments) {
+		stored = 0.5 - 0.5 * log(max(stored, 1e-30)) / max(sltShadowMoments.x, 1e-4);
+	}
 	float3 display = stored.rrr;
 
 	if (gOverlay.tilesPerAxis > 1) {

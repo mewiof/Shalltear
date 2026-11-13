@@ -26,6 +26,11 @@ namespace Shalltear {
 		VisibleDepth = 1,
 	};
 
+	enum class ShadowFilter : u8 {
+		PCF = 0,
+		Moments = 1,
+	};
+
 } // namespace Shalltear
 
 SLT_REFLECT_ENUM(::Shalltear::TonemapCurve)
@@ -44,6 +49,11 @@ SLT_END_ENUM()
 SLT_REFLECT_ENUM(::Shalltear::ShadowCascadeFit)
 SLT_ENUM_VALUE(Fixed)
 SLT_ENUM_VALUE(VisibleDepth)
+SLT_END_ENUM()
+
+SLT_REFLECT_ENUM(::Shalltear::ShadowFilter)
+SLT_ENUM_VALUE(PCF)
+SLT_ENUM_VALUE(Moments)
 SLT_END_ENUM()
 
 namespace Shalltear {
@@ -68,6 +78,11 @@ namespace Shalltear {
 		SLT_REFLECT_FIELD(shadowFirstCascadeDistance, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowCascadeFit, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowPcfTaps, SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(shadowFilter, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
+		SLT_REFLECT_FIELD(shadowMomentBlur, SLT_RANGE(0, 2), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(shadowMomentPositiveExponent, SLT_RANGE(1.0f, 40.0f), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(shadowMomentNegativeExponent, SLT_RANGE(1.0f, 40.0f), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
+		SLT_REFLECT_FIELD(shadowMomentBleedReduction, SLT_RANGE(0.0f, 0.99f), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(shadowAtlasSize, SLT_MUTABILITY(::Shalltear::MutabilityClass::FrameBoundary))
 		SLT_REFLECT_FIELD(objectShadows, SLT_RANGE(0, 16), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
 		SLT_REFLECT_FIELD(objectShadowResolution, SLT_RANGE(64, 4096), SLT_MUTABILITY(::Shalltear::MutabilityClass::Hot))
@@ -111,6 +126,15 @@ namespace Shalltear {
 		ShadowCascadeFit shadowCascadeFit = ShadowCascadeFit::Fixed;
 
 		i32 shadowPcfTaps = 5;
+
+		// Moments: cascades as EVSM, 4 samples per texel, filtered
+		ShadowFilter shadowFilter = ShadowFilter::PCF;
+		// texels of box filter around each resolved texel
+		i32 shadowMomentBlur = 0;
+		f32 shadowMomentPositiveExponent = 40.0f;
+		f32 shadowMomentNegativeExponent = 5.0f;
+		// higher: less light bleeding, darker penumbrae
+		f32 shadowMomentBleedReduction = 0.25f;
 
 		i32 shadowAtlasSize = 2048;
 

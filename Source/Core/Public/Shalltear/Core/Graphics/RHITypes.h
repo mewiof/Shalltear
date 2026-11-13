@@ -55,6 +55,7 @@ namespace Shalltear::RHI {
 		BC7Unorm,
 		BC7SRGB,
 		BC6HUFloat,
+		RGBA32Float,
 		Count
 	};
 
@@ -87,6 +88,8 @@ namespace Shalltear::RHI {
 			return width * height * 4;
 		case Format::RGBA16Float:
 			return width * height * 8;
+		case Format::RGBA32Float:
+			return width * height * 16;
 		case Format::Unknown:
 		case Format::Count:
 			break;

@@ -3574,6 +3574,7 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 	u32 shadowLights = 0;
 	u32 shadowMaps = 0;
 	u32 punctualOnlyMaps = 0;
+	u32 momentMaps = 0;
 	if (available && _mounted) {
 		Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
 		if (meshAsset) {
@@ -3614,6 +3615,13 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 				RenderTo(target, pixels, size);
 			}
 			punctualOnlyMaps = RenderSystem::GetStats().shadowMapsRendered;
+
+			sun->SetCastShadows(true);
+			UseProfile([](GraphicsProfile& profile) { profile.shadowFilter = ShadowFilter::Moments; });
+			for (int frame = 0; frame < 3; ++frame) {
+				RenderTo(target, pixels, size);
+			}
+			momentMaps = RenderSystem::GetStats().shadowMapsRendered;
 			RenderSystem::DestroyViewTarget(target);
 			SceneSystem::UnloadScene(scene);
 		}
@@ -3631,6 +3639,7 @@ TEST_F(ShadowViewFixture, AShadowedFrameLogsNoGraphicsError) {
 	EXPECT_EQ(shadowLights, 3u);
 	EXPECT_EQ(shadowMaps, 12u);
 	EXPECT_EQ(punctualOnlyMaps, 7u);
+	EXPECT_EQ(momentMaps, 12u);
 	EXPECT_TRUE(captured.empty()) << captured;
 }
 
@@ -5228,6 +5237,97 @@ TEST_F(ShadowViewFixture, NestedObjectShadowTakesSubtree) {
 	mount->GetComponent<MeshRenderer>()->SetCastShadows(ShadowCasting::Off);
 	RenderThirdPerson(target, pixels, size);
 	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 3u);
+
+	RenderSystem::DestroyViewTarget(target);
+	SceneSystem::UnloadScene(scene);
+	AssetDatabase::UnloadAsset(meshAsset);
+}
+
+TEST_F(ShadowViewFixture, MomentShadowEdgeMovesWithinTexel) {
+	InitializeWith();
+	if (!RenderSystem::IsRenderingAvailable()) {
+		GTEST_SKIP() << "no Vulkan device available";
+	}
+	ASSERT_TRUE(_mounted);
+	UseProfile([](GraphicsProfile& profile) {
+		profile.shadowDistance = 20.0f;
+		profile.shadowCascades = 1;
+		profile.shadowAtlasSize = 512;
+	});
+	Asset* meshAsset = AssetDatabase::LoadAsset(Path("engine://Meshes/Cube.primitive"));
+	ASSERT_NE(meshAsset, nullptr);
+	const Handle<MeshAsset> cube(static_cast<MeshAsset*>(meshAsset));
+	Handle<Scene> scene = SceneSystem::CreateScene("MomentEdge");
+	Handle<SceneObject> ground = SceneSystem::CreateObject("Ground", scene);
+	ground->SetLocalPosition(Vec3(0.0f, -0.2f, 0.0f));
+	ground->SetLocalScale(Vec3(40.0f, 0.4f, 40.0f));
+	ground->AddComponent<MeshRenderer>()->SetMesh(cube);
+	Handle<SceneObject> block = SceneSystem::CreateObject("Block", scene);
+	block->SetLocalPosition(Vec3(0.0f, 0.5f, 0.0f));
+	Handle<MeshRenderer> blockRenderer = block->AddComponent<MeshRenderer>();
+	blockRenderer->SetMesh(cube);
+	blockRenderer->SetCastShadows(ShadowCasting::ShadowsOnly);
+	Handle<SceneObject> sunObject = SceneSystem::CreateObject("Sun", scene);
+	sunObject->SetLocalRotation(Quat::LookRotation(Vec3(0.0f, -0.8f, 0.6f).Normalized()));
+	Handle<Light> sun = sunObject->AddComponent<Light>();
+	sun->SetIntensity(2.0f);
+	SceneSystem::EndFrame();
+
+	ViewTargetId target = RenderSystem::CreateViewTarget({256, 256});
+	ASSERT_NE(target, INVALID_VIEW_TARGET);
+	const Vec3 eye(0.0f, 5.0f, -1.0f);
+	const Vec3 lookAt(0.0f, 0.0f, 0.8f);
+	Vector<u8> lit{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	sun->SetCastShadows(false);
+	RenderFrom(target, eye, lookAt, lit, size);
+	sun->SetCastShadows(true);
+	ViewDesc desc;
+	desc.view = Mat4::LookAt(eye, lookAt);
+	desc.projection = Mat4::PerspectiveReverseZ(55.0f, 1.0f, 0.1f, 500.0f);
+	desc.cameraPosition = eye;
+	desc.clearColor = Color::Black();
+	desc.retainCascadeFit = true;
+	RenderSystem::SubmitView(target, desc);
+	RenderSystem::RenderAll();
+	CascadeFit fits[MAX_SHADOW_CASCADES];
+	if (RenderSystem::GetCascadeFit(target, {fits, std::size(fits)}) != 1u) {
+		RenderSystem::DestroyViewTarget(target);
+		SceneSystem::UnloadScene(scene);
+		GTEST_SKIP() << "no shadowing light extracted (dxcompiler.dll unavailable?)";
+	}
+	const f32 texel = fits[0].worldTexelSize;
+
+	auto unchangedSteps = [&](Vector<u8>& first) {
+		u32 unchanged = 0;
+		Vector<u8> previous{GetMemoryResource(MemTag::Graphics)};
+		Vector<u8> current{GetMemoryResource(MemTag::Graphics)};
+		for (u32 step = 0; step <= 4; ++step) {
+			block->SetLocalPosition(Vec3(static_cast<f32>(step) * 0.25f * texel, 0.5f, 0.0f));
+			SceneSystem::EndFrame();
+			RenderFrom(target, eye, lookAt, current, size);
+			if (step == 0) {
+				first = current;
+			} else if (current == previous) {
+				++unchanged;
+			}
+			previous = current;
+		}
+		return unchanged;
+	};
+	Vector<u8> pcf{GetMemoryResource(MemTag::Graphics)};
+	EXPECT_GE(unchangedSteps(pcf), 2u);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+
+	UseProfile([](GraphicsProfile& profile) { profile.shadowFilter = ShadowFilter::Moments; });
+	Vector<u8> moments{GetMemoryResource(MemTag::Graphics)};
+	EXPECT_EQ(unchangedSteps(moments), 0u);
+	EXPECT_EQ(RenderSystem::GetStats().shadowMapsRendered, 1u);
+	const ShadowDelta shadow = CompareFrames(moments, lit, size);
+	EXPECT_GT(shadow.darker, 300u);
+	EXPECT_EQ(shadow.brighter, 0u);
+	const f32 pcfCore = static_cast<f32>(MeasureShadowEdge(pcf, lit, size).core);
+	EXPECT_NEAR(static_cast<f32>(MeasureShadowEdge(moments, lit, size).core), pcfCore, 0.1f * pcfCore);
 
 	RenderSystem::DestroyViewTarget(target);
 	SceneSystem::UnloadScene(scene);

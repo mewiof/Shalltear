@@ -147,6 +147,8 @@ float3 ShalltearTransformNormal(float4 column0, float4 column1, float4 column2, 
 	float sltFogLayerCount;
 	uint64_t sltViewDataAddress;
 	uint64_t sltDecalAddress;
+	// positive exponent, negative exponent, bleed reduction
+	float4 sltShadowMoments;
 };
 
 #include "ViewData.hlsli"

@@ -53,6 +53,7 @@ namespace {
 		{"Shaders/Skinning.hlsl", EngineBuiltins::SkinningShader},
 		{"Shaders/DepthRange.hlsl", EngineBuiltins::DepthRangeShader},
 		{"Shaders/DepthRangeMS.hlsl", EngineBuiltins::DepthRangeMultisampledShader},
+		{"Shaders/MomentResolve.hlsl", EngineBuiltins::MomentResolveShader},
 	};
 
 	class EngineBuiltinsFixture : public ::testing::Test {

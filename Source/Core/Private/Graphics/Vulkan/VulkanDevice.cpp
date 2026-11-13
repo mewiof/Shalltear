@@ -43,6 +43,8 @@ namespace Shalltear::RHI {
 			return VK_FORMAT_BC7_SRGB_BLOCK;
 		case Format::BC6HUFloat:
 			return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+		case Format::RGBA32Float:
+			return VK_FORMAT_R32G32B32A32_SFLOAT;
 		default:
 			return VK_FORMAT_UNDEFINED;
 		}

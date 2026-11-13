@@ -325,7 +325,7 @@ float4 PSMain(VSOutput input) : SV_Target { return float4(1, 0, 1, 1); }
 
 } // anonymous namespace
 
-TEST_F(ShaderCompileFixture, OnlyLODFadeSpecializationImports) {
+TEST_F(ShaderCompileFixture, OnlyEngineSpecializationsImport) {
 	ShaderAsset probe;
 	if (!probe.Import(Write("probe.hlsl", MINIMAL_SHADER))) {
 		GTEST_SKIP() << "dxcompiler.dll unavailable";
@@ -340,7 +340,8 @@ TEST_F(ShaderCompileFixture, OnlyLODFadeSpecializationImports) {
 		return shader.Import(Write("flag.hlsl", source));
 	};
 	EXPECT_TRUE(withConstant(SHADER_LOD_FADE_CONSTANT_ID));
-	EXPECT_FALSE(withConstant(SHADER_LOD_FADE_CONSTANT_ID + 1));
+	EXPECT_TRUE(withConstant(SHADER_SHADOW_MOMENTS_CONSTANT_ID));
+	EXPECT_FALSE(withConstant(SHADER_SHADOW_MOMENTS_CONSTANT_ID + 1));
 }
 
 TEST_F(ShaderCompileFixture, ImportCompilesReflectsAndParsesState) {

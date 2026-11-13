@@ -289,8 +289,9 @@ namespace Shalltear {
 			f32 fogLayerCount = 0.0f;
 			u64 viewDataAddress = 0;
 			u64 decalAddress = 0;
+			Vec4 shadowMoments;
 		};
-		static_assert(sizeof(GPUViewUniforms) == 240);
+		static_assert(sizeof(GPUViewUniforms) == 256);
 
 		struct GPUViewData {
 			Mat4 view;
@@ -436,6 +437,7 @@ namespace Shalltear {
 		constexpr u32 DRAW_FADE_SHIFT = 16u;
 		constexpr u32 DRAW_FADE_ABOVE = 1u << 24;
 		constexpr RHI::SpecializationConstant LODFadeConstant{SHADER_LOD_FADE_CONSTANT_ID, 1};
+		constexpr RHI::SpecializationConstant ShadowMomentsConstant{SHADER_SHADOW_MOMENTS_CONSTANT_ID, 1};
 		static_assert(static_cast<u32>(RHI::BlendMode::Count) <= 8u, "the blend's 3 bits of the per-draw flags");
 		static_assert(static_cast<u32>(RHI::BlendMode::Opaque) == 0u && static_cast<u32>(RHI::BlendMode::Alpha) == 1u &&
 						  static_cast<u32>(RHI::BlendMode::Additive) == 2u && static_cast<u32>(RHI::BlendMode::Premultiplied) == 3u &&
@@ -853,6 +855,20 @@ namespace Shalltear {
 			RHI::TextureHandle shadowAtlas;
 			RHI::TextureHandle punctualShadowAtlas;
 			RHI::SamplerHandle shadowSampler;
+			ShadowFilter shadowFilter = ShadowFilter::PCF;
+			u32 shadowMomentBlur = 0;
+			// positive exponent, negative exponent, bleed reduction
+			Vec3 shadowMomentParams{40.0f, 5.0f, 0.25f};
+			RHI::TextureHandle momentAtlas;
+			RHI::TextureHandle momentDepth;
+			u32 momentSamples = 1;
+			Handle<ShaderAsset> momentResolveShader;
+			bool momentResolveShaderTried = false;
+
+			bool MomentsActive() const {
+				return shadowFilter == ShadowFilter::Moments && momentAtlas.IsValid() && momentDepth.IsValid() && momentResolveShader.Get();
+			}
+			RHI::TextureHandle DirectionalShadowTexture() const { return MomentsActive() ? momentAtlas : shadowAtlas; }
 
 			struct EnvironmentSetup {
 				RHI::TextureHandle cube;
@@ -1327,9 +1343,10 @@ namespace Shalltear {
 		}
 
 		u64 PipelineKey(u64 shaderId, u32 shaderVersion, u32 variant, ShaderProgramKind kind,
-						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples, bool lodFade) {
+						RHI::Format colorFormat, RHI::Format depthFormat, u64 stateKey, u32 samples, bool lodFade, bool moments) {
 			u64 key = shaderId * 1099511628211ull;
 			key ^= lodFade ? 0x9E3779B97F4A7C15ull : 0ull;
+			key ^= moments ? 0xC2B2AE3D27D4EB4Full : 0ull;
 			key ^= static_cast<u64>(shaderVersion) << 32;
 			key ^= static_cast<u64>(kind) << 62;
 			key ^= static_cast<u64>(variant) << 40;
@@ -1373,6 +1390,28 @@ namespace Shalltear {
 			return false;
 		}
 
+		bool ShaderDeclaresBinding(const ShaderAsset& shader, u32 set, u32 binding) {
+			for (const RHI::DescriptorBindingDesc& declared : shader.bindings) {
+				if (declared.set == set && declared.binding == binding) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		constexpr u32 SHADOW_ATLAS_BINDING = 1;
+		constexpr u32 SHADOW_SAMPLER_BINDING = 2;
+		constexpr u32 PUNCTUAL_ATLAS_BINDING = 3;
+		constexpr u32 ENVIRONMENT_CUBE_BINDING = 4;
+		constexpr u32 ENVIRONMENT_SAMPLER_BINDING = 5;
+		constexpr u32 AMBIENT_OCCLUSION_BINDING = 6;
+		constexpr u32 AMBIENT_OCCLUSION_SAMPLER_BINDING = 7;
+		constexpr u32 REFLECTION_PROBE_BINDING = 8;
+		constexpr u32 ENVIRONMENT_CUBE2_BINDING = 9;
+		// must match ShalltearGlobals.hlsli
+		constexpr u32 SHADER_GLOBALS_BINDING = 10;
+		constexpr u32 SHADER_GLOBAL_RESOURCE_BINDING = 11;
+
 		RHI::PipelineHandle GetOrCreatePipeline(ShaderAsset* shader, RHI::Format colorFormat, RHI::Format depthFormat,
 												const RHI::ShaderRenderState* stateOverride = nullptr, u32 samples = 1,
 												u32 variant = SHADER_BASE_VARIANT,
@@ -1396,8 +1435,9 @@ namespace Shalltear {
 			u64 shaderId = shader->GetInstanceId();
 			const RHI::ShaderRenderState& pipelineState = stateOverride ? *stateOverride : shader->renderState;
 			lodFade = lodFade && kind != ShaderProgramKind::Compute;
+			const bool moments = kind == ShaderProgramKind::Forward && state.MomentsActive() && ShaderDeclaresBinding(*shader, 0, SHADOW_ATLAS_BINDING);
 			u64 key = PipelineKey(shaderId, shader->version, variant, kind, colorFormat, depthFormat, RenderStateKey(pipelineState), samples,
-								  lodFade);
+								  lodFade, moments);
 			auto it = state.pipelineCache.find(key);
 			if (it != state.pipelineCache.end()) {
 				if (outInstanced) {
@@ -1442,9 +1482,15 @@ namespace Shalltear {
 										   : valuePass ? blob(code->depthValuePixelSpirv)
 													   : blob(code->depthPixelSpirv))
 										: blob(code->pixelSpirv);
+			RHI::SpecializationConstant constants[2];
+			u32 constantCount = 0;
 			if (lodFade) {
-				desc.pixelConstants = {&LODFadeConstant, 1};
+				constants[constantCount++] = LODFadeConstant;
 			}
+			if (moments) {
+				constants[constantCount++] = ShadowMomentsConstant;
+			}
+			desc.pixelConstants = {constants, constantCount};
 			desc.bindings = {shader->bindings.data(), shader->bindings.size()};
 			desc.pushConstantSize = shader->pushConstantSize;
 			desc.blend = pipelineState.blend;
@@ -1464,28 +1510,6 @@ namespace Shalltear {
 
 			return remember(state.device->CreateGraphicsPipeline(desc), ReadsInstanceIndex(desc.vertexSpirv));
 		}
-
-		bool ShaderDeclaresBinding(const ShaderAsset& shader, u32 set, u32 binding) {
-			for (const RHI::DescriptorBindingDesc& declared : shader.bindings) {
-				if (declared.set == set && declared.binding == binding) {
-					return true;
-				}
-			}
-			return false;
-		}
-
-		constexpr u32 SHADOW_ATLAS_BINDING = 1;
-		constexpr u32 SHADOW_SAMPLER_BINDING = 2;
-		constexpr u32 PUNCTUAL_ATLAS_BINDING = 3;
-		constexpr u32 ENVIRONMENT_CUBE_BINDING = 4;
-		constexpr u32 ENVIRONMENT_SAMPLER_BINDING = 5;
-		constexpr u32 AMBIENT_OCCLUSION_BINDING = 6;
-		constexpr u32 AMBIENT_OCCLUSION_SAMPLER_BINDING = 7;
-		constexpr u32 REFLECTION_PROBE_BINDING = 8;
-		constexpr u32 ENVIRONMENT_CUBE2_BINDING = 9;
-		// must match ShalltearGlobals.hlsli
-		constexpr u32 SHADER_GLOBALS_BINDING = 10;
-		constexpr u32 SHADER_GLOBAL_RESOURCE_BINDING = 11;
 
 		void WriteShaderGlobals(RenderState& state, RHI::Device& device, RHI::TransientSetWriter& writer, const ShaderAsset& shader);
 
@@ -2994,6 +3018,7 @@ namespace Shalltear {
 			RHI::Format depthFormat = RHI::Format::Unknown;
 			RHI::TransientAllocation viewBlock{};
 			Vec2 casterBias{};
+			u32 samples = 1;
 		};
 
 		u32 RecordProceduralDepth(RHI::CommandList& cmd, RHI::Device& device, std::span<const u32> renderers,
@@ -3050,7 +3075,7 @@ namespace Shalltear {
 					init.pass = depthView.pass;
 					init.colorFormat = depthView.colorFormat;
 					init.depthFormat = depthView.depthFormat;
-					init.samples = 1;
+					init.samples = depthView.samples;
 					init.extent = depthView.extent;
 					init.view = depthView.view;
 					init.projection = depthView.projection;
@@ -4118,8 +4143,9 @@ namespace Shalltear {
 
 		bool BindDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, const DrawEntry& entry,
 						   const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
-						   const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value, bool& instanced) {
-			RHI::PipelineHandle pipeline = GetOrCreatePipeline(entry.shader, colorFormat, depthFormat, &drawState, 1, entry.variant,
+						   const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value, bool& instanced,
+						   u32 samples = 1) {
+			RHI::PipelineHandle pipeline = GetOrCreatePipeline(entry.shader, colorFormat, depthFormat, &drawState, samples, entry.variant,
 															   ShaderProgramKind::Depth, &instanced, entry.lodFade != 0);
 			if (!pipeline.IsValid()) {
 				return false;
@@ -4158,15 +4184,59 @@ namespace Shalltear {
 		u32 RecordDepthDraw(RHI::CommandList& cmd, RHI::Device& device, DepthDrawBinding& bound, DrawEntry& entry,
 							const RHI::ShaderRenderState& drawState, RHI::Format colorFormat, RHI::Format depthFormat,
 							const RHI::TransientAllocation& viewAllocation, u64 drawAddress, u32 value = 0,
-							const RunLength& runLength = {}) {
+							const RunLength& runLength = {}, u32 samples = 1) {
 			bool instanced = false;
 			if (!BindDepthDraw(cmd, device, bound, entry, drawState, colorFormat, depthFormat, viewAllocation, drawAddress, value,
-							   instanced)) {
+							   instanced, samples)) {
 				return 0;
 			}
 			const u32 instances = instanced ? runLength() : 1u;
 			DrawMesh(cmd, entry, instances);
 			return instances;
+		}
+
+		struct GPUMomentResolvePush {
+			i32 tileOriginX = 0;
+			i32 tileOriginY = 0;
+			i32 tileSizeX = 0;
+			i32 tileSizeY = 0;
+			f32 positiveExponent = 0.0f;
+			f32 negativeExponent = 0.0f;
+			i32 radius = 0;
+			u32 samples = 1;
+		};
+
+		bool ResolveMoments(RHI::CommandList& cmd, RHI::Device& device, RHI::TextureHandle momentAtlas, const RectI& tile) {
+			RenderState& state = *_state;
+			ShaderAsset* shader = state.momentResolveShader.Get();
+			const RHI::PipelineHandle pipeline =
+				shader ? GetOrCreatePipeline(shader, RHI::Format::RGBA32Float, RHI::Format::Unknown) : RHI::PipelineHandle{};
+			if (!pipeline.IsValid()) {
+				return false;
+			}
+			RHI::RenderPassDesc::Attachment attachment;
+			attachment.texture = momentAtlas;
+			attachment.load = RHI::LoadOp::Load;
+			RHI::RenderPassDesc desc;
+			desc.colorAttachments = {&attachment, 1};
+			cmd.TransitionTexture(momentAtlas, RHI::ResourceState::RenderTarget);
+			cmd.BeginRenderPass(desc);
+			cmd.SetViewportScissor(tile);
+			cmd.SetPipeline(pipeline);
+			cmd.BindTransientSet(1, device.CreateTransientSet(pipeline, 1).WriteTexture(0, state.momentDepth).WriteSampler(1, state.clampSampler).Commit());
+			GPUMomentResolvePush push;
+			push.tileOriginX = tile.Left();
+			push.tileOriginY = tile.Top();
+			push.tileSizeX = tile.size.x;
+			push.tileSizeY = tile.size.y;
+			push.positiveExponent = state.shadowMomentParams.x;
+			push.negativeExponent = state.shadowMomentParams.y;
+			push.radius = static_cast<i32>(state.shadowMomentBlur);
+			push.samples = state.momentSamples;
+			cmd.PushConstants({reinterpret_cast<const u8*>(&push), sizeof(push)});
+			cmd.Draw(3);
+			cmd.EndRenderPass();
+			return true;
 		}
 
 		void GatherObjectShadowMembers(RenderState& state, SceneObject& root, u32 layerMask, AABB& bounds) {
@@ -4562,6 +4632,73 @@ namespace Shalltear {
 
 			u32 drawCalls = 0;
 			const u64 casterViewData = WriteViewData(device, view, projection, Vec2I(static_cast<i32>(atlasSize), static_cast<i32>(atlasSize)));
+			auto drawMap = [&](u32 map, const RectI& tile, u32 samples) {
+				const bool cascade = map < cascadeCount;
+				const Mat4& mapViewProjection = cascade ? state.cascadeViews[map].viewProjection
+														: state.punctualViews[map - firstPunctualMap].viewProjection;
+				cmd.SetViewportScissor(tile);
+
+				RHI::TransientAllocation viewAllocation = device.AllocateTransient(sizeof(GPUViewUniforms));
+				if (!viewAllocation.IsValid()) {
+					return false;
+				}
+				GPUViewUniforms casterUniforms;
+				casterUniforms.viewProjection = mapViewProjection;
+				casterUniforms.cameraPosition = cameraPosition;
+				casterUniforms.viewDataAddress = casterViewData;
+				std::memcpy(viewAllocation.cpu, &casterUniforms, sizeof(GPUViewUniforms));
+
+				DepthDrawBinding bound;
+				const u64 mapBit = 1ull << map;
+				for (u32 i = 0; i < extracted.count;) {
+					DrawEntry& entry = *extracted.list[i];
+					if ((entry.volumeMask & mapBit) == 0 || entry.alpha) {
+						++i;
+						continue;
+					}
+
+					const bool twoSided = entry.castShadows == ShadowCasting::TwoSided;
+					RHI::ShaderRenderState casterState = entry.renderState;
+					casterState.blend = RHI::BlendMode::Opaque;
+					casterState.depth = RHI::DepthMode::TestWrite;
+					casterState.depthCompare = RHI::DepthCompare::NearerOrEqual;
+					casterState.fill = RHI::FillMode::Solid;
+					ApplyCasterBias(casterState, casterBias[map]);
+					if (twoSided) {
+						casterState.cull = RHI::CullMode::Off;
+					}
+					const u32 drawn = RecordDepthDraw(
+						cmd, device, bound, entry, casterState, RHI::Format::Unknown, SHADOW_ATLAS_FORMAT, viewAllocation,
+						extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw), 0, [&] {
+							return InstanceRunLength(extracted.list, i, extracted.count, [&](const DrawEntry& next) {
+								return (next.volumeMask & mapBit) != 0 && (next.castShadows == ShadowCasting::TwoSided) == twoSided;
+							});
+						},
+						samples);
+					if (drawn == 0) {
+						++i;
+						continue;
+					}
+					++drawCalls;
+					state.frameDrawCallsSaved += drawn - 1;
+					outTriangles += entry.submesh->indexCount / 3 * drawn;
+					i += drawn;
+				}
+				if (!casters.empty() && (map < objectFirst || map >= objectFirst + objectCount)) {
+					ProceduralDepthView itemView;
+					itemView.pass = ProceduralPass::Shadow;
+					itemView.view = cascade ? state.cascadeViews[map].view : state.punctualViews[map - firstPunctualMap].view;
+					itemView.projection = cascade ? state.cascadeViews[map].projection : state.punctualViews[map - firstPunctualMap].projection;
+					itemView.extent = tile.size;
+					itemView.depthFormat = SHADOW_ATLAS_FORMAT;
+					itemView.viewBlock = viewAllocation;
+					itemView.casterBias = casterBias[map];
+					itemView.samples = samples;
+					drawCalls += RecordProceduralDepth(cmd, device, casters, itemView, &volumes[map]);
+				}
+				++state.frameShadowMapsRendered;
+				return true;
+			};
 			auto drawMaps = [&](RHI::TextureHandle target, u32 first, u32 count) {
 				if (count == 0) {
 					return;
@@ -4573,76 +4710,41 @@ namespace Shalltear {
 				RHI::RenderPassDesc atlasPass;
 				atlasPass.depth = &depthAttachment;
 				cmd.BeginRenderPass(atlasPass);
-
 				for (u32 map = first; map < first + count; ++map) {
-					const bool cascade = map < cascadeCount;
-					const RectI tile = cascade ? GraphicsInternal::CascadeAtlasRect(map, atlasSize, cascadeCount)
-											   : punctualTiles[map];
-					const Mat4& mapViewProjection = cascade ? state.cascadeViews[map].viewProjection
-															: state.punctualViews[map - firstPunctualMap].viewProjection;
-					cmd.SetViewportScissor(tile);
-
-					RHI::TransientAllocation viewAllocation = device.AllocateTransient(sizeof(GPUViewUniforms));
-					if (!viewAllocation.IsValid()) {
+					const RectI tile = map < cascadeCount ? GraphicsInternal::CascadeAtlasRect(map, atlasSize, cascadeCount) : punctualTiles[map];
+					if (!drawMap(map, tile, 1)) {
 						break;
 					}
-					GPUViewUniforms casterUniforms;
-					casterUniforms.viewProjection = mapViewProjection;
-					casterUniforms.cameraPosition = cameraPosition;
-					casterUniforms.viewDataAddress = casterViewData;
-					std::memcpy(viewAllocation.cpu, &casterUniforms, sizeof(GPUViewUniforms));
-
-					DepthDrawBinding bound;
-					const u64 mapBit = 1ull << map;
-					for (u32 i = 0; i < extracted.count;) {
-						DrawEntry& entry = *extracted.list[i];
-						if ((entry.volumeMask & mapBit) == 0 || entry.alpha) {
-							++i;
-							continue;
-						}
-
-						const bool twoSided = entry.castShadows == ShadowCasting::TwoSided;
-						RHI::ShaderRenderState casterState = entry.renderState;
-						casterState.blend = RHI::BlendMode::Opaque;
-						casterState.depth = RHI::DepthMode::TestWrite;
-						casterState.depthCompare = RHI::DepthCompare::NearerOrEqual;
-						casterState.fill = RHI::FillMode::Solid;
-						ApplyCasterBias(casterState, casterBias[map]);
-						if (twoSided) {
-							casterState.cull = RHI::CullMode::Off;
-						}
-						const u32 drawn = RecordDepthDraw(
-							cmd, device, bound, entry, casterState, RHI::Format::Unknown, SHADOW_ATLAS_FORMAT, viewAllocation,
-							extracted.perDrawAddress + static_cast<u64>(i) * sizeof(GPUPerDraw), 0, [&] {
-								return InstanceRunLength(extracted.list, i, extracted.count, [&](const DrawEntry& next) {
-									return (next.volumeMask & mapBit) != 0 && (next.castShadows == ShadowCasting::TwoSided) == twoSided;
-								});
-							});
-						if (drawn == 0) {
-							++i;
-							continue;
-						}
-						++drawCalls;
-						state.frameDrawCallsSaved += drawn - 1;
-						outTriangles += entry.submesh->indexCount / 3 * drawn;
-						i += drawn;
-					}
-					if (!casters.empty() && (map < objectFirst || map >= objectFirst + objectCount)) {
-						ProceduralDepthView itemView;
-						itemView.pass = ProceduralPass::Shadow;
-						itemView.view = cascade ? state.cascadeViews[map].view : state.punctualViews[map - firstPunctualMap].view;
-						itemView.projection = cascade ? state.cascadeViews[map].projection : state.punctualViews[map - firstPunctualMap].projection;
-						itemView.extent = tile.size;
-						itemView.depthFormat = SHADOW_ATLAS_FORMAT;
-						itemView.viewBlock = viewAllocation;
-						itemView.casterBias = casterBias[map];
-						drawCalls += RecordProceduralDepth(cmd, device, casters, itemView, &volumes[map]);
-					}
-					++state.frameShadowMapsRendered;
 				}
 				cmd.EndRenderPass();
 			};
-			drawMaps(atlas, 0, cascadeCount);
+			const bool moments = state.MomentsActive() && atlas == state.momentAtlas;
+			if (moments && cascadeCount > 0) {
+				const Vec2I depthSize = device.GetTextureSize(state.momentDepth);
+				for (u32 map = 0; map < cascadeCount; ++map) {
+					RHI::RenderPassDesc::DepthAttachment depthAttachment;
+					depthAttachment.texture = state.momentDepth;
+					depthAttachment.load = RHI::LoadOp::Clear;
+					depthAttachment.clearDepth = 0.0f;
+					RHI::RenderPassDesc samplesPass;
+					samplesPass.depth = &depthAttachment;
+					cmd.TransitionTexture(state.momentDepth, RHI::ResourceState::DepthWrite);
+					cmd.BeginRenderPass(samplesPass);
+					const bool drawn = drawMap(map, RectI(0, 0, depthSize.x, depthSize.y), state.momentSamples);
+					cmd.EndRenderPass();
+					if (!drawn) {
+						break;
+					}
+					cmd.TransitionTexture(state.momentDepth, RHI::ResourceState::ShaderResource);
+					if (map > 0) {
+						cmd.TransitionTexture(atlas, RHI::ResourceState::ShaderResource);
+					}
+					ResolveMoments(cmd, device, atlas, GraphicsInternal::CascadeAtlasRect(map, atlasSize, cascadeCount));
+				}
+				cmd.TransitionTexture(state.momentDepth, RHI::ResourceState::DepthWrite);
+			} else if (!moments) {
+				drawMaps(atlas, 0, cascadeCount);
+			}
 			drawMaps(punctualAtlas, firstPunctualMap, mapCount - firstPunctualMap);
 
 			RenderState::ShadowSetup& setup = state.pendingShadow;
@@ -5401,6 +5503,9 @@ namespace Shalltear {
 			viewUniforms.transparentReceivesShadows = state.transparentReceiveShadows ? 1.0f : 0.0f;
 			viewUniforms.shadowAtlasTexel = 1.0f / static_cast<f32>(Math::Max(state.ShadowAtlasSize(), 1u));
 			viewUniforms.shadowPcfTaps = static_cast<f32>(state.shadowPcfTaps);
+			if (state.MomentsActive() && shadow.cascadeCount > 0) {
+				viewUniforms.shadowMoments = Vec4(state.shadowMomentParams, 1.0f);
+			}
 
 			// before the view uniforms (its address is one of them)
 			const u64 environmentBytes = sizeof(GPUEnvironment) + static_cast<u64>(environment.fogCount) * sizeof(GPUFogLayer);
@@ -5506,7 +5611,7 @@ namespace Shalltear {
 					cmd.SetPipeline(pipeline);
 					boundPipeline = pipeline;
 					boundMaterial = ~0ull;
-					viewSet = CreateViewSet(device, pipeline, *entry.shader, viewAllocation, state.shadowAtlas,
+					viewSet = CreateViewSet(device, pipeline, *entry.shader, viewAllocation, state.DirectionalShadowTexture(),
 											state.punctualShadowAtlas, environment.cube[0], ambientOcclusion, environment.cube[1]);
 					cmd.BindTransientSet(0, viewSet);
 					if (SceneRequests::DeclaresSceneSet(*entry.shader)) {
@@ -5565,7 +5670,7 @@ namespace Shalltear {
 				init.sceneDepth = bound.depth;
 				init.sceneNormals = bound.normals;
 				init.viewBlock = viewAllocation;
-				init.shadowAtlas = state.shadowAtlas;
+				init.shadowAtlas = state.DirectionalShadowTexture();
 				init.punctualAtlas = state.punctualShadowAtlas;
 				init.environmentCube = environment.cube[0];
 				init.environmentCube2 = environment.cube[1];
@@ -5610,7 +5715,7 @@ namespace Shalltear {
 					boundPipeline = RHI::PipelineHandle{};
 					boundMaterial = ~0ull;
 					RHI::TransientSet skySet = CreateViewSet(device, skyPipeline, *skyShader, viewAllocation,
-															 state.shadowAtlas, state.punctualShadowAtlas, sky.cube);
+															 state.DirectionalShadowTexture(), state.punctualShadowAtlas, sky.cube);
 					cmd.BindTransientSet(0, skySet);
 					if (skyMaterial) {
 						DrawEntry skyEntry;
@@ -5669,7 +5774,7 @@ namespace Shalltear {
 				if (wirePipeline.IsValid()) {
 					cmd.SetPipeline(wirePipeline);
 					RHI::TransientSet wireViewSet = CreateViewSet(device, wirePipeline, *wireShader, viewAllocation,
-																  state.shadowAtlas, state.punctualShadowAtlas);
+																  state.DirectionalShadowTexture(), state.punctualShadowAtlas);
 					cmd.BindTransientSet(0, wireViewSet);
 					for (u32 i = 0; i < drawCount; ++i) {
 						DrawEntry& entry = *drawList[i];
@@ -6563,7 +6668,7 @@ namespace Shalltear {
 			exec.cmd->BeginRenderPass(desc);
 			exec.cmd->SetPipeline(pipeline);
 			exec.cmd->BindTransientSet(0, CreateViewSet(*exec.device, pipeline, *shader, pending.viewAllocation,
-														state.shadowAtlas, state.punctualShadowAtlas));
+														state.DirectionalShadowTexture(), state.punctualShadowAtlas));
 
 			GPUDebugOverlayPush push;
 			push.mode = static_cast<u32>(pending.debugOverlay);
@@ -7748,7 +7853,7 @@ namespace Shalltear {
 									  GraphResourceId sceneTarget, GraphResourceId sceneDepth,
 									  GraphResourceId worldSkin, GraphResourceId worldSkinBuffer) {
 			RenderState::WindowWork& windowWork = state.frameWork[work.index];
-			GraphResourceId windowShadowAtlas = graph.Import(state.shadowAtlas);
+			GraphResourceId windowShadowAtlas = graph.Import(state.DirectionalShadowTexture());
 			GraphResourceId windowPunctualAtlas = graph.Import(state.punctualShadowAtlas);
 			const bool windowCasts = PartitionHasShadowCaster(state, SceneKind::World, {});
 
@@ -7905,10 +8010,13 @@ namespace Shalltear {
 
 				if (windowCasts) {
 					graph.AddPass("Render.Window.Shadow", windowShadowSite, &PassRecordWindowShadow, work);
-					graph.Write(windowShadowAtlas, RHI::ResourceState::DepthWrite);
+					graph.Write(windowShadowAtlas, state.MomentsActive() ? RHI::ResourceState::RenderTarget : RHI::ResourceState::DepthWrite);
 					graph.Write(windowPunctualAtlas, RHI::ResourceState::DepthWrite);
 					graph.Read(worldSkin, RHI::ResourceState::ShaderResource);
 					DeclareProceduralReads(state, graph, casters);
+					if (state.MomentsActive()) {
+						graph.Write(graph.Import(state.momentDepth), RHI::ResourceState::DepthWrite);
+					}
 				}
 
 				flushCameraRowsBefore(RowSortKey(PassPoint::Opaque, FrameStagePosition::Normal));
@@ -8187,7 +8295,7 @@ namespace Shalltear {
 				};
 				flushRowsBefore(RowSortKey(PassPoint::Shadows, FrameStagePosition::Normal));
 
-				GraphResourceId shadowAtlas = graph.Import(state.shadowAtlas);
+				GraphResourceId shadowAtlas = graph.Import(state.DirectionalShadowTexture());
 				GraphResourceId punctualAtlas = graph.Import(state.punctualShadowAtlas);
 				{
 					auto fitIt = state.viewTargets.find(pending.targetId);
@@ -8198,10 +8306,13 @@ namespace Shalltear {
 				if (viewCasts) {
 					SLT_GRAPH_SITE(viewShadowSite, "Render.View.Shadow");
 					graph.AddPass("Render.View.Shadow", viewShadowSite, &PassRecordViewShadow, viewWork);
-					graph.Write(shadowAtlas, RHI::ResourceState::DepthWrite);
+					graph.Write(shadowAtlas, state.MomentsActive() ? RHI::ResourceState::RenderTarget : RHI::ResourceState::DepthWrite);
 					graph.Write(punctualAtlas, RHI::ResourceState::DepthWrite);
 					graph.Read(skin, RHI::ResourceState::ShaderResource);
 					DeclareProceduralReads(state, graph, casters);
+					if (state.MomentsActive()) {
+						graph.Write(graph.Import(state.momentDepth), RHI::ResourceState::DepthWrite);
+					}
 				}
 
 				flushRowsBefore(RowSortKey(PassPoint::Opaque, FrameStagePosition::Normal));
@@ -8531,12 +8642,61 @@ namespace Shalltear {
 			}
 		}
 
+		void EnsureMomentTargets(RenderState& state) {
+			auto release = [&state](RHI::TextureHandle& texture) {
+				if (texture.IsValid()) {
+					state.device->DestroyResource(texture);
+					texture = {};
+				}
+			};
+			if (state.shadowFilter != ShadowFilter::Moments || state.shadowDistance <= 0.0f) {
+				release(state.momentAtlas);
+				release(state.momentDepth);
+				return;
+			}
+			if (!state.momentResolveShaderTried) {
+				state.momentResolveShaderTried = true;
+				state.momentResolveShader = LoadEngineShader(EngineBuiltins::MomentResolveShader, "MomentResolve");
+			}
+			const i32 atlas = static_cast<i32>(state.ShadowAtlasSize());
+			const i32 tile = atlas / static_cast<i32>(GraphicsInternal::CascadeTilesPerAxis(state.shadowCascades));
+			if (state.momentAtlas.IsValid() && state.device->GetTextureSize(state.momentAtlas) != Vec2I(atlas, atlas)) {
+				release(state.momentAtlas);
+			}
+			if (state.momentDepth.IsValid() && state.device->GetTextureSize(state.momentDepth) != Vec2I(tile, tile)) {
+				release(state.momentDepth);
+			}
+			if (!state.momentAtlas.IsValid()) {
+				RHI::TextureDesc desc;
+				desc.size = {atlas, atlas};
+				desc.format = RHI::Format::RGBA32Float;
+				desc.usage = RHI::TextureUsage::RenderTarget | RHI::TextureUsage::Sampled;
+				desc.debugName = "ShadowMomentAtlas";
+				state.momentAtlas = state.device->CreateTextureResource(desc);
+			}
+			if (!state.momentDepth.IsValid()) {
+				const u32 offered =
+					state.device->GetSupportedSampleCounts(SHADOW_ATLAS_FORMAT, RHI::TextureUsage::DepthStencil | RHI::TextureUsage::Sampled);
+				state.momentSamples = (offered & 4u) != 0 ? 4u : ((offered & 2u) != 0 ? 2u : 1u);
+				if (state.momentSamples > 1) {
+					RHI::TextureDesc desc;
+					desc.size = {tile, tile};
+					desc.format = SHADOW_ATLAS_FORMAT;
+					desc.usage = RHI::TextureUsage::DepthStencil | RHI::TextureUsage::Sampled;
+					desc.samples = state.momentSamples;
+					desc.debugName = "ShadowMomentDepth";
+					state.momentDepth = state.device->CreateTextureResource(desc);
+				}
+			}
+		}
+
 		void EnsureShadowAtlases(RenderState& state) {
 			if (!state.device) {
 				return;
 			}
 			const i32 size = static_cast<i32>(state.ShadowAtlasSize());
 			if (state.shadowAtlas.IsValid() && state.shadowAtlasCreatedAt == size) {
+				EnsureMomentTargets(state);
 				return;
 			}
 			if (state.shadowAtlas.IsValid()) {
@@ -8555,6 +8715,7 @@ namespace Shalltear {
 			atlasDesc.debugName = "PunctualShadowAtlas";
 			state.punctualShadowAtlas = state.device->CreateTextureResource(atlasDesc);
 			state.shadowAtlasCreatedAt = size;
+			EnsureMomentTargets(state);
 		}
 
 		u32 ResolveSampleCount(RenderState& state, i32 requested) {
@@ -8607,6 +8768,11 @@ namespace Shalltear {
 			state.shadowFirstCascadeDistance = profile.shadowFirstCascadeDistance;
 			state.shadowCascadeFit = profile.shadowCascadeFit;
 			state.shadowPcfTaps = static_cast<u32>(Math::Clamp(profile.shadowPcfTaps, 1, 7)) | 1u;
+			state.shadowFilter = profile.shadowFilter == ShadowFilter::Moments ? ShadowFilter::Moments : ShadowFilter::PCF;
+			state.shadowMomentBlur = static_cast<u32>(Math::Clamp(profile.shadowMomentBlur, 0, 2));
+			state.shadowMomentParams = Vec3(Math::Clamp(profile.shadowMomentPositiveExponent, 1.0f, 40.0f),
+											Math::Clamp(profile.shadowMomentNegativeExponent, 1.0f, 40.0f),
+											Math::Clamp(profile.shadowMomentBleedReduction, 0.0f, 0.99f));
 			state.shadowAtlasSize = ClampAtlasSize(profile.shadowAtlasSize);
 			state.transparentReceiveShadows = profile.transparentReceiveShadows;
 			state.reflectionProbeResolution = ClampProbeResolution(profile.reflectionProbeResolution);
@@ -9461,6 +9627,7 @@ namespace Shalltear {
 			ReleaseEngineShader(state.skinningShader);
 			ReleaseEngineShader(state.depthRangeShader);
 			ReleaseEngineShader(state.depthRangeShaderMultisampled);
+			ReleaseEngineShader(state.momentResolveShader);
 			state.skinDeformer.Destroy(*state.device);
 			state.isolatedSkinDeformer.Destroy(*state.device);
 			for (RHI::BufferHandle* buffer : {&state.depthRangeRing, &state.depthRangeScratch, &state.depthRangeSeed}) {
@@ -9554,6 +9721,12 @@ namespace Shalltear {
 			}
 			if (state.punctualShadowAtlas.IsValid()) {
 				state.device->DestroyResource(state.punctualShadowAtlas);
+			}
+			for (RHI::TextureHandle* texture : {&state.momentAtlas, &state.momentDepth}) {
+				if (texture->IsValid()) {
+					state.device->DestroyResource(*texture);
+					*texture = {};
+				}
 			}
 			if (state.shadowSampler.IsValid()) {
 				state.device->DestroyResource(state.shadowSampler);

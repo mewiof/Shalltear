@@ -6,10 +6,15 @@
 #include "ShalltearCommon.hlsli"
 #include "CascadeSelect.hlsli"
 
+// must match ShaderReflection.h's SHADER_SHADOW_MOMENTS_CONSTANT_ID
+#define SHALLTEAR_SHADOW_MOMENTS_CONSTANT 101
+[[vk::constant_id(SHALLTEAR_SHADOW_MOMENTS_CONSTANT)]] const bool gShalltearShadowMoments = false;
+
 // only declared by a shader that shadows
-[[vk::binding(1, 0)]] Texture2D<float> sltShadowAtlas;
+// moments under gShalltearShadowMoments, depth otherwise
+[[vk::binding(1, 0)]] Texture2D<float4> sltShadowAtlas;
 [[vk::binding(2, 0)]] SamplerState sltShadowSampler;
-[[vk::binding(3, 0)]] Texture2D<float> sltPunctualShadowAtlas;
+[[vk::binding(3, 0)]] Texture2D<float4> sltPunctualShadowAtlas;
 
 struct ShalltearShadowMap {
 	float4 column0;
@@ -75,7 +80,7 @@ float2 ShalltearShadowTentFetch(uint pair, uint pairs, float offset, float halfW
 }
 
 // texels compared with plane at their centers (not at tap)
-float ShalltearShadowCompare(Texture2D<float> atlas, float2 tap, float2 uv, float reference, float2 slope) {
+float ShalltearShadowCompare(Texture2D<float4> atlas, float2 tap, float2 uv, float reference, float2 slope) {
 	float2 texel = tap / sltShadowAtlasTexel - 0.5;
 	float2 lower = floor(texel);
 	float2 weight = texel - lower;
@@ -89,7 +94,7 @@ float ShalltearShadowCompare(Texture2D<float> atlas, float2 tap, float2 uv, floa
 }
 
 // widths 1-7 cost 1-16 bilinear fetches
-float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, float2 slope, float2 reach, float4 uvBounds) {
+float ShalltearShadowTent(Texture2D<float4> atlas, float2 uv, float reference, float2 slope, float2 reach, float4 uvBounds) {
 	uint width = (uint)max(sltShadowPcfTaps, 1.0);
 	if (width <= 1) {
 		return ShalltearShadowCompare(atlas, clamp(uv, uvBounds.xy, uvBounds.zw), uv, reference, slope);
@@ -111,7 +116,7 @@ float ShalltearShadowTent(Texture2D<float> atlas, float2 uv, float reference, fl
 	return sum;
 }
 
-float ShalltearSampleShadowMap(Texture2D<float> atlas, uint index, float texelSize, float3 positionWS,
+float ShalltearSampleShadowMap(Texture2D<float4> atlas, uint index, float texelSize, float3 positionWS,
 							   float3 positionDdx, float3 positionDdy, float3 normalWS, float3 lightDirection, bool tileOnly = false) {
 	ShalltearShadowMap map = ShalltearLoadShadowMap(index);
 	float3 biased = ShalltearShadowBiasedPosition(map, texelSize, positionWS, normalWS, lightDirection);
@@ -128,8 +133,45 @@ float ShalltearSampleShadowMap(Texture2D<float> atlas, uint index, float texelSi
 	return ShalltearShadowTent(atlas, projected.xy, projected.z, slope, reach, map.uvBounds);
 }
 
+float ShalltearMomentBound(float2 moments, float warped, float minimumVariance) {
+	float variance = max(moments.y - moments.x * moments.x, minimumVariance);
+	float gap = warped - moments.x;
+	float bound = variance / (variance + gap * gap);
+	float bleed = sltShadowMoments.z;
+	return warped <= moments.x ? 1.0 : saturate((bound - bleed) / max(1.0 - bleed, 1e-4));
+}
+
+float4 ShalltearLoadMoments(float2 uv) {
+	float2 texel = uv / sltShadowAtlasTexel - 0.5;
+	int2 corner = int2(floor(texel));
+	float2 weight = texel - float2(corner);
+	int last = int(1.0 / sltShadowAtlasTexel + 0.5) - 1;
+	int2 next = min(corner + 1, int2(last, last));
+	float4 top = lerp(sltShadowAtlas.Load(int3(corner, 0)), sltShadowAtlas.Load(int3(next.x, corner.y, 0)), weight.x);
+	float4 bottom = lerp(sltShadowAtlas.Load(int3(corner.x, next.y, 0)), sltShadowAtlas.Load(int3(next, 0)), weight.x);
+	return lerp(top, bottom, weight.y);
+}
+
+float ShalltearSampleCascadeMoments(uint index, float3 positionWS, float3 normalWS, float3 lightDirection) {
+	ShalltearShadowMap map = ShalltearLoadShadowMap(index);
+	float3 biased = ShalltearShadowBiasedPosition(map, map.worldTexelSize, positionWS, normalWS, lightDirection);
+	float3 projected = ShalltearShadowProject(map, biased);
+	if (projected.z <= 0.0 || projected.z >= 1.0) {
+		return 1.0;
+	}
+	float4 moments = ShalltearLoadMoments(clamp(projected.xy, map.uvBounds.xy, map.uvBounds.zw));
+	// must match MomentResolve.hlsl
+	float depth = 1.0 - 2.0 * projected.z;
+	float2 warped = float2(exp(sltShadowMoments.x * depth), -exp(-sltShadowMoments.y * depth));
+	float2 scale = 1e-4 * sltShadowMoments.xy * warped;
+	return min(ShalltearMomentBound(moments.xy, warped.x, scale.x * scale.x), ShalltearMomentBound(moments.zw, warped.y, scale.y * scale.y));
+}
+
 float ShalltearSampleCascade(uint index, float3 positionWS, float3 positionDdx, float3 positionDdy,
 							 float3 normalWS, float3 lightDirection) {
+	if (gShalltearShadowMoments) {
+		return ShalltearSampleCascadeMoments(index, positionWS, normalWS, lightDirection);
+	}
 	float texel = ShalltearLoadShadowMap(index).worldTexelSize;
 	return ShalltearSampleShadowMap(sltShadowAtlas, index, texel, positionWS, positionDdx, positionDdy, normalWS, lightDirection);
 }

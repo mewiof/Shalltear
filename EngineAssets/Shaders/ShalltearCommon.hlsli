@@ -97,6 +97,8 @@ float3 ShalltearTransformNormal(float4 column0, float4 column1, float4 column2, 
 	return lengthSquared > 1e-20 ? transformed * rsqrt(lengthSquared) : transformed;
 }
 
+#include "ShalltearGlobals.hlsli"
+
 // per view/bound once per view from upload ring
 [[vk::binding(0, 0)]] cbuffer ShalltearView {
 	float4x4 sltViewProjection;

@@ -6,10 +6,12 @@
 #include "Shalltear/Core/FileSystem.h"
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/FullScreenPass.h"
+#include "Shalltear/Core/Graphics/ImageEncoding.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/MeshRenderer.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
 #include "Shalltear/Core/Graphics/ObjectPass.h"
+#include "Shalltear/Core/Graphics/ShaderGlobals.h"
 #include "Shalltear/Core/Scene.h"
 #include "Shalltear/Core/Settings.h"
 #include "Shalltear/Core/Window/WindowSystem.h"
@@ -24,6 +26,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 
 using namespace Shalltear;
 
@@ -63,6 +66,43 @@ namespace {
 		"\treturn output;\n"
 		"}\n"
 		"float4 PSMain(VSOutput input) : SV_Target { return tint; }\n";
+
+	constexpr const char* GLOBAL_SHADER =
+		"#pragma shalltear_blend opaque\n"
+		"#pragma shalltear_depth off\n"
+		"#pragma shalltear_cull off\n"
+		"#include \"ShalltearGlobals.hlsli\"\n"
+		"[[vk::binding(SHALLTEAR_GLOBALS_BINDING, 0)]] cbuffer ShalltearGlobals { float4 globalTint; float globalScale; float globalRampMix; };\n"
+		"[[vk::binding(SHALLTEAR_GLOBAL_RESOURCE_BINDING, 0)]] Texture2D globalRamp;\n"
+		"[[vk::binding(SHALLTEAR_GLOBAL_RESOURCE_BINDING + 1, 0)]] SamplerState globalRampSampler;\n"
+		"struct VSOutput { float4 positionCS : SV_Position; };\n"
+		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
+		"\tVSOutput output;\n"
+		"\tfloat2 corner = float2((vertexId << 1) & 2, vertexId & 2);\n"
+		"\toutput.positionCS = float4(corner * 2.0 - 1.0, 0.0, 1.0);\n"
+		"\treturn output;\n"
+		"}\n"
+		"float4 PSMain(VSOutput input) : SV_Target {\n"
+		"\tfloat3 ramp = globalRamp.SampleLevel(globalRampSampler, float2(0.5, 0.5), 0).rgb;\n"
+		"\treturn float4(globalTint.rgb * globalScale + ramp * globalRampMix, 1.0);\n"
+		"}\n";
+
+	constexpr const char* GLOBAL_MESH_SHADER =
+		"#pragma shalltear_blend opaque\n"
+		"#pragma shalltear_depth test_write\n"
+		"#pragma shalltear_cull off\n"
+		"#include \"ShalltearCommon.hlsli\"\n"
+		"[[vk::binding(SHALLTEAR_GLOBALS_BINDING, 0)]] cbuffer ShalltearGlobals { float4 meshTint; };\n"
+		"[[vk::push_constant]] ShalltearDrawHeader gDraw;\n"
+		"struct VSOutput { float4 positionCS : SV_Position; };\n"
+		"VSOutput VSMain(uint vertexId : SV_VertexID) {\n"
+		"\tShalltearPerDraw draw = ShalltearLoadPerDraw(gDraw.drawAddress);\n"
+		"\tShalltearVertex vertex = ShalltearLoadVertex(draw.vertexAddress, vertexId);\n"
+		"\tVSOutput output;\n"
+		"\toutput.positionCS = mul(sltViewProjection, ShalltearTransformPosition(draw, vertex.position));\n"
+		"\treturn output;\n"
+		"}\n"
+		"float4 PSMain(VSOutput input) : SV_Target { return float4(meshTint.rgb, 1.0); }\n";
 
 	f32 EncodedByte(f32 linear) {
 		linear = Math::Clamp(linear, 0.0f, 1.0f);
@@ -453,6 +493,102 @@ TEST_F(FullScreenPassFixture, PostColorReadsResolvedScene) {
 	ASSERT_GT(NonBlackTexels(pixels, size), 200u);
 
 	EXPECT_EQ(TexelsNotMatchingTheRotationOf(reference, pixels, size), 0u);
+}
+
+TEST_F(FullScreenPassFixture, ShaderGlobalsReachPass) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("Globals.hlsl", GLOBAL_SHADER);
+	MaterialAsset* material = LoadMaterial("Globals.mat", "Globals.hlsl", "");
+	ASSERT_NE(material, nullptr);
+	FullScreenPass row;
+	row.point = PassPoint::AfterOpaque;
+	row.material = Handle<MaterialAsset>(material);
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 0, 0, 255)), 0u);
+
+	ShaderGlobals::SetColor("globalTint", Color(1.0f, 0.0f, 0.0f, 1.0f));
+	ShaderGlobals::SetFloat("globalScale", 1.0f);
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(255, 0, 0, 255)), 0u);
+
+	ShaderGlobals::SetFloat("globalScale", 0.0f);
+	ShaderGlobals::SetFloat("globalRampMix", 1.0f);
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(255, 255, 255, 255)), 0u);
+
+	Vector<u8> green{GetMemoryResource(MemTag::Graphics)};
+	for (u32 i = 0; i < 16; ++i) {
+		green.insert(green.end(), {0, 255, 0, 255});
+	}
+	Vector<u8> png{GetMemoryResource(MemTag::Graphics)};
+	ASSERT_TRUE(ImageEncoding::EncodePNG(green, Vec2I(4, 4), png));
+	{
+		std::ofstream out(_root / "Green.png", std::ios::binary);
+		out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+	}
+	Asset* texture = AssetDatabase::LoadAsset(Path("project://Green.png"));
+	ASSERT_NE(texture, nullptr);
+	ShaderGlobals::SetTexture("globalRamp", Handle<TextureAsset>(static_cast<TextureAsset*>(texture)));
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 255, 0, 255)), 0u);
+
+	ShaderGlobals::ClearAll();
+	ASSERT_TRUE(Render(rows, pixels, size));
+	EXPECT_EQ(TexelsOtherThan(pixels, size, Color32(0, 0, 0, 255)), 0u);
+	AssetDatabase::UnloadAsset(texture);
+}
+
+TEST_F(FullScreenPassFixture, ShaderGlobalsReachMeshMaterial) {
+	InitializeAt(1);
+	if (!Ready()) {
+		GTEST_SKIP() << "no device or no grid shader";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	WriteProjectFile("GlobalMesh.hlsl", GLOBAL_MESH_SHADER);
+	MaterialAsset* material = LoadMaterial("GlobalMesh.mat", "GlobalMesh.hlsl", "");
+	ASSERT_NE(material, nullptr);
+	Asset* quadMesh = AssetDatabase::LoadAsset(Path(GetPrimitiveMeshPath(PrimitiveShape::Cube)));
+	ASSERT_NE(quadMesh, nullptr);
+	_scene = SceneSystem::CreateScene("Globals");
+	Handle<MeshRenderer> renderer = SceneSystem::CreateObject("Cube", _scene)->AddComponent<MeshRenderer>();
+	renderer->SetMesh(Handle<MeshAsset>(static_cast<MeshAsset*>(quadMesh)));
+	renderer->SetMaterial(0, Handle<MaterialAsset>(material));
+	SceneSystem::EndFrame();
+
+	auto count = [](const Vector<u8>& pixels, Vec2I size, Color32 color) {
+		u32 matches = 0;
+		for (i32 y = 0; y < size.y; ++y) {
+			for (i32 x = 0; x < size.x; ++x) {
+				matches += TexelAt(pixels, size, x, y) == color ? 1u : 0u;
+			}
+		}
+		return matches;
+	};
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ShaderGlobals::SetColor("meshTint", Color(0.0f, 0.0f, 1.0f, 1.0f));
+	ASSERT_TRUE(Render({}, pixels, size));
+	const u32 blue = count(pixels, size, Color32(0, 0, 255, 255));
+	EXPECT_GT(blue, 100u);
+
+	ShaderGlobals::SetColor("meshTint", Color(1.0f, 0.0f, 0.0f, 1.0f));
+	ASSERT_TRUE(Render({}, pixels, size));
+	EXPECT_EQ(count(pixels, size, Color32(255, 0, 0, 255)), blue);
+	EXPECT_EQ(count(pixels, size, Color32(0, 0, 255, 255)), 0u);
+	ShaderGlobals::ClearAll();
+	AssetDatabase::UnloadAsset(quadMesh);
 }
 
 TEST_F(FullScreenPassFixture, SingleSampleCopyIsBlit) {

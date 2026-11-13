@@ -1,4 +1,5 @@
 #include "Shalltear/Core/Graphics/RenderSystem.h"
+#include "Shalltear/Core/Graphics/ShaderGlobals.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/AssetImporter.h"
@@ -61,6 +62,7 @@
 #include "Graphics/ShadowCasterCulling.h"
 #include "Graphics/Skinning.h"
 #include "Graphics/TextureSampling.h"
+#include "Graphics/UniformPacking.h"
 #include "Module/EngineStateTable.h"
 #include "ScreenInternal.h"
 #include "Shalltear/Core/Window.h"
@@ -621,6 +623,13 @@ namespace Shalltear {
 				GraphicsInternal::CaptureFollowUp followUp;
 			};
 			Vector<FrameCapture> frameCaptures{GetMemoryResource(MemTag::Graphics)};
+
+			Vector<MaterialAsset::Param> globalValues{GetMemoryResource(MemTag::Graphics)};
+			struct GlobalTexture {
+				StringHash hash;
+				Handle<TextureAsset> texture;
+			};
+			Vector<GlobalTexture> globalTextures{GetMemoryResource(MemTag::Graphics)};
 			RHI::BufferHandle pickRing;
 			u64 renderedFrames = 0;
 
@@ -1371,6 +1380,11 @@ namespace Shalltear {
 		constexpr u32 AMBIENT_OCCLUSION_SAMPLER_BINDING = 7;
 		constexpr u32 REFLECTION_PROBE_BINDING = 8;
 		constexpr u32 ENVIRONMENT_CUBE2_BINDING = 9;
+		// must match ShalltearGlobals.hlsli
+		constexpr u32 SHADER_GLOBALS_BINDING = 10;
+		constexpr u32 SHADER_GLOBAL_RESOURCE_BINDING = 11;
+
+		void WriteShaderGlobals(RenderState& state, RHI::Device& device, RHI::TransientSetWriter& writer, const ShaderAsset& shader);
 
 		RHI::TransientSet CreateViewSet(RHI::Device& device, RHI::PipelineHandle pipeline, const ShaderAsset& shader,
 										const RHI::TransientAllocation& viewAllocation, RHI::TextureHandle atlas,
@@ -1414,6 +1428,7 @@ namespace Shalltear {
 					writer.WriteSampler(AMBIENT_OCCLUSION_SAMPLER_BINDING, state.linearClampSampler);
 				}
 			}
+			WriteShaderGlobals(state, device, writer, shader);
 			return writer.Commit();
 		}
 
@@ -1750,6 +1765,84 @@ namespace Shalltear {
 				}
 			}
 			return nullptr;
+		}
+
+		RHI::SamplerHandle TextureSampler(RenderState& state, const TextureAsset& texture);
+
+		void WriteShaderGlobals(RenderState& state, RHI::Device& device, RHI::TransientSetWriter& writer, const ShaderAsset& shader) {
+			for (const UniformBlockLayout& block : shader.uniformBlocks) {
+				if (block.set != 0 || block.binding != SHADER_GLOBALS_BINDING || block.sizeBytes == 0) {
+					continue;
+				}
+				RHI::TransientAllocation allocation = device.AllocateTransient(block.sizeBytes, 16);
+				if (!allocation.IsValid()) {
+					break;
+				}
+				const std::span<u8> bytes{static_cast<u8*>(allocation.cpu), block.sizeBytes};
+				std::memset(bytes.data(), 0, bytes.size());
+				for (const UniformMember& member : block.members) {
+					const StringHash name(std::string_view{member.name});
+					for (const MaterialAsset::Param& value : state.globalValues) {
+						if (value.hash == name) {
+							GraphicsInternal::WriteUniformMember(member, value, bytes);
+							break;
+						}
+					}
+				}
+				writer.WriteUniformBuffer(block.binding, allocation.buffer, allocation.offset, block.sizeBytes);
+			}
+
+			const TextureAsset* paired[16] = {};
+			u32 textures = 0;
+			for (const ShaderResourceInfo& resource : shader.resources) {
+				if (resource.set != 0 || resource.binding < SHADER_GLOBAL_RESOURCE_BINDING || resource.type != RHI::DescriptorType::SampledTexture) {
+					continue;
+				}
+				const StringHash name(std::string_view{resource.name});
+				const TextureAsset* texture = nullptr;
+				for (const RenderState::GlobalTexture& global : state.globalTextures) {
+					if (global.hash == name) {
+						texture = global.texture.Get();
+						break;
+					}
+				}
+				if (texture && (!texture->texture.IsValid() || texture->GetDimension() != resource.dimension)) {
+					texture = nullptr;
+				}
+				writer.WriteTexture(resource.binding, texture ? texture->texture
+															  : FallbackTexture(state, resource.dimension, ShaderTextureFallback::White));
+				if (textures < std::size(paired)) {
+					paired[textures] = texture;
+				}
+				++textures;
+			}
+			u32 samplers = 0;
+			for (const ShaderResourceInfo& resource : shader.resources) {
+				if (resource.set != 0 || resource.binding < SHADER_GLOBAL_RESOURCE_BINDING || resource.type != RHI::DescriptorType::Sampler) {
+					continue;
+				}
+				const TextureAsset* texture = samplers < std::size(paired) && samplers < textures ? paired[samplers] : nullptr;
+				writer.WriteSampler(resource.binding, texture ? TextureSampler(state, *texture) : state.linearClampSampler);
+				++samplers;
+			}
+		}
+
+		bool DeclaresOnlyGlobalViewResources(const ShaderAsset& shader) {
+			for (const ShaderResourceInfo& resource : shader.resources) {
+				if (resource.set == 0 && resource.binding < SHADER_GLOBALS_BINDING) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		void BindGlobalsOnlyViewSet(RHI::CommandList& cmd, RHI::Device& device, RHI::PipelineHandle pipeline, const ShaderAsset& shader) {
+			if (!SceneRequests::DeclaresViewSet(shader) || !DeclaresOnlyGlobalViewResources(shader)) {
+				return;
+			}
+			RHI::TransientSetWriter writer = device.CreateTransientSet(pipeline, 0);
+			WriteShaderGlobals(*_state, device, writer, shader);
+			cmd.BindTransientSet(0, writer.Commit());
 		}
 
 		RHI::SamplerHandle TextureSampler(RenderState& state, const TextureAsset& texture) {
@@ -8052,6 +8145,7 @@ namespace Shalltear {
 		RHI::CommandList& cmd = *_exec->cmd;
 		cmd.BeginRenderPass(desc);
 		cmd.SetPipeline(pipeline);
+		BindGlobalsOnlyViewSet(cmd, *_exec->device, pipeline, *asset);
 		BindSceneTextureSet(cmd, *_exec->device, pipeline, *asset, SceneRequestTextures{_sceneColor, _sceneDepth, _sceneNormals, _passInput0, _passInput1, _passVolume},
 							PassView{_view, _projection, _extent});
 		if (!pushConstants.empty()) {
@@ -8079,7 +8173,7 @@ namespace Shalltear {
 						 asset->virtualPath, pushConstants.size(), shader->pushConstantSize);
 			return false;
 		}
-		if (SceneRequests::DeclaresViewSet(*shader)) {
+		if (SceneRequests::DeclaresViewSet(*shader) && !DeclaresOnlyGlobalViewResources(*shader)) {
 			SLT_LOG_WARN("Graphics", "pass material '{}' uses shader '{}' (declares per view resources, a pass has no view set). "
 									 "Use a shader with no `shalltear_template`",
 						 asset->virtualPath, shader->virtualPath);
@@ -8110,6 +8204,7 @@ namespace Shalltear {
 		RHI::Device& device = *_exec->device;
 		cmd.BeginRenderPass(desc);
 		cmd.SetPipeline(pipeline);
+		BindGlobalsOnlyViewSet(cmd, device, pipeline, *shader);
 		BindMaterialSet(cmd, device, pipeline, entry);
 		BindSceneTextureSet(cmd, device, pipeline, *shader, SceneRequestTextures{_sceneColor, _sceneDepth, _sceneNormals, _passInput0, _passInput1, _passVolume},
 							PassView{_view, _projection, _extent});
@@ -9986,5 +10081,87 @@ namespace Shalltear {
 		}
 
 	} // namespace GraphicsInternal
+
+	namespace ShaderGlobals {
+
+		namespace {
+
+			void Store(std::string_view name, MaterialAsset::Param value) {
+				if (!_state) {
+					return;
+				}
+				value.hash = StringHash(name);
+				for (MaterialAsset::Param& existing : _state->globalValues) {
+					if (existing.hash == value.hash) {
+						existing.kind = value.kind;
+						std::memcpy(existing.numbers, value.numbers, sizeof(value.numbers));
+						existing.integer = value.integer;
+						return;
+					}
+				}
+				value.name = str(name);
+				_state->globalValues.push_back(std::move(value));
+			}
+
+			MaterialAsset::Param Floats(UniformMemberType kind, f32 x, f32 y = 0.0f, f32 z = 0.0f, f32 w = 0.0f) {
+				MaterialAsset::Param value = MaterialAsset::MakeParam(kind);
+				value.numbers[0] = x;
+				value.numbers[1] = y;
+				value.numbers[2] = z;
+				value.numbers[3] = w;
+				return value;
+			}
+
+		} // anonymous namespace
+
+		void SetFloat(std::string_view name, f32 value) {
+			Store(name, Floats(UniformMemberType::Float, value));
+		}
+
+		void SetVector(std::string_view name, const Vec4& value) {
+			Store(name, Floats(UniformMemberType::Vec4, value.x, value.y, value.z, value.w));
+		}
+
+		void SetColor(std::string_view name, const Color& value) {
+			Store(name, Floats(UniformMemberType::Vec4, value.r, value.g, value.b, value.a));
+		}
+
+		void SetInt(std::string_view name, i32 value) {
+			MaterialAsset::Param param = MaterialAsset::MakeParam(UniformMemberType::Int);
+			param.integer = value;
+			Store(name, std::move(param));
+		}
+
+		void SetTexture(std::string_view name, Handle<TextureAsset> texture) {
+			if (!_state) {
+				return;
+			}
+			const StringHash hash(name);
+			for (RenderState::GlobalTexture& existing : _state->globalTextures) {
+				if (existing.hash == hash) {
+					existing.texture = texture;
+					return;
+				}
+			}
+			_state->globalTextures.push_back({hash, texture});
+		}
+
+		void Clear(std::string_view name) {
+			if (!_state) {
+				return;
+			}
+			const StringHash hash(name);
+			std::erase_if(_state->globalValues, [hash](const MaterialAsset::Param& value) { return value.hash == hash; });
+			std::erase_if(_state->globalTextures, [hash](const RenderState::GlobalTexture& value) { return value.hash == hash; });
+		}
+
+		void ClearAll() {
+			if (_state) {
+				_state->globalValues.clear();
+				_state->globalTextures.clear();
+			}
+		}
+
+	} // namespace ShaderGlobals
 
 } // namespace Shalltear

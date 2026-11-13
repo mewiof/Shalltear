@@ -37,6 +37,7 @@
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/ReflectionProbe.h"
 #include "Shalltear/Core/Graphics/ScreenCapture.h"
+#include "Shalltear/Core/Graphics/ShaderGlobals.h"
 #include "Shalltear/Core/Graphics/SkinnedMeshRenderer.h"
 #include "Shalltear/Core/UI.h"
 #include "Shalltear/Core/UI/StyleSheetAsset.h"

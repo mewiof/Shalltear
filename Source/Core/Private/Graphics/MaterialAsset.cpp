@@ -1,6 +1,7 @@
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 
 #include "Asset/EngineBuiltins.h"
+#include "Graphics/UniformPacking.h"
 
 #include "Shalltear/Core/Asset/AssetDatabase.h"
 #include "Shalltear/Core/Asset/PakFormat.h"
@@ -238,6 +239,29 @@ namespace Shalltear {
 		return resolved;
 	}
 
+	void GraphicsInternal::WriteUniformMember(const UniformMember& member, const MaterialAsset::Param& value, std::span<u8> block) {
+		if (member.offset + member.sizeBytes > block.size()) {
+			return;
+		}
+		u8* at = block.data() + member.offset;
+		const u32 memberFloats = UniformMemberFloatCount(member.type);
+		const u32 valueFloats = UniformMemberFloatCount(value.kind);
+		if (memberFloats > 0 && valueFloats > 0) {
+			const u32 floats = std::min(memberFloats, valueFloats);
+			std::memcpy(at, value.numbers, std::min<u32>(member.sizeBytes, floats * static_cast<u32>(sizeof(f32))));
+			return;
+		}
+		if (member.type != value.kind) {
+			return;
+		}
+		if (member.type == UniformMemberType::Int) {
+			std::memcpy(at, &value.integer, std::min<u32>(member.sizeBytes, sizeof(i32)));
+		} else if (member.type == UniformMemberType::Bool) {
+			const u32 flag = value.integer != 0 ? 1u : 0u;
+			std::memcpy(at, &flag, std::min<u32>(member.sizeBytes, sizeof(u32)));
+		}
+	}
+
 	void MaterialAsset::PackBlock(const UniformBlockLayout& layout, std::span<u8> out,
 								  std::span<const ShaderMemberDefault> defaults) const {
 		if (out.size() < layout.sizeBytes) {
@@ -266,23 +290,7 @@ namespace Shalltear {
 			if (!param || param->kind != member.type) {
 				continue;
 			}
-			u32 floatCount = UniformMemberFloatCount(member.type);
-			if (floatCount > 0) {
-				std::memcpy(bytes + member.offset, param->numbers, std::min<u32>(member.sizeBytes, floatCount * static_cast<u32>(sizeof(f32))));
-				continue;
-			}
-			switch (member.type) {
-			case UniformMemberType::Int:
-				std::memcpy(bytes + member.offset, &param->integer, std::min<u32>(member.sizeBytes, sizeof(i32)));
-				break;
-			case UniformMemberType::Bool: {
-				u32 value = param->integer != 0 ? 1u : 0u;
-				std::memcpy(bytes + member.offset, &value, std::min<u32>(member.sizeBytes, sizeof(u32)));
-				break;
-			}
-			default:
-				break;
-			}
+			GraphicsInternal::WriteUniformMember(member, *param, {bytes, layout.sizeBytes});
 		}
 	}
 

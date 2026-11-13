@@ -33,6 +33,7 @@ namespace {
 		ModuleHandle _module;
 
 		void SetUp() override {
+			Settings::Terminate();
 			static std::atomic<u64> counter{0};
 			u64 unique = counter.fetch_add(1);
 			u64 stamp = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count());

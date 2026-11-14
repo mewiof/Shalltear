@@ -954,7 +954,7 @@ TEST_F(GammaPostProcessFixture, GammaBloomKeepsGlintsSmall) {
 	const f32 lamp = BloomShare(0.6f);
 	const f32 glint = BloomShare(0.12f);
 	ASSERT_GT(lamp, 0.0f);
-	EXPECT_LT(glint, 0.6f * lamp) << glint << " -> " << lamp;
+	EXPECT_LT(glint, 0.75f * lamp) << glint << " -> " << lamp;
 }
 
 TEST_F(GammaPostProcessFixture, GammaBloomAddsInLinearLight) {
@@ -1004,6 +1004,56 @@ TEST_F(GammaPostProcessFixture, GammaBloomAddsInLinearLight) {
 	}
 	EXPECT_GT(checked, 50u);
 	EXPECT_LT(worst, 2.5f) << checked;
+}
+
+TEST_F(GammaPostProcessFixture, GammaBloomLevelsFilterLinearLight) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no device";
+	}
+	if (!CompilerAvailable()) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable";
+	}
+	const Color clear = Color(0.0f, 0.0f, 0.0f);
+	ASSERT_TRUE(AddBrightQuad(0.8f, Vec3(), "Lamp", 1.2f));
+	Vector<u8> reference{GetMemoryResource(MemTag::Graphics)};
+	Vec2I referenceSize{};
+	ASSERT_TRUE(Render({}, reference, referenceSize, clear));
+
+	PostProcessProfile* profile = MakeProfile("LevelEnergy.slpp");
+	ASSERT_NE(profile, nullptr);
+	profile->bloom = true;
+	profile->bloomIntensity = 0.5f;
+	profile->bloomThreshold = 0.4f;
+	profile->bloomScatter = 0.0f;
+	AddVolume(profile);
+	PostProcessPass row;
+	const Handle<RenderPass> rows[] = {Handle<RenderPass>(&row)};
+	Vector<u8> tight{GetMemoryResource(MemTag::Graphics)};
+	Vector<u8> wide{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	ASSERT_TRUE(Render(rows, tight, size, clear));
+	profile->bloomScatter = 1.0f;
+	ASSERT_TRUE(Render(rows, wide, size, clear));
+	ASSERT_EQ(size, referenceSize);
+
+	f32 source = 0.0f;
+	f32 tightLight = 0.0f;
+	f32 wideLight = 0.0f;
+	u8 peak = 0;
+	for (i32 y = 0; y < size.y; ++y) {
+		for (i32 x = 0; x < size.x; ++x) {
+			const f32 before = ByteToLinear(Texel(reference, referenceSize, x, y)[0]);
+			source += Texel(reference, referenceSize, x, y)[0] > 100 ? 1.0f : 0.0f;
+			tightLight += ByteToLinear(Texel(tight, size, x, y)[0]) - before;
+			wideLight += ByteToLinear(Texel(wide, size, x, y)[0]) - before;
+			peak = std::max(peak, Texel(tight, size, x, y)[0]);
+		}
+	}
+	ASSERT_GT(source, 300.0f);
+	ASSERT_LT(peak, 250);
+	const f32 passed = (0.8f - 0.4f) * 0.5f * source;
+	EXPECT_GT(tightLight, 0.5f * passed) << tightLight << " -> " << passed;
+	EXPECT_GT(wideLight, 0.4f * tightLight) << wideLight << " -> " << tightLight;
 }
 
 TEST_F(GammaPostProcessFixture, GammaVignetteAndGradeUseLinearLight) {

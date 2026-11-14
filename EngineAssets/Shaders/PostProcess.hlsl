@@ -108,20 +108,29 @@ float2 ShalltearBloomSourceTexel(uint step) {
 			   : texel * 0.5;
 }
 
-float3 ShalltearBloomDownsample(Texture2D source, float2 uv, float2 texel) {
-	float3 a = source.Sample(sltSceneSampler, uv + texel * float2(-2.0, -2.0)).rgb;
-	float3 b = source.Sample(sltSceneSampler, uv + texel * float2(0.0, -2.0)).rgb;
-	float3 c = source.Sample(sltSceneSampler, uv + texel * float2(2.0, -2.0)).rgb;
-	float3 d = source.Sample(sltSceneSampler, uv + texel * float2(-1.0, -1.0)).rgb;
-	float3 e = source.Sample(sltSceneSampler, uv + texel * float2(1.0, -1.0)).rgb;
-	float3 f = source.Sample(sltSceneSampler, uv + texel * float2(-2.0, 0.0)).rgb;
-	float3 g = source.Sample(sltSceneSampler, uv).rgb;
-	float3 h = source.Sample(sltSceneSampler, uv + texel * float2(2.0, 0.0)).rgb;
-	float3 i = source.Sample(sltSceneSampler, uv + texel * float2(-1.0, 1.0)).rgb;
-	float3 j = source.Sample(sltSceneSampler, uv + texel * float2(1.0, 1.0)).rgb;
-	float3 k = source.Sample(sltSceneSampler, uv + texel * float2(-2.0, 2.0)).rgb;
-	float3 l = source.Sample(sltSceneSampler, uv + texel * float2(0.0, 2.0)).rgb;
-	float3 m = source.Sample(sltSceneSampler, uv + texel * float2(2.0, 2.0)).rgb;
+float3 ShalltearBloomEncode(float3 color) {
+	return gShalltearGammaColorSpace ? sqrt(color) : color;
+}
+
+float3 ShalltearBloomTap(Texture2D source, float2 uv, bool level) {
+	float3 stored = source.Sample(sltSceneSampler, uv).rgb;
+	return level && gShalltearGammaColorSpace ? stored * stored : stored;
+}
+
+float3 ShalltearBloomDownsample(Texture2D source, float2 uv, float2 texel, bool level) {
+	float3 a = ShalltearBloomTap(source, uv + texel * float2(-2.0, -2.0), level);
+	float3 b = ShalltearBloomTap(source, uv + texel * float2(0.0, -2.0), level);
+	float3 c = ShalltearBloomTap(source, uv + texel * float2(2.0, -2.0), level);
+	float3 d = ShalltearBloomTap(source, uv + texel * float2(-1.0, -1.0), level);
+	float3 e = ShalltearBloomTap(source, uv + texel * float2(1.0, -1.0), level);
+	float3 f = ShalltearBloomTap(source, uv + texel * float2(-2.0, 0.0), level);
+	float3 g = ShalltearBloomTap(source, uv, level);
+	float3 h = ShalltearBloomTap(source, uv + texel * float2(2.0, 0.0), level);
+	float3 i = ShalltearBloomTap(source, uv + texel * float2(-1.0, 1.0), level);
+	float3 j = ShalltearBloomTap(source, uv + texel * float2(1.0, 1.0), level);
+	float3 k = ShalltearBloomTap(source, uv + texel * float2(-2.0, 2.0), level);
+	float3 l = ShalltearBloomTap(source, uv + texel * float2(0.0, 2.0), level);
+	float3 m = ShalltearBloomTap(source, uv + texel * float2(2.0, 2.0), level);
 	float3 result = (d + e + i + j) * 0.125;
 	result += (a + b + g + f) * 0.03125;
 	result += (b + c + h + g) * 0.03125;
@@ -132,15 +141,15 @@ float3 ShalltearBloomDownsample(Texture2D source, float2 uv, float2 texel) {
 
 // 9 tap tent upsample. levels should show no square edges
 float3 ShalltearBloomUpsample(Texture2D source, float2 uv, float2 texel) {
-	float3 result = source.Sample(sltSceneSampler, uv + texel * float2(-1.0, -1.0)).rgb;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(0.0, -1.0)).rgb * 2.0;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(1.0, -1.0)).rgb;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(-1.0, 0.0)).rgb * 2.0;
-	result += source.Sample(sltSceneSampler, uv).rgb * 4.0;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(1.0, 0.0)).rgb * 2.0;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(-1.0, 1.0)).rgb;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(0.0, 1.0)).rgb * 2.0;
-	result += source.Sample(sltSceneSampler, uv + texel * float2(1.0, 1.0)).rgb;
+	float3 result = ShalltearBloomTap(source, uv + texel * float2(-1.0, -1.0), true);
+	result += ShalltearBloomTap(source, uv + texel * float2(0.0, -1.0), true) * 2.0;
+	result += ShalltearBloomTap(source, uv + texel * float2(1.0, -1.0), true);
+	result += ShalltearBloomTap(source, uv + texel * float2(-1.0, 0.0), true) * 2.0;
+	result += ShalltearBloomTap(source, uv, true) * 4.0;
+	result += ShalltearBloomTap(source, uv + texel * float2(1.0, 0.0), true) * 2.0;
+	result += ShalltearBloomTap(source, uv + texel * float2(-1.0, 1.0), true);
+	result += ShalltearBloomTap(source, uv + texel * float2(0.0, 1.0), true) * 2.0;
+	result += ShalltearBloomTap(source, uv + texel * float2(1.0, 1.0), true);
 	return result * 0.0625;
 }
 
@@ -163,17 +172,16 @@ float4 PSMain(VSOutput input) : SV_Target {
 
 	// steps shall return before grading runs
 	if (step == SHALLTEAR_POST_STEP_PREFILTER) {
-		float3 bright = ShalltearBloomThreshold(ShalltearBloomDownsample(sltSceneColor, input.uv, sourceTexel));
-		// levels filtered square root encoded under gamma color space
-		return float4(gShalltearGammaColorSpace ? sqrt(bright) : bright, 1.0);
+		float3 bright = ShalltearBloomThreshold(ShalltearBloomDownsample(sltSceneColor, input.uv, sourceTexel, false));
+		return float4(ShalltearBloomEncode(bright), 1.0);
 	}
 	if (step == SHALLTEAR_POST_STEP_DOWNSAMPLE) {
-		return float4(ShalltearBloomDownsample(sltPassInput0, input.uv, sourceTexel), 1.0);
+		return float4(ShalltearBloomEncode(ShalltearBloomDownsample(sltPassInput0, input.uv, sourceTexel, true)), 1.0);
 	}
 	if (step == SHALLTEAR_POST_STEP_UPSAMPLE) {
 		float3 lower = ShalltearBloomUpsample(sltPassInput0, input.uv, sourceTexel);
-		float3 here = sltPassInput1.Sample(sltSceneSampler, input.uv).rgb;
-		return float4(lerp(here, lower, gPost.bloomParams.z), 1.0);
+		float3 here = ShalltearBloomTap(sltPassInput1, input.uv, true);
+		return float4(ShalltearBloomEncode(lerp(here, lower, gPost.bloomParams.z)), 1.0);
 	}
 
 	float3 color = sltSceneColor.Sample(sltSceneSampler, input.uv).rgb;
@@ -187,7 +195,6 @@ float4 PSMain(VSOutput input) : SV_Target {
 	// bloom added before grade (filters should tint it too)
 	if (gPost.bloomTintAndIntensity.w > 0.0) {
 		float3 bloom = ShalltearBloomUpsample(sltPassInput0, input.uv, sourceTexel);
-		bloom = gShalltearGammaColorSpace ? bloom * bloom : bloom;
 		color += bloom * gPost.bloomTintAndIntensity.rgb * gPost.bloomTintAndIntensity.w;
 	}
 

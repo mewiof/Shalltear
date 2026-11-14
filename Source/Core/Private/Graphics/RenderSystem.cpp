@@ -504,8 +504,10 @@ namespace Shalltear {
 			struct LODMember {
 				u32 group = 0;
 				u64 levels = 0;
+				bool procedural = false;
 			};
 			HashMap<u64, LODMember> lodMembers{GetMemoryResource(MemTag::Graphics)};
+			u32 lodProceduralMembers = 0;
 			f32 lodBias = 1.0f;
 			u32 lodFinestLevel = 0;
 			bool lodCrossFade = true;
@@ -2522,15 +2524,9 @@ namespace Shalltear {
 			const MaterialAsset* errorMaterial = nullptr;
 		};
 
-		bool LODDraws(const DrawWalk& walk, u64 renderer, u8& outFade, bool& outAbove) {
+		bool LODDraws(const LODChoice& choice, u64 levels, u8& outFade, bool& outAbove) {
 			outFade = 0;
 			outAbove = false;
-			const auto found = walk.lodMembers->find(renderer);
-			if (found == walk.lodMembers->end() || found->second.group >= walk.lodChoices.size()) {
-				return true;
-			}
-			const LODChoice& choice = walk.lodChoices[found->second.group];
-			const u64 levels = found->second.levels;
 			const bool atLevel = choice.level < LODChoice::MAX_LEVELS && ((levels >> choice.level) & 1u) != 0;
 			const bool atNext = choice.next < LODChoice::MAX_LEVELS && ((levels >> choice.next) & 1u) != 0;
 			if (atLevel && atNext) {
@@ -2546,6 +2542,16 @@ namespace Shalltear {
 				return choice.keep != 255;
 			}
 			return false;
+		}
+
+		bool LODDraws(const DrawWalk& walk, u64 renderer, u8& outFade, bool& outAbove) {
+			const auto found = walk.lodMembers->find(renderer);
+			if (found == walk.lodMembers->end() || found->second.group >= walk.lodChoices.size()) {
+				outFade = 0;
+				outAbove = false;
+				return true;
+			}
+			return LODDraws(walk.lodChoices[found->second.group], found->second.levels, outFade, outAbove);
 		}
 
 		// called on a job lane (no state write/RHI call)
@@ -2750,6 +2756,7 @@ namespace Shalltear {
 			for (u64 id : record.renderers) {
 				const auto found = state.lodMembers.find(id);
 				if (found != state.lodMembers.end() && found->second.group == index) {
+					state.lodProceduralMembers -= found->second.procedural ? 1u : 0u;
 					state.lodMembers.erase(found);
 				}
 			}
@@ -2769,6 +2776,7 @@ namespace Shalltear {
 			}
 			const Mat4 toLocal = owner->GetWorldMatrix().Inverse();
 			AABB bounds = AABB::Empty();
+			Vector<Handle<ProceduralRenderer>> procedural{GetMemoryResource(MemTag::Graphics)};
 			const u32 levels = Math::Min(group->GetLevelCount(), LODChoice::MAX_LEVELS);
 			for (u32 level = 0; level < levels; ++level) {
 				for (const Handle<SceneObject>& objectHandle : group->GetLevel(level).objects) {
@@ -2776,13 +2784,14 @@ namespace Shalltear {
 					if (!object) {
 						continue;
 					}
-					auto join = [&](const Component* renderer, const MeshAsset* mesh) {
+					auto join = [&](const Component* renderer, const MeshAsset* mesh, bool isProcedural = false) {
 						if (!renderer) {
 							return;
 						}
 						RenderState::LODMember& member = state.lodMembers[renderer->GetInstanceId()];
 						if (member.group != index || member.levels == 0) {
-							member = {index, 0};
+							state.lodProceduralMembers += isProcedural && member.levels == 0 ? 1u : 0u;
+							member = {index, 0, isProcedural};
 							record.renderers.push_back(renderer->GetInstanceId());
 						}
 						member.levels |= 1ull << level;
@@ -2794,6 +2803,11 @@ namespace Shalltear {
 					join(renderer, renderer ? renderer->GetMesh().Get() : nullptr);
 					const SkinnedMeshRenderer* skinned = object->GetComponent<SkinnedMeshRenderer>().Get();
 					join(skinned, skinned ? skinned->GetMesh().Get() : nullptr);
+					procedural.clear();
+					object->GetComponents(procedural);
+					for (const Handle<ProceduralRenderer>& item : procedural) {
+						join(item.Get(), nullptr, true);
+					}
 				}
 			}
 			if (bounds.IsValid()) {
@@ -2863,43 +2877,72 @@ namespace Shalltear {
 			return choice;
 		}
 
+		struct LODViewpoint {
+			Vec3 origin{};
+			bool perspective = true;
+			f32 scale = 1.0f;
+			u64 view = 0;
+			f64 now = 0.0;
+		};
+
+		LODViewpoint LODViewpointOf(const RenderState& state, const Vec3& origin, const Mat4& projection, u64 view, bool hasTime, f64 time) {
+			LODViewpoint from;
+			from.origin = origin;
+			from.perspective = projection(3, 2) != 0.0f;
+			from.scale = std::abs(projection(1, 1)) * 0.5f * state.lodBias;
+			from.view = view;
+			from.now = hasTime ? time : Time::GetUnscaledTime();
+			return from;
+		}
+
+		LODChoice ChooseLOD(RenderState& state, u32 index, const LODViewpoint& from) {
+			const RenderState::LODFrameGroup& frame = state.lodFrame[index];
+			if (!frame.group) {
+				return {};
+			}
+			const f32 reach = from.perspective ? Math::Max(Vec3::Distance(from.origin, frame.center), 1e-4f) : 1.0f;
+			const f32 height = frame.size * from.scale / reach;
+			LODChoice choice;
+			if (from.view != 0 && state.lodCrossFade && frame.group->GetFadeMode() == LODFadeMode::AnimatedCrossFade) {
+				u64 key = (from.view ^ (frame.id * 0x9E3779B97F4A7C15ull)) * 0xBF58476D1CE4E5B9ull;
+				key ^= key >> 31;
+				RenderState::LODFadeSlot& slot = state.lodFades[key];
+				if (slot.seen != state.lodFrameIndex) {
+					slot.seen = state.lodFrameIndex;
+					slot.choice = frame.group->Choose(height, slot.fade, from.now);
+				}
+				choice = slot.choice;
+			} else {
+				choice = frame.group->Choose(height);
+				if (!state.lodCrossFade) {
+					choice.next = LODChoice::NONE;
+					choice.keep = 255;
+				}
+			}
+			return FloorLOD(choice, frame.group->GetLevelCount(), state.lodFinestLevel);
+		}
+
 		std::span<const LODChoice> ChooseLODs(RenderState& state, LinearAllocator& arena, const Vec3& origin, const Mat4& projection) {
 			const u32 count = static_cast<u32>(state.lodFrame.size());
 			if (count == 0) {
 				return {};
 			}
 			LODChoice* choices = arena.AllocateAs<LODChoice>(count);
-			const bool perspective = projection(3, 2) != 0.0f;
-			const f32 scale = std::abs(projection(1, 1)) * 0.5f * state.lodBias;
-			const f64 now = state.hasViewTime ? state.viewTime : Time::GetUnscaledTime();
+			const LODViewpoint from = LODViewpointOf(state, origin, projection, state.lodView, state.hasViewTime, state.viewTime);
 			for (u32 i = 0; i < count; ++i) {
-				const RenderState::LODFrameGroup& frame = state.lodFrame[i];
-				if (!frame.group) {
-					choices[i] = LODChoice{};
-					continue;
-				}
-				const f32 reach = perspective ? Math::Max(Vec3::Distance(origin, frame.center), 1e-4f) : 1.0f;
-				const f32 height = frame.size * scale / reach;
-				LODChoice choice;
-				if (state.lodView != 0 && state.lodCrossFade && frame.group->GetFadeMode() == LODFadeMode::AnimatedCrossFade) {
-					u64 key = (state.lodView ^ (frame.id * 0x9E3779B97F4A7C15ull)) * 0xBF58476D1CE4E5B9ull;
-					key ^= key >> 31;
-					RenderState::LODFadeSlot& slot = state.lodFades[key];
-					if (slot.seen != state.lodFrameIndex) {
-						slot.seen = state.lodFrameIndex;
-						slot.choice = frame.group->Choose(height, slot.fade, now);
-					}
-					choice = slot.choice;
-				} else {
-					choice = frame.group->Choose(height);
-					if (!state.lodCrossFade) {
-						choice.next = LODChoice::NONE;
-						choice.keep = 255;
-					}
-				}
-				choices[i] = FloorLOD(choice, frame.group->GetLevelCount(), state.lodFinestLevel);
+				choices[i] = ChooseLOD(state, i, from);
 			}
 			return {choices, count};
+		}
+
+		bool ProceduralLODDraws(RenderState& state, const LODViewpoint& from, u64 renderer) {
+			const auto found = state.lodMembers.find(renderer);
+			if (found == state.lodMembers.end() || found->second.group >= state.lodFrame.size()) {
+				return true;
+			}
+			u8 fade = 0;
+			bool above = false;
+			return LODDraws(ChooseLOD(state, found->second.group, from), found->second.levels, fade, above);
 		}
 
 		ExtractedDraws ExtractDrawList(LinearAllocator& arena, DrawListUse use, SceneKind kind, std::span<const u64> onlyScenes,
@@ -4053,14 +4096,20 @@ namespace Shalltear {
 
 		constexpr u64 PENDING_VIEW_LOD_KEY = 1ull << 63;
 
+		u64 LODViewKey(const RenderState::PendingView& view) {
+			return PENDING_VIEW_LOD_KEY | view.targetId;
+		}
+
+		u64 LODViewKey(const Camera* camera) {
+			return camera ? camera->GetInstanceId() & ~PENDING_VIEW_LOD_KEY : 0;
+		}
+
 		class ViewRecordScope {
 		public:
 			explicit ViewRecordScope(const RenderState::PendingView& view)
-				: ViewRecordScope(view.hasTime, view.time, _state->passScopes[view.scopeIndex].exposureAddress,
-								  PENDING_VIEW_LOD_KEY | view.targetId) {}
+				: ViewRecordScope(view.hasTime, view.time, _state->passScopes[view.scopeIndex].exposureAddress, LODViewKey(view)) {}
 			explicit ViewRecordScope(const RenderState::CameraWork& camera)
-				: ViewRecordScope(false, 0.0, _state->passScopes[camera.scopeIndex].exposureAddress,
-								  camera.camera ? camera.camera->GetInstanceId() & ~PENDING_VIEW_LOD_KEY : 0) {}
+				: ViewRecordScope(false, 0.0, _state->passScopes[camera.scopeIndex].exposureAddress, LODViewKey(camera.camera)) {}
 			ViewRecordScope(bool hasTime, f64 time, u64 exposureAddress, u64 lodView = 0) {
 				RenderState& state = *_state;
 				state.hasViewTime = hasTime;
@@ -7166,7 +7215,8 @@ namespace Shalltear {
 		}
 
 		ProceduralSlice CullProceduralRenderers(RenderState& state, bool isolated, std::span<const u64> onlyScenes,
-												std::span<const u64> skippedTypes, const Mat4& viewProjection, u32 cullingMask) {
+												std::span<const u64> skippedTypes, const Mat4& viewProjection, u32 cullingMask,
+												const LODViewpoint& from) {
 			GraphicsInternal::ProceduralFrame& frame = state.procedural;
 			ProceduralSlice slice;
 			slice.first = static_cast<u32>(state.proceduralVisible.size());
@@ -7186,7 +7236,8 @@ namespace Shalltear {
 					continue;
 				}
 				renderer.tested = true;
-				if ((renderer.renderingLayerMask & cullingMask) == 0 || (renderer.bounded && !frustum.Intersects(renderer.bounds))) {
+				if ((renderer.renderingLayerMask & cullingMask) == 0 || (renderer.bounded && !frustum.Intersects(renderer.bounds)) ||
+					(state.lodProceduralMembers != 0 && !ProceduralLODDraws(state, from, renderer.renderer.GetInstanceId()))) {
 					++state.frameProceduralCulled;
 					continue;
 				}
@@ -7211,7 +7262,7 @@ namespace Shalltear {
 		}
 
 		ProceduralSlice CollectProceduralCasters(RenderState& state, bool isolated, std::span<const u64> onlyScenes,
-												 std::span<const u64> skippedTypes, u32 cullingMask) {
+												 std::span<const u64> skippedTypes, u32 cullingMask, const LODViewpoint& from) {
 			const GraphicsInternal::ProceduralFrame& frame = state.procedural;
 			ProceduralSlice slice;
 			slice.first = static_cast<u32>(state.proceduralVisible.size());
@@ -7228,7 +7279,9 @@ namespace Shalltear {
 				}
 				for (u32 item = renderer.firstItem; item < renderer.firstItem + renderer.itemCount; ++item) {
 					if (frame.items[item].castShadows != ShadowCasting::Off) {
-						state.proceduralVisible.push_back(index);
+						if (state.lodProceduralMembers == 0 || ProceduralLODDraws(state, from, renderer.renderer.GetInstanceId())) {
+							state.proceduralVisible.push_back(index);
+						}
 						break;
 					}
 				}
@@ -7927,12 +7980,15 @@ namespace Shalltear {
 				PassRequests sceneReads = PassRequests::None;
 				ProceduralView proceduralView;
 				proceduralView.extent = extent;
+				LODViewpoint lodFrom;
 				if (const SceneObject* cullOwner = cameraRows.camera ? cameraRows.camera->GetOwner().Get() : nullptr) {
 					proceduralView.view = cullOwner->GetWorldMatrix().Inverse();
 					proceduralView.projection = cameraRows.camera->BuildProjection(aspect);
 					proceduralView.cameraPosition = cullOwner->GetWorldPosition();
+					lodFrom = LODViewpointOf(state, proceduralView.cameraPosition, proceduralView.projection, LODViewKey(cameraRows.camera),
+											 false, 0.0);
 					procedural = CullProceduralRenderers(state, false, {}, {}, proceduralView.projection * proceduralView.view,
-														 cameraRows.camera->GetCullingMask());
+														 cameraRows.camera->GetCullingMask(), lodFrom);
 					sceneReads = procedural.reads | SceneReadsInView(state, false, {}, proceduralView.projection * proceduralView.view,
 																	 cameraRows.camera->GetCullingMask());
 				}
@@ -7954,7 +8010,7 @@ namespace Shalltear {
 				ProceduralSlice casters;
 				casters.first = static_cast<u32>(state.proceduralVisible.size());
 				if (windowCasts) {
-					casters = CollectProceduralCasters(state, false, {}, {}, cameraRows.camera ? cameraRows.camera->GetCullingMask() : ~0u);
+					casters = CollectProceduralCasters(state, false, {}, {}, cameraRows.camera ? cameraRows.camera->GetCullingMask() : ~0u, lodFrom);
 				}
 				windowWork.cameras[cameraIndex].firstCaster = casters.first;
 				windowWork.cameras[cameraIndex].casterCount = casters.count;
@@ -8199,10 +8255,12 @@ namespace Shalltear {
 					prepassKey = Math::Min(prepassKey, RowSortKey(PassPoint::DepthPrepass, FrameStagePosition::Normal));
 				}
 
+				const LODViewpoint lodFrom =
+					LODViewpointOf(state, pending.cameraPosition, pending.projection, LODViewKey(pending), pending.hasTime, pending.time);
 				const ProceduralSlice procedural = CullProceduralRenderers(
 					state, pending.kind != SceneKind::World, {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
 					{state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount}, pending.projection * pending.view,
-					pending.cullingMask);
+					pending.cullingMask, lodFrom);
 				const PassRequests sceneReads =
 					procedural.reads | (pending.fill == ViewFill::Wireframe
 											? PassRequests::None
@@ -8231,7 +8289,7 @@ namespace Shalltear {
 					casters = CollectProceduralCasters(state, pending.kind != SceneKind::World,
 													   {state.viewScenes.data() + pending.firstScene, pending.sceneCount},
 													   {state.viewSkippedTypes.data() + pending.firstSkipped, pending.skippedCount},
-													   pending.cullingMask);
+													   pending.cullingMask, lodFrom);
 				}
 				state.pendingViews[viewIndex].firstCaster = casters.first;
 				state.pendingViews[viewIndex].casterCount = casters.count;
@@ -10396,6 +10454,7 @@ namespace Shalltear {
 		if (_state) {
 			SwapRemoveHandle(_state->proceduralRenderers, renderer);
 			SwapRemoveHandle(_state->isolatedProceduralRenderers, renderer);
+			MarkLODRecordDirty(*_state, renderer.GetInstanceId());
 		}
 	}
 

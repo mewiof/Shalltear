@@ -10,6 +10,7 @@
 #include "Shalltear/Core/Graphics.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/FramePass.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Graphics/PrimitiveMesh.h"
 #include "Shalltear/Core/Module.h"
@@ -841,6 +842,47 @@ TEST_F(VisualEffectComponentFixture, CulledEffectWaitsUntilSeen) {
 	EXPECT_EQ(counts.dispatches, 3u);
 	EXPECT_EQ(EffectComponentAccess::Instance(*effect.Get())->GetTime(), 2.0f * STEP);
 	EXPECT_EQ(Alive(effect), 2u);
+	RenderSystem::DestroyViewTarget(view);
+}
+
+TEST_F(VisualEffectComponentFixture, LODHiddenEffectCountsAsCulled) {
+	if (!_ready) {
+		GTEST_SKIP() << "no Vulkan device";
+	}
+	VisualEffectAsset* asset = MakeSeenAsset(Rate(60.0f));
+	if (!asset) {
+		GTEST_SKIP() << "dxcompiler.dll unavailable and shader cache cold";
+	}
+	const ViewTargetId view = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(view, INVALID_VIEW_TARGET);
+	Handle<VisualEffect> effect = AddEffect(asset);
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", _scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.2f).objects.push_back(effect->GetOwner());
+	SceneSystem::EndFrame();
+	constexpr f32 STEP = 1.0f / 60.0f;
+
+	EffectFrameCounts counts = Seen(view, STEP);
+	EXPECT_EQ(counts.effects, 1u);
+	EXPECT_FALSE(effect->IsCulled());
+	counts = Seen(view, STEP);
+	EXPECT_EQ(counts.effects, 1u);
+	EXPECT_EQ(counts.culled, 0u);
+	EXPECT_GT(counts.draws, 0u);
+
+	group->EditLevel(0).screenRelativeHeight = 0.5f;
+	Seen(view, STEP);
+	EXPECT_TRUE(effect->IsCulled());
+	counts = Seen(view, STEP);
+	EXPECT_EQ(counts.effects, 0u);
+	EXPECT_EQ(counts.culled, 1u);
+	EXPECT_EQ(counts.draws, 0u);
+
+	group->EditLevel(0).screenRelativeHeight = 0.2f;
+	Seen(view, STEP);
+	EXPECT_FALSE(effect->IsCulled());
+	counts = Seen(view, STEP);
+	EXPECT_EQ(counts.effects, 1u);
+	EXPECT_GT(counts.draws, 0u);
 	RenderSystem::DestroyViewTarget(view);
 }
 

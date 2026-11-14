@@ -6,6 +6,7 @@
 
 #include "Shalltear/Core/Asset.h"
 #include "Shalltear/Core/Frame/FrameStages.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/MeshAsset.h"
 #include "Shalltear/Core/Math/Gradient.h"
@@ -554,6 +555,43 @@ TEST_F(LineRendererFixture, TrailDrawsBehindMovingObject) {
 	EXPECT_GT(Texel(pixels, size, size.x / 4, size.y / 2).g, 200);
 	EXPECT_GT(Texel(pixels, size, size.x * 3 / 4, size.y / 2).g, 200);
 	EXPECT_LT(Texel(pixels, size, size.x / 2, size.y / 4).g, 20);
+}
+
+TEST_F(LineRendererFixture, TrailHiddenPastItsLODLevel) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* hidden = LoadUnlit("Hidden.mat", Color(0.0f, 0.0f, 0.0f, 1.0f));
+	MaterialAsset* green = LoadUnlit("Green.mat", Color(0.0f, 1.0f, 0.0f, 1.0f));
+	ASSERT_NE(hidden, nullptr);
+	ASSERT_NE(green, nullptr);
+	ASSERT_TRUE(BuildStage(hidden, _stage));
+	_stage.quad->SetActive(false);
+	Handle<SceneObject> object = SceneSystem::CreateObject("Trail", _stage.scene);
+	Handle<TrailRenderer> trail = object->AddComponent<TrailRenderer>();
+	trail->materials.push_back(Handle<MaterialAsset>(green));
+	trail->widthMultiplier = 0.2f;
+	trail->castShadows = ShadowCasting::Off;
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", _stage.scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.2f).objects.push_back(object);
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	for (u32 frame = 0; frame <= 24; ++frame) {
+		object->SetLocalPosition(Vec3(-1.2f + 0.1f * static_cast<f32>(frame), 0.0f, 0.0f));
+		AdvanceTrails(1.0f / 60.0f);
+	}
+	ASSERT_TRUE(Render(QuadView(), pixels, size));
+	EXPECT_GT(CountGreen(pixels), 100u);
+
+	group->EditLevel(0).screenRelativeHeight = 0.5f;
+	ASSERT_TRUE(Render(QuadView(), pixels, size));
+	EXPECT_EQ(CountGreen(pixels), 0u);
+
+	group->EditLevel(0).screenRelativeHeight = 0.2f;
+	ASSERT_TRUE(Render(QuadView(), pixels, size));
+	EXPECT_GT(CountGreen(pixels), 100u);
 }
 
 #endif

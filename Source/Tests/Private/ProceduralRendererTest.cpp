@@ -5,6 +5,7 @@
 #include "Shalltear/Core/Graphics/Camera.h"
 #include "Shalltear/Core/Graphics/Environment.h"
 #include "Shalltear/Core/Graphics/FramePass.h"
+#include "Shalltear/Core/Graphics/LODGroup.h"
 #include "Shalltear/Core/Graphics/MaterialAsset.h"
 #include "Shalltear/Core/Graphics/ProceduralRenderer.h"
 #include "Shalltear/Core/Graphics/RHIDevice.h"
@@ -382,6 +383,13 @@ namespace {
 	};
 
 	char argumentsPassOwner = 0;
+
+	ViewDesc ViewFromZ(f32 z) {
+		ViewDesc desc = QuadView();
+		desc.view = Mat4::LookAt(Vec3(0.0f, 0.0f, z), Vec3(0.0f, 0.0f, 0.0f));
+		desc.cameraPosition = Vec3(0.0f, 0.0f, z);
+		return desc;
+	}
 
 } // anonymous namespace
 
@@ -1531,6 +1539,299 @@ TEST_F(ProceduralRendererFixture, CasterBiasReachesProceduralCasters) {
 	EXPECT_GT(contact, 100u);
 	stage.sun->SetShadowCasterSlopeBias(10.0f);
 	EXPECT_LT(shadowed(), contact / 4);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, LODLevelsHideMemberRenderers) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* hidden = LoadUnlit("Hidden.mat", Color(0.0f, 0.0f, 0.0f, 1.0f), false);
+	MaterialAsset* item = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(hidden, nullptr);
+	ASSERT_NE(item, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(hidden, stage));
+	stage.quad->SetActive(false);
+	Handle<TestSprite> fine = AddSprite(stage.scene, item, Vec3(), Color::Green());
+	Handle<TestSprite> coarse = AddSprite(stage.scene, item, Vec3(), Color::Red());
+	fine->halfSize = 0.2f;
+	coarse->halfSize = 0.2f;
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", stage.scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.5f).objects.push_back(fine->GetOwner());
+	group->AddLevel(0.1f).objects.push_back(coarse->GetOwner());
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto renderFrom = [&](f32 z) {
+		RenderSystem::SubmitView(stage.target, ViewFromZ(z));
+		RenderSystem::RenderAll();
+		return RenderSystem::ReadbackViewTarget(stage.target, pixels, size);
+	};
+
+	ASSERT_TRUE(renderFrom(1.5f));
+	GraphicsStats stats = RenderSystem::GetStats();
+	EXPECT_EQ(fine->recorded, 1u);
+	EXPECT_EQ(coarse->recorded, 0u);
+	EXPECT_EQ(stats.proceduralDrawn, 1u);
+	EXPECT_EQ(stats.proceduralCulled, 1u);
+	EXPECT_FALSE(fine->IsCulled());
+	EXPECT_TRUE(coarse->IsCulled());
+	EXPECT_GT(CenterTexel(pixels, size).y, 150.0f);
+	EXPECT_LT(CenterTexel(pixels, size).x, 20.0f);
+
+	ASSERT_TRUE(renderFrom(4.0f));
+	EXPECT_EQ(fine->recorded, 1u);
+	EXPECT_EQ(coarse->recorded, 1u);
+	EXPECT_TRUE(fine->IsCulled());
+	EXPECT_GT(CenterTexel(pixels, size).x, 150.0f);
+	EXPECT_LT(CenterTexel(pixels, size).y, 20.0f);
+
+	ASSERT_TRUE(renderFrom(12.0f));
+	stats = RenderSystem::GetStats();
+	EXPECT_EQ(fine->recorded, 1u);
+	EXPECT_EQ(coarse->recorded, 1u);
+	EXPECT_EQ(stats.proceduralDrawn, 0u);
+	EXPECT_EQ(stats.proceduralCulled, 2u);
+	EXPECT_TRUE(fine->IsCulled());
+	EXPECT_TRUE(coarse->IsCulled());
+	EXPECT_LT(CenterTexel(pixels, size).x + CenterTexel(pixels, size).y, 20.0f);
+
+	const ViewTargetId second = RenderSystem::CreateViewTarget({64, 64});
+	ASSERT_NE(second, INVALID_VIEW_TARGET);
+	RenderSystem::SubmitView(stage.target, ViewFromZ(12.0f));
+	RenderSystem::SubmitView(second, ViewFromZ(1.5f));
+	RenderSystem::RenderAll();
+	EXPECT_EQ(fine->recorded, 2u);
+	EXPECT_EQ(coarse->recorded, 1u);
+	EXPECT_FALSE(fine->IsCulled());
+	EXPECT_TRUE(coarse->IsCulled());
+	RenderSystem::DestroyViewTarget(second);
+
+	group->SetEnabled(false);
+	ASSERT_TRUE(renderFrom(12.0f));
+	EXPECT_EQ(fine->recorded, 3u);
+	EXPECT_EQ(coarse->recorded, 2u);
+	group->SetEnabled(true);
+
+	Handle<SceneObject> late = SceneSystem::CreateObject("Late", stage.scene);
+	group->EditLevel(0).objects.push_back(late);
+	SceneSystem::EndFrame();
+	ASSERT_TRUE(renderFrom(12.0f));
+	Handle<TestSprite> added = late->AddComponent<TestSprite>();
+	added->material = Handle<MaterialAsset>(item);
+	SceneSystem::EndFrame();
+	ASSERT_TRUE(renderFrom(12.0f));
+	EXPECT_EQ(added->recorded, 0u);
+	ASSERT_TRUE(renderFrom(1.5f));
+	EXPECT_EQ(added->recorded, 1u);
+
+	SceneSystem::Destroy(Handle<Component>(added.Get()));
+	Handle<TestSprite> swapped = late->AddComponent<TestSprite>();
+	swapped->material = Handle<MaterialAsset>(item);
+	SceneSystem::EndFrame();
+	ASSERT_EQ(late->GetComponentCount(), 1u);
+	ASSERT_TRUE(renderFrom(12.0f));
+	EXPECT_EQ(swapped->recorded, 0u);
+
+	SceneSystem::Destroy(fine->GetOwner());
+	SceneSystem::EndFrame();
+	ASSERT_TRUE(renderFrom(1.5f));
+	EXPECT_EQ(coarse->recorded, 2u);
+	EXPECT_EQ(swapped->recorded, 1u);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, WindowCameraLODHidesMember) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* item = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(item, nullptr);
+	WindowDesc windowDesc;
+	windowDesc.title = "ProceduralLOD";
+	windowDesc.clientSize = {128, 128};
+	windowDesc.flags = WindowFlags::Hidden;
+	Handle<Window> window = WindowSystem::Create(windowDesc);
+	ASSERT_TRUE(window.IsValid());
+
+	Handle<Scene> scene = SceneSystem::CreateScene("WindowLOD");
+	Handle<TestSprite> sprite = AddSprite(scene, item, Vec3(), Color::Green());
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.2f).objects.push_back(sprite->GetOwner());
+	Handle<SceneObject> cameraObject = SceneSystem::CreateObject("Camera", scene);
+	cameraObject->SetLocalPosition(Vec3(0.0f, 0.0f, 3.0f));
+	cameraObject->SetLocalRotation(Quat::AngleAxis(180.0f, Vec3::Up()));
+	Handle<Camera> camera = cameraObject->AddComponent<Camera>();
+	camera->SetTargetWindow(window);
+	camera->SetClearColor(Color::Black());
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto centerGreen = [&] {
+		for (u32 frame = 0; frame < 3; ++frame) {
+			WindowSystem::PumpEvents();
+			RenderSystem::RenderAll();
+		}
+		if (!RenderSystem::ReadbackWindowSceneColor(window, pixels, size) || size.x <= 0 || size.y <= 0) {
+			return -1.0f;
+		}
+		const u16* halves = reinterpret_cast<const u16*>(pixels.data());
+		return Math::HalfToFloat(halves[(static_cast<size_t>(size.y / 2) * size.x + size.x / 2) * 4 + 1]);
+	};
+
+	const f32 drawn = centerGreen();
+	const u32 recorded = sprite->recorded;
+	EXPECT_GT(recorded, 0u);
+	EXPECT_FALSE(sprite->IsCulled());
+	group->EditLevel(0).screenRelativeHeight = 0.9f;
+	const f32 culled = centerGreen();
+	EXPECT_EQ(sprite->recorded, recorded);
+	EXPECT_TRUE(sprite->IsCulled());
+
+	ASSERT_GE(culled, 0.0f);
+	EXPECT_GT(drawn, 0.5f);
+	EXPECT_LT(culled, 0.01f);
+
+	SceneSystem::UnloadScene(scene);
+	SceneSystem::EndFrame();
+}
+
+TEST_F(ProceduralRendererFixture, LODFadeDrawsBothMemberLevels) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	MaterialAsset* plain = LoadUnlit("Plain.mat", Color(1.0f, 1.0f, 1.0f, 1.0f), false);
+	MaterialAsset* red = LoadUnlit("Red.mat", Color(1.0f, 0.0f, 0.0f, 1.0f), false);
+	MaterialAsset* item = LoadShaderMaterial("Sprite.mat", "Sprite.hlsl", SPRITE_SHADER, "");
+	ASSERT_NE(plain, nullptr);
+	ASSERT_NE(red, nullptr);
+	ASSERT_NE(item, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(plain, stage));
+	Handle<SceneObject> coarseQuad = SceneSystem::CreateObject("CoarseQuad", stage.scene);
+	Handle<MeshRenderer> coarseRenderer = coarseQuad->AddComponent<MeshRenderer>();
+	coarseRenderer->SetMesh(stage.quad->GetComponent<MeshRenderer>()->GetMesh());
+	coarseRenderer->SetMaterial(0, Handle<MaterialAsset>(red));
+	Handle<TestSprite> fine = AddSprite(stage.scene, item, Vec3(0.2f, 0.2f, 0.01f), Color::Green());
+	Handle<TestSprite> coarse = AddSprite(stage.scene, item, Vec3(-0.2f, 0.2f, 0.01f), Color::Blue());
+	fine->halfSize = 0.03f;
+	coarse->halfSize = 0.03f;
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", stage.scene)->AddComponent<LODGroup>();
+	LODLevel& near = group->AddLevel(0.3f);
+	near.objects.push_back(stage.quad);
+	near.objects.push_back(fine->GetOwner());
+	near.fadeTransitionWidth = 1.0f;
+	LODLevel& far = group->AddLevel(0.01f);
+	far.objects.push_back(coarseQuad);
+	far.objects.push_back(coarse->GetOwner());
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	f64 clock = 10.0;
+	u32 fineDraws = 0;
+	u32 coarseDraws = 0;
+	const auto redShare = [&](f32 z) {
+		const u32 fineBefore = fine->recorded;
+		const u32 coarseBefore = coarse->recorded;
+		ViewDesc desc = ViewFromZ(z);
+		desc.time = &clock;
+		RenderSystem::SubmitView(stage.target, desc);
+		RenderSystem::RenderAll();
+		EXPECT_TRUE(RenderSystem::ReadbackViewTarget(stage.target, pixels, size));
+		fineDraws = fine->recorded - fineBefore;
+		coarseDraws = coarse->recorded - coarseBefore;
+		u32 lit = 0;
+		u32 reds = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			if (pixels[i] > 200) {
+				++lit;
+				reds += pixels[i + 1] < 60 ? 1u : 0u;
+			}
+		}
+		EXPECT_GT(lit, 100u);
+		return lit > 0 ? static_cast<f32>(reds) / static_cast<f32>(lit) : -1.0f;
+	};
+
+	EXPECT_EQ(redShare(1.5f), 0.0f);
+	EXPECT_EQ(fineDraws, 1u);
+	EXPECT_EQ(coarseDraws, 0u);
+
+	group->SetFadeMode(LODFadeMode::CrossFade);
+	const f32 keep = (0.866f / 1.5f - 0.3f) / 0.7f;
+	EXPECT_NEAR(redShare(1.5f), 1.0f - keep, 0.08f);
+	EXPECT_EQ(fineDraws, 1u);
+	EXPECT_EQ(coarseDraws, 1u);
+	EXPECT_EQ(redShare(0.8f), 0.0f);
+	EXPECT_EQ(fineDraws, 1u);
+	EXPECT_EQ(coarseDraws, 0u);
+
+	group->EditLevel(0).fadeTransitionWidth = 0.0f;
+	group->SetFadeMode(LODFadeMode::AnimatedCrossFade);
+	group->SetCrossFadeDuration(0.5f);
+	EXPECT_EQ(redShare(1.5f), 0.0f);
+	EXPECT_EQ(redShare(4.0f), 0.0f);
+	EXPECT_EQ(fineDraws, 1u);
+	EXPECT_EQ(coarseDraws, 0u);
+	clock = 10.25;
+	EXPECT_NEAR(redShare(4.0f), 0.5f, 0.08f);
+	EXPECT_EQ(fineDraws, 1u);
+	EXPECT_EQ(coarseDraws, 1u);
+	clock = 10.6;
+	EXPECT_GT(redShare(4.0f), 0.97f);
+	EXPECT_EQ(fineDraws, 0u);
+	EXPECT_EQ(coarseDraws, 1u);
+
+	TearDownStage(stage);
+}
+
+TEST_F(ProceduralRendererFixture, LODHiddenCasterCastsNoShadow) {
+	if (!Ready()) {
+		GTEST_SKIP() << "no Vulkan device or no shader compiler";
+	}
+	WriteProjectFile("Tally.hlsl", SHADOW_TALLY_SHADER);
+	Asset* tallyShader = AssetDatabase::LoadAsset(Path("project://Tally.hlsl"));
+	ASSERT_NE(tallyShader, nullptr);
+	MaterialAsset* ground = LoadMaterial("Tally.mat", tallyShader->assetId, "");
+	MaterialAsset* caster = LoadShaderMaterial("Caster.mat", "Caster.hlsl", CASTER_SPRITE_SHADER, "");
+	ASSERT_NE(ground, nullptr);
+	ASSERT_NE(caster, nullptr);
+	ShadingStage stage;
+	ASSERT_TRUE(BuildStage(ground, stage));
+	stage.quad->SetLocalScale(Vec3(8.0f, 8.0f, 1.0f));
+	Handle<TestSprite> sprite = AddSprite(stage.scene, caster, Vec3(0.0f, 0.0f, 1.0f), Color::White());
+	sprite->halfSize = 0.2f;
+	sprite->castShadows = true;
+	Handle<LODGroup> group = SceneSystem::CreateObject("Group", stage.scene)->AddComponent<LODGroup>();
+	group->AddLevel(0.2f).objects.push_back(sprite->GetOwner());
+	SceneSystem::EndFrame();
+
+	Vector<u8> pixels{GetMemoryResource(MemTag::Graphics)};
+	Vec2I size{};
+	const auto shadowed = [&] {
+		EXPECT_TRUE(RenderStage(stage, pixels, size));
+		u32 count = 0;
+		for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+			count += pixels[i + 2] > 100 && pixels[i + 2] < 180 && pixels[i] < 128 ? 1u : 0u;
+		}
+		return count;
+	};
+
+	EXPECT_GT(shadowed(), 30u);
+	const u32 cast = sprite->shadowRecorded;
+	const u32 drawn = sprite->recorded;
+	EXPECT_GT(cast, 0u);
+	EXPECT_EQ(drawn, 1u);
+
+	group->EditLevel(0).screenRelativeHeight = 0.5f;
+	EXPECT_EQ(shadowed(), 0u);
+	EXPECT_EQ(sprite->shadowRecorded, cast);
+	EXPECT_EQ(sprite->recorded, drawn);
 
 	TearDownStage(stage);
 }
